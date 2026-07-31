@@ -51,6 +51,14 @@ final class AppCoordinator: ObservableObject {
 
     let preferences: Preferences
 
+    /// `true` when every number on screen is synthetic (see `DemoMode`).
+    ///
+    /// Carried here rather than read from the environment by the view, so the
+    /// views stay ignorant of how the app was launched and the flag is decided
+    /// exactly once, in the composition root. Defaults to `false`, so any
+    /// caller that doesn't opt in gets the real thing.
+    let isDemoMode: Bool
+
     // MARK: Sources
 
     private let quotaSources: [QuotaSource]
@@ -75,6 +83,7 @@ final class AppCoordinator: ObservableObject {
 
     init(
         preferences: Preferences,
+        isDemoMode: Bool = false,
         quotaSources: [QuotaSource] = [],
         activitySources: [LocalActivitySource] = [],
         statusSources: [StatusSource] = [],
@@ -82,6 +91,7 @@ final class AppCoordinator: ObservableObject {
         activitySourceFactory: (() -> [LocalActivitySource])? = nil
     ) {
         self.preferences = preferences
+        self.isDemoMode = isDemoMode
         self.quotaSources = quotaSources
         self.activitySources = activitySources
         self.activitySourceFactory = activitySourceFactory

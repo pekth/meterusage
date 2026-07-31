@@ -34,7 +34,7 @@ public enum Pricing {
     /// Three distinct states, deliberately kept apart:
     ///   - `.priced`: a recognised model family with a published rate. Cost
     ///     is real.
-    ///   - `.knownUnpriced`: a recognised model (currently: Fable) for which
+    ///   - `.knownUnpriced`: a recognised model for which
     ///     we do not have a reliable published per-token rate. Tokens are
     ///     still counted correctly; cost is deliberately NOT estimated,
     ///     because a fabricated rate would be worse than an absent one.
@@ -73,9 +73,16 @@ public enum Pricing {
     // Keep this table in ONE place — nothing else in the app should hardcode
     // a rate. Prices as published at https://www.anthropic.com/pricing;
     // re-check that page when adding a new model family below.
-    private static let opus = Rate(inputPerMTok: 15, outputPerMTok: 75, cacheReadPerMTok: 1.5, cacheWritePerMTok: 18.75)
+    // Input and output are published list prices. Cache rates are DERIVED from
+    // the documented multipliers rather than a published per-model table:
+    // a cache read costs 0.1x the input rate, and a cache write costs 1.25x
+    // (the default 5-minute TTL). The 1-hour TTL writes at 2x instead; we
+    // assume 5-minute because that is the default and by far the common case,
+    // which means heavy 1h-TTL use is under-counted here.
+    private static let fable = Rate(inputPerMTok: 10, outputPerMTok: 50, cacheReadPerMTok: 1.0, cacheWritePerMTok: 12.50)
+    private static let opus = Rate(inputPerMTok: 5, outputPerMTok: 25, cacheReadPerMTok: 0.5, cacheWritePerMTok: 6.25)
     private static let sonnet = Rate(inputPerMTok: 3, outputPerMTok: 15, cacheReadPerMTok: 0.3, cacheWritePerMTok: 3.75)
-    private static let haiku = Rate(inputPerMTok: 0.8, outputPerMTok: 4, cacheReadPerMTok: 0.08, cacheWritePerMTok: 1)
+    private static let haiku = Rate(inputPerMTok: 1, outputPerMTok: 5, cacheReadPerMTok: 0.1, cacheWritePerMTok: 1.25)
 
     /// Rate used when a model string is unrecognised. Sonnet is the
     /// middle-of-the-road family, so this under/over-estimates less badly
@@ -92,19 +99,14 @@ public enum Pricing {
         case unrecognizedFallback(Rate)
     }
 
-    /// Fable is real, heavily-used, and has no published per-token rate as
-    /// of 2026-07 — it's neither Anthropic's own pricing page nor a model
-    /// family we can substring-match to one of the table above. Matches
-    /// both the dated id seen in transcripts ("claude-fable-5") and the
-    /// bare alias ("fable"). If Anthropic ever publishes a rate, add a
-    /// `fable` case to the table above and delete this branch — do NOT
-    /// invent a number here in the meantime.
-    private static func isFable(_ lowercasedModel: String) -> Bool {
-        lowercasedModel.contains("fable")
-    }
-
     private static func classify(_ model: String) -> Classification {
         let lower = model.lowercased()
+        // Fable is checked first: it is its own price tier, and matching it
+        // before the family names avoids a future id like "claude-fable-opus"
+        // silently falling through to the cheaper Opus rate.
+        if lower.contains("fable") {
+            return .priced(fable)
+        }
         if lower.contains("opus") {
             return .priced(opus)
         }
@@ -113,9 +115,6 @@ public enum Pricing {
         }
         if lower.contains("sonnet") {
             return .priced(sonnet)
-        }
-        if isFable(lower) {
-            return .knownUnpriced
         }
         return .unrecognizedFallback(fallback)
     }
@@ -127,7 +126,7 @@ public enum Pricing {
     /// Falls back to Sonnet-tier pricing (flagged) rather than crashing or
     /// silently reporting zero cost for a model we don't recognise.
     ///
-    /// For a known-but-unpriced model (Fable) this still returns a `Rate`
+    /// For a known-but-unpriced model this still returns a `Rate`
     /// value for source compatibility, but `isFallback` is `false` — Fable
     /// is not "guessed via fallback", it deliberately has no rate applied.
     /// The returned `Rate` in that case is never used to compute cost; use
@@ -156,17 +155,17 @@ public enum Pricing {
 
     /// Estimates USD cost for a set of token counts against a model string.
     ///
-    /// Design choice: a known-but-unpriced model (Fable) contributes `0` to
+    /// Design choice: a known-but-unpriced model contributes `0` to
     /// `costUSD` here, and therefore `0` to any total computed by summing
     /// `Estimate.costUSD` (e.g. `LocalActivity.totalCostUSD`) — the shared
     /// `SessionSummary.estimatedCostUSD` type is a plain `Double`, which has
     /// no way to represent "unknown"/"N/A", so `0` is the least-wrong
-    /// numeric value it can hold. That silently *reads* like "Fable is
+    /// numeric value it can hold. That silently *reads* like "the model is
     /// free" if you only look at the number, which is why `availability`
     /// (and `isFallback` for the unrecognised case) is returned alongside
     /// it — a caller summing costs must also check whether any session in
     /// the sum has `.knownUnpriced` availability and disclose that
-    /// separately (e.g. "$12.40 + Fable usage not priced") rather than
+    /// separately (e.g. "$12.40 + unpriced usage") rather than
     /// presenting the total as complete.
     public static func estimate(model: String, tokens: TokenTotals) -> Estimate {
         switch classify(model) {

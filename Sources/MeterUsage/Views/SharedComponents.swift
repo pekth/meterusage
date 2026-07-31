@@ -69,9 +69,20 @@ enum MU {
     // Metrics -------------------------------------------------------------
 
     static let popoverWidth: CGFloat = 340
-    static let popoverHeight: CGFloat = 600
+    /// Tall enough that the per-model breakdown clears the bottom edge without
+    /// scrolling. At 600 the quota cards pushed it below the fold, which made a
+    /// heavily-used model look like it wasn't being tracked at all — the whole
+    /// point of the breakdown is that every model you run is visibly accounted
+    /// for. Keep headroom here when adding rows above it.
+    static let popoverHeight: CGFloat = 700
     static let cardRadius: CGFloat = 10
     static let gutter: CGFloat = 14
+
+    /// Fixed widths for the two numeric columns in the per-model breakdown, so
+    /// the header labels and every row share one grid and the digits don't
+    /// shuffle sideways between refreshes.
+    static let tokenColumn: CGFloat = 52
+    static let costColumn: CGFloat = 54
 }
 
 /// Maps consumption to a headroom colour.

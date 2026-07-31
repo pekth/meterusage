@@ -2,10 +2,15 @@
 
 A macOS menu-bar app that shows how much of your AI coding quota you have left.
 
-<!-- SCREENSHOT:hero -->
-
 Claude Code and Codex both burn through rate limits you can't see until you hit
 them. meterusage puts the number in your menu bar.
+
+<img src="docs/images/menubar.png" alt="The meterusage menu-bar indicator showing 82%" height="24">
+
+<img src="docs/images/popover.png" alt="The meterusage popover: Claude and Codex quota windows with reset times, then local activity with tokens, estimated cost, and a per-model breakdown" width="330">
+
+<sub>Screenshots are the real app in demo mode (`METERUSAGE_DEMO=1`) — every
+number is synthetic, which is why the popover is badged **Demo**.</sub>
 
 ```sh
 git clone https://github.com/pekth/meterusage.git
@@ -18,16 +23,13 @@ connect, no API key to paste, no statusline to install.
 
 ## What you get
 
-<!-- SCREENSHOT:popover -->
-
 - **Live Codex quota** — 5-hour and weekly windows, credit balance, and plan,
   read through the `codex` CLI you're already signed in to.
-- **Claude activity** — tokens, estimated cost, and per-session breakdown,
-  computed from your own local transcripts.
+- **Claude activity** — tokens and estimated cost broken down per model, so
+  every model you actually run is visibly accounted for. Computed from your
+  own local transcripts.
 - **A 26-week heatmap** of daily usage.
 - **Service health** from Anthropic's public status page.
-
-<!-- SCREENSHOT:heatmap -->
 
 ## How it works
 
@@ -79,6 +81,18 @@ swift test             # unit tests
 No third-party dependencies. No Apple Developer account needed — the app is
 ad-hoc signed, so macOS will ask you to confirm the first launch via
 **System Settings → Privacy & Security**.
+
+### Demo mode
+
+Run the real UI against synthetic data — useful for screenshots, or for
+poking at the app without either CLI installed:
+
+```sh
+METERUSAGE_DEMO=1 swift run meterusage
+```
+
+A **Demo** badge appears in the popover header so fake numbers are never
+mistaken for real ones. See [docs/DEMO.md](docs/DEMO.md).
 
 ## Cost figures are estimates
 

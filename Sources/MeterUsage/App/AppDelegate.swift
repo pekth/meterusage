@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let preferences = Preferences()
         let coordinator = AppCoordinator(
             preferences: preferences,
+            isDemoMode: Composition.isDemoMode,
             quotaSources: Composition.quotaSources(),
             activitySources: Composition.activitySources(),
             statusSources: Composition.statusSources(),
@@ -139,8 +140,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 enum Composition {
 
+    /// Whether this launch shows synthetic data instead of the user's own.
+    ///
+    /// Read exactly once, here, at first use — not per source and not per
+    /// refresh. A flag that could change mid-session would let half the popover
+    /// show real numbers and half show invented ones, which is worse than
+    /// either. Default is off: a user who never sets `METERUSAGE_DEMO=1`
+    /// cannot reach demo mode by any route. See `DemoMode` and docs/DEMO.md.
+    static let isDemoMode = DemoMode.isEnabled()
+
     static func quotaSources() -> [QuotaSource] {
-        [
+        if isDemoMode {
+            return [DemoClaudeQuotaSource(), DemoCodexQuotaSource()]
+        }
+        return [
             // Live Codex limits, read over the CLI's local RPC.
             CodexQuotaSource(),
             // Claude publishes no local quota endpoint. This reads a file only
@@ -151,17 +164,17 @@ enum Composition {
     }
 
     static func activitySources() -> [LocalActivitySource] {
-        [ClaudeLocalSource()]
+        isDemoMode ? [DemoLocalActivitySource()] : [ClaudeLocalSource()]
     }
 
     static func statusSources() -> [StatusSource] {
-        [StatusPageSource(provider: .claude)]
+        isDemoMode ? [DemoStatusSource()] : [StatusPageSource(provider: .claude)]
     }
 
     /// Codex reports its plan inline with its quota, so it needs no source
     /// here; Claude's tier lives in local account metadata and needs its own.
     static func planSources() -> [PlanSource] {
-        [ClaudePlanSource()]
+        isDemoMode ? [DemoPlanSource()] : [ClaudePlanSource()]
     }
 }
 

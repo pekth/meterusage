@@ -38,6 +38,12 @@ struct ActivitySection: View {
                     emptyState
                 } else {
                     totals
+                    // Immediately under the totals it decomposes, and above the
+                    // heatmap: this answers "what am I spending it on?", which
+                    // is the question the totals provoke. The heatmap answers
+                    // "when?", which nobody asks first.
+                    Divider().overlay(MU.hairline)
+                    ModelBreakdown(models: byModel)
                     if hasUnpricedModels {
                         UnpricedNote()
                     }
@@ -119,6 +125,41 @@ struct ActivitySection: View {
         }
     }
 
+    /// Per-model totals, heaviest first.
+    ///
+    /// Grouped on the raw model string, not on a normalised family. Two
+    /// spellings the app can't prove are the same model stay separate rows: a
+    /// wrong merge invents usage that never happened, and the display name is
+    /// already the only thing shortened.
+    private var byModel: [ModelUsage] {
+        var order: [String] = []
+        var buckets: [String: ModelUsage] = [:]
+
+        for session in loaded.flatMap(\.sessions) {
+            if var existing = buckets[session.model] {
+                existing.tokens = existing.tokens + session.tokens
+                existing.costUSD += session.estimatedCostUSD
+                existing.sessionCount += 1
+                buckets[session.model] = existing
+            } else {
+                order.append(session.model)
+                buckets[session.model] = ModelUsage(
+                    model: session.model,
+                    tokens: session.tokens,
+                    costUSD: session.estimatedCostUSD,
+                    sessionCount: 1
+                )
+            }
+        }
+
+        return order
+            .compactMap { buckets[$0] }
+            // Tokens, not cost: cost is unavailable for some models, so sorting
+            // by it would push exactly the models this section exists to
+            // surface to the bottom of the list.
+            .sorted { $0.tokens.total > $1.tokens.total }
+    }
+
     /// Newest first, capped: the popover is a glance surface, not a log viewer.
     private var recentSessions: [SessionSummary] {
         loaded
@@ -126,6 +167,117 @@ struct ActivitySection: View {
             .sorted { $0.startedAt > $1.startedAt }
             .prefix(6)
             .map { $0 }
+    }
+}
+
+/// One model's share of local activity.
+struct ModelUsage: Identifiable {
+    let model: String
+    var tokens: TokenTotals
+    var costUSD: Double
+    var sessionCount: Int
+
+    /// The raw model string is the identity; the shortened name is only ever a
+    /// label, so two models that shorten alike still can't collide here.
+    var id: String { model }
+    var displayName: String { Fmt.shortModel(model) }
+}
+
+/// Per-model breakdown of local activity.
+///
+/// WHY THIS EXISTS: before it, a model's name appeared only in the recent-session
+/// rows, which sit below the fold in a 340×600 popover. A heavily-used model with
+/// no published rate was therefore counted correctly and displayed nowhere — the
+/// user could see a "some models have no rate" footnote without ever learning
+/// which models, or how much of their work ran on one. Counting something and
+/// never naming it is indistinguishable from not tracking it.
+private struct ModelBreakdown: View {
+    let models: [ModelUsage]
+
+    /// Five rows covers the realistic case (most people run two or three models
+    /// and a stray) while keeping this section shorter than the totals above it.
+    private static let collapsedLimit = 5
+
+    @State private var expanded = false
+
+    private var visible: [ModelUsage] {
+        expanded ? models : Array(models.prefix(Self.collapsedLimit))
+    }
+
+    private var hiddenCount: Int {
+        max(models.count - Self.collapsedLimit, 0)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            columnHeader
+            ForEach(visible) { model in
+                ModelRow(usage: model)
+            }
+            if hiddenCount > 0 {
+                disclosure
+            }
+        }
+    }
+
+    /// Named columns, because two right-aligned numeric columns are otherwise
+    /// ambiguous — a bare "1.2M / ~$4.10" pair doesn't say which is which.
+    private var columnHeader: some View {
+        HStack(spacing: 8) {
+            Text("MODEL")
+            Spacer(minLength: 4)
+            Text("TOKENS").frame(width: MU.tokenColumn, alignment: .trailing)
+            Text("COST").frame(width: MU.costColumn, alignment: .trailing)
+        }
+        .font(.muSectionTitle)
+        .tracking(0.6)
+        .foregroundColor(MU.textTertiary)
+    }
+
+    private var disclosure: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.18)) { expanded.toggle() }
+        } label: {
+            Text(expanded ? "Show fewer" : "+\(hiddenCount) more")
+                .font(.muCaption)
+                .foregroundColor(MU.accent)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 1)
+    }
+}
+
+private struct ModelRow: View {
+    let usage: ModelUsage
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(usage.displayName)
+                .font(.muBody)
+                .foregroundColor(MU.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            Text(Fmt.compactCount(usage.tokens.total))
+                .font(.muNumber)
+                .foregroundColor(MU.textSecondary)
+                .frame(width: MU.tokenColumn, alignment: .trailing)
+            Text(CostDisplay.label(model: usage.model, costUSD: usage.costUSD))
+                .font(.muNumber)
+                .foregroundColor(MU.textSecondary)
+                .frame(width: MU.costColumn, alignment: .trailing)
+        }
+        .help(CostDisplay.help(model: usage.model))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        let cost = CostDisplay.isUnpriced(usage.model)
+            ? "cost unavailable, no published rate"
+            : "about \(Fmt.usd(usage.costUSD))"
+        let sessions = "\(usage.sessionCount) session\(usage.sessionCount == 1 ? "" : "s")"
+        return "\(usage.displayName): \(Fmt.compactCount(usage.tokens.total)) tokens, \(cost), \(sessions)"
     }
 }
 
@@ -142,6 +294,33 @@ private struct ProviderNote: Identifiable {
 }
 
 // MARK: - Pieces
+
+/// The single place a model's cost becomes text.
+///
+/// Two surfaces render a per-model cost — the breakdown and the session list —
+/// and they must never disagree about what an unpriced model looks like. One
+/// showing "—" while the other showed "$0.00" would make the em-dash read as a
+/// glitch rather than as a statement.
+enum CostDisplay {
+
+    static func isUnpriced(_ model: String) -> Bool {
+        Pricing.availability(forModel: model) == .knownUnpriced
+    }
+
+    /// An em-dash, never "$0.00".
+    ///
+    /// The token count beside it is real and measured; the cost simply is not
+    /// something we can state. A zero would claim the work was free.
+    static func label(model: String, costUSD: Double) -> String {
+        isUnpriced(model) ? "\u{2014}" : "~\(Fmt.usd(costUSD))"
+    }
+
+    static func help(model: String) -> String {
+        isUnpriced(model)
+            ? "No public per-token rate is published for this model, so no cost is estimated. The token count is exact."
+            : "Estimated from public list prices — not a bill."
+    }
+}
 
 /// Explains both the "+" on the total and the em-dash in the session list.
 ///
@@ -254,21 +433,11 @@ private struct SessionRow: View {
         }
     }
 
-    private var isUnpriced: Bool {
-        Pricing.availability(forModel: session.model) == .knownUnpriced
-    }
-
-    /// An em-dash, never "$0.00".
-    ///
-    /// The token count beside it is real and measured; the cost is simply not
-    /// something we can state. A zero would claim this session was free.
     private var costLabel: String {
-        isUnpriced ? "\u{2014}" : "~\(Fmt.usd(session.estimatedCostUSD))"
+        CostDisplay.label(model: session.model, costUSD: session.estimatedCostUSD)
     }
 
     private var costHelp: String {
-        isUnpriced
-            ? "No public per-token rate is published for this model, so no cost is estimated. The token count is exact."
-            : "Estimated from public list prices — not a bill."
+        CostDisplay.help(model: session.model)
     }
 }

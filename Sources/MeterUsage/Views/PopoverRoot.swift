@@ -32,6 +32,14 @@ struct PopoverRoot: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(MU.text)
 
+            // Every number below is synthetic when this shows. Quiet enough not
+            // to spoil a marketing screenshot, unmistakable on inspection — so
+            // a demo shot can never be read as real telemetry, and nobody files
+            // a bug about the figures being wrong.
+            if coordinator.isDemoMode {
+                PlanBadge(text: "Demo")
+            }
+
             if coordinator.isRefreshing && !showingSettings {
                 ProgressView()
                     .controlSize(.small)
