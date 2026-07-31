@@ -1,0 +1,37 @@
+# Build
+.build/
+.swiftpm/
+DerivedData/
+*.o
+*.dSYM/
+dist/
+*.app/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+*.xcuserstate
+xcuserdata/
+
+# Credential-shaped files must never be committed. These are belt-and-braces on
+# top of the pre-commit hook in .githooks/pre-commit — the app itself never
+# writes any of them.
+*.pem
+*.p12
+*.mobileprovision
+.env
+.env.*
+!.env.example
+auth.json
+credentials.json
+.credentials.json
+*token*.json
+*secret*
+*.key
+
+# Real captured provider payloads. Fixtures under Tests/ must be synthetic;
+# anything captured from a live account stays out of the repo.
+Tests/**/Fixtures/**/*.live.json
+scratch/

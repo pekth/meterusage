@@ -1,0 +1,139 @@
+import SwiftUI
+import Combine
+import ServiceManagement
+
+// MARK: - Preferences
+//
+// Settings live in `UserDefaults` and are read two ways:
+//
+//   * `SettingsView` binds them with `@AppStorage`, so toggling a control writes
+//     through immediately with no plumbing.
+//   * `AppCoordinator` needs to *react* to the same values (a changed refresh
+//     interval must restart the timer), and `@AppStorage` gives no notification
+//     outside a View's body. `Preferences` therefore observes
+//     `UserDefaults.didChangeNotification` and republishes.
+//
+// Both paths address the same keys, so there is exactly one stored value per
+// setting and no synchronisation problem.
+
+enum PrefKey {
+    static let refreshInterval = "refreshIntervalSeconds"
+    static let showClaude = "showProviderClaude"
+    static let showCodex = "showProviderCodex"
+    static let theme = "appearanceTheme"
+    static let launchAtLogin = "launchAtLogin"
+}
+
+/// Popover appearance. The menu-bar label always follows the system menu bar.
+enum AppTheme: String, CaseIterable, Identifiable {
+    case system, light, dark
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .system: return "System"
+        case .light:  return "Light"
+        case .dark:   return "Dark"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light:  return .light
+        case .dark:   return .dark
+        }
+    }
+}
+
+@MainActor
+final class Preferences: ObservableObject {
+
+    /// Polling faster than this is pure waste: providers report coarse windows
+    /// and every poll spawns a subprocess. Enforced here rather than trusted to
+    /// the UI, so a hand-edited defaults value can't create a hot loop.
+    static let minimumRefreshInterval: TimeInterval = 30
+    static let defaultRefreshInterval: TimeInterval = 60
+
+    static let intervalChoices: [TimeInterval] = [30, 60, 120, 300, 900]
+
+    @Published private(set) var refreshInterval: TimeInterval = Preferences.defaultRefreshInterval
+    @Published private(set) var enabledProviders: Set<Provider> = Set(Provider.allCases)
+    @Published private(set) var theme: AppTheme = .system
+
+    private let defaults: UserDefaults
+    private var observer: NSObjectProtocol?
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        defaults.register(defaults: [
+            PrefKey.refreshInterval: Preferences.defaultRefreshInterval,
+            PrefKey.showClaude: true,
+            PrefKey.showCodex: true,
+            PrefKey.theme: AppTheme.system.rawValue,
+            PrefKey.launchAtLogin: false
+        ])
+        reload()
+        observer = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: defaults,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.reload() }
+        }
+    }
+
+    // No `deinit` teardown: a single `Preferences` is created by the app
+    // delegate and lives for the process lifetime, and touching main-actor state
+    // from a nonisolated `deinit` is not expressible cleanly here.
+
+    private func reload() {
+        let stored = defaults.double(forKey: PrefKey.refreshInterval)
+        let interval = stored > 0 ? stored : Preferences.defaultRefreshInterval
+        let clamped = max(interval, Preferences.minimumRefreshInterval)
+        if clamped != refreshInterval { refreshInterval = clamped }
+
+        var providers = Set<Provider>()
+        if defaults.bool(forKey: PrefKey.showClaude) { providers.insert(.claude) }
+        if defaults.bool(forKey: PrefKey.showCodex) { providers.insert(.codex) }
+        if providers != enabledProviders { enabledProviders = providers }
+
+        let newTheme = AppTheme(rawValue: defaults.string(forKey: PrefKey.theme) ?? "") ?? .system
+        if newTheme != theme { theme = newTheme }
+    }
+
+    func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }
+}
+
+// MARK: - Launch at login
+
+/// Thin wrapper over `SMAppService`.
+///
+/// Kept separate from `Preferences` because registration can fail (the user can
+/// deny it in System Settings) and the stored toggle must then be corrected to
+/// match reality rather than lying about the app's state.
+enum LoginItem {
+
+    static var isEnabled: Bool {
+        SMAppService.mainApp.status == .enabled
+    }
+
+    /// Returns the state actually achieved, which may differ from `enabled`.
+    @discardableResult
+    static func set(_ enabled: Bool) -> Bool {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            // Registration is unavailable when running from a bare binary rather
+            // than an installed .app bundle. Nothing to surface beyond the
+            // toggle snapping back.
+            return isEnabled
+        }
+        return isEnabled
+    }
+}

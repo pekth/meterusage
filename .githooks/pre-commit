@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Block credential-shaped content from entering this repo.
+#
+# meterusage is a public repo that reads usage data from local AI CLIs, so
+# developer machines running it necessarily have live tokens nearby. This hook
+# is the mechanical backstop: it scans the staged diff, not the worktree, and
+# fails CLOSED (any error aborts the commit rather than allowing it).
+#
+# Bypass with `git commit --no-verify` only when you have manually confirmed a
+# match is a false positive.
+set -euo pipefail
+
+fail=0
+note() { printf '  %s\n' "$1" >&2; }
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+# 1) Provider token prefixes and JWTs, matched against added lines only.
+added=$(git diff --cached --unified=0 -- $staged | grep '^+' | grep -v '^+++' || true)
+
+scan() { # <label> <regex>
+  if printf '%s' "$added" | grep -qE "$2"; then
+    note "BLOCKED: $1"
+    fail=1
+  fi
+}
+
+scan "Anthropic key/token (sk-ant-...)"      'sk-ant-[a-z0-9]{2,12}-[A-Za-z0-9_-]{20,}'
+scan "OpenAI key (sk-...)"                   'sk-(proj|svcacct)?-?[A-Za-z0-9_-]{32,}'
+scan "Supabase token (sbp_/sbs_)"            'sb[a-z]_[A-Za-z0-9]{20,}'
+scan "GitHub token (gh*_)"                   'gh[pousr]_[A-Za-z0-9]{30,}'
+scan "Stripe secret key"                     '(sk|rk)_(live|test)_[A-Za-z0-9]{20,}'
+scan "Stripe webhook secret"                 'whsec_[A-Za-z0-9]{20,}'
+scan "JWT"                                   'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}'
+scan "Private key block"                     'BEGIN [A-Z ]*PRIVATE KEY'
+scan "JSON OAuth field with a value"         '"(access_?[Tt]oken|refresh_?[Tt]oken|client_?[Ss]ecret|id_?token)"[[:space:]]*:[[:space:]]*"[^"]{16,}"'
+scan "NAME_SECRET=value assignment"          '[A-Z_]*(SECRET|TOKEN|PASSWORD|APIKEY|API_KEY)[A-Z_]*=[A-Za-z0-9/+_-]{16,}'
+
+# 2) Personal identity that must not ship in a public repo.
+#
+# Test fixtures legitimately need macOS-shaped paths, so two reserved synthetic
+# names are allowed and every other username is blocked. Keep that list tiny —
+# the whole point is that a real developer username can never slip through.
+#
+# Done as extract-then-filter rather than a negative lookahead: this hook must
+# run on stock macOS, where grep is BSD and supports neither -P nor (?!...).
+# A lookahead here would silently never match, which fails OPEN — the one
+# outcome a secret guard must never have.
+if printf '%s' "$added" \
+     | grep -oE '/Users/[A-Za-z0-9._-]+/' \
+     | grep -qvE '^/Users/(testuser|example)/'; then
+  note "BLOCKED: absolute /Users/<name>/ path (use testuser/example in fixtures)"
+  fail=1
+fi
+scan "Apple DEVELOPMENT_TEAM value"          'DEVELOPMENT_TEAM[[:space:]]*=[[:space:]]*[A-Z0-9]{10}'
+scan "Tailscale host"                        '[a-z0-9-]+\.ts\.net'
+
+# 3) Files that should never be tracked regardless of content.
+for f in $staged; do
+  case "$f" in
+    *auth.json|*.credentials.json|*credentials.json|.env|.env.*|*.p12|*.pem|*.key)
+      note "BLOCKED: credential-shaped file staged: $f"; fail=1 ;;
+  esac
+done
+
+if [ "$fail" -ne 0 ]; then
+  cat >&2 <<'EOF'
+
+pre-commit: refusing to commit.
+A secret or personal identifier appears in the staged changes.
+
+Do NOT just re-run with --no-verify. If a real credential was staged, it must be
+rotated at the provider even if you unstage it now.
+EOF
+  exit 1
+fi
+
+exit 0
