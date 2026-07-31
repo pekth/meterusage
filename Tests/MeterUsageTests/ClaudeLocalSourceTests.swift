@@ -514,14 +514,17 @@ final class OptionalQuotaFileSourceTests: XCTestCase {
         XCTAssertFalse(labels.contains { $0.hasPrefix("7-day (Sonnet") })
     }
 
-    /// SPECULATIVE, not observed: a scan of every `seven_day_*` field name
-    /// in the Claude Code CLI bundle turns up exactly `seven_day_opus`,
-    /// `seven_day_sonnet`, `seven_day_overage_included`, and
-    /// `seven_day_oauth_apps` — there is no `seven_day_fable` key anywhere
-    /// today. This test only proves the parser is forward-compatible via
-    /// the generic `seven_day_<model>` scan, not that Fable will ever
-    /// actually appear this way (Fable bills against `extra_usage`
-    /// instead — see the credits tests below).
+    /// SPECULATIVE for this exact key spelling: no `seven_day_fable` key has
+    /// been observed. Fable DOES have its own real weekly plan-quota window
+    /// (confirmed 2026-07-31 against the machine owner's own Claude app
+    /// usage screenshot plus the raw cached API response — see
+    /// OptionalQuotaFileSource.swift's header comment) — it just arrives via
+    /// the API's `limits` array / this file's `weekly` array, not via a
+    /// `seven_day_fable` sibling key. This test only proves the parser is
+    /// forward-compatible via the generic `seven_day_<model>` scan in case
+    /// that key spelling is ever added too; it is not a claim that Fable
+    /// bills only through `extra_usage` (see the credits tests below, which
+    /// cover a real but separate mechanism).
     func testSpeculativeSevenDayFableKeyParsesAndLabelsIfEverPresent() async throws {
         let file = try tempQuotaFile("""
         {
@@ -592,6 +595,269 @@ final class OptionalQuotaFileSourceTests: XCTestCase {
         XCTAssertEqual(usedDollars, 3.40, accuracy: 0.0001)
         XCTAssertEqual(limitDollars, 15.00, accuracy: 0.0001)
         XCTAssertEqual(credits.unlimited, false)
+    }
+
+    // MARK: - `limits[]` array (writer plumbing)
+
+    /// The canonical writer shape: `session`, `weekly_all`, and
+    /// `weekly_scoped` entries, in the order the API returns them. Labels
+    /// and order must both come through untouched.
+    func testLimitsArrayParsesAllThreeKindsWithCorrectLabels() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "session", "group": "session", "percent": 18, "scope": null,
+              "resets_at": "2026-08-01T01:00:00.000000+00:00" },
+            { "kind": "weekly_all", "group": "weekly", "percent": 44, "scope": null,
+              "resets_at": "2026-08-05T00:00:00.000000+00:00" },
+            { "kind": "weekly_scoped", "group": "weekly", "percent": 12,
+              "scope": { "model": { "id": null, "display_name": "Fable" } },
+              "resets_at": "2026-08-05T00:00:00.000000+00:00" }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.map(\.label), ["5-hour", "Weekly · All models", "Weekly · Fable"])
+        XCTAssertEqual(quota.windows[0].usedPercent, 18)
+        XCTAssertEqual(quota.windows[1].usedPercent, 44)
+        XCTAssertEqual(quota.windows[2].usedPercent, 12)
+        for window in quota.windows {
+            XCTAssertNotNil(window.resetsAt)
+        }
+    }
+
+    /// A `weekly_scoped` entry is labelled from `scope.model.display_name`,
+    /// not a hardcoded model name — this pins that the label is genuinely
+    /// derived, not coincidentally matching a "Fable" special case.
+    func testScopedEntryLabelledFromDisplayName() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "weekly_scoped", "group": "weekly", "percent": 7,
+              "scope": { "model": { "id": null, "display_name": "Opus" } },
+              "resets_at": "2026-08-05T00:00:00Z" }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.map(\.label), ["Weekly · Opus"])
+    }
+
+    /// Absence of `limits` must leave the existing five_hour/seven_day
+    /// behaviour completely untouched — the fixture has no `limits` key.
+    func testAbsentLimitsArrayLeavesExistingBehaviourUntouched() async throws {
+        let source = OptionalQuotaFileSource(candidatePaths: [try fixtureURL()])
+        let quota = try await source.fetchQuota()
+
+        let labels = quota.windows.map(\.label)
+        XCTAssertTrue(labels.contains("5-hour"))
+        XCTAssertTrue(labels.contains("7-day"))
+    }
+
+    /// `resets_at` in `limits[]` arrives as an ISO-8601 string; the older
+    /// `five_hour`/`seven_day` blocks use an integer epoch. Both must
+    /// parse to the same moment in time when equivalent.
+    func testLimitsResetsAtParsesBothISO8601AndEpoch() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "session", "group": "session", "percent": 10, "scope": null,
+              "resets_at": "2026-08-01T12:30:00.384213+00:00" },
+            { "kind": "weekly_all", "group": "weekly", "percent": 20, "scope": null,
+              "resets_at": 1785585600 }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        let session = try XCTUnwrap(quota.windows.first { $0.label == "5-hour" })
+        let sessionReset = try XCTUnwrap(session.resetsAt)
+        XCTAssertEqual(sessionReset.timeIntervalSince1970, 1785587400.384213, accuracy: 0.01)
+
+        let weeklyAll = try XCTUnwrap(quota.windows.first { $0.label == "Weekly · All models" })
+        let weeklyReset = try XCTUnwrap(weeklyAll.resetsAt)
+        XCTAssertEqual(weeklyReset.timeIntervalSince1970, 1785585600, accuracy: 0.01)
+    }
+
+    /// A malformed entry (not even a JSON object) must be skipped without
+    /// failing the parse of the rest of the array.
+    func testMalformedLimitsEntryIsSkippedNotFatal() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "session", "group": "session", "percent": 15, "scope": null,
+              "resets_at": "2026-08-01T00:00:00Z" },
+            "this is not an object",
+            { "kind": "weekly_all", "group": "weekly", "percent": 33, "scope": null,
+              "resets_at": "2026-08-05T00:00:00Z" }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.map(\.label), ["5-hour", "Weekly · All models"])
+    }
+
+    /// An unknown `kind` with a `scope.model.display_name` present still
+    /// yields a sensible, non-crashing label; one with no display name at
+    /// all is skipped rather than inventing a label for it.
+    func testUnknownKindDerivesLabelFromDisplayNameOrIsSkipped() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "some_future_kind", "group": "weekly", "percent": 5,
+              "scope": { "model": { "id": null, "display_name": "Haiku" } },
+              "resets_at": null },
+            { "kind": "another_future_kind", "group": null, "percent": 9,
+              "scope": null, "resets_at": null }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.count, 1)
+        XCTAssertTrue(quota.windows[0].label.contains("Haiku"))
+    }
+
+    /// When `limits[]` is present, it takes precedence over the legacy
+    /// `five_hour`/`seven_day` keys entirely — both must be absent from
+    /// the resulting windows so the user never sees the same window
+    /// rendered twice under two different labels.
+    func testLimitsArrayTakesPrecedenceOverLegacyKeys() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "five_hour": { "used_percentage": 61, "resets_at": 1790000000 },
+          "seven_day": { "used_percentage": 24, "resets_at": 1790500000 },
+          "limits": [
+            { "kind": "session", "group": "session", "percent": 99, "scope": null,
+              "resets_at": "2026-08-01T00:00:00Z" }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.map(\.label), ["5-hour"])
+        XCTAssertEqual(quota.windows[0].usedPercent, 99)
+    }
+
+    /// Real Anthropic usage-API `limits[]` entries carry extra keys
+    /// (`is_active`, `severity`) that the Claude app's usage screen uses.
+    /// They must be ignored, not fatal — and `is_active: false` must NOT
+    /// hide a window (observed 2026-07-31: Fable at 99% arrives with
+    /// `is_active: false` while still shown on the usage screen).
+    func testRealWorldLimitsExtraKeysAreIgnoredAndInactiveStillShows() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "session", "group": "session", "percent": 24, "scope": null,
+              "is_active": false, "severity": "normal",
+              "resets_at": "2026-07-31T12:30:00.546474+00:00" },
+            { "kind": "weekly_all", "group": "weekly", "percent": 100, "scope": null,
+              "is_active": true, "severity": "critical",
+              "resets_at": "2026-08-01T12:00:00.546502+00:00" },
+            { "kind": "weekly_scoped", "group": "weekly", "percent": 99,
+              "scope": { "model": { "id": null, "display_name": "Fable" } },
+              "is_active": false, "severity": "critical",
+              "resets_at": "2026-08-01T11:59:59.546832+00:00" }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(
+            quota.windows.map(\.label),
+            ["5-hour", "Weekly · All models", "Weekly · Fable"]
+        )
+        XCTAssertEqual(quota.windows.map(\.usedPercent), [24, 100, 99])
+    }
+
+    /// `QuotaSection`/`WindowRow`/`MeterBar` render from `QuotaWindow` only —
+    /// label, usedPercent, fraction, resetsAt. Pin the Fable-scoped window
+    /// produces a distinct non-duplicated label and a MeterBar-ready fraction
+    /// without needing a SwiftUI host.
+    func testFableScopedWindowDrivesDistinctLabelAndMeterFraction() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "weekly_all", "group": "weekly", "percent": 100, "scope": null,
+              "resets_at": "2026-08-01T12:00:00Z" },
+            { "kind": "weekly_scoped", "group": "weekly", "percent": 99,
+              "scope": { "model": { "id": null, "display_name": "Fable" } },
+              "resets_at": "2026-08-01T12:00:00Z" }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.count, 2)
+        let labels = quota.windows.map(\.label)
+        XCTAssertEqual(Set(labels).count, labels.count, "duplicate window labels would double-render rows")
+        XCTAssertFalse(labels.contains("7-day"), "legacy coarse label must not appear alongside limits[]")
+
+        let fable = try XCTUnwrap(quota.windows.first { $0.label == "Weekly · Fable" })
+        XCTAssertEqual(fable.usedPercent, 99)
+        XCTAssertEqual(fable.fraction, 0.99, accuracy: 0.0001)
+        XCTAssertNotNil(fable.resetsAt)
+    }
+
+    /// `limits[]` is a full replacement: legacy `seven_day_*` model keys must
+    /// not be merged in beside it (that would re-introduce the same weekly
+    /// allowance under a second label family).
+    func testLimitsDoesNotMergeLegacyPerModelSevenDayKeys() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "seven_day_opus": { "used_percentage": 15, "resets_at": 1790500000 },
+          "seven_day_sonnet": { "used_percentage": 62, "resets_at": 1790500000 },
+          "limits": [
+            { "kind": "weekly_scoped", "group": "weekly", "percent": 99,
+              "scope": { "model": { "id": null, "display_name": "Fable" } },
+              "resets_at": "2026-08-01T12:00:00Z" }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.map(\.label), ["Weekly · Fable"])
+        XCTAssertFalse(quota.windows.contains { $0.label.hasPrefix("7-day") })
+    }
+
+    /// Credits (`extra_usage`) stay independent of `limits[]` precedence —
+    /// both can surface in one payload so the plan windows and the credits
+    /// meter render together without either suppressing the other.
+    func testLimitsAndExtraUsageAreOrthogonal() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "weekly_scoped", "group": "weekly", "percent": 12,
+              "scope": { "model": { "id": null, "display_name": "Fable" } },
+              "resets_at": "2026-08-05T00:00:00Z" }
+          ],
+          "extra_usage": {
+            "is_enabled": true,
+            "used_percentage": 10,
+            "used_credits": 100,
+            "monthly_limit": 1000
+          }
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.map(\.label), ["Weekly · Fable"])
+        let credits = try XCTUnwrap(quota.credits)
+        XCTAssertEqual(try XCTUnwrap(credits.usedDollars), 1.0, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(credits.limitDollars), 10.0, accuracy: 0.0001)
     }
 
     /// `is_enabled: true` but the numeric fields are still `null` (a

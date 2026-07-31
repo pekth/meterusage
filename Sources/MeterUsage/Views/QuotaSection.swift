@@ -216,7 +216,12 @@ private struct WindowRow: View {
 
 /// The usage-credits bucket, distinct from the 5h/7d plan-allowance windows
 /// above it — this is where anything billed outside that allowance draws
-/// from (Fable among them, but not exclusively it; see `caption` below).
+/// from. Fable is NOT an example of this: it has its own weekly
+/// plan-allowance window (see `OptionalQuotaFileSource`'s per-model
+/// `weekly` handling), confirmed 2026-07-31 against the machine owner's own
+/// Claude app usage screenshot. An earlier version of this comment claimed
+/// Fable billed here instead — that was wrong, based on an absence-of-
+/// evidence read of the CLI binary rather than the actual usage API.
 ///
 /// Renders a used/limit meter, mirroring `WindowRow`, ONLY when both
 /// `usedDollars` and `limitDollars` are known. When the source can only
@@ -273,11 +278,11 @@ private struct CreditsRow: View {
         return Fmt.usd(credits.balance)
     }
 
-    /// Factual and brief on purpose: Fable is a named example of a model
-    /// billed outside the plan allowance, not a claim that it's the only
-    /// one, and this never implies Fable is part of the 5h/7d allowance
-    /// above — it draws from this separate credits bucket instead.
+    /// Factual and brief on purpose. Does not name Fable: Fable is not
+    /// billed here — it has its own weekly plan-allowance window shown as
+    /// an ordinary `WindowRow` above, not a credits draw (see the header
+    /// comment on this file and on `OptionalQuotaFileSource`).
     private var caption: String {
-        "Usage credits cover models billed outside the plan allowance, including Fable."
+        "Usage credits cover models billed outside the plan allowance."
     }
 }
