@@ -154,26 +154,31 @@ private struct WindowRow: View {
                     .font(.muBody)
                     .foregroundColor(MU.textSecondary)
                 Spacer(minLength: 4)
-                Text(countdownLabel)
+                // Countdown and wall-clock on one line rather than two. Two
+                // lines per window cost four lines across the popover and
+                // pushed the per-model breakdown below the fold — and the two
+                // facts are one thought ("in 3h — that's 7:23 this morning"),
+                // so splitting them was never worth the height.
+                Text(resetLabel)
                     .font(.muCaption)
                     .foregroundColor(MU.textTertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             MeterBar(fraction: window.fraction, tint: tint)
-            // Absent, not blank, when the provider doesn't say: an empty line
-            // where a time should be reads as a value that failed to load.
-            if let absolute = absoluteLabel {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    Text(absolute)
-                        .font(.system(size: 9.5))
-                        .foregroundColor(MU.textTertiary)
-                        .lineLimit(1)
-                }
-            }
         }
         .help(helpLabel)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// "resets in 3h 14m · today 7:23 AM", or just the countdown when the
+    /// wall-clock adds nothing.
+    private var resetLabel: String {
+        guard let absolute = absoluteLabel, !countdownLabel.isEmpty else {
+            return countdownLabel
+        }
+        return "\(countdownLabel) · \(absolute)"
     }
 
     /// Relative, because "resets in 2h 14m" answers the question the user
@@ -209,18 +214,56 @@ private struct WindowRow: View {
     }
 }
 
+/// The usage-credits bucket, distinct from the 5h/7d plan-allowance windows
+/// above it — this is where anything billed outside that allowance draws
+/// from (Fable among them, but not exclusively it; see `caption` below).
+///
+/// Renders a used/limit meter, mirroring `WindowRow`, ONLY when both
+/// `usedDollars` and `limitDollars` are known. When the source can only
+/// report a remaining `balance` (or nothing at all), this falls back to the
+/// older plain-text line rather than fabricating a meter it can't back up.
 private struct CreditsRow: View {
     let credits: CreditBalance
 
+    private var tint: Color {
+        guard let usedPercent else { return MU.calm }
+        return headroomColor(usedPercent: usedPercent)
+    }
+
+    private var usedPercent: Double? {
+        guard let used = credits.usedDollars, let limit = credits.limitDollars, limit > 0 else { return nil }
+        return (used / limit) * 100
+    }
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text("Credits")
-                .font(.muBody)
-                .foregroundColor(MU.textSecondary)
-            Spacer(minLength: 4)
-            Text(label)
-                .font(.muNumber)
-                .foregroundColor(MU.text)
+        if let used = credits.usedDollars, let limit = credits.limitDollars, limit > 0 {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Credits")
+                        .font(.muBody)
+                        .foregroundColor(MU.textSecondary)
+                    Spacer(minLength: 4)
+                    Text("\(Fmt.usd(used)) / \(Fmt.usd(limit))")
+                        .font(.muNumber)
+                        .foregroundColor(MU.text)
+                        .lineLimit(1)
+                }
+                MeterBar(fraction: (usedPercent ?? 0) / 100, tint: tint)
+            }
+            .help(caption)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Credits: \(Fmt.usd(used)) of \(Fmt.usd(limit)) used. \(caption)")
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("Credits")
+                    .font(.muBody)
+                    .foregroundColor(MU.textSecondary)
+                Spacer(minLength: 4)
+                Text(label)
+                    .font(.muNumber)
+                    .foregroundColor(MU.text)
+            }
+            .help(caption)
         }
     }
 
@@ -228,5 +271,13 @@ private struct CreditsRow: View {
         if credits.unlimited { return "Unlimited" }
         if !credits.hasCredits { return "None" }
         return Fmt.usd(credits.balance)
+    }
+
+    /// Factual and brief on purpose: Fable is a named example of a model
+    /// billed outside the plan allowance, not a claim that it's the only
+    /// one, and this never implies Fable is part of the 5h/7d allowance
+    /// above — it draws from this separate credits bucket instead.
+    private var caption: String {
+        "Usage credits cover models billed outside the plan allowance, including Fable."
     }
 }

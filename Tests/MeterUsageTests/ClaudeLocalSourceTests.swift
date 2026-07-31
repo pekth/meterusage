@@ -456,4 +456,161 @@ final class OptionalQuotaFileSourceTests: XCTestCase {
             // expected
         }
     }
+
+    // MARK: - Per-model 7-day windows (TASK 1)
+
+    /// The fixture mirrors the real, `seven_day_opus`/`seven_day_sonnet`-less
+    /// payload observed on this machine (2026-07-31). Absence of both keys
+    /// must produce zero extra windows and no error — this is the everyday
+    /// case, not an edge case.
+    func testAbsentPerModelSevenDayKeysProduceNoExtraWindows() async throws {
+        let source = OptionalQuotaFileSource(candidatePaths: [try fixtureURL()])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertFalse(quota.windows.contains { $0.label.hasPrefix("7-day (") })
+        // The coarse window is still there.
+        XCTAssertTrue(quota.windows.contains { $0.label == "7-day" })
+    }
+
+    /// `seven_day_opus` / `seven_day_sonnet`, when present, are ADDITIVE to
+    /// the overall `seven_day` window — not a replacement for it, unlike
+    /// `weekly` vs `seven_day`.
+    func testPerModelSevenDayWindowsParseAndLabelWhenPresent() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "seven_day": { "used_percentage": 40, "resets_at": 1790500000 },
+          "seven_day_opus": { "used_percentage": 15, "resets_at": 1790500000 },
+          "seven_day_sonnet": { "used_percentage": 62, "resets_at": 1790500000 }
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        let labels = quota.windows.map(\.label)
+        XCTAssertTrue(labels.contains("7-day"))
+        XCTAssertTrue(labels.contains("7-day (Opus)"))
+        XCTAssertTrue(labels.contains("7-day (Sonnet)"))
+
+        let opus = quota.windows.first { $0.label == "7-day (Opus)" }
+        XCTAssertEqual(opus?.usedPercent, 15.0)
+        let sonnet = quota.windows.first { $0.label == "7-day (Sonnet)" }
+        XCTAssertEqual(sonnet?.usedPercent, 62.0)
+    }
+
+    /// One of the two present, the other explicitly `null` — the `null` one
+    /// must not produce a window and must not fail the parse.
+    func testOnePerModelKeyNullProducesNoWindowForThatModelOnly() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "seven_day_opus": { "used_percentage": 8, "resets_at": 1790500000 },
+          "seven_day_sonnet": null
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        let labels = quota.windows.map(\.label)
+        XCTAssertTrue(labels.contains("7-day (Opus)"))
+        XCTAssertFalse(labels.contains { $0.hasPrefix("7-day (Sonnet") })
+    }
+
+    /// SPECULATIVE, not observed: a scan of every `seven_day_*` field name
+    /// in the Claude Code CLI bundle turns up exactly `seven_day_opus`,
+    /// `seven_day_sonnet`, `seven_day_overage_included`, and
+    /// `seven_day_oauth_apps` — there is no `seven_day_fable` key anywhere
+    /// today. This test only proves the parser is forward-compatible via
+    /// the generic `seven_day_<model>` scan, not that Fable will ever
+    /// actually appear this way (Fable bills against `extra_usage`
+    /// instead — see the credits tests below).
+    func testSpeculativeSevenDayFableKeyParsesAndLabelsIfEverPresent() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "seven_day_fable": { "used_percentage": 33, "resets_at": 1790500000 }
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        let fable = quota.windows.first { $0.label == "7-day (Fable)" }
+        XCTAssertNotNil(fable)
+        XCTAssertEqual(fable?.usedPercent, 33.0)
+    }
+
+    /// A `seven_day_*`-shaped key that isn't `{used_percentage, resets_at}`
+    /// (e.g. the real `seven_day_overage_included` boolean field) must be
+    /// skipped, not treated as a parse failure for the whole file.
+    func testMismatchedShapeSevenDayKeyIsSkippedNotFatal() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "seven_day": { "used_percentage": 10, "resets_at": 1790500000 },
+          "seven_day_overage_included": true
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertTrue(quota.windows.contains { $0.label == "7-day" })
+        XCTAssertFalse(quota.windows.contains { $0.label.hasPrefix("7-day (Overage") })
+    }
+
+    // MARK: - Usage credits (TASK 2)
+
+    /// Real-world default (`is_enabled: false`, everything else `null`)
+    /// must still yield no `CreditBalance` at all — already pinned by
+    /// `testDisabledNullExtraUsageProducesNilCreditsNotZero` above; this
+    /// adds the same assertion for the used/limit fields specifically, so a
+    /// regression that starts synthesizing a zeroed used/limit pair would
+    /// be caught even if `credits` itself were made non-nil by mistake.
+    func testDisabledExtraUsageHasNoUsedOrLimitDollars() async throws {
+        let source = OptionalQuotaFileSource(candidatePaths: [try fixtureURL()])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertNil(quota.credits?.usedDollars)
+        XCTAssertNil(quota.credits?.limitDollars)
+    }
+
+    /// Enabled with both values present: cents on the wire convert to
+    /// dollars for `usedDollars`/`limitDollars`, which is what the credits
+    /// meter in `QuotaSection` renders.
+    func testEnabledExtraUsageExposesUsedAndLimitDollars() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "extra_usage": {
+            "is_enabled": true,
+            "used_percentage": 12,
+            "used_credits": 340,
+            "monthly_limit": 1500
+          }
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        let credits = try XCTUnwrap(quota.credits)
+        let usedDollars = try XCTUnwrap(credits.usedDollars)
+        let limitDollars = try XCTUnwrap(credits.limitDollars)
+        XCTAssertEqual(usedDollars, 3.40, accuracy: 0.0001)
+        XCTAssertEqual(limitDollars, 15.00, accuracy: 0.0001)
+        XCTAssertEqual(credits.unlimited, false)
+    }
+
+    /// `is_enabled: true` but the numeric fields are still `null` (a
+    /// plausible future partial-rollout shape) must be treated the same as
+    /// disabled — no fabricated $0/$0 credits row.
+    func testEnabledExtraUsageWithNullValuesProducesNilCredits() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "extra_usage": {
+            "is_enabled": true,
+            "used_percentage": null,
+            "used_credits": null,
+            "monthly_limit": null
+          }
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertNil(quota.credits)
+    }
 }

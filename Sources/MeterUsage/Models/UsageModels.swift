@@ -34,11 +34,27 @@ public struct CreditBalance: Equatable, Sendable {
     public let balance: Double
     public let hasCredits: Bool
     public let unlimited: Bool
+    /// Dollars consumed so far this cycle, where the provider reports a
+    /// used/limit pair rather than (or in addition to) a remaining
+    /// `balance`. `nil` when the source only knows a remaining balance
+    /// (e.g. Codex today) — views must not assume this is ever populated.
+    public let usedDollars: Double?
+    /// The monthly cap in dollars, paired with `usedDollars`. `nil` under
+    /// the same conditions as `usedDollars`.
+    public let limitDollars: Double?
 
-    public init(balance: Double, hasCredits: Bool, unlimited: Bool) {
+    public init(
+        balance: Double,
+        hasCredits: Bool,
+        unlimited: Bool,
+        usedDollars: Double? = nil,
+        limitDollars: Double? = nil
+    ) {
         self.balance = balance
         self.hasCredits = hasCredits
         self.unlimited = unlimited
+        self.usedDollars = usedDollars
+        self.limitDollars = limitDollars
     }
 }
 
