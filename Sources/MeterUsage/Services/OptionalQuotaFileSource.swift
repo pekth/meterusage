@@ -46,20 +46,53 @@ import Foundation
 //     fails on a *missing* non-optional key, and every property here is
 //     Optional.
 //
-// `weekly` (an array that would supersede `seven_day` when present) is
-// SPEC-DRIVEN, not observed: the real file captured above has no `weekly`
-// key at all. The schema still allows it, so the precedence logic below is
-// kept, but it hasn't been exercised against a real payload.
+// `weekly` (an array that would supersede `seven_day` when present) is not
+// currently written by the on-disk file above, but IS real: verified
+// 2026-07-31 against the raw Claude usage API response cached at
+// `/tmp/claude/statusline-usage-cache-*.json` (source of the `claudewatch`
+// statusline writer). That response carries a `limits` array with entries
+// like:
+//   {
+//     "kind": "weekly_all", "group": "weekly", "percent": 100,
+//     "resets_at": "2026-08-01T12:00:00Z", "scope": null
+//   },
+//   {
+//     "kind": "weekly_scoped", "group": "weekly", "percent": 99,
+//     "resets_at": "2026-08-01T12:00:00Z",
+//     "scope": { "model": { "id": null, "display_name": "Fable" } }
+//   }
+// This matches the machine owner's own screenshot of the Claude app's usage
+// screen exactly (99% used, "Resets Sat 8:00 AM", labeled "Fable") and
+// disproves two earlier, wrong conclusions reached from grepping strings in
+// the Claude Code CLI binary: Fable is NOT billed only through
+// `extra_usage`/usage-credits, and it DOES have its own weekly plan-quota
+// window — "Fable 5 is still included with your Max plan" per the app's own
+// copy. The CLI binary grep found nothing because that usage screen is
+// rendered by the Claude desktop/web app reading this API response
+// directly, not by anything shipped in the CLI bundle.
+//
+// The `claudewatch` statusline writer (`statusline.sh`) currently discards
+// the entire `limits` array when it builds `claudewatch-usage.json` — it
+// only extracts `.five_hour`, `.seven_day`, and `.extra_usage` from the
+// cached response. The one-line-shaped fix on that side: map each
+// `limits[] | select(.group == "weekly")` entry to a `weekly` array entry
+// `{ label, used_percentage: .percent, resets_at }` (label = "All models"
+// for `kind == "weekly_all"`, else `.scope.model.display_name`) and include
+// it in the JSON written to `claudewatch-usage.json`. Until that writer
+// change ships, this parser's `weekly` handling below is exercised by
+// synthetic fixtures rather than the live file, which is why the precedence
+// logic is kept even though today's live file has no `weekly` key:
 //   {
 //     "weekly": [
-//       { "label": "Sonnet weekly", "used_percentage": 12, "resets_at": 1780500000 }
+//       { "label": "All models", "used_percentage": 100, "resets_at": 1785585600 },
+//       { "label": "Fable", "used_percentage": 99, "resets_at": 1785585600 }
 //     ]
 //   }
 //
 // `weekly`, when present (even as a single-element array), takes precedence
 // over `seven_day` — it's the more specific, potentially multi-window
-// breakdown (e.g. separate Sonnet/Opus weekly caps), so it supersedes the
-// coarser single seven-day figure rather than being merged with it.
+// breakdown (e.g. separate Sonnet/Opus/Fable weekly caps), so it supersedes
+// the coarser single seven-day figure rather than being merged with it.
 public struct OptionalQuotaFileSource: QuotaSource {
 
     public let provider: Provider = .claude
@@ -101,71 +134,91 @@ public struct OptionalQuotaFileSource: QuotaSource {
         }
 
         var windows: [QuotaWindow] = []
-        if let fiveHour = payload.five_hour {
-            windows.append(
-                QuotaWindow(
-                    label: "5-hour",
-                    usedPercent: fiveHour.used_percentage ?? 0,
-                    resetsAt: fiveHour.resets_at.map(Date.init(timeIntervalSince1970:))
-                )
-            )
-        }
 
-        if let weekly = payload.weekly, !weekly.isEmpty {
-            // `weekly` supersedes `seven_day` — see header comment.
-            for entry in weekly {
+        // `limits[]`, when present, is the BEST source and takes full
+        // precedence over every legacy key below (`five_hour`, `seven_day`,
+        // `weekly`, and the per-model `seven_day_<model>` family) — it is
+        // built directly from the real Anthropic usage API's `limits`
+        // array (see header comment), which is the same data the Claude
+        // app's own usage screen renders from. Rendering `limits[]`
+        // *alongside* the legacy keys would show the same window twice
+        // under two different labels (e.g. "7-day" and "Weekly · All
+        // models" both meaning the seven-day-all-models window), so this
+        // is a full replacement, not a merge, whenever `limits` is present
+        // and non-empty. `extra_usage`/credits handling below is
+        // unaffected either way — it's an orthogonal concern.
+        if let limits = payload.limits?.compactMap(\.entry), !limits.isEmpty {
+            for entry in limits {
+                guard let window = Self.quotaWindow(fromLimitEntry: entry) else { continue }
+                windows.append(window)
+            }
+        } else {
+            if let fiveHour = payload.five_hour {
                 windows.append(
                     QuotaWindow(
-                        label: entry.label ?? "Weekly",
-                        usedPercent: entry.used_percentage ?? 0,
-                        resetsAt: entry.resets_at.map(Date.init(timeIntervalSince1970:))
+                        label: "5-hour",
+                        usedPercent: fiveHour.used_percentage ?? 0,
+                        resetsAt: fiveHour.resets_at.map(Date.init(timeIntervalSince1970:))
                     )
                 )
             }
-        } else if let sevenDay = payload.seven_day {
-            windows.append(
-                QuotaWindow(
-                    label: "7-day",
-                    usedPercent: sevenDay.used_percentage ?? 0,
-                    resetsAt: sevenDay.resets_at.map(Date.init(timeIntervalSince1970:))
-                )
-            )
-        }
 
-        // Per-model weekly windows: `seven_day_opus`, `seven_day_sonnet`,
-        // and — generically, see below — any future `seven_day_<model>`
-        // key. Additive to the coarse `seven_day` window above, never a
-        // replacement for it: the overall 7-day figure and a per-model
-        // breakdown answer different questions, and both can be true at
-        // once (unlike `weekly` vs `seven_day`, which describe the same
-        // thing at two granularities).
-        //
-        // Both `seven_day_opus` and `seven_day_sonnet` are OPTIONAL and, on
-        // this machine's real file (captured 2026-07-31), ABSENT — the
-        // live payload only has the bare `seven_day` block. Absence must
-        // produce zero extra windows and zero errors, never a fabricated
-        // window.
-        //
-        // `seven_day_fable` is NOT a key that has been observed anywhere —
-        // a full scan of every `seven_day_*` field name in the Claude Code
-        // CLI bundle turns up exactly `seven_day_opus`, `seven_day_sonnet`,
-        // `seven_day_overage_included`, `seven_day_oauth_apps`, and no
-        // `seven_day_fable`. Fable bills against usage credits
-        // (`extra_usage` below), not a 5h/7d window, so no such key is
-        // expected to ever appear. The generic `seven_day_<model>` scan
-        // below is forward-compatible speculation, not a claim that Fable
-        // — or any other named model — will show up this way; it exists so
-        // that IF the upstream schema ever grows one, this parser lights
-        // it up without a code change, and it does nothing when (as today)
-        // no such key exists.
-        for (model, window) in payload.perModelSevenDay.sorted(by: { $0.key < $1.key }) {
-            windows.append(
-                QuotaWindow(
-                    label: "7-day (\(Self.capitalized(model)))",
-                    usedPercent: window.used_percentage ?? 0,
-                    resetsAt: window.resets_at.map(Date.init(timeIntervalSince1970:))
+            if let weekly = payload.weekly, !weekly.isEmpty {
+                // `weekly` supersedes `seven_day` — see header comment.
+                for entry in weekly {
+                    windows.append(
+                        QuotaWindow(
+                            label: entry.label ?? "Weekly",
+                            usedPercent: entry.used_percentage ?? 0,
+                            resetsAt: entry.resets_at.map(Date.init(timeIntervalSince1970:))
+                        )
+                    )
+                }
+            } else if let sevenDay = payload.seven_day {
+                windows.append(
+                    QuotaWindow(
+                        label: "7-day",
+                        usedPercent: sevenDay.used_percentage ?? 0,
+                        resetsAt: sevenDay.resets_at.map(Date.init(timeIntervalSince1970:))
+                    )
                 )
-            )
+            }
+
+            // Per-model weekly windows: `seven_day_opus`, `seven_day_sonnet`,
+            // and — generically, see below — any future `seven_day_<model>`
+            // key. Additive to the coarse `seven_day` window above, never a
+            // replacement for it: the overall 7-day figure and a per-model
+            // breakdown answer different questions, and both can be true at
+            // once (unlike `weekly` vs `seven_day`, which describe the same
+            // thing at two granularities).
+            //
+            // Both `seven_day_opus` and `seven_day_sonnet` are OPTIONAL and, on
+            // this machine's real file (captured 2026-07-31), ABSENT — the
+            // live payload only has the bare `seven_day` block. Absence must
+            // produce zero extra windows and zero errors, never a fabricated
+            // window.
+            //
+            // `seven_day_fable` (this exact key spelling) has never been
+            // observed — the API's actual per-model weekly breakdown arrives
+            // via the `limits` array (handled above, taking full precedence
+            // when present), not via a `seven_day_<model>` sibling key.
+            // Fable DOES have its own weekly plan-quota window — confirmed
+            // 2026-07-31 against the machine owner's own Claude app usage
+            // screenshot and the raw cached API response — it is just carried
+            // under a different shape than Opus/Sonnet's `seven_day_*` keys.
+            // The generic `seven_day_<model>` scan below stays as
+            // forward-compatible handling for that key family in case the API
+            // ever adds `seven_day_fable` directly; it is not itself how Fable
+            // shows up today.
+            for (model, window) in payload.perModelSevenDay.sorted(by: { $0.key < $1.key }) {
+                windows.append(
+                    QuotaWindow(
+                        label: "7-day (\(Self.capitalized(model)))",
+                        usedPercent: window.used_percentage ?? 0,
+                        resetsAt: window.resets_at.map(Date.init(timeIntervalSince1970:))
+                    )
+                )
+            }
         }
 
         // `extra_usage.is_enabled: false` (the observed real-world default)
@@ -220,12 +273,50 @@ public struct OptionalQuotaFileSource: QuotaSource {
         return first.uppercased() + model.dropFirst()
     }
 
+    /// Maps one `limits[]` entry to a displayable `QuotaWindow`, per the
+    /// label rules verified against the machine owner's own Claude app
+    /// usage screen (2026-07-31):
+    ///   - `kind == "session"`       -> "5-hour" (the session/5h window)
+    ///   - `kind == "weekly_all"`    -> "Weekly · All models"
+    ///   - `kind == "weekly_scoped"` -> "Weekly · <scope.model.display_name>"
+    ///   - any other/unknown `kind` (including a missing one) -> derive a
+    ///     label from `scope.model.display_name` when present; otherwise
+    ///     return `nil` so the caller skips the entry entirely rather than
+    ///     inventing a label for data we don't understand.
+    private static func quotaWindow(fromLimitEntry entry: LimitEntry) -> QuotaWindow? {
+        let label: String
+        switch entry.kind ?? "" {
+        case "session":
+            label = "5-hour"
+        case "weekly_all":
+            label = "Weekly · All models"
+        case "weekly_scoped":
+            if let name = entry.scopeModelDisplayName {
+                label = "Weekly · \(name)"
+            } else {
+                // Known kind, just missing the scope name we'd normally
+                // hang off it — still a real weekly window, so render it
+                // generically rather than dropping it.
+                label = "Weekly"
+            }
+        default:
+            guard let name = entry.scopeModelDisplayName else { return nil }
+            if let group = entry.group {
+                label = "\(Self.capitalized(group)) · \(name)"
+            } else {
+                label = name
+            }
+        }
+        return QuotaWindow(label: label, usedPercent: entry.percent ?? 0, resetsAt: entry.resetsAt)
+    }
+
     // MARK: - Wire types
 
     private struct Payload: Decodable {
         let five_hour: Window?
         let seven_day: Window?
         let weekly: [WeeklyWindow]?
+        let limits: [SkippableLimitEntry]?
         let extra_usage: ExtraUsage?
         /// Every `seven_day_<model>` key found in the payload, keyed by the
         /// model name (e.g. "opus", "sonnet"). Built generically in
@@ -240,7 +331,7 @@ public struct OptionalQuotaFileSource: QuotaSource {
         let perModelSevenDay: [String: Window]
 
         private enum CodingKeys: String, CodingKey {
-            case five_hour, seven_day, weekly, extra_usage
+            case five_hour, seven_day, weekly, limits, extra_usage
         }
 
         /// Opens the same JSON object a second time under keys typed as
@@ -258,6 +349,7 @@ public struct OptionalQuotaFileSource: QuotaSource {
             five_hour = try container.decodeIfPresent(Window.self, forKey: .five_hour)
             seven_day = try container.decodeIfPresent(Window.self, forKey: .seven_day)
             weekly = try container.decodeIfPresent([WeeklyWindow].self, forKey: .weekly)
+            limits = try container.decodeIfPresent([SkippableLimitEntry].self, forKey: .limits)
             extra_usage = try container.decodeIfPresent(ExtraUsage.self, forKey: .extra_usage)
 
             let dynamic = try decoder.container(keyedBy: DynamicKey.self)
@@ -288,6 +380,86 @@ public struct OptionalQuotaFileSource: QuotaSource {
         let label: String?
         let used_percentage: Double?
         let resets_at: Double?
+    }
+
+    /// One entry of the real Anthropic usage API's `limits` array (see the
+    /// header comment for the verified shape). `percent` decodes as
+    /// `Double` even for a bare JSON integer literal — the same
+    /// `JSONDecoder` widening behaviour documented on `Window` above.
+    /// `resets_at` is handled manually in `init(from:)` because it arrives
+    /// as EITHER an ISO-8601 string (the `limits[]` shape) or an integer
+    /// epoch (the older `five_hour`/`seven_day` shape) — never assume
+    /// which, decode defensively for both.
+    private struct LimitEntry: Decodable {
+        let kind: String?
+        let group: String?
+        let percent: Double?
+        let scopeModelDisplayName: String?
+        let resetsAt: Date?
+
+        private enum CodingKeys: String, CodingKey {
+            case kind, group, percent, scope, resets_at
+        }
+
+        private struct Scope: Decodable {
+            let model: Model?
+            struct Model: Decodable {
+                let id: String?
+                let display_name: String?
+            }
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            kind = try container.decodeIfPresent(String.self, forKey: .kind)
+            group = try container.decodeIfPresent(String.self, forKey: .group)
+            percent = try container.decodeIfPresent(Double.self, forKey: .percent)
+            let scope = try container.decodeIfPresent(Scope.self, forKey: .scope)
+            scopeModelDisplayName = scope?.model?.display_name
+
+            // `resets_at`: try the epoch-number shape first, then the
+            // ISO-8601-string shape. Either being absent/mismatched is
+            // fine — `try?` collapses "missing key", "JSON null", and
+            // "wrong type" all down to `nil`, and a `resets_at` this
+            // parser can't make sense of just means "no reset time to
+            // show", never a parse failure for the whole entry.
+            if let epoch = try? container.decode(Double.self, forKey: .resets_at) {
+                resetsAt = Date(timeIntervalSince1970: epoch)
+            } else if let iso = try? container.decode(String.self, forKey: .resets_at) {
+                resetsAt = Self.parseISO8601(iso)
+            } else {
+                resetsAt = nil
+            }
+        }
+
+        /// Handles both the fractional-seconds form observed in the real
+        /// cached API response (`"2026-08-01T12:00:00.384229+00:00"`) and
+        /// the plain-seconds form, in case a future/other producer omits
+        /// the fraction.
+        private static func parseISO8601(_ string: String) -> Date? {
+            let withFraction = ISO8601DateFormatter()
+            withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = withFraction.date(from: string) {
+                return date
+            }
+            let plain = ISO8601DateFormatter()
+            plain.formatOptions = [.withInternetDateTime]
+            return plain.date(from: string)
+        }
+    }
+
+    /// Wraps `LimitEntry`'s throwing decode in a `try?` so one malformed
+    /// element (wrong shape, not even a JSON object, an unparseable
+    /// `resets_at`, etc.) never fails the whole `limits` array — it just
+    /// produces a `nil` `entry`, which the caller filters out. Mirrors the
+    /// same "malformed input degrades gracefully" posture as the rest of
+    /// this file (see `Payload`'s `perModelSevenDay` scan above).
+    private struct SkippableLimitEntry: Decodable {
+        let entry: LimitEntry?
+
+        init(from decoder: Decoder) throws {
+            entry = try? LimitEntry(from: decoder)
+        }
     }
 
     private struct ExtraUsage: Decodable {
