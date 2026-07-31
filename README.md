@@ -28,19 +28,27 @@ connect, no API key to paste, no statusline to install.
 - **Claude activity** — tokens and estimated cost broken down per model, so
   every model you actually run is visibly accounted for. Computed from your
   own local transcripts.
+- **Claude quota bars *(optional)*** — shown only when a local companion has
+  already written a usage snapshot. When that file includes a `limits[]`
+  array (session / weekly_all / weekly_scoped), meterusage can surface those
+  windows — including a Fable `weekly_scoped` bar. If the writer still emits
+  only legacy `five_hour` / `seven_day` fields, you get those instead. No
+  Fable bar appears until the writer actually emits `limits[]` (or an
+  equivalent weekly breakdown).
 - **A 26-week heatmap** of daily usage.
 - **Service health** from Anthropic's public status page.
 
 ## How it works
 
 meterusage reuses the CLI logins already on your machine. It never handles a
-credential itself.
+credential itself. It does **not** call Anthropic for quota and does **not**
+read any Claude credentials.
 
 | What | How | Needs network |
 |---|---|---|
 | Codex quota | Spawns `codex app-server --stdio` and calls `account/rateLimits/read` over JSON-RPC. The subprocess authenticates itself. | Yes, by the CLI |
 | Claude activity | Streams `~/.claude/projects/**/*.jsonl` and sums usage fields. | No |
-| Claude quota *(optional)* | Displayed only if a usage JSON already exists on disk. | No |
+| Claude quota *(optional)* | Reads an on-disk usage JSON if a companion already wrote one (e.g. `~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Parses legacy windows and, when present, `limits[]` (including Fable `weekly_scoped`). Does not fetch Anthropic quota. | No |
 | Service health | Public Statuspage JSON. | Yes |
 
 ### Why there's no "Sign in with Claude" button
@@ -52,9 +60,14 @@ endpoint using Anthropic's first-party client id. meterusage deliberately
 doesn't, because that impersonates the official client and can break without
 notice.
 
-So the honest split: **Codex quota is live from the cloud. Claude numbers are
-computed locally.** If you happen to have a usage JSON on disk, Claude quota
-bars light up too — but nothing requires it, and nothing asks you for it.
+So the honest split: **Codex quota is live from the cloud. Claude activity is
+computed locally. Claude quota bars are optional and file-driven.** meterusage
+never talks to Anthropic for quota and never opens a credential file. If a
+local companion (ClaudeWatch, or a future helper) writes a usage snapshot,
+quota bars light up from that file alone. When the snapshot includes
+`limits[]`, those windows — including Fable — take precedence over legacy
+keys; today's claudewatch writer may still ship only the legacy fields, so
+Fable display depends on the writer, not on meterusage inventing data.
 
 See [docs/PRIVACY.md](docs/PRIVACY.md) for the full boundary and how each claim
 is enforced by tests and hooks rather than promised in prose.

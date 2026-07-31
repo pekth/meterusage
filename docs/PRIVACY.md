@@ -25,8 +25,33 @@ each claim is enforced rather than merely promised.
 |---|---|---|
 | Codex quota | Spawns `codex app-server --stdio` and makes a JSON-RPC `account/rateLimits/read` call. This is a supported CLI surface; the subprocess authenticates itself using your existing `codex login`. meterusage never sees the token. | Yes, by the CLI subprocess |
 | Claude activity | Streams your own transcript files under `~/.claude/projects/`, summing token-usage fields. | No |
-| Claude quota *(optional)* | If a usage JSON file happens to exist, its percentages are displayed. Absent by default and never requested. | No |
+| Claude quota *(optional)* | Read-only parse of a local usage snapshot if a companion already wrote one (`~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Supports legacy `five_hour` / `seven_day` / `weekly` shapes and, when present, a `limits[]` array (session / weekly_all / weekly_scoped, including Fable). meterusage does **not** fetch Anthropic quota and does **not** read Claude credentials. Absent by default and never requested. | No |
 | Service health | Public, unauthenticated Statuspage JSON at `status.claude.com`. | Yes |
+
+### Optional Claude quota file (including Fable)
+
+Claude quota bars are a pure bonus. A companion tool must already have written
+a small JSON snapshot to disk; meterusage never prompts for it and never
+creates it. Implementation lives in
+`Sources/MeterUsage/Services/OptionalQuotaFileSource.swift`.
+
+Honest limits of that path:
+
+- **No direct Anthropic quota fetch.** meterusage does not call the usage API
+  and does not open `~/.claude/.credentials.json` or Keychain items for this
+  purpose (or any other).
+- **`limits[]` is parsed when present.** When the snapshot includes a non-empty
+  `limits` array, those windows fully replace legacy 5-hour / 7-day / weekly
+  keys so the same window is not drawn twice. A `weekly_scoped` entry with
+  `scope.model.display_name == "Fable"` can render as a real Fable plan-
+  allowance bar.
+- **Fable display depends on the writer.** The parser can handle `limits[]`,
+  but the bar only appears if the local companion emits that shape. Current
+  claudewatch JSON may still contain only legacy fields (`five_hour`,
+  `seven_day`, `extra_usage`); until a writer includes `limits[]` (or an
+  equivalent weekly breakdown), no Fable quota bar is shown.
+- **Credits stay orthogonal.** Extra-usage / credit balance is separate from
+  plan windows and is not how Fable is labelled.
 
 ### Why there is no "sign in with Claude" button
 
@@ -39,8 +64,8 @@ and can break without notice.
 
 The consequence is honest rather than hidden: Codex shows real live quota,
 Claude shows locally-computed activity, and Claude quota bars appear only if a
-usage file is already present. Nothing is silently estimated and labelled as
-authoritative.
+usage file is already present — and only with the windows that file actually
+contains. Nothing is silently estimated and labelled as authoritative.
 
 ## Cost figures are estimates
 
