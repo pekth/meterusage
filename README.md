@@ -1,6 +1,11 @@
+<img src="docs/images/icon.png" alt="" width="96" align="left">
+
 # meterusage
 
 A macOS menu-bar app that shows how much of your AI coding quota you have left.
+
+<br clear="left">
+
 
 Claude Code and Codex both burn through rate limits you can't see until you hit
 them. meterusage puts the number in your menu bar.
