@@ -144,14 +144,22 @@ public struct OptionalQuotaFileSource: QuotaSource {
         // *alongside* the legacy keys would show the same window twice
         // under two different labels (e.g. "7-day" and "Weekly · All
         // models" both meaning the seven-day-all-models window), so this
-        // is a full replacement, not a merge, whenever `limits` is present
-        // and non-empty. `extra_usage`/credits handling below is
-        // unaffected either way — it's an orthogonal concern.
-        if let limits = payload.limits?.compactMap(\.entry), !limits.isEmpty {
-            for entry in limits {
-                guard let window = Self.quotaWindow(fromLimitEntry: entry) else { continue }
-                windows.append(window)
-            }
+        // is a full replacement, not a merge, whenever `limits` yields at
+        // least one displayable window. `extra_usage`/credits handling
+        // below is unaffected either way — it's an orthogonal concern.
+        //
+        // The gate deliberately tests the MAPPED windows, not the decoded
+        // entries: entries that decode fine but that `quotaWindow` declines
+        // to render (unknown `kind` with no model name, or a missing
+        // `percent` — see that method) must not count as "we have limits
+        // data". Gating on the raw entry count instead would let a payload
+        // whose every entry is undisplayable suppress the legacy keys and
+        // strand the card with zero windows, even though `five_hour` /
+        // `seven_day` were sitting there with perfectly good data.
+        let limitWindows = Self.orderedEntries(payload.limits)
+            .compactMap(Self.quotaWindow(fromLimitEntry:))
+        if !limitWindows.isEmpty {
+            windows.append(contentsOf: limitWindows)
         } else {
             if let fiveHour = payload.five_hour {
                 windows.append(
@@ -273,6 +281,35 @@ public struct OptionalQuotaFileSource: QuotaSource {
         return first.uppercased() + model.dropFirst()
     }
 
+    /// The `limits[]` entries, in the order they should be RENDERED.
+    ///
+    /// `QuotaSection` draws windows in array order, so this is where the
+    /// popover's reading order is decided: the 5-hour session window first,
+    /// then the all-models weekly window, then the per-model weekly windows
+    /// (Fable among them) underneath it. That is a UX requirement of this
+    /// app, not a property of the upstream payload — today's real response
+    /// happens to arrive in exactly this order, but nothing contracts it,
+    /// and a reordering upstream would silently shuffle the popover.
+    ///
+    /// Unknown kinds sort last, and the original-index tiebreak keeps them
+    /// (and any same-kind group, e.g. several `weekly_scoped` models) in
+    /// arrival order rather than scrambling them. The tiebreak is
+    /// load-bearing: `sorted(by:)` is not guaranteed stable.
+    private static func orderedEntries(_ raw: [SkippableLimitEntry]?) -> [LimitEntry] {
+        func rank(_ entry: LimitEntry) -> Int {
+            switch entry.kind {
+            case "session": return 0
+            case "weekly_all": return 1
+            case "weekly_scoped": return 2
+            default: return 3
+            }
+        }
+        return (raw ?? []).compactMap(\.entry)
+            .enumerated()
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
+            .map(\.element)
+    }
+
     /// Maps one `limits[]` entry to a displayable `QuotaWindow`, per the
     /// label rules verified against the machine owner's own Claude app
     /// usage screen (2026-07-31):
@@ -283,7 +320,13 @@ public struct OptionalQuotaFileSource: QuotaSource {
     ///     label from `scope.model.display_name` when present; otherwise
     ///     return `nil` so the caller skips the entry entirely rather than
     ///     inventing a label for data we don't understand.
+    ///
+    /// An entry with no `percent` is skipped whatever its `kind`. Defaulting
+    /// it to 0 would draw an empty bar — a positive claim of full headroom —
+    /// for a window we know nothing about, which is exactly backwards when
+    /// the truth might be 99%. Showing no row at all is the honest failure.
     private static func quotaWindow(fromLimitEntry entry: LimitEntry) -> QuotaWindow? {
+        guard let percent = entry.percent else { return nil }
         let label: String
         switch entry.kind ?? "" {
         case "session":
@@ -307,7 +350,7 @@ public struct OptionalQuotaFileSource: QuotaSource {
                 label = name
             }
         }
-        return QuotaWindow(label: label, usedPercent: entry.percent ?? 0, resetsAt: entry.resetsAt)
+        return QuotaWindow(label: label, usedPercent: percent, resetsAt: entry.resetsAt)
     }
 
     // MARK: - Wire types

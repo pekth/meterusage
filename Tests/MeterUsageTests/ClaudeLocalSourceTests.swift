@@ -860,6 +860,88 @@ final class OptionalQuotaFileSourceTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(credits.limitDollars), 10.0, accuracy: 0.0001)
     }
 
+    /// A `limits[]` array whose every entry decodes cleanly but yields no
+    /// displayable window (unknown kinds, no model names) must NOT suppress
+    /// the legacy keys. Gating precedence on the raw entry count instead of
+    /// the mapped windows would strand the card with zero windows here,
+    /// while `five_hour` sat in the same file with perfectly good data.
+    func testUndisplayableLimitsEntriesFallBackToLegacyKeys() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "five_hour": { "used_percentage": 61, "resets_at": 1790000000 },
+          "seven_day": { "used_percentage": 24, "resets_at": 1790500000 },
+          "limits": [
+            { "kind": "some_future_kind", "group": null, "percent": 5,
+              "scope": null, "resets_at": null },
+            { "kind": "another_future_kind", "group": null, "percent": 9,
+              "scope": null, "resets_at": null }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.map(\.label), ["5-hour", "7-day"])
+        XCTAssertEqual(quota.windows[0].usedPercent, 61)
+    }
+
+    /// An entry with a known `kind` but no `percent` is skipped, never
+    /// rendered as 0% — an empty bar is a positive claim of full headroom,
+    /// and the truth for that window might be 99%.
+    func testLimitsEntryWithNullPercentIsSkippedNotZeroed() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "session", "group": "session", "percent": 15, "scope": null,
+              "resets_at": "2026-08-01T00:00:00Z" },
+            { "kind": "weekly_all", "group": "weekly", "percent": null, "scope": null,
+              "resets_at": "2026-08-05T00:00:00Z" },
+            { "kind": "weekly_scoped", "group": "weekly",
+              "scope": { "model": { "id": null, "display_name": "Fable" } },
+              "resets_at": "2026-08-05T00:00:00Z" }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.windows.map(\.label), ["5-hour"])
+        XCTAssertFalse(quota.windows.contains { $0.usedPercent == 0 })
+    }
+
+    /// Render order is imposed locally, not inherited from the payload:
+    /// session, then the all-models weekly window, then the per-model
+    /// weekly windows (Fable among them) underneath it — even when the
+    /// array arrives scrambled. Same-rank entries keep arrival order.
+    func testLimitsRenderOrderIsImposedNotInherited() async throws {
+        let file = try tempQuotaFile("""
+        {
+          "limits": [
+            { "kind": "weekly_scoped", "group": "weekly", "percent": 99,
+              "scope": { "model": { "id": null, "display_name": "Fable" } },
+              "resets_at": "2026-08-05T00:00:00Z" },
+            { "kind": "some_future_kind", "group": "weekly", "percent": 3,
+              "scope": { "model": { "id": null, "display_name": "Haiku" } },
+              "resets_at": null },
+            { "kind": "weekly_scoped", "group": "weekly", "percent": 40,
+              "scope": { "model": { "id": null, "display_name": "Opus" } },
+              "resets_at": "2026-08-05T00:00:00Z" },
+            { "kind": "weekly_all", "group": "weekly", "percent": 44, "scope": null,
+              "resets_at": "2026-08-05T00:00:00Z" },
+            { "kind": "session", "group": "session", "percent": 18, "scope": null,
+              "resets_at": "2026-08-01T01:00:00Z" }
+          ]
+        }
+        """)
+        let source = OptionalQuotaFileSource(candidatePaths: [file])
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(
+            quota.windows.map(\.label),
+            ["5-hour", "Weekly · All models", "Weekly · Fable", "Weekly · Opus", "Weekly · Haiku"]
+        )
+    }
+
     /// `is_enabled: true` but the numeric fields are still `null` (a
     /// plausible future partial-rollout shape) must be treated the same as
     /// disabled — no fabricated $0/$0 credits row.
