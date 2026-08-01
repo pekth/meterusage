@@ -30,11 +30,12 @@ connect, no API key to paste, no statusline to install.
   own local transcripts.
 - **Claude quota bars *(optional)*** — shown only when a local companion has
   already written a usage snapshot. When that file includes a `limits[]`
-  array (session / weekly_all / weekly_scoped), meterusage can surface those
+  array (session / weekly_all / weekly_scoped), meterusage surfaces those
   windows — including a Fable `weekly_scoped` bar. If the writer still emits
   only legacy `five_hour` / `seven_day` fields, you get those instead. No
-  Fable bar appears until the writer actually emits `limits[]` (or an
-  equivalent weekly breakdown).
+  Fable bar appears until the writer actually emits `limits[]`; most
+  statusline writers discard it, so [docs/COMPANION.md](docs/COMPANION.md)
+  shows how to pass it through.
 - **A 26-week heatmap** of daily usage.
 - **Service health** from Anthropic's public status page.
 
@@ -89,7 +90,13 @@ an error — meterusage is useful with just one of them installed.
 swift build            # debug binary
 swift test             # unit tests
 ./Scripts/make-app.sh  # assembles dist/MeterUsage.app, ad-hoc signed
+./Scripts/make-icon.sh # regenerates the app icon (only when the design changes)
 ```
+
+The icon is generated rather than hand-drawn: `Scripts/make-icon.swift` renders
+it from the same geometry the menu-bar glyph uses, so the two stay the same
+mark. Both the 1024×1024 master and the `.icns` are committed, so a fresh clone
+builds a complete bundle without running the generator.
 
 No third-party dependencies. No Apple Developer account needed — the app is
 ad-hoc signed, so macOS will ask you to confirm the first launch via

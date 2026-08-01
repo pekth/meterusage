@@ -218,8 +218,8 @@ private struct WindowRow: View {
 /// above it — this is where anything billed outside that allowance draws
 /// from. Fable is NOT an example of this: it has its own weekly
 /// plan-allowance window (see `OptionalQuotaFileSource`'s per-model
-/// `weekly` handling), confirmed 2026-07-31 against the machine owner's own
-/// Claude app usage screenshot. An earlier version of this comment claimed
+/// `weekly` handling), confirmed 2026-07-31 against the Claude app's own
+/// usage screen. An earlier version of this comment claimed
 /// Fable billed here instead — that was wrong, based on an absence-of-
 /// evidence read of the CLI binary rather than the actual usage API.
 ///

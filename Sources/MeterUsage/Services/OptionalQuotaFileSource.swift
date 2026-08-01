@@ -13,8 +13,8 @@ import Foundation
 //   ~/.claude/claudewatch-usage.json
 //   ~/.claude/meterusage-usage.json
 //
-// VERIFIED against the real live file (`~/.claude/claudewatch-usage.json`,
-// a symlink into `~/ClaudeSync/dot-claude/`) on 2026-07-31:
+// VERIFIED against a real live file (`~/.claude/claudewatch-usage.json`)
+// on 2026-07-31:
 //   {
 //     "five_hour":  { "used_percentage": 50, "resets_at": 1785483000 },
 //     "seven_day":  { "used_percentage": 93, "resets_at": 1785585600 },
@@ -61,7 +61,7 @@ import Foundation
 //     "resets_at": "2026-08-01T12:00:00Z",
 //     "scope": { "model": { "id": null, "display_name": "Fable" } }
 //   }
-// This matches the machine owner's own screenshot of the Claude app's usage
+// This matches a screenshot of the Claude app's own usage
 // screen exactly (99% used, "Resets Sat 8:00 AM", labeled "Fable") and
 // disproves two earlier, wrong conclusions reached from grepping strings in
 // the Claude Code CLI binary: Fable is NOT billed only through
@@ -211,7 +211,7 @@ public struct OptionalQuotaFileSource: QuotaSource {
             // via the `limits` array (handled above, taking full precedence
             // when present), not via a `seven_day_<model>` sibling key.
             // Fable DOES have its own weekly plan-quota window — confirmed
-            // 2026-07-31 against the machine owner's own Claude app usage
+            // 2026-07-31 against the Claude app's own usage
             // screenshot and the raw cached API response — it is just carried
             // under a different shape than Opus/Sonnet's `seven_day_*` keys.
             // The generic `seven_day_<model>` scan below stays as
@@ -311,7 +311,7 @@ public struct OptionalQuotaFileSource: QuotaSource {
     }
 
     /// Maps one `limits[]` entry to a displayable `QuotaWindow`, per the
-    /// label rules verified against the machine owner's own Claude app
+    /// label rules verified against the Claude app's own usage
     /// usage screen (2026-07-31):
     ///   - `kind == "session"`       -> "5-hour" (the session/5h window)
     ///   - `kind == "weekly_all"`    -> "Weekly · All models"

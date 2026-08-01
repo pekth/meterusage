@@ -516,7 +516,7 @@ final class OptionalQuotaFileSourceTests: XCTestCase {
 
     /// SPECULATIVE for this exact key spelling: no `seven_day_fable` key has
     /// been observed. Fable DOES have its own real weekly plan-quota window
-    /// (confirmed 2026-07-31 against the machine owner's own Claude app
+    /// (confirmed 2026-07-31 against the Claude app's own usage
     /// usage screenshot plus the raw cached API response — see
     /// OptionalQuotaFileSource.swift's header comment) — it just arrives via
     /// the API's `limits` array / this file's `weekly` array, not via a
