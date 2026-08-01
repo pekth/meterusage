@@ -48,12 +48,16 @@ cp "${INFO_PLIST_SRC}" "${APP_DIR}/Contents/Info.plist"
 # Classic 8-byte package signature. Harmless, and some tooling still looks.
 printf 'APPL????' > "${APP_DIR}/Contents/PkgInfo"
 
-# Optional icon: present in a released checkout, absent in a fresh one.
-if [ -f "${ROOT_DIR}/Resources/AppIcon.icns" ]; then
-    cp "${ROOT_DIR}/Resources/AppIcon.icns" "${APP_DIR}/Contents/Resources/AppIcon.icns"
-    /usr/libexec/PlistBuddy -c "Add :CFBundleIconFile string AppIcon" \
-        "${APP_DIR}/Contents/Info.plist" 2>/dev/null || true
+# The icon is committed, so a checkout without it means something is wrong —
+# a bad merge, a partial clone, a stray `rm`. Fail loudly: silently shipping a
+# generic-icon bundle is the kind of regression nobody files a bug about.
+# `Info.plist` already declares `CFBundleIconFile`, so this only copies.
+if [ ! -f "${ROOT_DIR}/Resources/AppIcon.icns" ]; then
+    echo "error: Resources/AppIcon.icns is missing." >&2
+    echo "       Regenerate it with ./Scripts/make-icon.sh" >&2
+    exit 1
 fi
+cp "${ROOT_DIR}/Resources/AppIcon.icns" "${APP_DIR}/Contents/Resources/AppIcon.icns"
 
 echo "==> Ad-hoc signing"
 # `-s -` is the ad-hoc identity: no certificate, no team, nothing machine
