@@ -458,7 +458,7 @@ public actor ClaudeLocalSource: LocalActivitySource {
 
 extension TokenTotals: Codable {
     private enum CodingKeys: String, CodingKey {
-        case input, output, cacheRead, cacheWrite
+        case input, output, reasoning, cacheRead, cacheWrite
     }
 
     public init(from decoder: Decoder) throws {
@@ -466,6 +466,7 @@ extension TokenTotals: Codable {
         self.init(
             input: try c.decode(Int.self, forKey: .input),
             output: try c.decode(Int.self, forKey: .output),
+            reasoning: try c.decodeIfPresent(Int.self, forKey: .reasoning) ?? 0,
             cacheRead: try c.decode(Int.self, forKey: .cacheRead),
             cacheWrite: try c.decode(Int.self, forKey: .cacheWrite)
         )
@@ -475,6 +476,7 @@ extension TokenTotals: Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(input, forKey: .input)
         try c.encode(output, forKey: .output)
+        try c.encode(reasoning, forKey: .reasoning)
         try c.encode(cacheRead, forKey: .cacheRead)
         try c.encode(cacheWrite, forKey: .cacheWrite)
     }

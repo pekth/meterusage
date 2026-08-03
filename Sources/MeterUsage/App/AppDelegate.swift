@@ -26,11 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let preferences = Preferences()
+        let quotaSources = Composition.quotaSources()
         let coordinator = AppCoordinator(
             preferences: preferences,
             isDemoMode: Composition.isDemoMode,
-            quotaSources: Composition.quotaSources(),
+            quotaSources: quotaSources,
+            resetConsumer: quotaSources.compactMap { $0 as? QuotaResetConsumer }.first,
             activitySources: Composition.activitySources(),
+            usageSources: Composition.usageSources(),
             statusSources: Composition.statusSources(),
             planSources: Composition.planSources(),
             // Same factory, so "clear cache" can rebuild the activity sources
@@ -151,11 +154,14 @@ enum Composition {
 
     static func quotaSources() -> [QuotaSource] {
         if isDemoMode {
-            return [DemoClaudeQuotaSource(), DemoCodexQuotaSource()]
+            return [DemoClaudeQuotaSource(), DemoCodexQuotaSource(), DemoOpenRouterQuotaSource()]
         }
         return [
             // Live Codex limits, read over the CLI's local RPC.
             CodexQuotaSource(),
+            // OpenRouter key spend and optional limit, read from its
+            // authenticated account endpoint.
+            OpenRouterQuotaSource(),
             // Claude publishes no local quota endpoint. This reads a file only
             // if one happens to exist, and reports `.noData` otherwise — the
             // normal case, and deliberately not an error.
@@ -167,8 +173,29 @@ enum Composition {
         isDemoMode ? [DemoLocalActivitySource()] : [ClaudeLocalSource()]
     }
 
+    static func usageSources() -> [UsageSource] {
+        if isDemoMode {
+            return [
+                DemoAntigravityUsageSource(),
+                DemoGrokUsageSource(),
+                DemoOpenCodeGoUsageSource()
+            ]
+        }
+        return [
+            AntigravityUsageSource(),
+            GrokUsageSource(),
+            OpenCodeGoUsageSource()
+        ]
+    }
+
     static func statusSources() -> [StatusSource] {
-        isDemoMode ? [DemoStatusSource()] : [StatusPageSource(provider: .claude)]
+        if isDemoMode {
+            return [.codex, .claude].map { DemoStatusSource(provider: $0) }
+        }
+        return [
+            StatusPageSource(provider: .codex),
+            StatusPageSource(provider: .claude)
+        ]
     }
 
     /// Codex reports its plan inline with its quota, so it needs no source
@@ -177,4 +204,3 @@ enum Composition {
         isDemoMode ? [DemoPlanSource()] : [ClaudePlanSource()]
     }
 }
-

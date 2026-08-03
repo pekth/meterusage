@@ -20,6 +20,10 @@ enum PrefKey {
     static let refreshInterval = "refreshIntervalSeconds"
     static let showClaude = "showProviderClaude"
     static let showCodex = "showProviderCodex"
+    static let showAntigravity = "showProviderAntigravity"
+    static let showGrok = "showProviderGrok"
+    static let showOpenCodeGo = "showProviderOpenCodeGo"
+    static let showOpenRouter = "showProviderOpenRouter"
     static let theme = "appearanceTheme"
     static let launchAtLogin = "launchAtLogin"
 }
@@ -67,10 +71,20 @@ final class Preferences: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // `register(defaults:)` supplies first-run values only. It never
+        // replaces values the user has already saved in this suite.
         defaults.register(defaults: [
             PrefKey.refreshInterval: Preferences.defaultRefreshInterval,
-            PrefKey.showClaude: true,
+            // Codex is the primary provider. OpenRouter and OpenCode Go are
+            // enabled when configured; Claude, Antigravity, and Grok remain
+            // explicit opt-ins until their integrations are enabled for
+            // normal use.
+            PrefKey.showClaude: false,
             PrefKey.showCodex: true,
+            PrefKey.showAntigravity: false,
+            PrefKey.showGrok: false,
+            PrefKey.showOpenCodeGo: true,
+            PrefKey.showOpenRouter: true,
             PrefKey.theme: AppTheme.system.rawValue,
             PrefKey.launchAtLogin: false
         ])
@@ -95,8 +109,12 @@ final class Preferences: ObservableObject {
         if clamped != refreshInterval { refreshInterval = clamped }
 
         var providers = Set<Provider>()
-        if defaults.bool(forKey: PrefKey.showClaude) { providers.insert(.claude) }
         if defaults.bool(forKey: PrefKey.showCodex) { providers.insert(.codex) }
+        if defaults.bool(forKey: PrefKey.showAntigravity) { providers.insert(.antigravity) }
+        if defaults.bool(forKey: PrefKey.showGrok) { providers.insert(.grok) }
+        if defaults.bool(forKey: PrefKey.showOpenCodeGo) { providers.insert(.openCodeGo) }
+        if defaults.bool(forKey: PrefKey.showOpenRouter) { providers.insert(.openRouter) }
+        if defaults.bool(forKey: PrefKey.showClaude) { providers.insert(.claude) }
         if providers != enabledProviders { enabledProviders = providers }
 
         let newTheme = AppTheme(rawValue: defaults.string(forKey: PrefKey.theme) ?? "") ?? .system

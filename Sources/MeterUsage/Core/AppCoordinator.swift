@@ -35,6 +35,7 @@ final class AppCoordinator: ObservableObject {
 
     @Published private(set) var quotas: [Provider: Loaded<ProviderQuota>] = [:]
     @Published private(set) var activities: [Provider: Loaded<LocalActivity>] = [:]
+    @Published private(set) var usages: [Provider: Loaded<ProviderUsage>] = [:]
     @Published private(set) var statuses: [Provider: Loaded<ServiceStatus>] = [:]
     /// Subscription tier per provider. Kept in its own map rather than folded
     /// into `quotas` because a plan is read from a different place than the
@@ -62,12 +63,15 @@ final class AppCoordinator: ObservableObject {
     // MARK: Sources
 
     private let quotaSources: [QuotaSource]
+    /// Optional because only Codex exposes an account-mutating reset action.
+    private let resetConsumer: QuotaResetConsumer?
     /// Not `let`: clearing the cache replaces these instances (see
     /// `performCacheClear`), which is how a re-scan is made genuinely cold.
     private var activitySources: [LocalActivitySource]
     /// Rebuilds the activity sources from scratch. Supplied by the composition
     /// root so this file still names no concrete source.
     private let activitySourceFactory: (() -> [LocalActivitySource])?
+    private let usageSources: [UsageSource]
     private let statusSources: [StatusSource]
     /// Optional: a build with no plan source simply never renders a plan badge,
     /// which is the same as a source that reports `.noData`.
@@ -85,7 +89,9 @@ final class AppCoordinator: ObservableObject {
         preferences: Preferences,
         isDemoMode: Bool = false,
         quotaSources: [QuotaSource] = [],
+        resetConsumer: QuotaResetConsumer? = nil,
         activitySources: [LocalActivitySource] = [],
+        usageSources: [UsageSource] = [],
         statusSources: [StatusSource] = [],
         planSources: [PlanSource] = [],
         activitySourceFactory: (() -> [LocalActivitySource])? = nil
@@ -93,8 +99,10 @@ final class AppCoordinator: ObservableObject {
         self.preferences = preferences
         self.isDemoMode = isDemoMode
         self.quotaSources = quotaSources
+        self.resetConsumer = resetConsumer
         self.activitySources = activitySources
         self.activitySourceFactory = activitySourceFactory
+        self.usageSources = usageSources
         self.statusSources = statusSources
         self.planSources = planSources
     }
@@ -181,20 +189,37 @@ final class AppCoordinator: ObservableObject {
         if Date().timeIntervalSince(last) > maxAge { refresh() }
     }
 
+    /// Performs the explicitly confirmed Codex reset and refreshes all data so
+    /// the menu immediately reflects the provider's new limits and remaining
+    /// reset credits. A non-reset outcome is treated as unavailable rather than
+    /// presented as a successful mutation.
+    func consumeCodexReset(creditID: String) async throws {
+        guard let resetConsumer else { throw SourceUnavailable.failed(.codex) }
+        guard try await resetConsumer.consumeReset(creditID: creditID) else {
+            throw SourceUnavailable.failed(.codex)
+        }
+        refresh()
+    }
+
     private func performRefresh() async {
         // Sources are independent and mostly I/O-bound, so they run together and
         // the sweep costs as long as the slowest one, not their sum.
         await withTaskGroup(of: Void.self) { group in
-            for source in quotaSources {
+            for source in quotaSources where preferences.isEnabled(source.provider) {
                 group.addTask { [weak self] in await self?.load(quota: source) }
             }
-            for source in activitySources {
+            for source in activitySources where preferences.isEnabled(source.provider) {
                 group.addTask { [weak self] in await self?.load(activity: source) }
             }
+            for source in usageSources where preferences.isEnabled(source.provider) {
+                group.addTask { [weak self] in await self?.load(usage: source) }
+            }
+            // Server health is independent of the provider visibility toggles:
+            // hiding Claude usage should not hide the top-level health signal.
             for source in statusSources {
                 group.addTask { [weak self] in await self?.load(status: source) }
             }
-            for source in planSources {
+            for source in planSources where preferences.isEnabled(source.provider) {
                 group.addTask { [weak self] in await self?.load(plan: source) }
             }
         }
@@ -225,6 +250,16 @@ final class AppCoordinator: ObservableObject {
             result = .missing(Self.reason(for: error, provider: source.provider))
         }
         activities[source.provider] = result
+    }
+
+    private func load(usage source: UsageSource) async {
+        let result: Loaded<ProviderUsage>
+        do {
+            result = .value(try await source.fetchUsage())
+        } catch {
+            result = .missing(Self.reason(for: error, provider: source.provider))
+        }
+        usages[source.provider] = result
     }
 
     private func load(status source: StatusSource) async {
@@ -315,10 +350,33 @@ final class AppCoordinator: ObservableObject {
         Provider.allCases.filter { preferences.isEnabled($0) }
     }
 
+    var visibleQuotaProviders: [Provider] {
+        let providers = Set(quotaSources.map(\.provider))
+        return visibleProviders.filter { providers.contains($0) }
+    }
+
+    var visibleActivityProviders: [Provider] {
+        let providers = Set(activitySources.map(\.provider))
+        return visibleProviders.filter { providers.contains($0) }
+    }
+
+    var visibleUsageProviders: [Provider] {
+        let providers = Set(usageSources.map(\.provider))
+        return visibleProviders.filter { providers.contains($0) }
+    }
+
+    var visibleStatusProviders: [Provider] {
+        statusSources.map(\.provider)
+    }
+
+    /// Status sources describe service health, not provider usage. They remain
+    /// visible even when the matching provider's usage card is switched off.
+    var statusProviders: [Provider] { visibleStatusProviders }
+
     /// The single most-constrained window across every visible provider — the
     /// one number the menu bar shows.
     var mostConstrained: (provider: Provider, window: QuotaWindow)? {
-        visibleProviders
+        visibleQuotaProviders
             .compactMap { quotas[$0]?.value }
             .flatMap { quota in quota.windows.map { (quota.provider, $0) } }
             .max { $0.1.usedPercent < $1.1.usedPercent }
@@ -326,12 +384,12 @@ final class AppCoordinator: ObservableObject {
 
     /// Worst known service severity, or `nil` when nothing has been checked.
     var worstStatus: ServiceStatus? {
-        visibleProviders
+        statusProviders
             .compactMap { statuses[$0]?.value }
             .max { $0.severity.rawValue < $1.severity.rawValue }
     }
 
     var combinedActivity: [LocalActivity] {
-        visibleProviders.compactMap { activities[$0]?.value }
+        visibleActivityProviders.compactMap { activities[$0]?.value }
     }
 }

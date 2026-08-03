@@ -65,16 +65,18 @@ enum MU {
     static let neutral = dynamicColor(light: rgb(120, 120, 132), dark: rgb(150, 150, 162))
 
     static let accent = dynamicColor(light: rgb(64, 96, 220), dark: rgb(124, 152, 255))
+    static let antigravity = dynamicColor(light: rgb(122, 76, 194), dark: rgb(181, 132, 255))
+    static let grok = dynamicColor(light: rgb(196, 94, 30), dark: rgb(255, 145, 78))
+    static let openCodeGo = dynamicColor(light: rgb(20, 126, 150), dark: rgb(69, 199, 219))
+    static let openRouter = dynamicColor(light: rgb(104, 72, 190), dark: rgb(166, 132, 255))
 
     // Metrics -------------------------------------------------------------
 
     static let popoverWidth: CGFloat = 340
-    /// Tall enough that the per-model breakdown clears the bottom edge without
-    /// scrolling. At 600 the quota cards pushed it below the fold, which made a
-    /// heavily-used model look like it wasn't being tracked at all — the whole
-    /// point of the breakdown is that every model you run is visibly accounted
-    /// for. Keep headroom here when adding rows above it.
-    static let popoverHeight: CGFloat = 700
+    /// Keeps the default dashboard tight. Optional provider and activity cards
+    /// can make the content taller; `PopoverRoot`'s scroll view handles those
+    /// cases instead of reserving a large empty footer on the common layout.
+    static let popoverHeight: CGFloat = 650
     static let cardRadius: CGFloat = 10
     static let gutter: CGFloat = 14
 
@@ -104,6 +106,20 @@ func severityColor(_ severity: Severity) -> Color {
     case .partialOutage: return MU.warn
     case .majorOutage:   return MU.alert
     case .unknown:       return MU.neutral
+    }
+}
+
+/// Provider identity colours. These are paired with names and never carry
+/// meaning by colour alone; quota severity still uses the separate green/amber/
+/// red headroom scale.
+func providerColor(_ provider: Provider) -> Color {
+    switch provider {
+    case .codex:      return MU.accent
+    case .antigravity:return MU.antigravity
+    case .grok:       return MU.grok
+    case .openCodeGo: return MU.openCodeGo
+    case .openRouter: return MU.openRouter
+    case .claude:     return MU.calm
     }
 }
 
@@ -237,6 +253,28 @@ struct StatusDot: View {
     }
 }
 
+/// A status colour paired with its written severity so the signal remains
+/// understandable without colour perception.
+struct StatusBadge: View {
+    let severity: Severity
+
+    var body: some View {
+        HStack(spacing: 4) {
+            StatusDot(color: severityColor(severity), diameter: 6)
+            Text(severity.displayName)
+                .font(.muCaption)
+                .foregroundColor(severityColor(severity))
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(
+            Capsule(style: .continuous).fill(severityColor(severity).opacity(0.12))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Status: \(severity.displayName)")
+    }
+}
+
 /// Calm empty state.
 ///
 /// A missing provider is the normal case on most machines — no CLI installed, or
@@ -288,6 +326,23 @@ enum Fmt {
         }
     }
 
+    /// An exact, grouped whole-number count for provider credit units.
+    /// Credits are not currency and must never inherit a dollar symbol or
+    /// compact `1.8K` notation when the provider reports `1843`.
+    static func credits(_ value: Double) -> String {
+        if let formatted = wholeNumber.string(from: NSNumber(value: value.rounded())) {
+            return formatted
+        }
+        return String(Int(value.rounded()))
+    }
+
+    /// Exact grouped count for sessions and messages. Unlike token totals,
+    /// these provider-native activity counts are small enough that rounding to
+    /// "1.4K" would hide useful information.
+    static func count(_ value: Int) -> String {
+        wholeNumber.string(from: NSNumber(value: value)) ?? String(value)
+    }
+
     /// Currency for display: "$4.20", "$78.31", "$43,640".
     ///
     /// Grouping separators are not cosmetic here — an unseparated "$43640"
@@ -327,8 +382,23 @@ enum Fmt {
         return f
     }()
 
+    private static let wholeNumber: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        f.minimumFractionDigits = 0
+        f.maximumFractionDigits = 0
+        return f
+    }()
+
     static func percent(_ value: Double) -> String {
         String(format: "%.0f%%", value.clamped(to: 0...100))
+    }
+
+    /// Codex reports consumption, while its account screen presents the
+    /// remaining headroom. Keep both values derived from the same source field
+    /// so the bar, number and colour cannot disagree.
+    static func remainingPercent(_ usedPercent: Double) -> String {
+        "\(percent(100 - usedPercent)) left"
     }
 
     /// Compact forward duration: "2h 14m", "9m", "3d 4h".
@@ -397,6 +467,17 @@ enum Fmt {
         }
         return weekdayAndClock.string(from: date)
     }
+
+    /// Expiry detail for earned reset credits, including the local time zone.
+    static func expiryMoment(_ date: Date) -> String {
+        expiryFormatter.string(from: date)
+    }
+
+    private static let expiryFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("Mdjmz")
+        return f
+    }()
 
     // MARK: Model names
 

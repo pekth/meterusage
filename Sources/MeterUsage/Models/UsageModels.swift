@@ -29,11 +29,57 @@ public struct QuotaWindow: Equatable, Sendable {
     public var fraction: Double { usedPercent / 100 }
 }
 
+/// A named group of quota windows, such as the general account allowance or a
+/// model-specific allowance.
+public struct QuotaGroup: Equatable, Sendable {
+    public let id: String
+    public let title: String
+    public let windows: [QuotaWindow]
+
+    public init(id: String, title: String, windows: [QuotaWindow]) {
+        self.id = id
+        self.title = title
+        self.windows = windows
+    }
+}
+
+/// An earned usage-limit reset returned by Codex, kept display-only. The app
+/// does not redeem resets; that is an external account mutation.
+public struct QuotaResetCredit: Equatable, Sendable, Identifiable {
+    public let id: String
+    public let title: String
+    public let status: String?
+    public let expiresAt: Date?
+
+    public init(id: String, title: String, status: String? = nil, expiresAt: Date? = nil) {
+        self.id = id
+        self.title = title
+        self.status = status
+        self.expiresAt = expiresAt
+    }
+}
+
+/// Unit used by a provider's balance display.
+public enum CreditUnit: Equatable, Sendable {
+    case credits
+    case dollars
+}
+
+/// Codex's current display conversion: 2,500 credits equals $100.
+public enum CodexCreditConversion {
+    public static let creditsPerDollar = 25.0
+
+    public static func dollars(for credits: Double) -> Double {
+        credits / creditsPerDollar
+    }
+}
+
 /// Prepaid credit balance, where a provider exposes one.
 public struct CreditBalance: Equatable, Sendable {
     public let balance: Double
     public let hasCredits: Bool
     public let unlimited: Bool
+    public let unit: CreditUnit
     /// Dollars consumed so far this cycle, where the provider reports a
     /// used/limit pair rather than (or in addition to) a remaining
     /// `balance`. `nil` when the source only knows a remaining balance
@@ -42,19 +88,26 @@ public struct CreditBalance: Equatable, Sendable {
     /// The monthly cap in dollars, paired with `usedDollars`. `nil` under
     /// the same conditions as `usedDollars`.
     public let limitDollars: Double?
+    /// A USD equivalent for a balance whose native unit is credits. For Codex,
+    /// this uses the configured 2,500-credits/$100 display conversion.
+    public let dollarBalance: Double?
 
     public init(
         balance: Double,
         hasCredits: Bool,
         unlimited: Bool,
+        unit: CreditUnit = .dollars,
         usedDollars: Double? = nil,
-        limitDollars: Double? = nil
+        limitDollars: Double? = nil,
+        dollarBalance: Double? = nil
     ) {
         self.balance = balance
         self.hasCredits = hasCredits
         self.unlimited = unlimited
+        self.unit = unit
         self.usedDollars = usedDollars
         self.limitDollars = limitDollars
+        self.dollarBalance = dollarBalance
     }
 }
 
@@ -62,7 +115,10 @@ public struct CreditBalance: Equatable, Sendable {
 public struct ProviderQuota: Equatable, Sendable {
     public let provider: Provider
     public let windows: [QuotaWindow]
+    public let groups: [QuotaGroup]
     public let credits: CreditBalance?
+    public let resetCreditCount: Int?
+    public let resetCredits: [QuotaResetCredit]
     /// Plan name if the provider reports one, e.g. "plus". Never an account id.
     public let planType: String?
     public let capturedAt: Date
@@ -70,26 +126,54 @@ public struct ProviderQuota: Equatable, Sendable {
     public init(
         provider: Provider,
         windows: [QuotaWindow],
+        groups: [QuotaGroup] = [],
         credits: CreditBalance? = nil,
+        resetCreditCount: Int? = nil,
+        resetCredits: [QuotaResetCredit] = [],
         planType: String? = nil,
         capturedAt: Date
     ) {
         self.provider = provider
         self.windows = windows
+        self.groups = groups
         self.credits = credits
+        self.resetCreditCount = resetCreditCount
+        self.resetCredits = resetCredits
         self.planType = planType
         self.capturedAt = capturedAt
     }
 }
 
 public enum Provider: String, CaseIterable, Sendable {
-    case claude
     case codex
+    case antigravity
+    case grok
+    case openCodeGo
+    case openRouter
+    case claude
 
     public var displayName: String {
         switch self {
-        case .claude: return "Claude"
         case .codex: return "Codex"
+        case .antigravity: return "Antigravity"
+        case .grok: return "Grok"
+        case .openCodeGo: return "OpenCode Go"
+        case .openRouter: return "OpenRouter"
+        case .claude: return "Claude"
+        }
+    }
+
+    /// Public provider status page for the providers whose machine-readable
+    /// feed is shown in the dashboard. Other providers remain linkless rather
+    /// than sending the user to a guessed or unrelated page.
+    public var statusPageURL: URL? {
+        switch self {
+        case .codex:
+            return URL(string: "https://status.openai.com/")
+        case .claude:
+            return URL(string: "https://status.claude.com/")
+        case .antigravity, .grok, .openCodeGo, .openRouter:
+            return nil
         }
     }
 }
@@ -100,22 +184,31 @@ public enum Provider: String, CaseIterable, Sendable {
 public struct TokenTotals: Equatable, Sendable {
     public var input: Int
     public var output: Int
+    public var reasoning: Int
     public var cacheRead: Int
     public var cacheWrite: Int
 
-    public init(input: Int = 0, output: Int = 0, cacheRead: Int = 0, cacheWrite: Int = 0) {
+    public init(
+        input: Int = 0,
+        output: Int = 0,
+        reasoning: Int = 0,
+        cacheRead: Int = 0,
+        cacheWrite: Int = 0
+    ) {
         self.input = input
         self.output = output
+        self.reasoning = reasoning
         self.cacheRead = cacheRead
         self.cacheWrite = cacheWrite
     }
 
-    public var total: Int { input + output + cacheRead + cacheWrite }
+    public var total: Int { input + output + reasoning + cacheRead + cacheWrite }
 
     public static func + (lhs: TokenTotals, rhs: TokenTotals) -> TokenTotals {
         TokenTotals(
             input: lhs.input + rhs.input,
             output: lhs.output + rhs.output,
+            reasoning: lhs.reasoning + rhs.reasoning,
             cacheRead: lhs.cacheRead + rhs.cacheRead,
             cacheWrite: lhs.cacheWrite + rhs.cacheWrite
         )
@@ -193,6 +286,46 @@ public struct LocalActivity: Equatable, Sendable {
 
     public var totalCostUSD: Double {
         sessions.reduce(0) { $0 + $1.estimatedCostUSD }
+    }
+
+    public var totalMessages: Int {
+        sessions.reduce(0) { $0 + $1.messageCount }
+    }
+}
+
+/// Provider usage whose source does not necessarily expose token economics.
+///
+/// Antigravity and Grok persist sessions/messages but not billable token counts;
+/// OpenCode Go does expose token and cost totals. Keeping those fields optional
+/// prevents a zero from being mistaken for measured zero usage.
+public struct ProviderUsage: Equatable, Sendable {
+    public let provider: Provider
+    public let sessionCount: Int
+    public let messageCount: Int
+    public let tokens: TokenTotals?
+    public let estimatedCostUSD: Double?
+    public let todaySessionCount: Int
+    public let todayMessageCount: Int
+    public let capturedAt: Date
+
+    public init(
+        provider: Provider,
+        sessionCount: Int,
+        messageCount: Int,
+        tokens: TokenTotals? = nil,
+        estimatedCostUSD: Double? = nil,
+        todaySessionCount: Int = 0,
+        todayMessageCount: Int = 0,
+        capturedAt: Date
+    ) {
+        self.provider = provider
+        self.sessionCount = max(sessionCount, 0)
+        self.messageCount = max(messageCount, 0)
+        self.tokens = tokens
+        self.estimatedCostUSD = estimatedCostUSD
+        self.todaySessionCount = max(todaySessionCount, 0)
+        self.todayMessageCount = max(todayMessageCount, 0)
+        self.capturedAt = capturedAt
     }
 }
 
@@ -302,6 +435,8 @@ public enum SourceUnavailable: Error, Equatable, Sendable {
     case failed(Provider)
     /// Nothing to read yet, which is normal on a fresh machine.
     case noData
+    /// A provider-specific local history/cache is not present.
+    case dataNotFound(String)
 
     public var userFacingMessage: String {
         switch self {
@@ -310,6 +445,7 @@ public enum SourceUnavailable: Error, Equatable, Sendable {
         case .offline:                return "Offline"
         case .failed(let p):          return "Couldn't read \(p.displayName) usage"
         case .noData:                 return "No usage yet"
+        case .dataNotFound(let name): return "\(name) not found"
         }
     }
 }

@@ -38,6 +38,11 @@ public protocol JSONRPCClient: Sendable {
     /// well-formed responses; only process-level failures throw
     /// `JSONRPCTransportError`.
     func requestCodexRateLimits() async throws -> Data
+
+    /// Consumes one earned Codex rate-limit reset and returns its raw response.
+    /// The caller supplies only the provider-issued credit id; this client
+    /// creates a fresh idempotency key for the account mutation.
+    func consumeCodexRateLimitReset(creditID: String) async throws -> Data
 }
 
 // MARK: - Real transport
@@ -58,13 +63,31 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
     }
 
     public func requestCodexRateLimits() async throws -> Data {
+        try await request(operation: .rateLimits)
+    }
+
+    public func consumeCodexRateLimitReset(creditID: String) async throws -> Data {
+        try await request(
+            operation: .consume(
+                creditID: creditID,
+                idempotencyKey: UUID().uuidString.lowercased()
+            )
+        )
+    }
+
+    private enum Operation: Sendable {
+        case rateLimits
+        case consume(creditID: String, idempotencyKey: String)
+    }
+
+    private func request(operation: Operation) async throws -> Data {
         let binary = try Self.resolveCodexBinary()
         let clientVersion = self.clientVersion
         let timeout = self.timeout
 
         return try await withThrowingTaskGroup(of: Data.self) { group in
             group.addTask {
-                try Self.runExchange(binary: binary, clientVersion: clientVersion)
+                try Self.runExchange(binary: binary, clientVersion: clientVersion, operation: operation)
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
@@ -104,7 +127,7 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
     /// Synchronous by design: this runs inside a `Task.addTask` closure that
     /// already has its own thread from the cooperative pool's blocking-work
     /// allowance, and the whole call is raced against a timeout task above.
-    private static func runExchange(binary: String, clientVersion: String) throws -> Data {
+    private static func runExchange(binary: String, clientVersion: String, operation: Operation) throws -> Data {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binary)
         process.arguments = ["app-server", "--stdio"]
@@ -161,7 +184,12 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "initialize",
-            "params": ["clientInfo": ["name": "meterusage", "version": clientVersion]],
+            "params": [
+                "clientInfo": ["name": "meterusage", "version": clientVersion],
+                // This opt-in exposes model-scoped rate limits and reset
+                // details in the same authenticated Codex app-server response.
+                "capabilities": ["experimentalApi": true],
+            ],
         ])
         let outHandle = stdoutPipe.fileHandleForReading
         var buffer = Data()
@@ -209,7 +237,25 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
         _ = try readLine(until: { messageID(from: $0) == 1 })
 
         try writeLine(["jsonrpc": "2.0", "method": "initialized", "params": [String: Any]()])
-        try writeLine(["jsonrpc": "2.0", "id": 2, "method": "account/rateLimits/read", "params": [String: Any]()])
+        switch operation {
+        case .rateLimits:
+            try writeLine([
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "account/rateLimits/read",
+                "params": [String: Any](),
+            ])
+        case .consume(let creditID, let idempotencyKey):
+            try writeLine([
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "account/rateLimitResetCredit/consume",
+                "params": [
+                    "creditId": creditID,
+                    "idempotencyKey": idempotencyKey,
+                ],
+            ])
+        }
 
         return try readLine(until: { messageID(from: $0) == 2 })
     }

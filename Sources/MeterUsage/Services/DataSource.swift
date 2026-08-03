@@ -12,11 +12,26 @@ public protocol QuotaSource: Sendable {
     func fetchQuota() async throws -> ProviderQuota
 }
 
+/// Optional account action exposed by a quota source. Keeping redemption out
+/// of `QuotaSource` means every read-only provider remains read-only, while
+/// Codex can expose its explicit, user-confirmed reset action.
+public protocol QuotaResetConsumer: Sendable {
+    func consumeReset(creditID: String) async throws -> Bool
+}
+
 /// A source of locally-computed activity, derived from the user's own files.
 public protocol LocalActivitySource: Sendable {
     var provider: Provider { get }
     /// Scans local transcripts. Never performs network I/O.
     func scan() async throws -> LocalActivity
+}
+
+/// A local usage source for providers whose native history is not Claude's
+/// token transcript format. Sources may report sessions/messages only when
+/// token or cost data is unavailable.
+public protocol UsageSource: Sendable {
+    var provider: Provider { get }
+    func fetchUsage() async throws -> ProviderUsage
 }
 
 /// A source of provider service health.
