@@ -25,6 +25,13 @@ private final class FakeJSONRPCClient: JSONRPCClient {
         case .transportError(let error): throw error
         }
     }
+
+    func consumeCodexRateLimitReset(creditID: String) async throws -> Data {
+        switch outcome {
+        case .success(let data): return data
+        case .transportError(let error): throw error
+        }
+    }
 }
 
 final class CodexQuotaSourceTests: XCTestCase {
@@ -76,11 +83,10 @@ final class CodexQuotaSourceTests: XCTestCase {
     }
 
     func testUnknownExtraKeys_areIgnored_decodeSucceeds() async throws {
-        // The real payload carries limitId, limitName, individualLimit,
-        // spendControlReached, rateLimitReachedType — none of which we
-        // model. Decodable drops unmatched keys by default; pin that so a
-        // future field addition on the provider side can't silently start
-        // throwing.
+        // The real payload carries limitName, individualLimit,
+        // spendControlReached, rateLimitReachedType — only the fields needed
+        // for the display are modeled. Decodable drops the rest by default;
+        // pin that so a future field addition cannot silently start throwing.
         let json = """
         {"jsonrpc":"2.0","id":2,"result":{"rateLimits":{
             "limitId":"synthetic-id",
@@ -99,6 +105,77 @@ final class CodexQuotaSourceTests: XCTestCase {
 
         XCTAssertEqual(quota.windows.count, 1)
         XCTAssertEqual(quota.planType, "plus")
+    }
+
+    func testExperimentalDetails_parseModelSpecificWindowAndResetCredits() async throws {
+        // `experimentalApi` adds these fields to the authenticated app-server
+        // response. They are the data shown by the Codex account screen below
+        // the general weekly allowance.
+        let json = """
+        {"jsonrpc":"2.0","id":2,"result":{
+            "rateLimits":{
+                "limitId":"codex",
+                "primary":{"usedPercent":32,"windowDurationMins":10080,"resetsAt":1893456000},
+                "secondary":null,
+                "credits":{"hasCredits":true,"unlimited":false,"balance":"1843.3106385000"},
+                "planType":"prolite"
+            },
+            "rateLimitsByLimitId":{
+                "codex":{
+                    "limitId":"codex",
+                    "primary":{"usedPercent":32,"windowDurationMins":10080,"resetsAt":1893456000},
+                    "secondary":null
+                },
+                "codex_bengalfox":{
+                    "limitId":"codex_bengalfox",
+                    "limitName":"GPT-5.3-Codex-Spark",
+                    "primary":{"usedPercent":0,"windowDurationMins":10080,"resetsAt":1893456000},
+                    "secondary":null
+                }
+            },
+            "rateLimitResetCredits":{
+                "availableCount":2,
+                "credits":[
+                    {"id":"reset-1","resetType":"codexRateLimits","status":"available","expiresAt":1893456000,"title":"Full reset"},
+                    {"id":"reset-2","resetType":"codexRateLimits","status":"available","expiresAt":1893459600,"title":"Full reset"}
+                ]
+            }
+        }}
+        """
+        let source = CodexQuotaSource(client: FakeJSONRPCClient.json(json))
+
+        let quota = try await source.fetchQuota()
+
+        XCTAssertEqual(quota.groups.map(\.title), [
+            "General usage limits",
+            "GPT-5.3-Codex-Spark usage limits"
+        ])
+        XCTAssertEqual(quota.groups[1].windows.first?.usedPercent, 0)
+        XCTAssertEqual(quota.resetCreditCount, 2)
+        XCTAssertEqual(quota.resetCredits.count, 2)
+        XCTAssertEqual(quota.resetCredits.first?.title, "Full reset")
+        XCTAssertEqual(quota.resetCredits.first?.status, "available")
+        XCTAssertEqual(quota.credits?.unit, .credits)
+    }
+
+    func testConsumeReset_parsesSuccessfulOutcome() async throws {
+        let json = """
+        {"jsonrpc":"2.0","id":2,"result":{"outcome":"reset"}}
+        """
+        let source = CodexQuotaSource(client: FakeJSONRPCClient.json(json))
+
+        let didReset = try await source.consumeReset(creditID: "reset-1")
+        XCTAssertTrue(didReset)
+    }
+
+    func testConsumeReset_nonResetOutcomeIsFalse() async throws {
+        let json = """
+        {"jsonrpc":"2.0","id":2,"result":{"outcome":"alreadyRedeemed"}}
+        """
+        let source = CodexQuotaSource(client: FakeJSONRPCClient.json(json))
+
+        let didReset = try await source.consumeReset(creditID: "reset-1")
+        XCTAssertFalse(didReset)
     }
 
     func testFlippedOrdering_labelsByDuration_notByPosition() async throws {
@@ -139,6 +216,11 @@ final class CodexQuotaSourceTests: XCTestCase {
 
     // MARK: - Credits
 
+    func testCreditDisplayConversion_matchesCodexRate() {
+        XCTAssertEqual(CodexCreditConversion.dollars(for: 2_500), 100, accuracy: 0.0001)
+        XCTAssertEqual(CodexCreditConversion.dollars(for: 1_843.3106385), 73.73242554, accuracy: 0.0001)
+    }
+
     func testCreditsParsed_stringBalance() async throws {
         // This is the actual live bug: the real API sends `balance` as a
         // JSON string ("25.50"), not a number. The fixture mirrors that.
@@ -151,6 +233,23 @@ final class CodexQuotaSourceTests: XCTestCase {
         XCTAssertEqual(credits.balance, 25.5)
         XCTAssertTrue(credits.hasCredits)
         XCTAssertFalse(credits.unlimited)
+        XCTAssertEqual(try XCTUnwrap(credits.dollarBalance), 1.02, accuracy: 0.0001)
+    }
+
+    func testCreditsIgnoreUnrecognizedDollarLikeFields() async throws {
+        let json = """
+        {"jsonrpc":"2.0","id":2,"result":{"rateLimits":{
+            "primary":{"usedPercent":5,"windowDurationMins":300,"resetsAt":null},
+            "credits":{"hasCredits":true,"unlimited":false,"balance":"1843.31","dollarBalance":"1843.31"}
+        }}}
+        """
+        let source = CodexQuotaSource(client: FakeJSONRPCClient.json(json))
+
+        let quota = try await source.fetchQuota()
+
+        let credits = try XCTUnwrap(quota.credits)
+        XCTAssertEqual(credits.balance, 1843.31, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(credits.dollarBalance), 73.7324, accuracy: 0.0001)
     }
 
     func testCreditsParsed_numericBalance_forwardCompat() async throws {

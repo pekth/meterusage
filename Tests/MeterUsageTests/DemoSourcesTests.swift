@@ -80,6 +80,11 @@ final class DemoSourcesTests: XCTestCase {
         let credits = try XCTUnwrap(quota.credits)
         XCTAssertTrue(credits.hasCredits)
         XCTAssertFalse(credits.unlimited)
+        XCTAssertEqual(credits.unit, .credits)
+        let displayedCredits = Fmt.credits(1843)
+        XCTAssertFalse(displayedCredits.contains("$"))
+        XCTAssertFalse(displayedCredits.contains("K"))
+        XCTAssertEqual(displayedCredits.filter { $0.isNumber }.map(String.init).joined(), "1843")
         // Modest on purpose: a large balance in a public screenshot reads as
         // somebody's real account.
         XCTAssertGreaterThan(credits.balance, 1)
@@ -87,6 +92,12 @@ final class DemoSourcesTests: XCTestCase {
 
         let weekly = try XCTUnwrap(quota.windows.first { $0.label == "Weekly" })
         XCTAssertEqual(weekly.usedPercent, 72, accuracy: 0.001)
+        XCTAssertEqual(quota.groups.map(\.title), [
+            "General usage limits",
+            "GPT-5.3-Codex-Spark usage limits"
+        ])
+        XCTAssertEqual(quota.resetCreditCount, 2)
+        XCTAssertEqual(quota.resetCredits.count, 2)
     }
 
     /// The colour scale is only legible in a screenshot if more than one band
@@ -110,6 +121,37 @@ final class DemoSourcesTests: XCTestCase {
         XCTAssertEqual(status.severity, .operational)
         XCTAssertFalse(status.description.isEmpty)
         XCTAssertLessThanOrEqual(status.checkedAt, Date())
+    }
+
+    func testServiceStatusIsCodexFirstClassData() {
+        XCTAssertEqual(StatusPageSource().provider, .codex)
+        XCTAssertEqual(
+            Composition.statusSources().map(\.provider),
+            [.codex, .claude]
+        )
+    }
+
+    func testSupplementalDemoUsageCoversAllNewProviders() async throws {
+        let sources: [UsageSource] = [
+            DemoAntigravityUsageSource(),
+            DemoGrokUsageSource(),
+            DemoOpenCodeGoUsageSource()
+        ]
+
+        let usage = try await withThrowingTaskGroup(of: ProviderUsage.self, returning: [ProviderUsage].self) { group in
+            for source in sources {
+                group.addTask { try await source.fetchUsage() }
+            }
+            var values: [ProviderUsage] = []
+            for try await value in group { values.append(value) }
+            return values
+        }
+
+        XCTAssertEqual(Set(usage.map(\.provider)), [.antigravity, .grok, .openCodeGo])
+        XCTAssertTrue(usage.allSatisfy { $0.sessionCount > 0 && $0.messageCount > 0 })
+        XCTAssertNil(try XCTUnwrap(usage.first { $0.provider == .antigravity }).tokens)
+        XCTAssertNil(try XCTUnwrap(usage.first { $0.provider == .grok }).estimatedCostUSD)
+        XCTAssertNotNil(try XCTUnwrap(usage.first { $0.provider == .openCodeGo }).tokens)
     }
 
     // MARK: - Local activity shape
@@ -248,5 +290,8 @@ final class DemoSourcesTests: XCTestCase {
         _ = try await DemoPlanSource().fetchPlan()
         _ = try await DemoStatusSource().fetchStatus()
         _ = try await DemoLocalActivitySource().scan()
+        _ = try await DemoAntigravityUsageSource().fetchUsage()
+        _ = try await DemoGrokUsageSource().fetchUsage()
+        _ = try await DemoOpenCodeGoUsageSource().fetchUsage()
     }
 }

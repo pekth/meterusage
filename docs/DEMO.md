@@ -43,11 +43,22 @@ picture of anybody's account.
 
 ## Everything you see is fake
 
-All demo data is synthetic and invented:
+All demo data is synthetic and invented. The dashboard order is also exercised:
+service status is first, followed by quotas and provider usage.
 
-- **Claude** — Max 5× plan, 5-hour window at 34%, 7-day at 61%.
-- **Codex** — Plus plan, 5-hour window at 82%, weekly at 72%, a small credit
+- **Service status** — one operational row for each provider with a usable
+  public status feed: Codex and Claude.
+- **Codex** — Plus plan, general 5-hour/weekly limits, a GPT-5.3-Codex-Spark
+  limit, two expiring full-reset credits, and a small balance shown as credits
+  with its configured 2,500-credits/$100 dollar equivalent.
+- **OpenRouter** — a synthetic monthly dollar spending limit and remaining
   balance.
+- **Antigravity** — 18 sessions and 246 messages.
+- **Grok** — 12 sessions and 184 messages.
+- **OpenCode Go** — 26 sessions, 492 messages, measured token totals, and a
+  synthetic $16.33 estimate.
+- **Claude** — optional local activity and quota data; hidden by default in
+  Settings.
 - **Local activity** — 58 sessions, ~55M tokens, ~$156 estimated, across
   invented project names like `web-app` and `api-server`.
 - **Heatmap** — about 20 of the last 26 weeks populated, at varied intensity.

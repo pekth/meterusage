@@ -6,7 +6,7 @@ import Foundation
 /// directly — it delegates the RPC exchange to a `JSONRPCClient`, which keeps
 /// auth entirely inside the `codex` subprocess (it manages its own login
 /// state) and keeps this type unit-testable without a real CLI installed.
-public struct CodexQuotaSource: QuotaSource {
+public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
     public let provider: Provider = .codex
 
     private let client: JSONRPCClient
@@ -39,10 +39,39 @@ public struct CodexQuotaSource: QuotaSource {
         if let rpcError = envelope.error {
             throw Self.map(rpcError)
         }
-        guard let rateLimits = envelope.result?.rateLimits else {
+        guard let result = envelope.result, let rateLimits = result.rateLimits else {
             throw SourceUnavailable.failed(.codex)
         }
-        return Self.buildQuota(from: rateLimits)
+        return Self.buildQuota(
+            from: rateLimits,
+            additional: result.rateLimitsByLimitId,
+            resets: result.rateLimitResetCredits
+        )
+    }
+
+    /// Redeems one provider-issued reset. The UI confirms this action before
+    /// calling it; this source only reports whether the provider accepted it.
+    public func consumeReset(creditID: String) async throws -> Bool {
+        guard !creditID.isEmpty else { throw SourceUnavailable.failed(.codex) }
+
+        let responseLine: Data
+        do {
+            responseLine = try await client.consumeCodexRateLimitReset(creditID: creditID)
+        } catch let transportError as JSONRPCTransportError {
+            throw Self.map(transportError)
+        }
+
+        let envelope: ConsumeRPCEnvelope
+        do {
+            envelope = try JSONDecoder().decode(ConsumeRPCEnvelope.self, from: responseLine)
+        } catch {
+            throw SourceUnavailable.failed(.codex)
+        }
+
+        if let rpcError = envelope.error {
+            throw Self.map(rpcError)
+        }
+        return envelope.result?.outcome == "reset"
     }
 
     // MARK: - Response shape
@@ -61,18 +90,44 @@ public struct CodexQuotaSource: QuotaSource {
         let message: String
     }
 
+    struct ConsumeRPCEnvelope: Decodable {
+        let result: ConsumeResult?
+        let error: RPCErrorPayload?
+    }
+
+    struct ConsumeResult: Decodable {
+        let outcome: String?
+    }
+
     struct RateLimitsResult: Decodable {
         let rateLimits: RateLimitsPayload?
+        let rateLimitsByLimitId: [String: RateLimitsPayload]
+        let rateLimitResetCredits: RateLimitResetCredits?
+
+        private enum CodingKeys: String, CodingKey {
+            case rateLimits
+            case rateLimitsByLimitId
+            case rateLimitResetCredits
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            rateLimits = try container.decodeIfPresent(RateLimitsPayload.self, forKey: .rateLimits)
+            rateLimitsByLimitId = (try? container.decode([String: RateLimitsPayload].self, forKey: .rateLimitsByLimitId)) ?? [:]
+            rateLimitResetCredits = try? container.decodeIfPresent(RateLimitResetCredits.self, forKey: .rateLimitResetCredits)
+        }
     }
 
     struct RateLimitsPayload: Decodable {
+        let limitId: String?
+        let limitName: String?
         let primary: RateLimitWindow?
         let secondary: RateLimitWindow?
         let credits: RateLimitsCredits?
         let planType: String?
 
         private enum CodingKeys: String, CodingKey {
-            case primary, secondary, credits, planType
+            case limitId, limitName, primary, secondary, credits, planType
         }
 
         // Custom init so one malformed optional field degrades gracefully
@@ -83,17 +138,19 @@ public struct CodexQuotaSource: QuotaSource {
         // `fetchQuota` would turn a perfectly good windows payload into
         // `.failed`. The windows are the primary value of this call; a bad
         // `credits` (or any other field we don't recognize the shape of)
-        // must never take them down with it. `limitId`, `limitName`,
-        // `individualLimit`, `spendControlReached`, `rateLimitReachedType`
-        // are intentionally not modeled at all — Decodable ignores keys with
-        // no matching property, so they're dropped for free.
+        // must never take them down with it. `limitId` and `limitName` are
+        // retained for model-specific group labels; `individualLimit`,
+        // `spendControlReached`, and `rateLimitReachedType` remain intentionally
+        // unmodeled, so Decodable drops them for free.
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
+            limitId = try container.decodeIfPresent(String.self, forKey: .limitId)
+            limitName = try container.decodeIfPresent(String.self, forKey: .limitName)
             primary = try container.decodeIfPresent(RateLimitWindow.self, forKey: .primary)
             secondary = try container.decodeIfPresent(RateLimitWindow.self, forKey: .secondary)
             planType = try container.decodeIfPresent(String.self, forKey: .planType)
-            // `try?` on purpose: a credits shape we can't parse becomes
-            // "no credits reported", not a fetch failure.
+        // `try?` on purpose: a credits shape we can't parse becomes
+        // "no credits reported", not a fetch failure.
             credits = try? container.decodeIfPresent(RateLimitsCredits.self, forKey: .credits)
         }
     }
@@ -138,6 +195,33 @@ public struct CodexQuotaSource: QuotaSource {
                 balance = parsed
             }
         }
+
+    }
+
+    struct RateLimitResetCredits: Decodable {
+        let availableCount: Int
+        let credits: [RateLimitResetCredit]?
+
+        private enum CodingKeys: String, CodingKey {
+            case availableCount, credits
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            availableCount = try container.decode(Int.self, forKey: .availableCount)
+            credits = try? container.decodeIfPresent([RateLimitResetCredit].self, forKey: .credits)
+        }
+    }
+
+    struct RateLimitResetCredit: Decodable {
+        let id: String
+        let title: String?
+        let status: String?
+        let expiresAt: FlexibleDate?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, title, status, expiresAt
+        }
     }
 
     /// `resetsAt` has been observed as both an epoch-seconds number and an
@@ -169,21 +253,76 @@ public struct CodexQuotaSource: QuotaSource {
 
     // MARK: - Parsing
 
-    private static func buildQuota(from payload: RateLimitsPayload) -> ProviderQuota {
-        var windows: [QuotaWindow] = []
-        for window in [payload.primary, payload.secondary].compactMap({ $0 }) {
-            windows.append(QuotaWindow(label: label(for: window), usedPercent: window.usedPercent, resetsAt: window.resetsAt?.date))
+    private static func buildQuota(
+        from payload: RateLimitsPayload,
+        additional: [String: RateLimitsPayload],
+        resets: RateLimitResetCredits?
+    ) -> ProviderQuota {
+        let baseWindows = windows(from: payload)
+        var groups: [QuotaGroup] = []
+        if !baseWindows.isEmpty {
+            groups.append(
+                QuotaGroup(
+                    id: payload.limitId ?? "codex",
+                    title: "General usage limits",
+                    windows: baseWindows
+                )
+            )
         }
+
+        let baseID = payload.limitId ?? "codex"
+        for (key, extra) in additional.sorted(by: { $0.key < $1.key }) {
+            let extraID = extra.limitId ?? key
+            guard extraID != baseID, key != baseID else { continue }
+            let extraWindows = windows(from: extra)
+            guard !extraWindows.isEmpty else { continue }
+            groups.append(
+                QuotaGroup(
+                    id: extraID,
+                    title: "\(extra.limitName ?? key) usage limits",
+                    windows: extraWindows
+                )
+            )
+        }
+
         let credits = payload.credits.map {
-            CreditBalance(balance: $0.balance, hasCredits: $0.hasCredits, unlimited: $0.unlimited)
+            CreditBalance(
+                balance: $0.balance,
+                hasCredits: $0.hasCredits,
+                unlimited: $0.unlimited,
+                unit: .credits,
+                dollarBalance: CodexCreditConversion.dollars(for: $0.balance)
+            )
         }
+        let resetCredits = resets?.credits?.map {
+            QuotaResetCredit(
+                id: $0.id,
+                title: $0.title ?? "Full reset",
+                status: $0.status,
+                expiresAt: $0.expiresAt?.date
+            )
+        } ?? []
         return ProviderQuota(
             provider: .codex,
-            windows: windows,
+            windows: baseWindows,
+            groups: groups,
             credits: credits,
+            resetCreditCount: resets?.availableCount,
+            resetCredits: resetCredits,
             planType: payload.planType,
             capturedAt: Date()
         )
+    }
+
+    private static func windows(from payload: RateLimitsPayload) -> [QuotaWindow] {
+        [payload.primary, payload.secondary].compactMap { window in
+            guard let window else { return nil }
+            return QuotaWindow(
+                label: label(for: window),
+                usedPercent: window.usedPercent,
+                resetsAt: window.resetsAt?.date
+            )
+        }
     }
 
     /// Classify by duration, never by primary/secondary position.

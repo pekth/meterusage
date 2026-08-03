@@ -13,8 +13,12 @@ struct SettingsView: View {
     @ObservedObject var coordinator: AppCoordinator
 
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval: Double = Preferences.defaultRefreshInterval
-    @AppStorage(PrefKey.showClaude) private var showClaude: Bool = true
+    @AppStorage(PrefKey.showClaude) private var showClaude: Bool = false
     @AppStorage(PrefKey.showCodex) private var showCodex: Bool = true
+    @AppStorage(PrefKey.showAntigravity) private var showAntigravity: Bool = false
+    @AppStorage(PrefKey.showGrok) private var showGrok: Bool = false
+    @AppStorage(PrefKey.showOpenCodeGo) private var showOpenCodeGo: Bool = true
+    @AppStorage(PrefKey.showOpenRouter) private var showOpenRouter: Bool = true
     @AppStorage(PrefKey.theme) private var theme: String = AppTheme.system.rawValue
     @AppStorage(PrefKey.launchAtLogin) private var launchAtLogin: Bool = false
 
@@ -41,9 +45,41 @@ struct SettingsView: View {
             Group {
                 SectionHeader("Providers")
                 Card {
-                    SettingToggle(title: "Claude", isOn: $showClaude)
+                    ProviderToggle(
+                        provider: .codex,
+                        subtitle: "Primary quota and usage",
+                        isOn: $showCodex
+                    )
                     Divider().overlay(MU.hairline)
-                    SettingToggle(title: "Codex", isOn: $showCodex)
+                    ProviderToggle(
+                        provider: .antigravity,
+                        subtitle: "Local sessions and messages",
+                        isOn: $showAntigravity
+                    )
+                    Divider().overlay(MU.hairline)
+                    ProviderToggle(
+                        provider: .grok,
+                        subtitle: "Local session history",
+                        isOn: $showGrok
+                    )
+                    Divider().overlay(MU.hairline)
+                    ProviderToggle(
+                        provider: .openCodeGo,
+                        subtitle: "OpenCode Go token usage",
+                        isOn: $showOpenCodeGo
+                    )
+                    Divider().overlay(MU.hairline)
+                    ProviderToggle(
+                        provider: .openRouter,
+                        subtitle: "API usage and spending limit",
+                        isOn: $showOpenRouter
+                    )
+                    Divider().overlay(MU.hairline)
+                    ProviderToggle(
+                        provider: .claude,
+                        subtitle: "Optional Claude Code activity",
+                        isOn: $showClaude
+                    )
                 }
             }
 
@@ -173,5 +209,31 @@ private struct SettingToggle: View {
                 .toggleStyle(.switch)
                 .controlSize(.small)
         }
+    }
+}
+
+private struct ProviderToggle: View {
+    let provider: Provider
+    let subtitle: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            StatusDot(color: providerColor(provider), diameter: 8)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(provider.displayName)
+                    .font(.muBody)
+                    .foregroundColor(MU.text)
+                Text(subtitle)
+                    .font(.muCaption)
+                    .foregroundColor(MU.textTertiary)
+            }
+            Spacer(minLength: 6)
+            Toggle("Show \(provider.displayName)", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .accessibilityElement(children: .contain)
     }
 }

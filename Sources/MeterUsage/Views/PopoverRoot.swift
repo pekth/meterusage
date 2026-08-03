@@ -95,44 +95,55 @@ struct PopoverRoot: View {
     private var dashboard: some View {
         VStack(alignment: .leading, spacing: 14) {
 
+            StatusStrip(
+                statuses: coordinator.statuses,
+                providers: coordinator.statusProviders,
+                now: coordinator.clock
+            )
+
             SectionHeader("Quotas")
-            if coordinator.visibleProviders.isEmpty {
+            if coordinator.visibleQuotaProviders.isEmpty {
                 Card {
                     InfoState(
-                        message: "No providers shown",
-                        hint: "Turn one on in Settings."
+                        message: "No quota providers shown",
+                        hint: "Turn Codex, OpenRouter, or Claude on in Settings."
                     )
                 }
             } else {
-                ForEach(coordinator.visibleProviders, id: \.self) { provider in
+                ForEach(coordinator.visibleQuotaProviders, id: \.self) { provider in
                     QuotaSection(
                         provider: provider,
                         state: coordinator.quotas[provider] ?? .idle,
                         plan: coordinator.plans[provider] ?? .idle,
-                        now: coordinator.clock
+                        now: coordinator.clock,
+                        onUseReset: { creditID in
+                            try await coordinator.consumeCodexReset(creditID: creditID)
+                        }
                     )
                 }
             }
 
-            ActivitySection(
-                activities: coordinator.activities,
-                providers: coordinator.visibleProviders,
+            ProviderUsageSection(
+                usages: coordinator.usages,
+                providers: coordinator.visibleUsageProviders,
                 now: coordinator.clock
             )
 
-            StatusStrip(
-                statuses: coordinator.statuses,
-                providers: coordinator.visibleProviders,
-                now: coordinator.clock
-            )
+            if !coordinator.visibleActivityProviders.isEmpty {
+                ActivitySection(
+                    activities: coordinator.activities,
+                    providers: coordinator.visibleActivityProviders,
+                    now: coordinator.clock
+                )
+            }
         }
     }
 }
 
 // MARK: - Service status
 
-/// Compact health row. Kept at the bottom because it is the least-consulted
-/// information here — it matters only when something is wrong.
+/// Compact health row. It stays at the top so a service issue is visible before
+/// the usage cards, even when the matching provider's usage is hidden.
 private struct StatusStrip: View {
     let statuses: [Provider: Loaded<ServiceStatus>]
     let providers: [Provider]
@@ -149,15 +160,31 @@ private struct StatusStrip: View {
                         ForEach(rows) { row in
                             HStack(spacing: 8) {
                                 StatusDot(color: severityColor(row.severity))
-                                Text(row.description)
-                                    .font(.muBody)
-                                    .foregroundColor(MU.textSecondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(row.provider.displayName)
+                                        .font(.muBody)
+                                        .foregroundColor(providerColor(row.provider))
+                                    Text(row.description)
+                                        .font(.muCaption)
+                                        .foregroundColor(MU.textSecondary)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
                                 Spacer(minLength: 4)
-                                Text(Fmt.timeSince(row.checkedAt, now: now))
-                                    .font(.muCaption)
-                                    .foregroundColor(MU.textTertiary)
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    if let url = row.provider.statusPageURL {
+                                        Link(destination: url) {
+                                            StatusBadge(severity: row.severity)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help("Open \(row.provider.displayName) status page")
+                                    } else {
+                                        StatusBadge(severity: row.severity)
+                                    }
+                                    Text(Fmt.timeSince(row.checkedAt, now: now))
+                                        .font(.muCaption)
+                                        .foregroundColor(MU.textTertiary)
+                                }
                             }
                         }
                     }
@@ -168,6 +195,7 @@ private struct StatusStrip: View {
 
     private struct Row: Identifiable {
         let id: String
+        let provider: Provider
         let severity: Severity
         let description: String
         let checkedAt: Date
@@ -181,6 +209,7 @@ private struct StatusStrip: View {
             guard let status = statuses[provider]?.value else { return nil }
             return Row(
                 id: provider.rawValue,
+                provider: provider,
                 severity: status.severity,
                 description: status.description,
                 checkedAt: status.checkedAt

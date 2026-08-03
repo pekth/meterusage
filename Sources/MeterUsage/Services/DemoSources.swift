@@ -93,8 +93,71 @@ struct DemoCodexQuotaSource: QuotaSource {
                 QuotaWindow(label: "5-hour", usedPercent: 82, resetsAt: now.addingTimeInterval(1.75 * 3600)),
                 QuotaWindow(label: "Weekly", usedPercent: 72, resetsAt: now.addingTimeInterval(4.5 * 86_400))
             ],
-            credits: CreditBalance(balance: 41.60, hasCredits: true, unlimited: false),
+            groups: [
+                QuotaGroup(
+                    id: "codex",
+                    title: "General usage limits",
+                    windows: [
+                        QuotaWindow(label: "5-hour", usedPercent: 82, resetsAt: now.addingTimeInterval(1.75 * 3600)),
+                        QuotaWindow(label: "Weekly", usedPercent: 72, resetsAt: now.addingTimeInterval(4.5 * 86_400))
+                    ]
+                ),
+                QuotaGroup(
+                    id: "codex_bengalfox",
+                    title: "GPT-5.3-Codex-Spark usage limits",
+                    windows: [
+                        QuotaWindow(label: "Weekly", usedPercent: 0, resetsAt: now.addingTimeInterval(4.5 * 86_400))
+                    ]
+                )
+            ],
+            credits: CreditBalance(
+                balance: 41.60,
+                hasCredits: true,
+                unlimited: false,
+                unit: .credits,
+                dollarBalance: CodexCreditConversion.dollars(for: 41.60)
+            ),
+            resetCreditCount: 2,
+            resetCredits: [
+                QuotaResetCredit(
+                    id: "demo-reset-1",
+                    title: "Full reset",
+                    status: "available",
+                    expiresAt: now.addingTimeInterval(8 * 86_400)
+                ),
+                QuotaResetCredit(
+                    id: "demo-reset-2",
+                    title: "Full reset",
+                    status: "available",
+                    expiresAt: now.addingTimeInterval(9 * 86_400)
+                )
+            ],
             planType: "plus",
+            capturedAt: now
+        )
+    }
+}
+
+/// Synthetic OpenRouter spend with a monthly key limit. The values are
+/// deliberately modest and entirely invented, so demo mode never exposes a
+/// real account balance while still exercising the dollar meter.
+struct DemoOpenRouterQuotaSource: QuotaSource {
+    let provider: Provider = .openRouter
+
+    func fetchQuota() async throws -> ProviderQuota {
+        let now = Date()
+        return ProviderQuota(
+            provider: .openRouter,
+            windows: [
+                QuotaWindow(label: "Monthly", usedPercent: 25.5, resetsAt: nil)
+            ],
+            credits: CreditBalance(
+                balance: 74.50,
+                hasCredits: true,
+                unlimited: false,
+                usedDollars: 25.50,
+                limitDollars: 100.00
+            ),
             capturedAt: now
         )
     }
@@ -116,14 +179,73 @@ struct DemoPlanSource: PlanSource {
 /// Synthetic service health. Operational, because a demo screenshot should not
 /// imply the provider is currently down.
 struct DemoStatusSource: StatusSource {
-    let provider: Provider = .claude
+    let provider: Provider
+
+    init(provider: Provider = .codex) {
+        self.provider = provider
+    }
 
     func fetchStatus() async throws -> ServiceStatus {
         ServiceStatus(
-            provider: .claude,
+            provider: provider,
             severity: .operational,
             description: "All systems operational",
             checkedAt: Date().addingTimeInterval(-90)
+        )
+    }
+}
+
+// MARK: - Supplemental usage
+
+/// Synthetic Antigravity activity. It intentionally reports sessions/messages
+/// only because that is all Antigravity's local history can prove.
+struct DemoAntigravityUsageSource: UsageSource {
+    let provider: Provider = .antigravity
+
+    func fetchUsage() async throws -> ProviderUsage {
+        ProviderUsage(
+            provider: .antigravity,
+            sessionCount: 18,
+            messageCount: 246,
+            todaySessionCount: 2,
+            todayMessageCount: 31,
+            capturedAt: Date().addingTimeInterval(-75)
+        )
+    }
+}
+
+/// Synthetic Grok activity, using the same count-only contract as its local
+/// session summaries.
+struct DemoGrokUsageSource: UsageSource {
+    let provider: Provider = .grok
+
+    func fetchUsage() async throws -> ProviderUsage {
+        ProviderUsage(
+            provider: .grok,
+            sessionCount: 12,
+            messageCount: 184,
+            todaySessionCount: 1,
+            todayMessageCount: 22,
+            capturedAt: Date().addingTimeInterval(-65)
+        )
+    }
+}
+
+/// Synthetic OpenCode Go activity with measured token/cost fields, so the demo
+/// exercises both count-only and token-aware usage rows.
+struct DemoOpenCodeGoUsageSource: UsageSource {
+    let provider: Provider = .openCodeGo
+
+    func fetchUsage() async throws -> ProviderUsage {
+        ProviderUsage(
+            provider: .openCodeGo,
+            sessionCount: 26,
+            messageCount: 492,
+            tokens: TokenTotals(input: 1_420_000, output: 386_000, reasoning: 118_000, cacheRead: 9_840_000),
+            estimatedCostUSD: 16.33,
+            todaySessionCount: 3,
+            todayMessageCount: 71,
+            capturedAt: Date().addingTimeInterval(-55)
         )
     }
 }

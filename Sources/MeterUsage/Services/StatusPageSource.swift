@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Anthropic service health
+// MARK: - Provider service health
 //
 // Reads the public, unauthenticated Statuspage v2 JSON feed. No credentials are
 // sent and nothing identifying leaves the machine beyond the User-Agent.
@@ -12,7 +12,11 @@ import Foundation
 // `components.json` contract is stable, and anything we cannot parse degrades to
 // `.unknown` (visibly not-a-claim) rather than to a false all-clear.
 
-/// Fetches Anthropic component health from the public Statuspage API.
+/// Fetches provider component health from a public Statuspage API.
+///
+/// Codex uses OpenAI's status page, OpenRouter uses its own public status page,
+/// and Claude uses Claude's status page. Providers without a public
+/// machine-readable feed are omitted from the status section.
 public struct StatusPageSource: StatusSource {
 
     public let provider: Provider
@@ -20,20 +24,48 @@ public struct StatusPageSource: StatusSource {
     private let endpoint: URL
     private let session: URLSession
 
-    /// Components whose names contain any of these fragments are considered
-    /// relevant. Statuspage exposes a long list (docs, console, individual
-    /// models); a menu-bar dot should reflect the API surface a developer is
-    /// actually blocked by, not the marketing site.
-    private let interestingComponents = ["api", "claude", "code", "console"]
+    /// Components whose names contain one of these fragments are considered
+    /// relevant. Statuspage exposes unrelated products alongside the provider
+    /// surface, so the ambient status should reflect what can block this app.
+    private let interestingComponents: [String]
 
     public init(
-        provider: Provider = .claude,
-        endpoint: URL = URL(string: "https://status.claude.com/api/v2/components.json")!,
+        provider: Provider = .codex,
+        endpoint: URL? = nil,
         session: URLSession = StatusPageSource.defaultSession()
     ) {
         self.provider = provider
-        self.endpoint = endpoint
+        self.endpoint = endpoint ?? Self.defaultEndpoint(for: provider)
+        self.interestingComponents = Self.componentFragments(for: provider)
         self.session = session
+    }
+
+    private static func defaultEndpoint(for provider: Provider) -> URL {
+        switch provider {
+        case .openRouter:
+            return URL(string: "https://status.openrouter.ai/api/v2/components.json")!
+        case .claude:
+            return URL(string: "https://status.claude.com/api/v2/components.json")!
+        case .grok:
+            return URL(string: "https://status.x.ai/api/v2/components.json")!
+        default:
+            return URL(string: "https://status.openai.com/api/v2/components.json")!
+        }
+    }
+
+    private static func componentFragments(for provider: Provider) -> [String] {
+        switch provider {
+        case .openRouter:
+            return ["api", "chat", "data"]
+        case .claude:
+            return ["api", "claude", "code", "console"]
+        case .codex:
+            return ["codex", "cli", "login"]
+        case .grok:
+            return ["grok", "api", "sso", "login"]
+        default:
+            return ["api", provider.displayName.lowercased()]
+        }
     }
 
     /// Short timeouts: a hung status check must never delay a refresh cycle, and
@@ -158,6 +190,9 @@ public struct StatusPageSource: StatusSource {
     }
 }
 
+/// Honest status for a provider that does not expose a public feed this app
+/// can query. This is still rendered as a status row so the dashboard covers
+/// every configured provider without implying that an outage was checked.
 private extension URLError {
     var isOffline: Bool {
         switch code {

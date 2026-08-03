@@ -7,15 +7,20 @@ each claim is enforced rather than merely promised.
 
 ## What meterusage never does
 
-- **Never reads your credentials.** It does not open `~/.codex/auth.json`,
-  `~/.claude/.credentials.json`, or any macOS Keychain item. It holds no token
-  of any kind, at rest or in memory.
+- **Never reads Codex or Claude credentials.** It does not open
+  `~/.codex/auth.json`, `~/.claude/.credentials.json`, or any macOS Keychain
+  item. OpenRouter is the explicit exception: when configured, it reads an
+  existing `OPENROUTER_API_KEY` or supported local key file in memory only to
+  call OpenRouter's aggregate usage and balance endpoints; it never displays, logs, or
+  stores that key.
 - **Never asks you to paste a key.** There is no login screen, no token field,
   and no account connection flow.
 - **Never uses undocumented provider APIs.** It does not reuse another
   application's OAuth client id, and it does not call private endpoints.
-- **Never sends your data anywhere.** No telemetry, no analytics, no crash
-  reporting, no update pings. It has no server.
+- **Never sends prompts or code anywhere.** Provider requests are limited to
+  the documented Codex/OpenRouter usage calls and public status feeds. There
+  is no telemetry, analytics, crash reporting, or update ping; it has no
+  server.
 - **Never reads your prompts or code.** It parses only usage and metadata
   fields from local transcripts. Message content is skipped, not stored.
 
@@ -23,10 +28,15 @@ each claim is enforced rather than merely promised.
 
 | Source | Mechanism | Network? |
 |---|---|---|
-| Codex quota | Spawns `codex app-server --stdio` and makes a JSON-RPC `account/rateLimits/read` call. This is a supported CLI surface; the subprocess authenticates itself using your existing `codex login`. meterusage never sees the token. | Yes, by the CLI subprocess |
+| Codex quota | Spawns `codex app-server --stdio` and makes a JSON-RPC `account/rateLimits/read` call with the CLI's experimental rate-limit detail capability enabled. That returns general/model-specific windows and earned reset-credit expiry details when the account provides them. This is a supported CLI surface; the subprocess authenticates itself using your existing `codex login`. meterusage never sees the token. | Yes, by the CLI subprocess |
+| OpenRouter quota | Calls the documented `/api/v1/key` and `/api/v1/credits` endpoints with an existing API key and retains only aggregate dollar usage, account balance, optional limit, and reset cadence. It does not send prompts or model requests. | Yes |
 | Claude activity | Streams your own transcript files under `~/.claude/projects/`, summing token-usage fields. | No |
 | Claude quota *(optional)* | Read-only parse of a local usage snapshot if a companion already wrote one (`~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Supports legacy `five_hour` / `seven_day` / `weekly` shapes and, when present, a `limits[]` array (session / weekly_all / weekly_scoped, including Fable). meterusage does **not** fetch Anthropic quota and does **not** read Claude credentials. Absent by default and never requested. | No |
-| Service health | Public, unauthenticated Statuspage JSON at `status.claude.com`. | Yes |
+| Antigravity usage | Reads only session/message count fields from `~/.claude/claudewatch-agy-cache.json`. No prompt, code, or token fields are needed; token totals remain unknown. | No |
+| Grok usage | Reads only date and message-count fields from `~/.grok/sessions/**/summary.json`. It does not open chat-history content or context-window signal files. | No |
+| OpenCode Go usage | Invokes the local `opencode db --format json` command with a read-only SQL query selecting numeric token/cost fields, message counts, and timestamps from `session`. It never selects message bodies, prompts, tool arguments, or paths. | No |
+| Codex service health | Public, unauthenticated Statuspage JSON at `status.openai.com`, filtered to Codex, CLI, and login components. | Yes |
+| Claude service health | Public, unauthenticated Statuspage JSON at `status.claude.com`, filtered to Claude/API components. | Yes |
 
 ### Optional Claude quota file (including Fable)
 
@@ -63,8 +73,11 @@ meterusage deliberately does not, because that impersonates the official client
 and can break without notice.
 
 The consequence is honest rather than hidden: Codex shows real live quota,
-Claude shows locally-computed activity, and Claude quota bars appear only if a
-usage file is already present — and only with the windows that file actually
+including Codex's 2,500-credits-to-$100 display conversion;
+OpenRouter shows provider-reported dollar usage and remaining account balance,
+local usage rows show only the
+fields each provider can prove, and Claude quota bars appear only if a usage
+file is already present — and only with the windows that file actually
 contains. Nothing is silently estimated and labelled as authoritative.
 
 ## Cost figures are estimates
@@ -77,14 +90,21 @@ source of truth for what you owe.
 
 ## What leaves your machine
 
-Two outbound requests, both of which you can verify in the source:
+Five outbound requests or subprocess-backed provider checks, all of which you
+can verify in the source:
 
 1. The `codex` CLI subprocess contacts OpenAI's backend to read your rate
    limits. This is the same call the CLI makes for itself.
-2. meterusage fetches `https://status.claude.com/api/v2/components.json`, a
+2. meterusage fetches `https://status.openai.com/api/v2/components.json`, a
    public status feed. No credentials, no identifiers, no usage data is sent.
+3. meterusage fetches `https://status.claude.com/api/v2/components.json`, a
+   public status feed.
+4. meterusage fetches OpenRouter's documented `/api/v1/key` and
+   `/api/v1/credits` endpoints with the existing key, retaining only aggregate
+   dollar usage and balance fields.
 
-Nothing else. There is no analytics endpoint to disable because there is none.
+The local usage commands and file reads above add no outbound request. There is
+no analytics endpoint to disable because there is none.
 
 ## The one file we read that also contains personal data
 
@@ -121,6 +141,12 @@ reach the screen, a cache, or a screenshot. `Privacy` in
 
 Because these conversions happen in the source layer rather than the view
 layer, there is no code path that renders the raw value.
+
+The supplemental sources apply the same boundary by construction: Antigravity
+and Grok reduce their stores to counts and dates, while OpenCode Go asks its
+database command for numeric usage columns only. Provider names and metric
+colours are rendered alongside written labels, so colour is never the only
+meaningful signal.
 
 ## How this is enforced
 

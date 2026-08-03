@@ -7,12 +7,13 @@ A macOS menu-bar app that shows how much of your AI coding quota you have left.
 <br clear="left">
 
 
-Claude Code and Codex both burn through rate limits you can't see until you hit
-them. meterusage puts the number in your menu bar.
+Codex, OpenRouter, Antigravity, Grok, OpenCode Go, and Claude Code all leave usage signals
+in different places. meterusage puts the useful numbers in your menu bar, with
+Codex first and each provider independently hideable.
 
 <img src="docs/images/menubar.png" alt="The meterusage menu-bar indicator showing 82%" height="24">
 
-<img src="docs/images/popover.png" alt="The meterusage popover: Claude and Codex quota windows with reset times, then local activity with tokens, estimated cost, and a per-model breakdown" width="330">
+<img src="docs/images/popover.png" alt="The meterusage popover: service status first, then Codex quotas and local provider usage" width="330">
 
 <sub>Screenshots are the real app in demo mode (`METERUSAGE_DEMO=1`) — every
 number is synthetic, which is why the popover is badged **Demo**.</sub>
@@ -24,13 +25,20 @@ cd meterusage
 ```
 
 Drag `MeterUsage.app` to Applications. That's the whole setup — no account to
-connect, no API key to paste, no statusline to install.
+connect and no key-entry screen. OpenRouter uses an existing
+`OPENROUTER_API_KEY` or local OpenRouter key file when present.
 
 ## What you get
 
-- **Live Codex quota** — 5-hour and weekly windows, credit balance, and plan,
-  read through the `codex` CLI you're already signed in to.
-- **Claude activity** — tokens and estimated cost broken down per model, so
+- **Live Codex quota** — general weekly limits, model-specific limits such as
+  GPT-5.3-Codex-Spark, reset-credit expiry details, credit balance, and plan,
+  read through the `codex` CLI you're already signed in to. Codex credits also
+  show their approximate dollar equivalent at 2,500 credits = $100.
+- **Live OpenRouter usage** — authenticated dollar spend, remaining account
+  balance, and the optional daily/weekly/monthly key spending limit.
+- **Local provider usage** — Antigravity and Grok session/message counts, plus
+  OpenCode Go token totals, message counts, and estimated local cost.
+- **Claude activity *(optional)*** — tokens and estimated cost broken down per model, so
   every model you actually run is visibly accounted for. Computed from your
   own local transcripts.
 - **Claude quota bars *(optional)*** — shown only when a local companion has
@@ -42,20 +50,33 @@ connect, no API key to paste, no statusline to install.
   statusline writers discard it, so [docs/COMPANION.md](docs/COMPANION.md)
   shows how to pass it through.
 - **A 26-week heatmap** of daily usage.
-- **Service health** from Anthropic's public status page.
+- **Colour-coded usage and status** — quota headroom uses calm/warning/alert
+  bands, while provider identity and written service-severity badges remain
+  understandable without relying on colour alone.
+- **Per-provider display settings** — hide any provider you do not use; Claude,
+  Antigravity, and Grok start hidden, while Codex is the primary entry.
+  Choices are saved locally and survive relaunches and app reinstalls.
+- **Service health at the top** for Codex and Claude from their public status
+  pages. Providers without a usable public status feed are omitted.
 
 ## How it works
 
-meterusage reuses the CLI logins already on your machine. It never handles a
-credential itself. It does **not** call Anthropic for quota and does **not**
-read any Claude credentials.
+meterusage reuses the CLI logins already on your machine. Codex and Claude
+credentials stay in their own clients; OpenRouter uses an existing key only
+for its aggregate usage and balance requests. It does **not** call Anthropic for quota and
+does **not** read any Claude credentials.
 
 | What | How | Needs network |
 |---|---|---|
-| Codex quota | Spawns `codex app-server --stdio` and calls `account/rateLimits/read` over JSON-RPC. The subprocess authenticates itself. | Yes, by the CLI |
+| Codex quota | Spawns `codex app-server --stdio` and calls `account/rateLimits/read` over JSON-RPC with the experimental rate-limit detail capability enabled. This includes general/model-specific windows and earned reset-credit expiry details. The subprocess authenticates itself. | Yes, by the CLI |
+| OpenRouter quota | Calls the documented `/api/v1/key` and `/api/v1/credits` endpoints with an existing `OPENROUTER_API_KEY` or supported local key file. Only aggregate usage, account balance, limit, and reset cadence are retained. | Yes |
 | Claude activity | Streams `~/.claude/projects/**/*.jsonl` and sums usage fields. | No |
 | Claude quota *(optional)* | Reads an on-disk usage JSON if a companion already wrote one (e.g. `~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Parses legacy windows and, when present, `limits[]` (including Fable `weekly_scoped`). Does not fetch Anthropic quota. | No |
-| Service health | Public Statuspage JSON. | Yes |
+| Antigravity usage | Reads session/message counts from the local `~/.claude/claudewatch-agy-cache.json` companion cache. Token totals are left unknown when the cache does not contain them. | No |
+| Grok usage | Reads session summaries under `~/.grok/sessions/**/summary.json`; only session dates and message counts are used. | No |
+| OpenCode Go usage | Runs the local `opencode db --format json` command with a read-only query over numeric session usage fields and timestamps. Message bodies are never queried. | No |
+| Codex service health | Public OpenAI Statuspage JSON, filtered to Codex, CLI, and login components. | Yes |
+| Claude service health | Public Claude Statuspage JSON, filtered to Claude/API components. | Yes |
 
 ### Why there's no "Sign in with Claude" button
 
@@ -66,14 +87,15 @@ endpoint using Anthropic's first-party client id. meterusage deliberately
 doesn't, because that impersonates the official client and can break without
 notice.
 
-So the honest split: **Codex quota is live from the cloud. Claude activity is
-computed locally. Claude quota bars are optional and file-driven.** meterusage
-never talks to Anthropic for quota and never opens a credential file. If a
-local companion (ClaudeWatch, or a future helper) writes a usage snapshot,
-quota bars light up from that file alone. When the snapshot includes
-`limits[]`, those windows — including Fable — take precedence over legacy
-keys; today's claudewatch writer may still ship only the legacy fields, so
-Fable display depends on the writer, not on meterusage inventing data.
+So the honest split: **Codex and OpenRouter quotas are live from the cloud;
+Antigravity, Grok, OpenCode Go, and Claude activity are computed from local
+data; Claude quota bars are optional and file-driven.** meterusage never talks
+to Anthropic for quota. OpenRouter's existing key is used only for its
+aggregate account endpoints and is never displayed or logged. If a local
+companion writes a usage snapshot, its counts light up from that file alone.
+When the Claude snapshot includes `limits[]`, those windows — including Fable —
+take precedence over legacy keys; display depends on what the writer actually
+emits.
 
 See [docs/PRIVACY.md](docs/PRIVACY.md) for the full boundary and how each claim
 is enforced by tests and hooks rather than promised in prose.
@@ -84,10 +106,15 @@ is enforced by tests and hooks rather than promised in prose.
 - Xcode command-line tools (`xcode-select --install`)
 - Optional: [`codex`](https://github.com/openai/codex) CLI, signed in, for live
   Codex quota
+- Optional: `OPENROUTER_API_KEY` or a local OpenRouter key file, for live
+  OpenRouter usage
+- Optional: [`opencode`](https://opencode.ai/), for OpenCode Go local usage
+- Optional: Grok CLI, for Grok session history
+- Optional: Antigravity/ClaudeWatch companion cache, for Antigravity counts
 - Optional: Claude Code, for local activity data
 
-Missing either CLI is fine. Those sections show a calm empty state instead of
-an error — meterusage is useful with just one of them installed.
+Missing any provider is fine. Its row shows a calm empty state, and Settings
+can hide providers that are not installed or not relevant to you.
 
 ## Build from source
 
