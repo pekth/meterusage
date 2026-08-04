@@ -89,12 +89,14 @@ enum MU {
 
 /// Maps consumption to a headroom colour.
 ///
-/// Thresholds are intentionally late: a 60%-used window is unremarkable, and
-/// colouring it amber trains the user to ignore the colour entirely.
+/// The bands follow the percentage the user sees: under half used is calm,
+/// half to four-fifths used is getting tight, and the final fifth is critical.
+/// Codex displays remaining percentage while other providers display consumed
+/// percentage, but both use this same consumed-percentage input.
 func headroomColor(usedPercent: Double) -> Color {
     switch usedPercent {
-    case ..<75:  return MU.calm
-    case ..<90:  return MU.warn
+    case ..<50:  return MU.calm
+    case ..<80:  return MU.warn
     default:     return MU.alert
     }
 }
