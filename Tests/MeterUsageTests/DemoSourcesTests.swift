@@ -42,6 +42,15 @@ final class DemoSourcesTests: XCTestCase {
         XCTAssertFalse(Composition.isDemoMode)
     }
 
+    func testLiveCompositionExposesCodexResetConsumer() throws {
+        try XCTSkipUnless(!Composition.isDemoMode, "reset actions are disabled in demo mode")
+
+        let codexSource = try XCTUnwrap(
+            Composition.quotaSources().first { $0.provider == .codex }
+        )
+        XCTAssertTrue(codexSource is any QuotaResetConsumer)
+    }
+
     /// The coordinator's flag is additive and defaults to off, so nothing that
     /// constructs one without opting in can render the badge.
     @MainActor
