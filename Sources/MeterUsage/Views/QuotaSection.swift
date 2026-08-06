@@ -25,8 +25,7 @@ struct QuotaSection: View {
     /// without pretending they can mutate the provider account.
     let onUseReset: ((String) async throws -> Void)?
 
-    @State private var resetToUse: QuotaResetCredit?
-    @State private var resetAlert: ResetAlert?
+    @State private var resetPrompt: ResetPrompt?
     @State private var consumingResetID: String?
 
     init(
@@ -48,22 +47,33 @@ struct QuotaSection: View {
             header
             content
         }
-        .alert(item: $resetToUse) { credit in
-            Alert(
-                title: Text("Use reset?"),
-                message: Text("This will consume one reset credit and reset your Codex usage limits."),
-                primaryButton: .destructive(Text("Use reset")) {
-                    beginUseReset(creditID: credit.id)
-                },
-                secondaryButton: .cancel()
-            )
-        }
-        .alert(item: $resetAlert) { alert in
-            Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
-                dismissButton: .default(Text("OK"))
-            )
+        // Keep confirmation, success, and failure in one presenter. Multiple
+        // `.alert` modifiers on the same SwiftUI view can compete on macOS,
+        // leaving the reset button looking inert.
+        .alert(item: $resetPrompt) { prompt in
+            switch prompt.kind {
+            case .confirmation(let credit):
+                return Alert(
+                    title: Text("Use reset?"),
+                    message: Text("This will consume one reset credit and reset your Codex usage limits."),
+                    primaryButton: .destructive(Text("Use reset")) {
+                        beginUseReset(creditID: credit.id)
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .success:
+                return Alert(
+                    title: Text("Reset applied"),
+                    message: Text("Codex usage limits were reset and the dashboard was refreshed."),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .failure(let title, let message):
+                return Alert(
+                    title: Text(title),
+                    message: Text(message),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
         }
     }
 
@@ -166,7 +176,7 @@ struct QuotaSection: View {
                             now: now,
                             canUseReset: onUseReset != nil,
                             consumingResetID: consumingResetID,
-                            onRequestUse: { resetToUse = $0 }
+                            onRequestUse: { resetPrompt = ResetPrompt(kind: .confirmation($0)) }
                         )
                     }
                     if let credits = quota.credits {
@@ -211,12 +221,12 @@ struct QuotaSection: View {
     }
 
     private func beginUseReset(creditID: String) {
-        resetToUse = nil
+        resetPrompt = nil
         guard let onUseReset else {
-            resetAlert = ResetAlert(
+            resetPrompt = ResetPrompt(kind: .failure(
                 title: "Reset unavailable",
                 message: "Codex reset actions are not available in this session."
-            )
+            ))
             return
         }
 
@@ -225,21 +235,27 @@ struct QuotaSection: View {
             do {
                 try await onUseReset(creditID)
                 consumingResetID = nil
+                resetPrompt = ResetPrompt(kind: .success)
             } catch {
                 consumingResetID = nil
-                resetAlert = ResetAlert(
+                resetPrompt = ResetPrompt(kind: .failure(
                     title: "Could not use reset",
                     message: "Refresh Codex limits and try again."
-                )
+                ))
             }
         }
     }
 }
 
-private struct ResetAlert: Identifiable {
+private struct ResetPrompt: Identifiable {
+    enum Kind {
+        case confirmation(QuotaResetCredit)
+        case success
+        case failure(title: String, message: String)
+    }
+
     let id = UUID()
-    let title: String
-    let message: String
+    let kind: Kind
 }
 
 // MARK: - Rows

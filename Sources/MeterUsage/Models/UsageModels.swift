@@ -43,8 +43,8 @@ public struct QuotaGroup: Equatable, Sendable {
     }
 }
 
-/// An earned usage-limit reset returned by Codex, kept display-only. The app
-/// does not redeem resets; that is an external account mutation.
+/// An earned usage-limit reset returned by Codex. The app displays it and only
+/// redeems it after the user explicitly confirms the action.
 public struct QuotaResetCredit: Equatable, Sendable, Identifiable {
     public let id: String
     public let title: String
