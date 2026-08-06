@@ -76,7 +76,7 @@ enum MU {
     /// Keeps the default dashboard tight. Optional provider and activity cards
     /// can make the content taller; `PopoverRoot`'s scroll view handles those
     /// cases instead of reserving a large empty footer on the common layout.
-    static let popoverHeight: CGFloat = 650
+    static let popoverHeight: CGFloat = 600
     static let cardRadius: CGFloat = 10
     static let gutter: CGFloat = 14
 
