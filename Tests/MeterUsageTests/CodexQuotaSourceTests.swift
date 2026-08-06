@@ -36,6 +36,10 @@ private final class FakeJSONRPCClient: JSONRPCClient {
 
 final class CodexQuotaSourceTests: XCTestCase {
 
+    func testRemainingPercent_liveNinetyTwoPercentUsedShowsEightPercentLeft() {
+        XCTAssertEqual(Fmt.remainingPercent(92), "8% left")
+    }
+
     // MARK: - Fixtures
 
     private func loadFixture() throws -> Data {

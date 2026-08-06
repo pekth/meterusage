@@ -91,8 +91,9 @@ enum MU {
 ///
 /// The bands follow the percentage the user sees: under half used is calm,
 /// half to four-fifths used is getting tight, and the final fifth is critical.
-/// Codex displays remaining percentage while other providers display consumed
-/// percentage, but both use this same consumed-percentage input.
+/// Codex quota cards display remaining percentage while the system-tray figure
+/// and other providers display consumed percentage; all pass consumed usage
+/// here so severity remains consistent.
 func headroomColor(usedPercent: Double) -> Color {
     switch usedPercent {
     case ..<50:  return MU.calm
@@ -396,9 +397,8 @@ enum Fmt {
         String(format: "%.0f%%", value.clamped(to: 0...100))
     }
 
-    /// Codex reports consumption, while its account screen presents the
-    /// remaining headroom. Keep both values derived from the same source field
-    /// so the bar, number and colour cannot disagree.
+    /// Codex popover cards show remaining headroom; the menu-bar slot uses
+    /// `percent(_:)` directly to retain its compact consumed-usage figure.
     static func remainingPercent(_ usedPercent: Double) -> String {
         "\(percent(100 - usedPercent)) left"
     }

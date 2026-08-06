@@ -33,7 +33,9 @@ connect and no key-entry screen. OpenRouter uses an existing
 - **Live Codex quota** — general weekly limits, model-specific limits such as
   GPT-5.3-Codex-Spark, reset-credit expiry details, credit balance, and plan,
   read through the `codex` CLI you're already signed in to. Codex credits also
-  show their approximate dollar equivalent at 2,500 credits = $100.
+  show their approximate dollar equivalent at 2,500 credits = $100. The compact
+  system-tray figure shows consumed usage; the Codex popover shows remaining
+  headroom.
 - **Live OpenRouter usage** — authenticated dollar spend, remaining account
   balance, and the optional daily/weekly/monthly key spending limit.
 - **Local provider usage** — Antigravity and Grok session/message counts, plus
