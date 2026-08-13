@@ -1,6 +1,6 @@
 <!-- ai-skills-managed: CONTROLLER.md -->
-<!-- source-commit: e52de9e19ef032af35771b3a332c15c57e587723 -->
-<!-- source-sha256: 11ab1c26224edde68e81ad14b1126a2386781782dc34763fdbf4f49b63908b98 -->
+<!-- source-commit: 97d487263399c8fba08edb28848dcd15cf7f22dd -->
+<!-- source-sha256: a040aa101a90c92a92c1858b3eca0772769e04835a6af9b6c654b39e0bbdb05d -->
 # CONTROLLER.md: T3 Code orchestration spec
 
 This file governs T3 Code routing, delegation, checkpoints, and worker lifecycle.
@@ -153,6 +153,30 @@ state. Then update the canonical handoff with:
 
 Write current truth, not an optimistic forecast. Remove or mark obsolete active
 claims so one file cannot describe two current realities. After writing, read the canonical handoff back and compare its status, artifact identity, next action, failure history, and child receipt with live state. Do not cross the barrier on a write failure, missing required field, stale read-back, or unresolved contradiction. Report `CONTINUITY BLOCKED` with exact evidence and keep the task status incomplete.
+
+### Append-only work history
+
+Record each material stage in `.handoff/history.md` before updating the
+checkpoint. Include one entry for user decisions, issues, failed attempts, and
+verification results. Each entry uses this schema:
+
+```text
+## Entry: <stable-id>
+- Session: <session id>
+- Turn: <turn id>
+- Event: <stage, decision, issue, failure, verification, Stop, or SessionEnd>
+- Result: <observed result>
+- Evidence: <command, file, log, or other proof>
+- Owner: <controller or child task path>
+- Next action: <one concrete next action>
+```
+
+The Controller Checkpoint must include `Latest history entry` and point to the
+last valid entry. Check that the entry has the current `Session` and `Turn`.
+Missing, malformed, or stale history blocks continuity. The stop and
+session-end paths create a receipt when the checkpoint is complete. If a
+blocked fallback is required, they append a blocked receipt without replacing
+earlier history.
 
 ## 3. Time and cost controls
 

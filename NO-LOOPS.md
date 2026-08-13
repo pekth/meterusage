@@ -1,5 +1,5 @@
 <!-- ai-skills-managed: NO-LOOPS.md -->
-<!-- source-commit: e52de9e19ef032af35771b3a332c15c57e587723 -->
+<!-- source-commit: 97d487263399c8fba08edb28848dcd15cf7f22dd -->
 <!-- source-sha256: cf79bf301d205bcac2ad87c7ba0f16fa77aab74b849827c5ab081b822cab1db4 -->
 # NO-LOOPS.md: PROHIBITED NO-LOOP RULES
 
