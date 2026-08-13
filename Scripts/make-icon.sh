@@ -21,6 +21,14 @@ swift "${ROOT_DIR}/Scripts/make-icon.swift" "${MASTER}"
 
 echo "==> Building iconset"
 mkdir -p "${ICONSET}"
+
+# The 256px repo mark. Two committed copies stay in sync from the one master:
+# assets/logo.png is the well-known path tools scan for a project logo (t3code
+# and others auto-detect it), and docs/images/icon.png is what the README shows.
+for LOGO in "${ROOT_DIR}/assets/logo.png" "${ROOT_DIR}/docs/images/icon.png"; do
+    mkdir -p "$(dirname "${LOGO}")"
+    sips -Z 256 "${MASTER}" --out "${LOGO}" >/dev/null
+done
 # The sizes `iconutil` expects. Each @2x is its @1x doubled, so both come from
 # the same master rather than from each other.
 for size in 16 32 128 256 512; do
