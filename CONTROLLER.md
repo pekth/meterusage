@@ -1,5 +1,5 @@
 <!-- ai-skills-managed: CONTROLLER.md -->
-<!-- source-commit: e466aa1f7cbee3c6e3e4c6896c11b63a3283442d -->
+<!-- source-commit: e52de9e19ef032af35771b3a332c15c57e587723 -->
 <!-- source-sha256: 11ab1c26224edde68e81ad14b1126a2386781782dc34763fdbf4f49b63908b98 -->
 # CONTROLLER.md: T3 Code orchestration spec
 
