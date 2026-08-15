@@ -482,8 +482,33 @@ public struct OpenCodeGoUsageSource: UsageSource {
             estimatedCostUSD: cost,
             todaySessionCount: todayRecords.count,
             todayMessageCount: todayRecords.reduce(0) { $0 + $1.messages },
+            usageWindows: Self.windows(from: records, now: now),
             capturedAt: records.map(\.updatedAt).max() ?? now
         )
+    }
+
+    /// Rolling usage slices over the records a fetch already read, using the
+    /// same `createdAt` convention the "today" counts use.
+    static func windows(from records: [Record], now: Date) -> [UsageWindow] {
+        [("last 24h", 86_400.0), ("last 7d", 7 * 86_400.0), ("last 30d", 30 * 86_400.0)]
+            .map { label, seconds in
+                let inWindow = records.filter { $0.createdAt >= now.addingTimeInterval(-seconds) }
+                return UsageWindow(
+                    label: label,
+                    sessionCount: inWindow.count,
+                    messageCount: inWindow.reduce(0) { $0 + $1.messages },
+                    tokens: inWindow.reduce(TokenTotals()) { total, record in
+                        total + TokenTotals(
+                            input: record.input,
+                            output: record.output,
+                            reasoning: record.reasoning,
+                            cacheRead: record.cacheRead,
+                            cacheWrite: record.cacheWrite
+                        )
+                    },
+                    estimatedCostUSD: inWindow.reduce(0) { $0 + $1.cost }
+                )
+            }
     }
 
     struct Record: Equatable {

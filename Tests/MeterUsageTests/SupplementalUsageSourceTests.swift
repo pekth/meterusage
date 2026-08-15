@@ -286,6 +286,68 @@ final class SupplementalUsageSourceTests: XCTestCase {
         XCTAssertEqual(records.reduce(0) { $0 + $1.cost }, 2.0, accuracy: 0.0001)
     }
 
+    /// Records are bucketed into rolling windows by `createdAt`, with each
+    /// window's own session/message/token/cost sums. A record aged past a
+    /// boundary contributes only to the windows that still contain it.
+    func testOpenCodeGoComputesRollingUsageWindows() throws {
+        let now = Date(timeIntervalSince1970: 1_780_000_000)
+        let hour: TimeInterval = 3_600
+        let day: TimeInterval = 86_400
+
+        func record(_ createdAgo: TimeInterval, _ cost: Double) -> OpenCodeGoUsageSource.Record {
+            let created = now.addingTimeInterval(-createdAgo)
+            return OpenCodeGoUsageSource.Record(
+                input: 100,
+                output: 20,
+                reasoning: 5,
+                cacheRead: 50,
+                cacheWrite: 1,
+                cost: cost,
+                messages: 4,
+                createdAt: created,
+                updatedAt: created
+            )
+        }
+
+        let records = [
+            record(1 * hour, 1.00),      // in 24h, 7d, 30d
+            record(3 * day, 2.00),       // in 7d, 30d (past 24h)
+            record(20 * day, 3.00),      // in 30d only (past 7d)
+            record(60 * day, 4.00)       // past all windows
+        ]
+
+        let windows = OpenCodeGoUsageSource.windows(from: records, now: now)
+
+        XCTAssertEqual(windows.count, 3)
+        XCTAssertEqual(windows.map(\.label), ["last 24h", "last 7d", "last 30d"])
+
+        let oneDay = try XCTUnwrap(windows.first { $0.label == "last 24h" })
+        XCTAssertEqual(oneDay.sessionCount, 1)
+        XCTAssertEqual(oneDay.messageCount, 4)
+        XCTAssertEqual(oneDay.tokens.total, 176)
+        XCTAssertEqual(oneDay.estimatedCostUSD, 1.00, accuracy: 0.0001)
+
+        let sevenDay = try XCTUnwrap(windows.first { $0.label == "last 7d" })
+        XCTAssertEqual(sevenDay.sessionCount, 2)
+        XCTAssertEqual(sevenDay.messageCount, 8)
+        XCTAssertEqual(sevenDay.tokens.total, 352)
+        XCTAssertEqual(sevenDay.estimatedCostUSD, 3.00, accuracy: 0.0001)
+
+        let thirtyDay = try XCTUnwrap(windows.first { $0.label == "last 30d" })
+        XCTAssertEqual(thirtyDay.sessionCount, 3)
+        XCTAssertEqual(thirtyDay.messageCount, 12)
+        XCTAssertEqual(thirtyDay.tokens.total, 528)
+        XCTAssertEqual(thirtyDay.estimatedCostUSD, 6.00, accuracy: 0.0001)
+    }
+
+    /// An empty record set must not fabricate a zero-usage window set — callers
+    /// that gate on the window list staying nil/empty rely on that.
+    func testOpenCodeGoEmptyRecordsProduceEmptyWindows() {
+        let windows = OpenCodeGoUsageSource.windows(from: [], now: Date())
+        XCTAssertEqual(windows.count, 3)
+        XCTAssertTrue(windows.allSatisfy { $0.sessionCount == 0 && $0.messageCount == 0 })
+    }
+
     /// Guards against the 64KB pipe-truncation failure mode: the real
     /// `opencode db` output for a busy account exceeds one 64KB pipe buffer, and
     /// a truncated payload must never be accepted as valid usage.

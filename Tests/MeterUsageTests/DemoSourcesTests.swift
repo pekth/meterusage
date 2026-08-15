@@ -160,7 +160,9 @@ final class DemoSourcesTests: XCTestCase {
         XCTAssertTrue(usage.allSatisfy { $0.sessionCount > 0 && $0.messageCount > 0 })
         XCTAssertNil(try XCTUnwrap(usage.first { $0.provider == .antigravity }).tokens)
         XCTAssertNil(try XCTUnwrap(usage.first { $0.provider == .grok }).estimatedCostUSD)
-        XCTAssertNotNil(try XCTUnwrap(usage.first { $0.provider == .openCodeGo }).tokens)
+        let openCode = try XCTUnwrap(usage.first { $0.provider == .openCodeGo })
+        XCTAssertNotNil(openCode.tokens)
+        XCTAssertEqual(openCode.usageWindows?.map(\.label), ["last 24h", "last 7d", "last 30d"])
     }
 
     // MARK: - Local activity shape
