@@ -487,12 +487,17 @@ public struct OpenCodeGoUsageSource: UsageSource {
         )
     }
 
-    /// Rolling usage slices over the records a fetch already read, using the
-    /// same `createdAt` convention the "today" counts use.
+    /// Rolling usage slices over the records a fetch already read.
+    ///
+    /// Windows use `updatedAt` (the session's last activity), matching how
+    /// `opencode stats --days N` buckets sessions: a session started before a
+    /// window but still being worked on inside it counts, and all of its
+    /// messages count. Filtering by `createdAt` under-counted the 24h window —
+    /// a session started two days ago and touched today contributed nothing.
     static func windows(from records: [Record], now: Date) -> [UsageWindow] {
         [("last 24h", 86_400.0), ("last 7d", 7 * 86_400.0), ("last 30d", 30 * 86_400.0)]
             .map { label, seconds in
-                let inWindow = records.filter { $0.createdAt >= now.addingTimeInterval(-seconds) }
+                let inWindow = records.filter { $0.updatedAt >= now.addingTimeInterval(-seconds) }
                 return UsageWindow(
                     label: label,
                     sessionCount: inWindow.count,
