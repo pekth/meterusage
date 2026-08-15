@@ -348,6 +348,36 @@ final class SupplementalUsageSourceTests: XCTestCase {
         XCTAssertTrue(windows.allSatisfy { $0.sessionCount == 0 && $0.messageCount == 0 })
     }
 
+    /// Each window's bar is its share of the 30-day cost: the 30d window is the
+    /// reference (always 1.0), and a zero reference must not divide by zero.
+    func testOpenCodeGoWindowShareOfLast30Days() {
+        let windows = [
+            UsageWindow(label: "last 24h", sessionCount: 3, messageCount: 71,
+                        tokens: TokenTotals(input: 260_000), estimatedCostUSD: 2.10),
+            UsageWindow(label: "last 7d", sessionCount: 21, messageCount: 390,
+                        tokens: TokenTotals(input: 980_000), estimatedCostUSD: 12.00),
+            UsageWindow(label: "last 30d", sessionCount: 26, messageCount: 492,
+                        tokens: TokenTotals(input: 1_420_000), estimatedCostUSD: 16.33)
+        ]
+        let reference = windows.first { $0.label == "last 30d" }!.estimatedCostUSD
+
+        XCTAssertEqual(
+            windows[0].shareOf30Days(referenceCost: reference),
+            2.10 / 16.33, accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            windows[1].shareOf30Days(referenceCost: reference),
+            12.00 / 16.33, accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            windows[2].shareOf30Days(referenceCost: reference),
+            1.0, accuracy: 0.0001
+        )
+
+        // Zero reference (no 30d window) must read 0, never NaN.
+        XCTAssertEqual(windows[0].shareOf30Days(referenceCost: 0), 0)
+    }
+
     /// Guards against the 64KB pipe-truncation failure mode: the real
     /// `opencode db` output for a busy account exceeds one 64KB pipe buffer, and
     /// a truncated payload must never be accepted as valid usage.

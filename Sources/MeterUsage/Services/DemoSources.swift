@@ -247,6 +247,7 @@ struct DemoOpenCodeGoUsageSource: UsageSource {
             todaySessionCount: 3,
             todayMessageCount: 71,
             usageWindows: [
+                // 30d is the reference, so 24h/7d shares render meaningful bars.
                 UsageWindow(
                     label: "last 24h",
                     sessionCount: 3,

@@ -88,33 +88,9 @@ private struct ProviderUsageRow: View {
             }
         case .value(let usage):
             if let windows = usage.usageWindows, !windows.isEmpty {
-                // Rolling-window view (OpenCode Go): one row per window with
-                // sessions, messages, tokens, and cost, then a fresh timestamp.
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(windows, id: \.label) { window in
-                        HStack(spacing: 5) {
-                            Text(window.label)
-                                .foregroundColor(providerColor(provider))
-                            Text("·")
-                            Text("\(window.sessionCount) session\(window.sessionCount == 1 ? "" : "s")")
-                            Text("·")
-                            Text("\(Fmt.count(window.messageCount)) messages")
-                            Text("·")
-                            Text("\(Fmt.compactCount(window.tokens.total)) tokens")
-                            Text("·")
-                            Text("~\(Fmt.usd(window.estimatedCostUSD))")
-                        }
-                        .font(.muCaption)
-                        .foregroundColor(MU.textTertiary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                    }
-                    Text("Updated \(Fmt.timeSince(usage.capturedAt, now: now))")
-                        .font(.muCaption)
-                        .foregroundColor(MU.textTertiary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
+                // Rolling-window view (OpenCode Go): one row per window with a
+                // share-of-30d bar + percentage, then counts, then a caption.
+                UsageWindowBars(windows: windows, provider: provider, now: now)
             } else {
                 HStack(spacing: 5) {
                     Text("\(usage.sessionCount) session\(usage.sessionCount == 1 ? "" : "s")")
@@ -189,5 +165,72 @@ private struct ProviderUsageRow: View {
         case .offline: return "Local usage remains available when the provider is online."
         case .failed: return "Will retry on the next refresh."
         }
+    }
+}
+
+/// Rolling usage windows (OpenCode Go) as bars.
+///
+/// OpenCode exposes no quota limit, so a percentage cannot mean "of your
+/// allowance". Instead each window's bar is its share of the *last 30 days*
+/// cost — the reference window — so "last 24h at 45%" reads as "45% of this
+/// month's spend happened in the last day". The 30d row is always 100%.
+private struct UsageWindowBars: View {
+    let windows: [UsageWindow]
+    let provider: Provider
+    let now: Date
+
+    private var referenceCost: Double {
+        windows.first { $0.label == "last 30d" }?.estimatedCostUSD ?? 0
+    }
+
+    private var tint: Color { providerColor(provider) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(windows, id: \.label) { window in
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(window.label)
+                            .font(.muBody)
+                            .foregroundColor(MU.textSecondary)
+                        Spacer(minLength: 4)
+                        Text(Fmt.percent(percent(of: window)))
+                            .font(.muNumber)
+                            .foregroundColor(tint)
+                    }
+                    MeterBar(fraction: fraction(of: window), tint: tint)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(window.label), \(Fmt.percent(percent(of: window))) of last 30 days")
+            }
+            Text("\(Fmt.count(count(of: "last 30d"))) sessions · \(Fmt.count(messages(of: "last 30d"))) messages · \(Fmt.compactCount(tokens(of: "last 30d").total)) tokens · ~\(Fmt.usd(referenceCost)) · updated \(Fmt.timeSince(now))")
+                .font(.muCaption)
+                .foregroundColor(MU.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text("Share of last 30d usage")
+                .font(.muCaption)
+                .foregroundColor(MU.textTertiary)
+        }
+    }
+
+    private func percent(of window: UsageWindow) -> Double {
+        window.shareOf30Days(referenceCost: referenceCost) * 100
+    }
+
+    private func fraction(of window: UsageWindow) -> Double {
+        window.shareOf30Days(referenceCost: referenceCost)
+    }
+
+    private func count(of label: String) -> Int {
+        windows.first { $0.label == label }?.sessionCount ?? 0
+    }
+
+    private func messages(of label: String) -> Int {
+        windows.first { $0.label == label }?.messageCount ?? 0
+    }
+
+    private func tokens(of label: String) -> TokenTotals {
+        windows.first { $0.label == label }?.tokens ?? TokenTotals()
     }
 }

@@ -316,6 +316,17 @@ public struct UsageWindow: Equatable, Sendable {
         self.tokens = tokens
         self.estimatedCostUSD = estimatedCostUSD
     }
+
+    /// Share (0...1) of the reference 30-day cost this window represents.
+    ///
+    /// OpenCode exposes no quota limit, so a bar cannot mean "percent of your
+    /// allowance". Instead each window's bar is its fraction of the last-30-day
+    /// window — the reference — so "last 24h at 0.45" reads as "45% of this
+    /// month's spend happened in the last day". The 30d window is always 1.0.
+    /// A missing or zero reference yields 0, never NaN.
+    public func shareOf30Days(referenceCost: Double) -> Double {
+        referenceCost > 0 ? estimatedCostUSD / referenceCost : 0
+    }
 }
 
 /// Provider usage whose source does not necessarily expose token economics.
