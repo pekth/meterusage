@@ -2,7 +2,16 @@ import Foundation
 
 // MARK: - Antigravity
 
-/// Reads the cache produced by the Antigravity/ClaudeWatch companion.
+/// Reads Antigravity (agy) session and message counts.
+///
+/// agy persists one JSON line per prompt to `history.jsonl` under its data
+/// directory. A native install keeps that at `~/.gemini/antigravity-cli/`, while
+/// containerised setups (e.g. the antigravity-docker wrapper) keep it inside the
+/// `antigravity-config` volume, which the host reaches through the container
+/// runtime. Only the `conversationId` and `timestamp` fields of each line are
+/// used; prompt text and workspace paths are never read. The legacy
+/// `~/.claude/claudewatch-agy-cache.json` snapshot produced by the retired
+/// ClaudeWatch companion is still honoured as a fallback.
 ///
 /// Antigravity keeps session and message history, but not input/output token
 /// counts. This source therefore reports activity counts only and never turns
@@ -10,16 +19,33 @@ import Foundation
 public struct AntigravityUsageSource: UsageSource {
     public let provider: Provider = .antigravity
     private let cacheURL: URL
+    private let historyURL: URL
 
-    public init(cacheURL: URL? = nil) {
+    public init(cacheURL: URL? = nil, historyURL: URL? = nil) {
         self.cacheURL = cacheURL ?? HomeDirectory.real
             .appendingPathComponent(".claude", isDirectory: true)
             .appendingPathComponent("claudewatch-agy-cache.json")
+        self.historyURL = historyURL ?? HomeDirectory.real
+            .appendingPathComponent(".gemini", isDirectory: true)
+            .appendingPathComponent("antigravity-cli", isDirectory: true)
+            .appendingPathComponent("history.jsonl")
     }
 
     public func fetchUsage() async throws -> ProviderUsage {
+        // 1. A native agy install keeps its history directly on the host.
+        if let data = try? Data(contentsOf: historyURL),
+           let usage = try? Self.parseHistory(data: data, now: Date()) {
+            return usage
+        }
+        // 2. Containerised agy keeps the same file inside the
+        //    `antigravity-config` volume, reachable through the runtime.
+        if let historyData = Self.readContainerHistory(),
+           let usage = try? Self.parseHistory(data: historyData, now: Date()) {
+            return usage
+        }
+        // 3. Fall back to the companion snapshot cache, if one exists.
         guard let data = try? Data(contentsOf: cacheURL) else {
-            throw SourceUnavailable.dataNotFound("Antigravity usage cache")
+            throw SourceUnavailable.dataNotFound("Antigravity usage")
         }
         do {
             return try Self.parse(data: data, now: Date())
@@ -143,9 +169,151 @@ public struct AntigravityUsageSource: UsageSource {
             return Date(timeIntervalSince1970: raw > 100_000_000_000 ? raw / 1000 : raw)
         }
         if let string = value as? String {
-            return ISO8601DateFormatter().date(from: string)
+            return parseTimestamp(string)
         }
         return nil
+    }
+
+    /// The Antigravity cache may carry fractional-second ISO timestamps (for
+    /// example `2026-08-15T17:57:15.877925Z`), which the default
+    /// `ISO8601DateFormatter` rejects. Parse fractional first, then fall back
+    /// to whole-second timestamps.
+    private static func parseTimestamp(_ raw: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: raw) { return date }
+
+        let whole = ISO8601DateFormatter()
+        whole.formatOptions = [.withInternetDateTime]
+        return whole.date(from: raw)
+    }
+
+    /// Reads agy's session history out of the `antigravity-config` container
+    /// volume.
+    ///
+    /// The volume lives inside the container-runtime VM, so it is read with a
+    /// throwaway `alpine` container that prints the history file. Only the
+    /// `conversationId` and `timestamp` fields are ever inspected; prompt text
+    /// and workspace paths in other fields are never read. Returns `nil` when
+    /// the runtime is absent, the volume or image is missing, the container
+    /// cannot be started, or the file is missing or empty.
+    ///
+    /// The volume is only mounted read-only, and only after an existence check:
+    /// `docker run` would otherwise create a phantom `antigravity-config`
+    /// volume on machines that never had agy's containerised setup.
+    private static func readContainerHistory() -> Data? {
+        guard let executable = resolveDockerExecutable(),
+              runtimeVolumeExists(executable, name: "antigravity-config"),
+              runtimeImageExists(executable, name: "alpine") else { return nil }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = [
+            "run", "--rm",
+            "-v", "antigravity-config:/data:ro",
+            "alpine", "cat", "/data/antigravity-cli/history.jsonl"
+        ]
+        let output = Pipe()
+        let error = Pipe()
+        process.standardOutput = output
+        process.standardError = error
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, !data.isEmpty else { return nil }
+        return data
+    }
+
+    private static func runtimeVolumeExists(_ executable: String, name: String) -> Bool {
+        run(executable: executable, arguments: ["volume", "inspect", name]) != nil
+    }
+
+    private static func runtimeImageExists(_ executable: String, name: String) -> Bool {
+        run(executable: executable, arguments: ["image", "inspect", name]) != nil
+    }
+
+    private static func run(executable: String, arguments: [String]) -> Data? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        let output = Pipe()
+        let error = Pipe()
+        process.standardOutput = output
+        process.standardError = error
+        do {
+            try process.run()
+        } catch {
+            return nil
+        }
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        return data
+    }
+
+    private static func resolveDockerExecutable() -> String? {
+        let fileManager = FileManager.default
+        let candidates: [String] = [
+            "/opt/homebrew/bin/docker",
+            "/opt/homebrew/bin/podman",
+            "/usr/local/bin/docker",
+            "/usr/local/bin/podman",
+            "/usr/bin/docker"
+        ]
+        for candidate in candidates where fileManager.isExecutableFile(atPath: candidate) {
+            return candidate
+        }
+        if let path = ProcessInfo.processInfo.environment["PATH"] {
+            for directory in path.split(separator: ":") {
+                let candidate = String(directory) + "/docker"
+                if fileManager.isExecutableFile(atPath: candidate) { return candidate }
+            }
+        }
+        return nil
+    }
+
+    /// Parses agy `history.jsonl` content (one JSON object per prompt line)
+    /// into usage counts, grouping lines by `conversationId`.
+    ///
+    /// Only `conversationId` and `timestamp` are read; a line's other fields
+    /// (prompt text, workspace path) are deliberately ignored. A session's
+    /// `startedAt` is its earliest prompt timestamp.
+    static func parseHistory(data: Data, now: Date) throws -> ProviderUsage {
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw SourceUnavailable.failed(.antigravity)
+        }
+        struct Record {
+            var messages: Int
+            var startedAt: Date?
+        }
+        var byID: [String: Record] = [:]
+        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            guard let lineData = String(rawLine).data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  let id = object["conversationId"] as? String, !id.isEmpty,
+                  let timestamp = object["timestamp"] else { continue }
+            var record = byID[id] ?? Record(messages: 0, startedAt: nil)
+            record.messages += 1
+            if let date = date(from: timestamp) {
+                if let current = record.startedAt {
+                    if date < current { record.startedAt = date }
+                } else {
+                    record.startedAt = date
+                }
+            }
+            byID[id] = record
+        }
+        let sessions: [[String: Any]] = byID.compactMap { _, record in
+            guard let startedAt = record.startedAt else { return nil }
+            return ["started_at": startedAt.timeIntervalSince1970, "messages": record.messages]
+        }
+        guard !sessions.isEmpty else { throw SourceUnavailable.noData }
+        let root: [String: Any] = ["sessions": sessions]
+        let data = try JSONSerialization.data(withJSONObject: root)
+        return try parse(data: data, now: now)
     }
 }
 
@@ -238,7 +406,7 @@ public struct GrokUsageSource: UsageSource {
     private static func date(in summary: [String: Any]) -> Date? {
         let keys = ["created_at", "createdAt", "last_active_at", "updated_at", "updatedAt"]
         for key in keys {
-            if let value = summary[key] as? String, let date = ISO8601DateFormatter().date(from: value) {
+            if let value = summary[key] as? String, let date = parseTimestamp(value) {
                 return date
             }
             if let value = summary[key] as? NSNumber {
@@ -247,6 +415,20 @@ public struct GrokUsageSource: UsageSource {
             }
         }
         return nil
+    }
+
+    /// Grok writes timestamps with fractional seconds (e.g.
+    /// `2026-08-15T17:57:15.877925Z`). The default `ISO8601DateFormatter`
+    /// rejects those, which silently emptied every summary. Parse fractional
+    /// first, then fall back to whole-second timestamps.
+    private static func parseTimestamp(_ raw: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: raw) { return date }
+
+        let whole = ISO8601DateFormatter()
+        whole.formatOptions = [.withInternetDateTime]
+        return whole.date(from: raw)
     }
 }
 
@@ -354,19 +536,37 @@ public struct OpenCodeGoUsageSource: UsageSource {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = ["db", "--format", "json", query]
-        let output = Pipe()
-        let error = Pipe()
-        process.standardOutput = output
-        process.standardError = error
+
+        // `opencode db --format json` stops at the 64KB pipe boundary when its
+        // stdout is a pipe (the trailing rows are silently dropped), but writes
+        // complete output to a regular file. Route stdout to a temporary file so
+        // large result sets survive. Stderr goes to /dev/null so a chatty CLI
+        // cannot fill a pipe buffer and stall the child mid-write.
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meterusage-opencode-\(UUID().uuidString).json")
+        guard FileManager.default.createFile(atPath: outputURL.path, contents: nil),
+              let outputHandle = try? FileHandle(forWritingTo: outputURL) else {
+            throw SourceUnavailable.failed(.openCodeGo)
+        }
+        defer {
+            outputHandle.closeFile()
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        process.standardOutput = outputHandle
+        if let devNull = FileHandle(forWritingAtPath: "/dev/null") {
+            process.standardError = devNull
+        }
 
         do {
             try process.run()
         } catch {
             throw SourceUnavailable.cliNotFound("OpenCode")
         }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
+            throw SourceUnavailable.failed(.openCodeGo)
+        }
+        guard let data = try? Data(contentsOf: outputURL) else {
             throw SourceUnavailable.failed(.openCodeGo)
         }
         return data
