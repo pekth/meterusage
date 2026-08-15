@@ -163,6 +163,28 @@ struct DemoOpenRouterQuotaSource: QuotaSource {
     }
 }
 
+/// Synthetic OpenCode Go allowance. Real values exercise three windows with
+/// different headrooms — the rolling window tight (a real "I'm almost out")
+/// signal) and the weekly/monthly comfortable — so a screenshot shows the
+/// full headroom colour scale.
+struct DemoOpenCodeGoQuotaSource: QuotaSource {
+    let provider: Provider = .openCodeGo
+
+    func fetchQuota() async throws -> ProviderQuota {
+        let now = Date()
+        return ProviderQuota(
+            provider: .openCodeGo,
+            windows: [
+                QuotaWindow(label: "Rolling", usedPercent: 87, resetsAt: now.addingTimeInterval(1.9 * 3600)),
+                QuotaWindow(label: "Weekly", usedPercent: 77, resetsAt: now.addingTimeInterval(26 * 3600)),
+                QuotaWindow(label: "Monthly", usedPercent: 44, resetsAt: now.addingTimeInterval(22.4 * 86_400))
+            ],
+            planType: "go",
+            capturedAt: now
+        )
+    }
+}
+
 // MARK: - Plan
 
 /// Synthetic subscription tier. `.max5x` rather than `.max20x` so the badge

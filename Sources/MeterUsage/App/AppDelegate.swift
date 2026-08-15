@@ -183,7 +183,7 @@ enum Composition {
 
     static func quotaSources() -> [QuotaSource] {
         if isDemoMode {
-            return [DemoClaudeQuotaSource(), DemoCodexQuotaSource(), DemoOpenRouterQuotaSource()]
+            return [DemoClaudeQuotaSource(), DemoCodexQuotaSource(), DemoOpenRouterQuotaSource(), DemoOpenCodeGoQuotaSource()]
         }
         return [
             // Live Codex limits, read over the CLI's local RPC.
@@ -191,6 +191,9 @@ enum Composition {
             // OpenRouter key spend and optional limit, read from its
             // authenticated account endpoint.
             OpenRouterQuotaSource(),
+            // OpenCode Go's rolling/weekly/monthly allowances, read from its
+            // authenticated Zen usage endpoint.
+            OpenCodeGoQuotaSource(),
             // Claude publishes no local quota endpoint. This reads a file only
             // if one happens to exist, and reports `.noData` otherwise — the
             // normal case, and deliberately not an error.
