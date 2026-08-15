@@ -340,6 +340,40 @@ final class SupplementalUsageSourceTests: XCTestCase {
         XCTAssertEqual(thirtyDay.estimatedCostUSD, 6.00, accuracy: 0.0001)
     }
 
+    /// Windows bucket by last activity (`updatedAt`), matching opencode's own
+    /// `stats --days N`: a session created before the window but worked on
+    /// inside it counts, and all of its messages count.
+    func testOpenCodeGoWindowUsesLastActivityNotCreationTime() throws {
+        let now = Date(timeIntervalSince1970: 1_780_000_000)
+        let hour: TimeInterval = 3_600
+        let day: TimeInterval = 86_400
+
+        let oldButActive = OpenCodeGoUsageSource.Record(
+            input: 100, output: 20, reasoning: 5, cacheRead: 50, cacheWrite: 1,
+            cost: 1.00, messages: 100,
+            createdAt: now.addingTimeInterval(-3 * day),  // started 3 days ago…
+            updatedAt: now.addingTimeInterval(-2 * hour)  // …touched 2h ago
+        )
+        let genuinelyOld = OpenCodeGoUsageSource.Record(
+            input: 10, output: 5, reasoning: 0, cacheRead: 0, cacheWrite: 0,
+            cost: 0.50, messages: 5,
+            createdAt: now.addingTimeInterval(-40 * day),
+            updatedAt: now.addingTimeInterval(-40 * day)
+        )
+
+        let windows = OpenCodeGoUsageSource.windows(from: [oldButActive, genuinelyOld], now: now)
+
+        let oneDay = try XCTUnwrap(windows.first { $0.label == "last 24h" })
+        XCTAssertEqual(oneDay.sessionCount, 1, "the old-but-active session counts")
+        XCTAssertEqual(oneDay.messageCount, 100, "all of its messages count")
+
+        let sevenDay = try XCTUnwrap(windows.first { $0.label == "last 7d" })
+        XCTAssertEqual(sevenDay.sessionCount, 1)
+
+        let thirtyDay = try XCTUnwrap(windows.first { $0.label == "last 30d" })
+        XCTAssertEqual(thirtyDay.sessionCount, 1)
+    }
+
     /// An empty record set must not fabricate a zero-usage window set — callers
     /// that gate on the window list staying nil/empty rely on that.
     func testOpenCodeGoEmptyRecordsProduceEmptyWindows() {
