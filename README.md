@@ -74,7 +74,7 @@ does **not** read any Claude credentials.
 | OpenRouter quota | Calls the documented `/api/v1/key` and `/api/v1/credits` endpoints with an existing `OPENROUTER_API_KEY` or supported local key file. Only aggregate usage, account balance, limit, and reset cadence are retained. | Yes |
 | Claude activity | Streams `~/.claude/projects/**/*.jsonl` and sums usage fields. | No |
 | Claude quota *(optional)* | Reads an on-disk usage JSON if a companion already wrote one (e.g. `~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Parses legacy windows and, when present, `limits[]` (including Fable `weekly_scoped`). Does not fetch Anthropic quota. | No |
-| Antigravity usage | Reads session/message counts from the local `~/.claude/claudewatch-agy-cache.json` companion cache. Token totals are left unknown when the cache does not contain them. | No |
+| Antigravity usage | Reads session/message counts from agy's `history.jsonl`, preferring the native `~/.gemini/antigravity-cli/` location and falling back to the `antigravity-config` container volume when agy is containerised, then the legacy `~/.claude/claudewatch-agy-cache.json` snapshot. Token totals are left unknown. | No |
 | Grok usage | Reads session summaries under `~/.grok/sessions/**/summary.json`; only session dates and message counts are used. | No |
 | OpenCode Go usage | Runs the local `opencode db --format json` command with a read-only query over numeric session usage fields and timestamps. Message bodies are never queried. | No |
 | Codex service health | Public OpenAI Statuspage JSON, filtered to Codex, CLI, and login components. | Yes |
@@ -112,7 +112,7 @@ is enforced by tests and hooks rather than promised in prose.
   OpenRouter usage
 - Optional: [`opencode`](https://opencode.ai/), for OpenCode Go local usage
 - Optional: Grok CLI, for Grok session history
-- Optional: Antigravity/ClaudeWatch companion cache, for Antigravity counts
+- Optional: the Antigravity (agy) CLI for Antigravity counts; containerised agy installs also need Docker or Podman
 - Optional: Claude Code, for local activity data
 
 Missing any provider is fine. Its row shows a calm empty state, and Settings
