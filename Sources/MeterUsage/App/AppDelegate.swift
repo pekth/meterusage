@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
     private var preferences: Preferences?
     private var coordinator: AppCoordinator?
+    private var resetAvailabilityNotifier: ResetAvailabilityNotifier?
     /// `main.swift`'s top-level code is not main-actor isolated, so the delegate
     /// must be constructible from there. Construction touches nothing isolated;
     /// every stored property is populated later in
@@ -27,11 +28,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let preferences = Preferences()
         let quotaSources = Composition.quotaSources()
+        let resetAvailabilityNotifier: ResetAvailabilityNotifier?
+        if Composition.isDemoMode {
+            resetAvailabilityNotifier = nil
+        } else {
+            let notifier = ResetAvailabilityNotifier()
+            notifier.start()
+            resetAvailabilityNotifier = notifier
+        }
         let coordinator = AppCoordinator(
             preferences: preferences,
             isDemoMode: Composition.isDemoMode,
             quotaSources: quotaSources,
             resetConsumer: quotaSources.compactMap { $0 as? QuotaResetConsumer }.first,
+            onQuotaResetAvailable: { event in
+                resetAvailabilityNotifier?.notify(event)
+            },
             activitySources: Composition.activitySources(),
             usageSources: Composition.usageSources(),
             statusSources: Composition.statusSources(),
@@ -42,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.preferences = preferences
         self.coordinator = coordinator
+        self.resetAvailabilityNotifier = resetAvailabilityNotifier
 
         installStatusItem(coordinator: coordinator)
         installPopover(coordinator: coordinator, preferences: preferences)
@@ -54,7 +67,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         guard let button = item.button else { return }
 
-        let host = NSHostingView(rootView: MenuBarLabel(coordinator: coordinator))
+        let host = NSHostingView(
+            rootView: MenuBarLabel(
+                coordinator: coordinator,
+                onWidthChange: { width in
+                    let pixels = ceil(width)
+                    if item.length != pixels {
+                        item.length = pixels
+                    }
+                }
+            )
+        )
         host.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(host)
         NSLayoutConstraint.activate([
@@ -113,9 +136,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // apps' windows and feel like a stuck window.
         popover.behavior = .transient
         popover.animates = true
-        popover.contentViewController = NSHostingController(
+        let hostingController = NSHostingController(
             rootView: PopoverRoot(coordinator: coordinator, preferences: preferences)
         )
+        // Let SwiftUI's measured content height drive the popover size instead
+        // of the fixed `contentSize` above, so the popover shrinks to its
+        // content (e.g. after a Codex reset credit is used and its section
+        // disappears) rather than reserving empty footer space.
+        hostingController.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = hostingController
         self.popover = popover
     }
 

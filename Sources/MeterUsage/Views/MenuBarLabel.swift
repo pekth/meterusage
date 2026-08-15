@@ -14,6 +14,10 @@ import SwiftUI
 struct MenuBarLabel: View {
 
     @ObservedObject var coordinator: AppCoordinator
+    /// The host reports the label's natural width so the `NSStatusItem` can
+    /// match it: too narrow a slot clips "100%" to "10", and a wider fixed
+    /// slot pads short figures like "9%" away from the gauge.
+    var onWidthChange: (CGFloat) -> Void = { _ in }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -21,11 +25,21 @@ struct MenuBarLabel: View {
             Text(display)
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                 .foregroundColor(hasReading ? tint : MU.neutral)
-                // Fixed slot: "9%" and "100%" must occupy the same width.
-                .frame(width: 30, alignment: .trailing)
         }
         .padding(.horizontal, 5)
         .frame(height: 22)
+        // Natural width regardless of the hosting slot, so the measurement
+        // below reports what the label really needs instead of a clipped size.
+        .fixedSize(horizontal: true, vertical: false)
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { onWidthChange(proxy.size.width) }
+                    .onChange(of: proxy.size.width) { newWidth in
+                        onWidthChange(newWidth)
+                    }
+            }
+        )
         .animation(.easeOut(duration: 0.3), value: fraction)
         .accessibilityLabel(accessibilityText)
     }
