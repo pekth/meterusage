@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// The whole popover: a fixed header, a scrolling body, and a settings pane that
 /// swaps in place of the body.
@@ -13,13 +14,26 @@ struct PopoverRoot: View {
 
     @State private var showingSettings = false
 
+    @State private var headerHeight: CGFloat = 44
+    @State private var contentHeight: CGFloat = 0
+
     var body: some View {
         VStack(spacing: 0) {
             header
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: HeaderHeightKey.self, value: proxy.size.height)
+                    }
+                )
             Divider().overlay(MU.hairline)
             content
         }
-        .frame(width: MU.popoverWidth, height: MU.popoverHeight)
+        .frame(
+            width: MU.popoverWidth,
+            height: min(MU.popoverHeight, headerHeight + 1 + contentHeight)
+        )
+        .onPreferenceChange(HeaderHeightKey.self) { headerHeight = $0 }
+        .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
         .background(MU.canvas)
         .preferredColorScheme(preferences.theme.colorScheme)
     }
@@ -88,6 +102,11 @@ struct PopoverRoot: View {
                 }
             }
             .padding(MU.gutter)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+                }
+            )
         }
         .scrollIndicatorsHiddenIfAvailable()
     }
@@ -140,6 +159,18 @@ struct PopoverRoot: View {
     }
 }
 
+// MARK: - Popover sizing
+
+private struct HeaderHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 44
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 // MARK: - Service status
 
 /// Compact health row. It stays at the top so a service issue is visible before
@@ -173,7 +204,9 @@ private struct StatusStrip: View {
                                 Spacer(minLength: 4)
                                 VStack(alignment: .trailing, spacing: 2) {
                                     if let url = row.provider.statusPageURL {
-                                        Link(destination: url) {
+                                        Button {
+                                            openStatusPage(url)
+                                        } label: {
                                             StatusBadge(severity: row.severity)
                                         }
                                         .buttonStyle(.plain)
@@ -260,4 +293,44 @@ private extension View {
             self
         }
     }
+}
+
+// MARK: - Opening status pages in a browser tab
+
+/// Opens the status page in the default browser, preferring a new tab.
+///
+/// A plain `NSWorkspace.open` hands the URL to LaunchServices, and Chromium
+/// browsers such as Helium open such links in a new window whenever the
+/// browser was not already running. Asking the running browser directly to
+/// `open location` opens a new tab in its frontmost window instead. Non-
+/// scriptable browsers make the AppleScript call throw, and the URL then
+/// falls back to `NSWorkspace.open`.
+private func openStatusPage(_ url: URL) {
+    guard let browserName = defaultBrowserName() else {
+        NSWorkspace.shared.open(url)
+        return
+    }
+    let source = """
+    tell application "\(appleScriptEscape(browserName))"
+        open location "\(appleScriptEscape(url.absoluteString))"
+    end tell
+    """
+    var error: NSDictionary?
+    let script = NSAppleScript(source: source)
+    if script?.executeAndReturnError(&error) == nil {
+        NSWorkspace.shared.open(url)
+    }
+}
+
+private func defaultBrowserName() -> String? {
+    guard let probe = URL(string: "https://status.example/"),
+          let appURL = NSWorkspace.shared.urlForApplication(toOpen: probe) else { return nil }
+    let bundleName = Bundle(url: appURL)?.object(forInfoDictionaryKey: "CFBundleName") as? String
+    return bundleName ?? appURL.deletingPathExtension().lastPathComponent
+}
+
+private func appleScriptEscape(_ string: String) -> String {
+    string
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
 }
