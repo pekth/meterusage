@@ -237,7 +237,8 @@ struct DemoOpenCodeGoUsageSource: UsageSource {
     let provider: Provider = .openCodeGo
 
     func fetchUsage() async throws -> ProviderUsage {
-        ProviderUsage(
+        let now = Date().addingTimeInterval(-55)
+        return ProviderUsage(
             provider: .openCodeGo,
             sessionCount: 26,
             messageCount: 492,
@@ -245,7 +246,30 @@ struct DemoOpenCodeGoUsageSource: UsageSource {
             estimatedCostUSD: 16.33,
             todaySessionCount: 3,
             todayMessageCount: 71,
-            capturedAt: Date().addingTimeInterval(-55)
+            usageWindows: [
+                UsageWindow(
+                    label: "last 24h",
+                    sessionCount: 3,
+                    messageCount: 71,
+                    tokens: TokenTotals(input: 260_000, output: 74_000, reasoning: 18_000, cacheRead: 1_420_000),
+                    estimatedCostUSD: 2.10
+                ),
+                UsageWindow(
+                    label: "last 7d",
+                    sessionCount: 21,
+                    messageCount: 390,
+                    tokens: TokenTotals(input: 980_000, output: 240_000, reasoning: 74_000, cacheRead: 6_100_000),
+                    estimatedCostUSD: 12.00
+                ),
+                UsageWindow(
+                    label: "last 30d",
+                    sessionCount: 26,
+                    messageCount: 492,
+                    tokens: TokenTotals(input: 1_420_000, output: 386_000, reasoning: 118_000, cacheRead: 9_840_000),
+                    estimatedCostUSD: 16.33
+                )
+            ],
+            capturedAt: now
         )
     }
 }

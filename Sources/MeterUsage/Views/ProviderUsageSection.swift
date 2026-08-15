@@ -87,42 +87,72 @@ private struct ProviderUsageRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         case .value(let usage):
-            HStack(spacing: 5) {
-                Text("\(usage.sessionCount) session\(usage.sessionCount == 1 ? "" : "s")")
-                Text("·")
-                Text("\(Fmt.count(usage.messageCount)) messages")
-                if let tokens = usage.tokens {
-                    Text("·")
-                    Text("\(Fmt.compactCount(tokens.total)) tokens")
+            if let windows = usage.usageWindows, !windows.isEmpty {
+                // Rolling-window view (OpenCode Go): one row per window with
+                // sessions, messages, tokens, and cost, then a fresh timestamp.
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(windows, id: \.label) { window in
+                        HStack(spacing: 5) {
+                            Text(window.label)
+                                .foregroundColor(providerColor(provider))
+                            Text("·")
+                            Text("\(window.sessionCount) session\(window.sessionCount == 1 ? "" : "s")")
+                            Text("·")
+                            Text("\(Fmt.count(window.messageCount)) messages")
+                            Text("·")
+                            Text("\(Fmt.compactCount(window.tokens.total)) tokens")
+                            Text("·")
+                            Text("~\(Fmt.usd(window.estimatedCostUSD))")
+                        }
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    }
+                    Text("Updated \(Fmt.timeSince(usage.capturedAt, now: now))")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
-                if let cost = usage.estimatedCostUSD {
-                    Text("·")
-                    Text("~\(Fmt.usd(cost))")
-                }
-            }
-            .font(.muCaption)
-            .foregroundColor(MU.textTertiary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-
-            if usage.todayMessageCount > 0 || usage.todaySessionCount > 0 {
-                Text("Today: \(usage.todaySessionCount) session\(usage.todaySessionCount == 1 ? "" : "s") · \(Fmt.count(usage.todayMessageCount)) messages · updated \(Fmt.timeSince(usage.capturedAt, now: now))")
-                    .font(.muCaption)
-                    .foregroundColor(MU.textTertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            } else if usage.tokens != nil {
-                Text("Updated \(Fmt.timeSince(usage.capturedAt, now: now)) · measured token totals")
-                    .font(.muCaption)
-                    .foregroundColor(MU.textTertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
             } else {
-                Text("Updated \(Fmt.timeSince(usage.capturedAt, now: now)) · token totals unavailable")
-                    .font(.muCaption)
-                    .foregroundColor(MU.textTertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                HStack(spacing: 5) {
+                    Text("\(usage.sessionCount) session\(usage.sessionCount == 1 ? "" : "s")")
+                    Text("·")
+                    Text("\(Fmt.count(usage.messageCount)) messages")
+                    if let tokens = usage.tokens {
+                        Text("·")
+                        Text("\(Fmt.compactCount(tokens.total)) tokens")
+                    }
+                    if let cost = usage.estimatedCostUSD {
+                        Text("·")
+                        Text("~\(Fmt.usd(cost))")
+                    }
+                }
+                .font(.muCaption)
+                .foregroundColor(MU.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+                if usage.todayMessageCount > 0 || usage.todaySessionCount > 0 {
+                    Text("Today: \(usage.todaySessionCount) session\(usage.todaySessionCount == 1 ? "" : "s") · \(Fmt.count(usage.todayMessageCount)) messages · updated \(Fmt.timeSince(usage.capturedAt, now: now))")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                } else if usage.tokens != nil {
+                    Text("Updated \(Fmt.timeSince(usage.capturedAt, now: now)) · measured token totals")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                } else {
+                    Text("Updated \(Fmt.timeSince(usage.capturedAt, now: now)) · token totals unavailable")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
             }
         }
     }

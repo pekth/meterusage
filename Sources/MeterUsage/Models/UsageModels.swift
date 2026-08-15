@@ -293,6 +293,31 @@ public struct LocalActivity: Equatable, Sendable {
     }
 }
 
+/// One usage slice over a named window (e.g. "last 24h"), aggregated from the
+/// same local history a source already reads. Sources without timestamps leave
+/// `ProviderUsage.usageWindows` nil.
+public struct UsageWindow: Equatable, Sendable {
+    public let label: String
+    public let sessionCount: Int
+    public let messageCount: Int
+    public let tokens: TokenTotals
+    public let estimatedCostUSD: Double
+
+    public init(
+        label: String,
+        sessionCount: Int,
+        messageCount: Int,
+        tokens: TokenTotals,
+        estimatedCostUSD: Double
+    ) {
+        self.label = label
+        self.sessionCount = max(sessionCount, 0)
+        self.messageCount = max(messageCount, 0)
+        self.tokens = tokens
+        self.estimatedCostUSD = estimatedCostUSD
+    }
+}
+
 /// Provider usage whose source does not necessarily expose token economics.
 ///
 /// Antigravity and Grok persist sessions/messages but not billable token counts;
@@ -306,6 +331,9 @@ public struct ProviderUsage: Equatable, Sendable {
     public let estimatedCostUSD: Double?
     public let todaySessionCount: Int
     public let todayMessageCount: Int
+    /// Rolling windows (e.g. "last 24h", "last 7d", "last 30d") computed from
+    /// the source's own records. Nil when the source has no timestamps.
+    public let usageWindows: [UsageWindow]?
     public let capturedAt: Date
 
     public init(
@@ -316,6 +344,7 @@ public struct ProviderUsage: Equatable, Sendable {
         estimatedCostUSD: Double? = nil,
         todaySessionCount: Int = 0,
         todayMessageCount: Int = 0,
+        usageWindows: [UsageWindow]? = nil,
         capturedAt: Date
     ) {
         self.provider = provider
@@ -325,6 +354,7 @@ public struct ProviderUsage: Equatable, Sendable {
         self.estimatedCostUSD = estimatedCostUSD
         self.todaySessionCount = max(todaySessionCount, 0)
         self.todayMessageCount = max(todayMessageCount, 0)
+        self.usageWindows = usageWindows
         self.capturedAt = capturedAt
     }
 }
