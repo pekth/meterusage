@@ -13,7 +13,11 @@ Codex first and each provider independently hideable.
 
 <img src="docs/images/menubar.png" alt="The meterusage menu-bar indicator showing 82%" height="24">
 
-<img src="docs/images/popover.png" alt="The meterusage popover: service status first, then Codex quotas and local provider usage" width="330">
+<img src="docs/images/popover.png" alt="The meterusage popover: service status, quotas, usage, and heatmaps" width="330">
+
+<img src="docs/images/popover-2.png" alt="The meterusage popover, scrolled: Codex, Claude, and Grok heatmaps" width="330">
+
+<img src="docs/images/popover-3.png" alt="The meterusage popover, scrolled: full dashboard with heatmaps" width="330">
 
 <sub>Screenshots are the real app in demo mode (`METERUSAGE_DEMO=1`) — every
 number is synthetic, which is why the popover is badged **Demo**.</sub>
