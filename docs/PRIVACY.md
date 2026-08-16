@@ -104,6 +104,10 @@ can verify in the source:
 4. meterusage fetches OpenRouter's documented `/api/v1/key` and
    `/api/v1/credits` endpoints with the existing key, retaining only aggregate
    dollar usage and balance fields.
+5. meterusage fetches Grok's billing endpoint
+   (`cli-chat-proxy.grok.com/v1/billing`) with the OIDC bearer token re-read
+   from `~/.grok/auth.json`, retaining only the allowance percent, period
+   type, and reset time. No prompts or model requests are sent.
 
 The local usage commands and file reads above add no outbound request. There is
 no analytics endpoint to disable because there is none.
