@@ -38,6 +38,11 @@ connect and no key-entry screen. OpenRouter uses an existing
   headroom.
 - **Live OpenRouter usage** — authenticated dollar spend, remaining account
   balance, and the optional daily/weekly/monthly key spending limit.
+- **Live Grok quota** — the current allowance window (weekly on the X Premium
+  tier, monthly on others) and the share already used, read from the same
+  billing service the Grok CLI uses. The OIDC token is re-read from
+  `~/.grok/auth.json` on every refresh, so a `grok` re-login never leaves the
+  app reading a stale credential until relaunch.
 - **Local provider usage** — Antigravity and Grok session/message counts, plus
   OpenCode Go token totals, message counts, and estimated local cost.
 - **Claude activity *(optional)*** — tokens and estimated cost broken down per model, so
@@ -72,6 +77,7 @@ does **not** read any Claude credentials.
 |---|---|---|
 | Codex quota | Spawns `codex app-server --stdio` and calls `account/rateLimits/read` over JSON-RPC with the experimental rate-limit detail capability enabled. This includes general/model-specific windows and earned reset-credit expiry details. The subprocess authenticates itself. | Yes, by the CLI |
 | OpenRouter quota | Calls the documented `/api/v1/key` and `/api/v1/credits` endpoints with an existing `OPENROUTER_API_KEY` or supported local key file. Only aggregate usage, account balance, limit, and reset cadence are retained. | Yes |
+| Grok quota | Calls the billing endpoint the Grok CLI itself uses (`cli-chat-proxy.grok.com/v1/billing`), sending only the OIDC bearer token re-read from `~/.grok/auth.json` on each refresh. Only the allowance percent, period type, and reset time are retained; no prompts or model requests are sent. | Yes |
 | Claude activity | Streams `~/.claude/projects/**/*.jsonl` and sums usage fields. | No |
 | Claude quota *(optional)* | Reads an on-disk usage JSON if a companion already wrote one (e.g. `~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Parses legacy windows and, when present, `limits[]` (including Fable `weekly_scoped`). Does not fetch Anthropic quota. | No |
 | Antigravity usage | Reads session/message counts from agy's `history.jsonl`, preferring the native `~/.gemini/antigravity-cli/` location and falling back to the `antigravity-config` container volume when agy is containerised, then the legacy `~/.claude/claudewatch-agy-cache.json` snapshot. Token totals are left unknown. | No |
@@ -89,9 +95,10 @@ endpoint using Anthropic's first-party client id. meterusage deliberately
 doesn't, because that impersonates the official client and can break without
 notice.
 
-So the honest split: **Codex and OpenRouter quotas are live from the cloud;
-Antigravity, Grok, OpenCode Go, and Claude activity are computed from local
-data; Claude quota bars are optional and file-driven.** meterusage never talks
+So the honest split: **Codex, OpenRouter, and Grok quotas are live from the
+cloud; Antigravity, Grok, OpenCode Go, and Claude activity are computed from
+local data; Claude quota bars are optional and file-driven.** meterusage never
+talks
 to Anthropic for quota. OpenRouter's existing key is used only for its
 aggregate account endpoints and is never displayed or logged. If a local
 companion writes a usage snapshot, its counts light up from that file alone.
@@ -111,7 +118,8 @@ is enforced by tests and hooks rather than promised in prose.
 - Optional: `OPENROUTER_API_KEY` or a local OpenRouter key file, for live
   OpenRouter usage
 - Optional: [`opencode`](https://opencode.ai/), for OpenCode Go local usage
-- Optional: Grok CLI, for Grok session history
+- Optional: Grok CLI (signed in), for Grok session history and the live
+  allowance window
 - Optional: the Antigravity (agy) CLI for Antigravity counts; containerised agy installs also need Docker or Podman
 - Optional: Claude Code, for local activity data
 

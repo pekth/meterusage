@@ -65,10 +65,6 @@ final class AppCoordinator: ObservableObject {
     private let quotaSources: [QuotaSource]
     /// Optional because only Codex exposes an account-mutating reset action.
     private let resetConsumer: QuotaResetConsumer?
-    /// Emits only when a later successful server snapshot contains a newly
-    /// available reset. The first snapshot establishes the baseline.
-    private var quotaResetAvailabilityDetector = QuotaResetAvailabilityDetector()
-    private let onQuotaResetAvailable: (QuotaResetAvailabilityEvent) -> Void
     /// Not `let`: clearing the cache replaces these instances (see
     /// `performCacheClear`), which is how a re-scan is made genuinely cold.
     private var activitySources: [LocalActivitySource]
@@ -94,7 +90,6 @@ final class AppCoordinator: ObservableObject {
         isDemoMode: Bool = false,
         quotaSources: [QuotaSource] = [],
         resetConsumer: QuotaResetConsumer? = nil,
-        onQuotaResetAvailable: @escaping (QuotaResetAvailabilityEvent) -> Void = { _ in },
         activitySources: [LocalActivitySource] = [],
         usageSources: [UsageSource] = [],
         statusSources: [StatusSource] = [],
@@ -105,7 +100,6 @@ final class AppCoordinator: ObservableObject {
         self.isDemoMode = isDemoMode
         self.quotaSources = quotaSources
         self.resetConsumer = resetConsumer
-        self.onQuotaResetAvailable = onQuotaResetAvailable
         self.activitySources = activitySources
         self.activitySourceFactory = activitySourceFactory
         self.usageSources = usageSources
@@ -234,19 +228,12 @@ final class AppCoordinator: ObservableObject {
 
     private func load(quota source: QuotaSource) async {
         let result: Loaded<ProviderQuota>
-        let resetEvent: QuotaResetAvailabilityEvent?
         do {
-            let quota = try await source.fetchQuota()
-            result = .value(quota)
-            resetEvent = quotaResetAvailabilityDetector.observe(quota)
+            result = .value(try await source.fetchQuota())
         } catch {
             result = .missing(Self.reason(for: error, provider: source.provider))
-            resetEvent = nil
         }
         quotas[source.provider] = result
-        if !isDemoMode, let resetEvent {
-            onQuotaResetAvailable(resetEvent)
-        }
     }
 
     private func load(activity source: LocalActivitySource) async {

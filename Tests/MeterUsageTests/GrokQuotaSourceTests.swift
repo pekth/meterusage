@@ -92,6 +92,35 @@ final class GrokQuotaSourceTests: XCTestCase {
         }
     }
 
+    /// The live service also rejects a stale bearer token with the string
+    /// error form `{"error":"<message>"}`. That is the same "not signed in"
+    /// state, so the user sees a sign-in hint rather than a generic failure.
+    func testParseStringAuthErrorIsNotSignedIn() throws {
+        let json = """
+        {"error":"Invalid or expired credentials (auth_kind=bearer, x_xai_token_auth=none, upstream=Unauthenticated, reason=no auth context)"}
+        """
+
+        XCTAssertThrowsError(
+            try GrokQuotaSource.parse(data: Data(json.utf8), now: Date())
+        ) { error in
+            XCTAssertEqual(error as? SourceUnavailable, .notSignedIn(.grok))
+        }
+    }
+
+    /// A non-auth string error still fails closed rather than being read as an
+    /// empty billing payload.
+    func testParseStringErrorWithoutAuthHintFails() throws {
+        let json = """
+        {"error":"rate limit exceeded"}
+        """
+
+        XCTAssertThrowsError(
+            try GrokQuotaSource.parse(data: Data(json.utf8), now: Date())
+        ) { error in
+            XCTAssertEqual(error as? SourceUnavailable, .failed(.grok))
+        }
+    }
+
     /// Garbage that is neither a billing payload nor an error body is a
     /// generic failure, not a crash.
     func testParseGarbageFails() throws {

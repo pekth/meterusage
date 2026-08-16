@@ -26,13 +26,18 @@ public struct GrokQuotaSource: QuotaSource {
         endpoint: URL? = nil,
         session: URLSession = GrokQuotaSource.defaultSession()
     ) {
-        self.apiToken = apiToken ?? Self.discoverToken()
+        // `nil` is kept meaning "discover per fetch", never resolved once here:
+        // the grok CLI rotates the OIDC token in `~/.grok/auth.json` on a
+        // regular basis, and an app that caches the token from launch shows a
+        // stale account until it is relaunched.
+        self.apiToken = apiToken
         self.endpoint = endpoint ?? URL(string: "https://cli-chat-proxy.grok.com/v1/billing?format=credits")!
         self.session = session
     }
 
     public func fetchQuota() async throws -> ProviderQuota {
-        guard let token = Self.normalized(apiToken) else {
+        let token = Self.normalized(apiToken) ?? Self.normalized(Self.discoverToken())
+        guard let token else {
             throw SourceUnavailable.dataNotFound("Grok credentials")
         }
 
@@ -91,6 +96,16 @@ public struct GrokQuotaSource: QuotaSource {
                 throw SourceUnavailable.failed(.grok)
             }
         }
+        // The auth failure can also arrive as `{"error":"<message>"}` (the
+        // live service returns this string form on a stale bearer token).
+        if let message = try? JSONDecoder().decode(StringErrorResponse.self, from: data) {
+            let lowered = message.error.lowercased()
+            if lowered.contains("invalid") || lowered.contains("expired")
+                || lowered.contains("unauth") || lowered.contains("not signed") {
+                throw SourceUnavailable.notSignedIn(.grok)
+            }
+            throw SourceUnavailable.failed(.grok)
+        }
         guard let response = try? JSONDecoder().decode(BillingResponse.self, from: data) else {
             throw SourceUnavailable.failed(.grok)
         }
@@ -133,6 +148,13 @@ public struct GrokQuotaSource: QuotaSource {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    /// NOTE (2026-08-16): Grok is rolling out a "redeem usage limit reset"
+    /// feature on the account/web side. The CLI's billing endpoint does not
+    /// expose it yet — no redeemable-reset field in the `/v1/billing` payload
+    /// and no redeem endpoint. When the CLI ships it, surface the reset here
+    /// the way Codex's reset credits are surfaced (see `QuotaSection` /
+    /// `QuotaResetConsumer`).
+    ///
     /// The billing service emits fractional-second ISO8601 timestamps with a
     /// UTC offset (e.g. `2026-08-18T04:06:19.522482+00:00`), which the default
     /// whole-second formatter rejects. Parse fractional first, then fall back.
@@ -209,6 +231,10 @@ public struct GrokQuotaSource: QuotaSource {
 
     private struct ErrorBody: Decodable {
         let type: String
+    }
+
+    private struct StringErrorResponse: Decodable {
+        let error: String
     }
 }
 
