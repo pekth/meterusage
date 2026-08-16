@@ -1,11 +1,17 @@
-<!-- BEGIN ai-skills managed controller policy -->
-## T3 Code Controller policy
+# Agent and contributor guidance
 
-Every top-level T3 Code session in this repository is a Controller. It must use
-the global `AGENTS.md` policy and the repository copies of `CONTROLLER.md` and
-`NO-LOOPS.md`. Project instructions can narrow scope but cannot disable mandatory
-delegation, child cleanup, or `.handoff/ACTIVE.md` continuity.
+Use this file with [`CONTRIBUTING.md`](CONTRIBUTING.md) when working on the
+public repository.
 
-Source: `ai-skills` commit `97d487263399c8fba08edb28848dcd15cf7f22dd`
-Template SHA-256: `ac2f3318f98b85907643519383525623abd051befd98e8cf509f4b43f0649a38`
-<!-- END ai-skills managed controller policy -->
+## Project rules
+
+- Keep changes focused and explain user-visible behavior in the pull request.
+- Run `swift build` and `swift test` before submitting code changes.
+- Use synthetic fixtures and demo data only. Never commit credentials, private
+  keys, real account data, raw transcripts, or personal absolute paths.
+- Read [`docs/PRIVACY.md`](docs/PRIVACY.md) before changing data sources,
+  logging, or provider integrations.
+- Update `README.md` or the relevant file under `docs/` when behavior or setup
+  changes.
+
+The repository does not publish private agent orchestration instructions.
