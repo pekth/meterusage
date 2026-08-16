@@ -36,6 +36,6 @@ credentials.json
 Tests/**/Fixtures/**/*.live.json
 scratch/
 
-# Local agent policy. Keep private orchestration files out of public forks.
+# Local tooling files.
 CONTROLLER.md
 NO-LOOPS.md
