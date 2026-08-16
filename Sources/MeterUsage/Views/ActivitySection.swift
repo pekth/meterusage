@@ -18,6 +18,7 @@ struct ActivitySection: View {
     let now: Date
 
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
+    @AppStorage(PrefKey.showClaudeHeatmap) private var showClaudeHeatmap: Bool = true
 
     private var loaded: [LocalActivity] {
         providers.compactMap { activities[$0]?.value }
@@ -49,14 +50,11 @@ struct ActivitySection: View {
                     if hasUnpricedModels {
                         UnpricedNote()
                     }
-                    if showHeatmap {
+                    if showHeatmap && showClaudeHeatmap {
                         Divider().overlay(MU.hairline)
                         HeatmapView(daily: loaded.flatMap(\.daily), today: now)
                     }
                 }
-            }
-            if !loaded.isEmpty {
-                SessionsCard(sessions: recentSessions, now: now)
             }
         }
     }
@@ -162,15 +160,6 @@ struct ActivitySection: View {
             // by it would push exactly the models this section exists to
             // surface to the bottom of the list.
             .sorted { $0.tokens.total > $1.tokens.total }
-    }
-
-    /// Newest first, capped: the popover is a glance surface, not a log viewer.
-    private var recentSessions: [SessionSummary] {
-        loaded
-            .flatMap(\.sessions)
-            .sorted { $0.startedAt > $1.startedAt }
-            .prefix(6)
-            .map { $0 }
     }
 }
 
@@ -374,74 +363,3 @@ private struct Stat: View {
     }
 }
 
-private struct SessionsCard: View {
-    let sessions: [SessionSummary]
-    let now: Date
-
-    var body: some View {
-        Card {
-            SectionHeader("Recent sessions")
-            if sessions.isEmpty {
-                InfoState(message: SourceUnavailable.noData.userFacingMessage)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
-                        if index > 0 {
-                            Divider().overlay(MU.hairline).padding(.vertical, 6)
-                        }
-                        SessionRow(session: session, now: now)
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct SessionRow: View {
-    let session: SessionSummary
-    let now: Date
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                // `projectName` is already a bare directory name (see Privacy).
-                Text(session.projectName)
-                    .font(.muBody)
-                    .foregroundColor(MU.text)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                HStack(spacing: 5) {
-                    Text(Fmt.timeSince(session.startedAt, now: now))
-                    Text("·")
-                    Text("\(session.messageCount) msg")
-                    Text("·")
-                    // Shown verbatim apart from the vendor prefix, so an
-                    // unfamiliar model reads as itself rather than as a guess.
-                    Text(Fmt.shortModel(session.model))
-                }
-                .font(.muCaption)
-                .foregroundColor(MU.textTertiary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            }
-            Spacer(minLength: 6)
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(Fmt.compactCount(session.tokens.total))
-                    .font(.muNumber)
-                    .foregroundColor(MU.textSecondary)
-                Text(costLabel)
-                    .font(.muCaption)
-                    .foregroundColor(MU.textTertiary)
-            }
-            .help(costHelp)
-        }
-    }
-
-    private var costLabel: String {
-        CostDisplay.label(model: session.model, costUSD: session.estimatedCostUSD)
-    }
-
-    private var costHelp: String {
-        CostDisplay.help(model: session.model)
-    }
-}

@@ -117,4 +117,61 @@ final class CodexLocalSourceTests: XCTestCase {
         XCTAssertEqual(intensities.max() ?? 0, 1, accuracy: 0.0001, "busiest day is the peak")
         XCTAssertTrue(intensities.contains { $0 > 0 }, "session metric must produce shaded cells")
     }
+
+    // MARK: - Aggregation modes
+
+    /// Two dates in the same week. Weekly mode shades every day of that week
+    /// with the week's combined total.
+    private func thisWeek(_ offsetFromMonday: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let today = calendar.startOfDay(for: Date())
+        // Gregorian weekdays run Sunday(1)...Saturday(7); walk back to Monday.
+        let daysBackToMonday = (calendar.component(.weekday, from: today) - 2 + 7) % 7
+        let monday = calendar.date(byAdding: .day, value: -daysBackToMonday, to: today)!
+        return calendar.date(byAdding: .day, value: offsetFromMonday, to: monday)!
+    }
+
+    private func cell(_ date: Date, in model: HeatmapView.Model) -> HeatmapView.Model.Cell? {
+        model.columns.flatMap { $0 }.compactMap { $0 }.first { $0.date == date }
+    }
+
+    func testWeeklyModeShadesWholeWeekWithWeekTotal() {
+        let monday = thisWeek(0)
+        let tuesday = thisWeek(1)
+        let daily = [
+            DailyActivity(day: monday, tokens: TokenTotals(input: 100), estimatedCostUSD: 0, sessionCount: 1),
+            DailyActivity(day: tuesday, tokens: TokenTotals(input: 200), estimatedCostUSD: 0, sessionCount: 1)
+        ]
+
+        let model = HeatmapView.Model(daily: daily, today: Date(), weeks: 26, mode: .weekly)
+
+        let mondayCell = try! XCTUnwrap(cell(monday, in: model))
+        let tuesdayCell = try! XCTUnwrap(cell(tuesday, in: model))
+        XCTAssertEqual(mondayCell.tokens, 300, "Monday carries the week's combined total")
+        XCTAssertEqual(tuesdayCell.tokens, 300)
+        XCTAssertEqual(
+            mondayCell.intensity, tuesdayCell.intensity, accuracy: 0.0001,
+            "every day in a week is shaded by the same weekly total"
+        )
+        XCTAssertGreaterThan(mondayCell.intensity, 0)
+    }
+
+    func testCumulativeModeAccumulatesToPeak() {
+        let monday = thisWeek(0)
+        let tuesday = thisWeek(1)
+        let daily = [
+            DailyActivity(day: monday, tokens: TokenTotals(input: 100), estimatedCostUSD: 0, sessionCount: 1),
+            DailyActivity(day: tuesday, tokens: TokenTotals(input: 200), estimatedCostUSD: 0, sessionCount: 1)
+        ]
+
+        let model = HeatmapView.Model(daily: daily, today: Date(), weeks: 26, mode: .cumulative)
+
+        let mondayCell = try! XCTUnwrap(cell(monday, in: model))
+        let tuesdayCell = try! XCTUnwrap(cell(tuesday, in: model))
+        XCTAssertEqual(mondayCell.tokens, 100)
+        XCTAssertEqual(tuesdayCell.tokens, 300, "running total up to and including the day")
+        XCTAssertEqual(mondayCell.intensity, 100.0 / 300.0, accuracy: 0.0001)
+        XCTAssertEqual(tuesdayCell.intensity, 1.0, accuracy: 0.0001, "the final day is the cumulative peak")
+    }
 }

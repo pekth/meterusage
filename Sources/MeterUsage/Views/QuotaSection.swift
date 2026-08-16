@@ -33,6 +33,7 @@ struct QuotaSection: View {
     @State private var consumingResetID: String?
 
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
+    @AppStorage(PrefKey.showCodexHeatmap) private var showCodexHeatmap: Bool = true
 
     init(
         provider: Provider,
@@ -205,11 +206,11 @@ struct QuotaSection: View {
     }
 
     /// Codex's weekly session heatmap, sharing the card its usage windows live
-    /// in. Governed by the same "Show heatmap" preference as the Local
-    /// activity grid, so one toggle controls every heatmap in the popover.
+    /// in. Governed by the master "Show heatmap" preference and the per-provider
+    /// Codex heatmap toggle.
     @ViewBuilder
     private var heatmapFooter: some View {
-        if provider == .codex, showHeatmap, !codexHeatmapDaily.isEmpty {
+        if provider == .codex, showHeatmap, showCodexHeatmap, !codexHeatmapDaily.isEmpty {
             Divider().overlay(MU.hairline).padding(.vertical, 12)
             HeatmapView(daily: codexHeatmapDaily, today: now, intensity: .sessions)
             HStack(spacing: 5) {

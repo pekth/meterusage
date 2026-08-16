@@ -58,8 +58,10 @@ connect and no key-entry screen. OpenRouter uses an existing
   shows how to pass it through.
 - **A 26-week heatmap** of daily usage — Codex activity (sessions per day)
   inside the Codex quota card, Claude local activity (tokens per day) in the
-  Local activity card. One **Show heatmap** toggle in Settings hides the whole
-  grid.
+  Local activity card. Each grid can be viewed by **day, week, or cumulative
+  total**, and hovering a cell shows the date and its tokens. A master
+  **Show heatmap** switch plus per-provider Codex/Claude heatmap toggles in
+  Settings control what is shown.
 - **Colour-coded usage and status** — quota headroom uses calm/warning/alert
   bands, while provider identity and written service-severity badges remain
   understandable without relying on colour alone.

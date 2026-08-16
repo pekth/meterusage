@@ -22,6 +22,8 @@ struct SettingsView: View {
     @AppStorage(PrefKey.theme) private var theme: String = AppTheme.system.rawValue
     @AppStorage(PrefKey.launchAtLogin) private var launchAtLogin: Bool = false
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
+    @AppStorage(PrefKey.showClaudeHeatmap) private var showClaudeHeatmap: Bool = true
+    @AppStorage(PrefKey.showCodexHeatmap) private var showCodexHeatmap: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -97,9 +99,23 @@ struct SettingsView: View {
                     Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Show heatmap",
-                        subtitle: "Weekly activity grid in the Codex and Local activity cards.",
+                        subtitle: "Master switch for the weekly activity grids.",
                         isOn: $showHeatmap
                     )
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "Codex heatmap",
+                        subtitle: "Weekly sessions grid inside the Codex card.",
+                        isOn: $showCodexHeatmap
+                    )
+                    .disabled(!showHeatmap)
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "Claude heatmap",
+                        subtitle: "Weekly token grid in the Local activity card.",
+                        isOn: $showClaudeHeatmap
+                    )
+                    .disabled(!showHeatmap)
                 }
             }
 

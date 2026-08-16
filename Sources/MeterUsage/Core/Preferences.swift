@@ -27,6 +27,8 @@ enum PrefKey {
     static let theme = "appearanceTheme"
     static let launchAtLogin = "launchAtLogin"
     static let showHeatmap = "showHeatmap"
+    static let showClaudeHeatmap = "showClaudeHeatmap"
+    static let showCodexHeatmap = "showCodexHeatmap"
 }
 
 /// Popover appearance. The menu-bar label always follows the system menu bar.
@@ -67,6 +69,8 @@ final class Preferences: ObservableObject {
     @Published private(set) var enabledProviders: Set<Provider> = Set(Provider.allCases)
     @Published private(set) var theme: AppTheme = .system
     @Published private(set) var showHeatmap: Bool = true
+    @Published private(set) var showClaudeHeatmap: Bool = true
+    @Published private(set) var showCodexHeatmap: Bool = true
 
     private let defaults: UserDefaults
     private var observer: NSObjectProtocol?
@@ -89,7 +93,9 @@ final class Preferences: ObservableObject {
             PrefKey.showOpenRouter: true,
             PrefKey.theme: AppTheme.system.rawValue,
             PrefKey.launchAtLogin: false,
-            PrefKey.showHeatmap: true
+            PrefKey.showHeatmap: true,
+            PrefKey.showClaudeHeatmap: true,
+            PrefKey.showCodexHeatmap: true
         ])
         reload()
         observer = NotificationCenter.default.addObserver(
@@ -125,6 +131,12 @@ final class Preferences: ObservableObject {
 
         let heatmap = defaults.bool(forKey: PrefKey.showHeatmap)
         if heatmap != showHeatmap { showHeatmap = heatmap }
+
+        let claudeHeatmap = defaults.bool(forKey: PrefKey.showClaudeHeatmap)
+        if claudeHeatmap != showClaudeHeatmap { showClaudeHeatmap = claudeHeatmap }
+
+        let codexHeatmap = defaults.bool(forKey: PrefKey.showCodexHeatmap)
+        if codexHeatmap != showCodexHeatmap { showCodexHeatmap = codexHeatmap }
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }
