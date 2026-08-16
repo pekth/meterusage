@@ -40,12 +40,25 @@ struct HeatmapView: View {
     var intensity: Intensity = .tokens
 
     @State private var mode: Mode = .daily
-    @State private var hovered: Model.Cell?
+    @State private var hovered: Hovered?
+    @State private var gridWidth: CGFloat = 0
+    @State private var bubbleWidth: CGFloat = 120
+
+    /// The cell under the pointer plus its grid position, so the tooltip can
+    /// float right above it.
+    private struct Hovered {
+        let column: Int
+        let row: Int
+        let cell: Model.Cell
+    }
 
     private let weeks = 26
     // 26 × (8 + 2.2) ≈ 263pt, which clears the card's ~288pt content width.
     private let cell: CGFloat = 8
     private let spacing: CGFloat = 2.2
+    private let tooltipHeight: CGFloat = 22
+
+    private var stride: CGFloat { cell + spacing }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -57,19 +70,11 @@ struct HeatmapView: View {
 
     // MARK: Header
 
-    /// The date · tokens readout as an instant tooltip bubble the moment a
-    /// cell is hovered (native `.help` waits on the system tooltip delay), or
-    /// the window label when nothing is under the pointer. The mode picker
-    /// sits at the trailing edge.
     private var header: some View {
         HStack(spacing: 6) {
-            if let hovered {
-                tooltipBubble(hovered)
-            } else {
-                Text("\(weeks) weeks")
-                    .font(.muCaption)
-                    .foregroundColor(MU.textTertiary)
-            }
+            Text("\(weeks) weeks")
+                .font(.muCaption)
+                .foregroundColor(MU.textTertiary)
             Spacer(minLength: 4)
             Picker("Heatmap view", selection: $mode) {
                 ForEach(Mode.allCases) { option in
@@ -81,25 +86,6 @@ struct HeatmapView: View {
             .controlSize(.mini)
             .fixedSize()
         }
-        .animation(.easeOut(duration: 0.1), value: hovered?.date)
-    }
-
-    private func tooltipBubble(_ day: Model.Cell) -> some View {
-        Text(Self.readout(day))
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(MU.text)
-            .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(MU.well)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .stroke(MU.hairline, lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
-            )
     }
 
     // MARK: Grid
@@ -116,6 +102,32 @@ struct HeatmapView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.onAppear { gridWidth = proxy.size.width }
+            }
+        )
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                let column = Int(location.x / stride)
+                let row = Int(location.y / stride)
+                if column >= 0, column < weeks, row >= 0, row < 7,
+                   let cell = model.columns[column][row] {
+                    hovered = Hovered(column: column, row: row, cell: cell)
+                } else {
+                    hovered = nil
+                }
+            case .ended:
+                hovered = nil
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if let hovered {
+                tooltipBubble(hovered.cell)
+                    .offset(x: tooltipX(hovered.column), y: tooltipY(hovered.row))
+            }
+        }
     }
 
     @ViewBuilder
@@ -123,14 +135,45 @@ struct HeatmapView: View {
         RoundedRectangle(cornerRadius: 2, style: .continuous)
             .fill(fill(for: day))
             .frame(width: cell, height: cell)
-            .help(day.map(Self.readout) ?? "")
-            .onHover { hovering in
-                if hovering {
-                    hovered = day
-                } else if hovered?.date == day?.date {
-                    hovered = nil
+    }
+
+    /// Horizontal position clamped so the bubble never runs off the grid's
+    /// edges, regardless of which column is hovered.
+    private func tooltipX(_ column: Int) -> CGFloat {
+        let center = CGFloat(column) * stride + cell / 2
+        let half = bubbleWidth / 2
+        let available = max(gridWidth - bubbleWidth, 0)
+        return min(max(center - half, 0), available)
+    }
+
+    /// Floats the bubble just above the hovered cell; the top row reaches up
+    /// over the header, which is fine — the overlay is non-interactive.
+    private func tooltipY(_ row: Int) -> CGFloat {
+        CGFloat(row) * stride - tooltipHeight - 4
+    }
+
+    private func tooltipBubble(_ day: Model.Cell) -> some View {
+        Text(Self.readout(day))
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(MU.text)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.onAppear { bubbleWidth = proxy.size.width }
                 }
-            }
+            )
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(MU.well)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .stroke(MU.hairline, lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+            )
+            .allowsHitTesting(false)
     }
 
     private func fill(for day: Model.Cell?) -> Color {

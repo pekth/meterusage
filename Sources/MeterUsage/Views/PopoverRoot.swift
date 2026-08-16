@@ -154,19 +154,6 @@ struct PopoverRoot: View {
                 providers: coordinator.visibleUsageProviders,
                 now: coordinator.clock
             )
-
-            // Codex and Claude each carry their heatmap inside their quota
-            // card, so neither shares the token-scaled Local activity grid.
-            // Codex's session-only activity is also kept out of the Local
-            // activity totals, which are token-and-model breakdowns.
-            let localActivityProviders = coordinator.visibleActivityProviders
-                .filter { $0 != .codex }
-            if !localActivityProviders.isEmpty {
-                ActivitySection(
-                    activities: coordinator.activities,
-                    providers: localActivityProviders
-                )
-            }
         }
     }
 

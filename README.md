@@ -127,7 +127,7 @@ is enforced by tests and hooks rather than promised in prose.
 - Optional: Grok CLI (signed in), for Grok session history and the live
   allowance window
 - Optional: the Antigravity (agy) CLI for Antigravity counts; containerised agy installs also need Docker or Podman
-- Optional: Claude Code, for local activity data
+- Optional: Claude Code, for Claude activity and the Claude heatmap
 
 Missing any provider is fine. Its row shows a calm empty state, and Settings
 can hide providers that are not installed or not relevant to you.
