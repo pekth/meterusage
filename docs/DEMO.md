@@ -57,11 +57,12 @@ service status is first, followed by quotas and provider usage.
 - **Grok** — 12 sessions and 184 messages.
 - **OpenCode Go** — 26 sessions, 492 messages, measured token totals, and a
   synthetic $16.33 estimate.
-- **Claude** — optional local activity and quota data; hidden by default in
-  Settings.
-- **Local activity** — 58 sessions, ~55M tokens, ~$156 estimated, across
-  invented project names like `web-app` and `api-server`.
-- **Heatmap** — about 20 of the last 26 weeks populated, at varied intensity.
+- **Claude** — optional companion-file quota data and a tokens-per-day
+  heatmap; hidden by default in Settings.
+- **Heatmaps** — Codex (sessions per day) and Claude (tokens per day) each
+  draw a 26-week grid with about 20 weeks populated at varied intensity. Each
+  grid switches between daily, weekly, and cumulative views, and hovering a
+  cell previews the date and its totals.
 
 The percentages are picked to make the popover *legible* rather than dramatic:
 one window sits in the amber band and the rest are green, so a screenshot shows
