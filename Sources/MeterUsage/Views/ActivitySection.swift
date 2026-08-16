@@ -17,6 +17,8 @@ struct ActivitySection: View {
     let providers: [Provider]
     let now: Date
 
+    @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
+
     private var loaded: [LocalActivity] {
         providers.compactMap { activities[$0]?.value }
     }
@@ -47,8 +49,10 @@ struct ActivitySection: View {
                     if hasUnpricedModels {
                         UnpricedNote()
                     }
-                    Divider().overlay(MU.hairline)
-                    HeatmapView(daily: loaded.flatMap(\.daily), today: now)
+                    if showHeatmap {
+                        Divider().overlay(MU.hairline)
+                        HeatmapView(daily: loaded.flatMap(\.daily), today: now)
+                    }
                 }
             }
             if !loaded.isEmpty {

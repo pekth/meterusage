@@ -56,7 +56,9 @@ connect and no key-entry screen. OpenRouter uses an existing
   Fable bar appears until the writer actually emits `limits[]`; most
   statusline writers discard it, so [docs/COMPANION.md](docs/COMPANION.md)
   shows how to pass it through.
-- **A 26-week heatmap** of daily usage.
+- **A 26-week heatmap** of daily usage — Codex activity (sessions per day) on
+  its own card, Claude local activity (tokens per day) in the Local activity
+  card. One **Show heatmap** toggle in Settings hides the whole grid.
 - **Colour-coded usage and status** — quota headroom uses calm/warning/alert
   bands, while provider identity and written service-severity badges remain
   understandable without relying on colour alone.
@@ -78,9 +80,10 @@ does **not** read any Claude credentials.
 | Codex quota | Spawns `codex app-server --stdio` and calls `account/rateLimits/read` over JSON-RPC with the experimental rate-limit detail capability enabled. This includes general/model-specific windows and earned reset-credit expiry details. The subprocess authenticates itself. | Yes, by the CLI |
 | OpenRouter quota | Calls the documented `/api/v1/key` and `/api/v1/credits` endpoints with an existing `OPENROUTER_API_KEY` or supported local key file. Only aggregate usage, account balance, limit, and reset cadence are retained. | Yes |
 | Grok quota | Calls the billing endpoint the Grok CLI itself uses (`cli-chat-proxy.grok.com/v1/billing`), sending only the OIDC bearer token re-read from `~/.grok/auth.json` on each refresh. Only the allowance percent, period type, and reset time are retained; no prompts or model requests are sent. | Yes |
+| Codex activity | Counts sessions per day from `~/.codex/sessions/**/*.jsonl`, reading only the start timestamp on each rollout's first event (the file's modification date as a fallback). Session payloads are never opened. | No |
 | Claude activity | Streams `~/.claude/projects/**/*.jsonl` and sums usage fields. | No |
 | Claude quota *(optional)* | Reads an on-disk usage JSON if a companion already wrote one (e.g. `~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Parses legacy windows and, when present, `limits[]` (including Fable `weekly_scoped`). Does not fetch Anthropic quota. | No |
-| Antigravity usage | Reads session/message counts from agy's `history.jsonl`, preferring the native `~/.gemini/antigravity-cli/` location and falling back to the `antigravity-config` container volume when agy is containerised, then the legacy `~/.claude/claudewatch-agy-cache.json` snapshot. Token totals are left unknown. | No |
+| Antigravity usage | Reads session/message counts from agy's `history.jsonl`, preferring the native `~/.gemini/antigravity-cli/` location and falling back to the `antigravity-config` container volume when agy is containerised. Token totals are left unknown. | No |
 | Grok usage | Reads session summaries under `~/.grok/sessions/**/summary.json`; only session dates and message counts are used. | No |
 | OpenCode Go usage | Runs the local `opencode db --format json` command with a read-only query over numeric session usage fields and timestamps. Message bodies are never queried. | No |
 | Codex service health | Public OpenAI Statuspage JSON, filtered to Codex, CLI, and login components. | Yes |

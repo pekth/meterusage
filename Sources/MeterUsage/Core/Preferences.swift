@@ -26,6 +26,7 @@ enum PrefKey {
     static let showOpenRouter = "showProviderOpenRouter"
     static let theme = "appearanceTheme"
     static let launchAtLogin = "launchAtLogin"
+    static let showHeatmap = "showHeatmap"
 }
 
 /// Popover appearance. The menu-bar label always follows the system menu bar.
@@ -65,6 +66,7 @@ final class Preferences: ObservableObject {
     @Published private(set) var refreshInterval: TimeInterval = Preferences.defaultRefreshInterval
     @Published private(set) var enabledProviders: Set<Provider> = Set(Provider.allCases)
     @Published private(set) var theme: AppTheme = .system
+    @Published private(set) var showHeatmap: Bool = true
 
     private let defaults: UserDefaults
     private var observer: NSObjectProtocol?
@@ -86,7 +88,8 @@ final class Preferences: ObservableObject {
             PrefKey.showOpenCodeGo: true,
             PrefKey.showOpenRouter: true,
             PrefKey.theme: AppTheme.system.rawValue,
-            PrefKey.launchAtLogin: false
+            PrefKey.launchAtLogin: false,
+            PrefKey.showHeatmap: true
         ])
         reload()
         observer = NotificationCenter.default.addObserver(
@@ -119,6 +122,9 @@ final class Preferences: ObservableObject {
 
         let newTheme = AppTheme(rawValue: defaults.string(forKey: PrefKey.theme) ?? "") ?? .system
         if newTheme != theme { theme = newTheme }
+
+        let heatmap = defaults.bool(forKey: PrefKey.showHeatmap)
+        if heatmap != showHeatmap { showHeatmap = heatmap }
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }

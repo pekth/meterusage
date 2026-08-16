@@ -175,7 +175,6 @@ final class SupplementalUsageSourceTests: XCTestCase {
         try Self.jsonl(lines).write(to: historyURL)
 
         let source = AntigravityUsageSource(
-            cacheURL: directory.appendingPathComponent("absent-cache.json"),
             historyURL: historyURL
         )
 

@@ -11,9 +11,18 @@ import SwiftUI
 /// scale would render most people's history as a uniform block.
 struct HeatmapView: View {
 
+    /// What a cell's shade measures. Providers with no token accounting (Codex)
+    /// shade by session count; token-bearing sources (Claude) shade by tokens.
+    enum Intensity {
+        case tokens
+        case sessions
+    }
+
     let daily: [DailyActivity]
     /// Anchors "today" so the grid doesn't drift mid-session.
     let today: Date
+    /// Defaults to tokens so existing callers are unchanged.
+    var intensity: Intensity = .tokens
 
     private let weeks = 26
     // 26 × (8 + 2.2) ≈ 263pt, which clears the card's ~288pt content width.
@@ -30,7 +39,7 @@ struct HeatmapView: View {
     // MARK: Grid
 
     private var grid: some View {
-        let model = Model(daily: daily, today: today, weeks: weeks)
+        let model = Model(daily: daily, today: today, weeks: weeks, intensity: intensity)
         return HStack(alignment: .top, spacing: spacing) {
             ForEach(0..<model.columns.count, id: \.self) { column in
                 VStack(spacing: spacing) {
@@ -62,8 +71,11 @@ struct HeatmapView: View {
     /// Tooltips never carry a project name or path — only a date and totals.
     private static func tooltip(_ day: Model.Cell) -> String {
         let date = Fmt.dayLabel.string(from: day.date)
-        guard day.tokens > 0 else { return "\(date): no activity" }
-        return "\(date): \(Fmt.compactCount(day.tokens)) tokens, \(day.sessions) session\(day.sessions == 1 ? "" : "s")"
+        if day.tokens == 0 && day.sessions == 0 { return "\(date): no activity" }
+        var parts: [String] = []
+        if day.tokens > 0 { parts.append("\(Fmt.compactCount(day.tokens)) tokens") }
+        if day.sessions > 0 { parts.append("\(day.sessions) session\(day.sessions == 1 ? "" : "s")") }
+        return "\(date): \(parts.joined(separator: ", "))"
     }
 
     // MARK: Legend
@@ -107,7 +119,7 @@ struct HeatmapView: View {
         /// outside the window (before the start, or after today).
         let columns: [[Cell?]]
 
-        init(daily: [DailyActivity], today: Date, weeks: Int) {
+        init(daily: [DailyActivity], today: Date, weeks: Int, intensity: HeatmapView.Intensity = .tokens) {
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = .current
 
@@ -127,7 +139,15 @@ struct HeatmapView: View {
                 totals[key] = (existing.tokens + entry.tokens.total,
                                existing.sessions + entry.sessionCount)
             }
-            let peak = max(totals.values.map(\.tokens).max() ?? 0, 1)
+            // Bucket against the metric that actually varies: a token-less
+            // source (Codex) has zero tokens everywhere, so its peak would
+            // otherwise flatten every cell to empty.
+            let valueFor: (Int, Int) -> Int
+            switch intensity {
+            case .tokens:   valueFor = { tokens, _ in tokens }
+            case .sessions: valueFor = { _, sessions in sessions }
+            }
+            let peak = max(totals.values.map { valueFor($0.tokens, $0.sessions) }.max() ?? 0, 1)
 
             var built: [[Cell?]] = []
             for week in 0..<weeks {
@@ -139,11 +159,12 @@ struct HeatmapView: View {
                         continue
                     }
                     let entry = totals[date] ?? (0, 0)
+                    let value = valueFor(entry.tokens, entry.sessions)
                     column.append(Cell(
                         date: date,
                         tokens: entry.tokens,
                         sessions: entry.sessions,
-                        intensity: Double(entry.tokens) / Double(peak)
+                        intensity: Double(value) / Double(peak)
                     ))
                 }
                 built.append(column)

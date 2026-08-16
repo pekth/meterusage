@@ -9,22 +9,16 @@ import Foundation
 /// containerised setups (e.g. the antigravity-docker wrapper) keep it inside the
 /// `antigravity-config` volume, which the host reaches through the container
 /// runtime. Only the `conversationId` and `timestamp` fields of each line are
-/// used; prompt text and workspace paths are never read. The legacy
-/// `~/.claude/claudewatch-agy-cache.json` snapshot produced by the retired
-/// ClaudeWatch companion is still honoured as a fallback.
+/// used; prompt text and workspace paths are never read.
 ///
 /// Antigravity keeps session and message history, but not input/output token
 /// counts. This source therefore reports activity counts only and never turns
 /// a missing token total into a fabricated zero-cost estimate.
 public struct AntigravityUsageSource: UsageSource {
     public let provider: Provider = .antigravity
-    private let cacheURL: URL
     private let historyURL: URL
 
-    public init(cacheURL: URL? = nil, historyURL: URL? = nil) {
-        self.cacheURL = cacheURL ?? HomeDirectory.real
-            .appendingPathComponent(".claude", isDirectory: true)
-            .appendingPathComponent("claudewatch-agy-cache.json")
+    public init(historyURL: URL? = nil) {
         self.historyURL = historyURL ?? HomeDirectory.real
             .appendingPathComponent(".gemini", isDirectory: true)
             .appendingPathComponent("antigravity-cli", isDirectory: true)
@@ -43,17 +37,7 @@ public struct AntigravityUsageSource: UsageSource {
            let usage = try? Self.parseHistory(data: historyData, now: Date()) {
             return usage
         }
-        // 3. Fall back to the companion snapshot cache, if one exists.
-        guard let data = try? Data(contentsOf: cacheURL) else {
-            throw SourceUnavailable.dataNotFound("Antigravity usage")
-        }
-        do {
-            return try Self.parse(data: data, now: Date())
-        } catch let error as SourceUnavailable {
-            throw error
-        } catch {
-            throw SourceUnavailable.failed(provider)
-        }
+        throw SourceUnavailable.dataNotFound("Antigravity usage")
     }
 
     static func parse(data: Data, now: Date) throws -> ProviderUsage {

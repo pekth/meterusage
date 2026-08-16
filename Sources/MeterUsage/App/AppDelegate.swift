@@ -192,7 +192,9 @@ enum Composition {
     }
 
     static func activitySources() -> [LocalActivitySource] {
-        isDemoMode ? [DemoLocalActivitySource()] : [ClaudeLocalSource()]
+        isDemoMode
+            ? [DemoLocalActivitySource(), DemoCodexActivitySource()]
+            : [ClaudeLocalSource(), CodexLocalSource()]
     }
 
     static func usageSources() -> [UsageSource] {

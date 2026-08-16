@@ -21,6 +21,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showOpenRouter) private var showOpenRouter: Bool = true
     @AppStorage(PrefKey.theme) private var theme: String = AppTheme.system.rawValue
     @AppStorage(PrefKey.launchAtLogin) private var launchAtLogin: Bool = false
+    @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -93,6 +94,12 @@ struct SettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "Show heatmap",
+                        subtitle: "Weekly activity grid in the Codex and Local activity cards.",
+                        isOn: $showHeatmap
+                    )
                 }
             }
 

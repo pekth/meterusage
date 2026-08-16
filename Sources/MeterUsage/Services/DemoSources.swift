@@ -349,6 +349,27 @@ struct DemoLocalActivitySource: LocalActivitySource {
     }
 }
 
+/// Demo counterpart of `CodexLocalSource`: the same session-only daily shape
+/// (no token ledger), so the dedicated Codex heatmap renders the same way the
+/// real source's will. The days reuse `DemoActivityData` but strip tokens and
+/// keep only the per-day session counts, matching Codex's count-based data.
+struct DemoCodexActivitySource: LocalActivitySource {
+    let provider: Provider = .codex
+
+    func scan() async throws -> LocalActivity {
+        let now = Date()
+        let daily = DemoActivityData.daily(now: now).map {
+            DailyActivity(day: $0.day, tokens: TokenTotals(), estimatedCostUSD: 0, sessionCount: $0.sessionCount)
+        }
+        return LocalActivity(
+            provider: .codex,
+            sessions: [],
+            daily: daily,
+            scannedAt: now
+        )
+    }
+}
+
 /// The generator behind `DemoLocalActivitySource`, split out so it can be
 /// exercised directly by tests without going through the async protocol.
 ///

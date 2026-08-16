@@ -148,10 +148,21 @@ struct PopoverRoot: View {
                 now: coordinator.clock
             )
 
-            if !coordinator.visibleActivityProviders.isEmpty {
+            // Codex has its own activity card (its session-only heatmap must
+            // not share the token-scaled Local activity grid), so it is kept
+            // out of the Local activity card's provider list.
+            let localActivityProviders = coordinator.visibleActivityProviders
+                .filter { $0 != .codex }
+            if !localActivityProviders.isEmpty {
                 ActivitySection(
                     activities: coordinator.activities,
-                    providers: coordinator.visibleActivityProviders,
+                    providers: localActivityProviders,
+                    now: coordinator.clock
+                )
+            }
+            if coordinator.visibleActivityProviders.contains(.codex) {
+                CodexActivitySection(
+                    state: coordinator.activities[.codex] ?? .idle,
                     now: coordinator.clock
                 )
             }
