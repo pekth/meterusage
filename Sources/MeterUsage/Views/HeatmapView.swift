@@ -40,6 +40,7 @@ struct HeatmapView: View {
     var intensity: Intensity = .tokens
 
     @State private var mode: Mode = .daily
+    @State private var hovered: Model.Cell?
 
     private let weeks = 26
     // 26 × (8 + 2.2) ≈ 263pt, which clears the card's ~288pt content width.
@@ -56,13 +57,19 @@ struct HeatmapView: View {
 
     // MARK: Header
 
-    /// Window label and the mode picker. Day totals live in each cell's
-    /// native tooltip (hover to read date · tokens).
+    /// The date · tokens readout as an instant tooltip bubble the moment a
+    /// cell is hovered (native `.help` waits on the system tooltip delay), or
+    /// the window label when nothing is under the pointer. The mode picker
+    /// sits at the trailing edge.
     private var header: some View {
         HStack(spacing: 6) {
-            Text("\(weeks) weeks")
-                .font(.muCaption)
-                .foregroundColor(MU.textTertiary)
+            if let hovered {
+                tooltipBubble(hovered)
+            } else {
+                Text("\(weeks) weeks")
+                    .font(.muCaption)
+                    .foregroundColor(MU.textTertiary)
+            }
             Spacer(minLength: 4)
             Picker("Heatmap view", selection: $mode) {
                 ForEach(Mode.allCases) { option in
@@ -74,6 +81,25 @@ struct HeatmapView: View {
             .controlSize(.mini)
             .fixedSize()
         }
+        .animation(.easeOut(duration: 0.1), value: hovered?.date)
+    }
+
+    private func tooltipBubble(_ day: Model.Cell) -> some View {
+        Text(Self.readout(day))
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(MU.text)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(MU.well)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .stroke(MU.hairline, lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
+            )
     }
 
     // MARK: Grid
@@ -98,6 +124,13 @@ struct HeatmapView: View {
             .fill(fill(for: day))
             .frame(width: cell, height: cell)
             .help(day.map(Self.readout) ?? "")
+            .onHover { hovering in
+                if hovering {
+                    hovered = day
+                } else if hovered?.date == day?.date {
+                    hovered = nil
+                }
+            }
     }
 
     private func fill(for day: Model.Cell?) -> Color {

@@ -15,10 +15,6 @@ struct ActivitySection: View {
 
     let activities: [Provider: Loaded<LocalActivity>]
     let providers: [Provider]
-    let now: Date
-
-    @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
-    @AppStorage(PrefKey.showClaudeHeatmap) private var showClaudeHeatmap: Bool = true
 
     private var loaded: [LocalActivity] {
         providers.compactMap { activities[$0]?.value }
@@ -41,18 +37,14 @@ struct ActivitySection: View {
                     emptyState
                 } else {
                     totals
-                    // Immediately under the totals it decomposes, and above the
-                    // heatmap: this answers "what am I spending it on?", which
-                    // is the question the totals provoke. The heatmap answers
-                    // "when?", which nobody asks first.
+                    // Immediately under the totals it decomposes: this answers
+                    // "what am I spending it on?", which is the question the
+                    // totals provoke. The heatmap lives on each provider's
+                    // own quota card now.
                     Divider().overlay(MU.hairline)
                     ModelBreakdown(models: byModel)
                     if hasUnpricedModels {
                         UnpricedNote()
-                    }
-                    if showHeatmap && showClaudeHeatmap {
-                        Divider().overlay(MU.hairline)
-                        HeatmapView(daily: loaded.flatMap(\.daily), today: now)
                     }
                 }
             }

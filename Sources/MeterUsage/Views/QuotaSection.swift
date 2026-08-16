@@ -24,15 +24,19 @@ struct QuotaSection: View {
     /// Optional so demo/read-only quota sources can render the same rows
     /// without pretending they can mutate the provider account.
     let onUseReset: ((String) async throws -> Void)?
-    /// Codex-only: the session-count heatmap rendered at the card's foot, so
-    /// all Codex figures live in one card. Empty for every other provider,
-    /// which leaves their cards unchanged.
-    var codexHeatmapDaily: [DailyActivity] = []
+    /// The weekly heatmap rendered at the card's foot, so all of a provider's
+    /// figures live in one card. Empty for providers without a heatmap, which
+    /// leaves their cards unchanged.
+    var heatmapDaily: [DailyActivity] = []
+    /// Codex has no token ledger and shades by sessions; token-bearing
+    /// sources (Claude) shade by tokens.
+    var heatmapIntensity: HeatmapView.Intensity = .tokens
 
     @State private var resetPrompt: ResetPrompt?
     @State private var consumingResetID: String?
 
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
+    @AppStorage(PrefKey.showClaudeHeatmap) private var showClaudeHeatmap: Bool = true
     @AppStorage(PrefKey.showCodexHeatmap) private var showCodexHeatmap: Bool = true
 
     init(
@@ -41,14 +45,16 @@ struct QuotaSection: View {
         plan: Loaded<PlanTier> = .idle,
         now: Date,
         onUseReset: ((String) async throws -> Void)? = nil,
-        codexHeatmapDaily: [DailyActivity] = []
+        heatmapDaily: [DailyActivity] = [],
+        heatmapIntensity: HeatmapView.Intensity = .tokens
     ) {
         self.provider = provider
         self.state = state
         self.plan = plan
         self.now = now
         self.onUseReset = onUseReset
-        self.codexHeatmapDaily = codexHeatmapDaily
+        self.heatmapDaily = heatmapDaily
+        self.heatmapIntensity = heatmapIntensity
     }
 
     var body: some View {
@@ -205,14 +211,14 @@ struct QuotaSection: View {
         }
     }
 
-    /// Codex's weekly session heatmap, sharing the card its usage windows live
-    /// in. Governed by the master "Show heatmap" preference and the per-provider
-    /// Codex heatmap toggle.
+    /// A provider's weekly heatmap, sharing the card its usage windows live
+    /// in. Governed by the master "Show heatmap" preference plus that
+    /// provider's own heatmap toggle.
     @ViewBuilder
     private var heatmapFooter: some View {
-        if provider == .codex, showHeatmap, showCodexHeatmap, !codexHeatmapDaily.isEmpty {
+        if showHeatmap, providerHeatmapEnabled, !heatmapDaily.isEmpty {
             Divider().overlay(MU.hairline).padding(.vertical, 12)
-            HeatmapView(daily: codexHeatmapDaily, today: now, intensity: .sessions)
+            HeatmapView(daily: heatmapDaily, today: now, intensity: heatmapIntensity)
             HStack(spacing: 5) {
                 Text("\(Fmt.count(heatmapSessions)) sessions in local history")
                     .font(.muCaption)
@@ -222,8 +228,16 @@ struct QuotaSection: View {
         }
     }
 
+    private var providerHeatmapEnabled: Bool {
+        switch provider {
+        case .codex:  return showCodexHeatmap
+        case .claude: return showClaudeHeatmap
+        default:      return false
+        }
+    }
+
     private var heatmapSessions: Int {
-        codexHeatmapDaily.reduce(0) { $0 + $1.sessionCount }
+        heatmapDaily.reduce(0) { $0 + $1.sessionCount }
     }
 
     // MARK: Tone

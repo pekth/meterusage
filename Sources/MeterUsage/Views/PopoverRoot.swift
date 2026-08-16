@@ -138,12 +138,13 @@ struct PopoverRoot: View {
                         onUseReset: { creditID in
                             try await coordinator.consumeCodexReset(creditID: creditID)
                         },
-                        // Codex's session heatmap lives inside its own quota
-                        // card so all Codex figures sit together. Other
-                        // providers pass nothing and render unchanged.
-                        codexHeatmapDaily: provider == .codex
-                            ? (coordinator.activities[.codex]?.value?.daily ?? [])
-                            : []
+                        // Codex and Claude render their weekly heatmaps inside
+                        // their own quota cards so all of a provider's figures
+                        // sit together. Codex shades by sessions (no token
+                        // ledger); Claude shades by tokens. Other providers
+                        // pass nothing and render unchanged.
+                        heatmapDaily: heatmapDaily(for: provider),
+                        heatmapIntensity: provider == .codex ? .sessions : .tokens
                     )
                 }
             }
@@ -154,18 +155,26 @@ struct PopoverRoot: View {
                 now: coordinator.clock
             )
 
-            // Codex has its own activity heatmap inside its quota card (its
-            // session-only grid must not share the token-scaled Local activity
-            // grid), so it is kept out of the Local activity card.
+            // Codex and Claude each carry their heatmap inside their quota
+            // card, so neither shares the token-scaled Local activity grid.
+            // Codex's session-only activity is also kept out of the Local
+            // activity totals, which are token-and-model breakdowns.
             let localActivityProviders = coordinator.visibleActivityProviders
                 .filter { $0 != .codex }
             if !localActivityProviders.isEmpty {
                 ActivitySection(
                     activities: coordinator.activities,
-                    providers: localActivityProviders,
-                    now: coordinator.clock
+                    providers: localActivityProviders
                 )
             }
+        }
+    }
+
+    private func heatmapDaily(for provider: Provider) -> [DailyActivity] {
+        switch provider {
+        case .codex:  return coordinator.activities[.codex]?.value?.daily ?? []
+        case .claude: return coordinator.activities[.claude]?.value?.daily ?? []
+        default:      return []
         }
     }
 }
