@@ -185,6 +185,25 @@ struct DemoOpenCodeGoQuotaSource: QuotaSource {
     }
 }
 
+/// Synthetic Grok allowance. A single weekly window close to the rollover, so
+/// a screenshot shows both the percentage and the reset countdown that a
+/// weekly-only provider displays.
+struct DemoGrokQuotaSource: QuotaSource {
+    let provider: Provider = .grok
+
+    func fetchQuota() async throws -> ProviderQuota {
+        let now = Date()
+        return ProviderQuota(
+            provider: .grok,
+            windows: [
+                QuotaWindow(label: "Weekly", usedPercent: 31, resetsAt: now.addingTimeInterval(2.2 * 86_400))
+            ],
+            planType: "X Premium",
+            capturedAt: now
+        )
+    }
+}
+
 // MARK: - Plan
 
 /// Synthetic subscription tier. `.max5x` rather than `.max20x` so the badge
