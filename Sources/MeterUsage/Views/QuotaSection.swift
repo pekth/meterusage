@@ -24,22 +24,30 @@ struct QuotaSection: View {
     /// Optional so demo/read-only quota sources can render the same rows
     /// without pretending they can mutate the provider account.
     let onUseReset: ((String) async throws -> Void)?
+    /// Codex-only: the session-count heatmap rendered at the card's foot, so
+    /// all Codex figures live in one card. Empty for every other provider,
+    /// which leaves their cards unchanged.
+    var codexHeatmapDaily: [DailyActivity] = []
 
     @State private var resetPrompt: ResetPrompt?
     @State private var consumingResetID: String?
+
+    @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
 
     init(
         provider: Provider,
         state: Loaded<ProviderQuota>,
         plan: Loaded<PlanTier> = .idle,
         now: Date,
-        onUseReset: ((String) async throws -> Void)? = nil
+        onUseReset: ((String) async throws -> Void)? = nil,
+        codexHeatmapDaily: [DailyActivity] = []
     ) {
         self.provider = provider
         self.state = state
         self.plan = plan
         self.now = now
         self.onUseReset = onUseReset
+        self.codexHeatmapDaily = codexHeatmapDaily
     }
 
     var body: some View {
@@ -130,6 +138,14 @@ struct QuotaSection: View {
 
     @ViewBuilder
     private var content: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            contentBody
+            heatmapFooter
+        }
+    }
+
+    @ViewBuilder
+    private var contentBody: some View {
         switch state {
         case .idle:
             // Distinct from "no data": we simply haven't looked yet.
@@ -186,6 +202,27 @@ struct QuotaSection: View {
                 .transition(.opacity)
             }
         }
+    }
+
+    /// Codex's weekly session heatmap, sharing the card its usage windows live
+    /// in. Governed by the same "Show heatmap" preference as the Local
+    /// activity grid, so one toggle controls every heatmap in the popover.
+    @ViewBuilder
+    private var heatmapFooter: some View {
+        if provider == .codex, showHeatmap, !codexHeatmapDaily.isEmpty {
+            Divider().overlay(MU.hairline).padding(.vertical, 12)
+            HeatmapView(daily: codexHeatmapDaily, today: now, intensity: .sessions)
+            HStack(spacing: 5) {
+                Text("\(Fmt.count(heatmapSessions)) sessions in local history")
+                    .font(.muCaption)
+                    .foregroundColor(MU.textTertiary)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private var heatmapSessions: Int {
+        codexHeatmapDaily.reduce(0) { $0 + $1.sessionCount }
     }
 
     // MARK: Tone

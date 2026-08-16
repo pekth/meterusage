@@ -56,9 +56,10 @@ connect and no key-entry screen. OpenRouter uses an existing
   Fable bar appears until the writer actually emits `limits[]`; most
   statusline writers discard it, so [docs/COMPANION.md](docs/COMPANION.md)
   shows how to pass it through.
-- **A 26-week heatmap** of daily usage — Codex activity (sessions per day) on
-  its own card, Claude local activity (tokens per day) in the Local activity
-  card. One **Show heatmap** toggle in Settings hides the whole grid.
+- **A 26-week heatmap** of daily usage — Codex activity (sessions per day)
+  inside the Codex quota card, Claude local activity (tokens per day) in the
+  Local activity card. One **Show heatmap** toggle in Settings hides the whole
+  grid.
 - **Colour-coded usage and status** — quota headroom uses calm/warning/alert
   bands, while provider identity and written service-severity badges remain
   understandable without relying on colour alone.

@@ -137,7 +137,13 @@ struct PopoverRoot: View {
                         now: coordinator.clock,
                         onUseReset: { creditID in
                             try await coordinator.consumeCodexReset(creditID: creditID)
-                        }
+                        },
+                        // Codex's session heatmap lives inside its own quota
+                        // card so all Codex figures sit together. Other
+                        // providers pass nothing and render unchanged.
+                        codexHeatmapDaily: provider == .codex
+                            ? (coordinator.activities[.codex]?.value?.daily ?? [])
+                            : []
                     )
                 }
             }
@@ -148,21 +154,15 @@ struct PopoverRoot: View {
                 now: coordinator.clock
             )
 
-            // Codex has its own activity card (its session-only heatmap must
-            // not share the token-scaled Local activity grid), so it is kept
-            // out of the Local activity card's provider list.
+            // Codex has its own activity heatmap inside its quota card (its
+            // session-only grid must not share the token-scaled Local activity
+            // grid), so it is kept out of the Local activity card.
             let localActivityProviders = coordinator.visibleActivityProviders
                 .filter { $0 != .codex }
             if !localActivityProviders.isEmpty {
                 ActivitySection(
                     activities: coordinator.activities,
                     providers: localActivityProviders,
-                    now: coordinator.clock
-                )
-            }
-            if coordinator.visibleActivityProviders.contains(.codex) {
-                CodexActivitySection(
-                    state: coordinator.activities[.codex] ?? .idle,
                     now: coordinator.clock
                 )
             }
