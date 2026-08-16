@@ -12,7 +12,7 @@ in different places. meterusage puts the useful numbers in your menu bar, with
 Codex first and each provider independently hideable.
 
 <img src="docs/images/menubar.png" alt="The meterusage menu-bar indicator showing 82%" height="24">
-
+<img src="docs/images/popover.png" alt="The meterusage popover: service status, quotas, usage, and heatmaps" width="330">
 <img src="docs/images/popover-2.png" alt="The meterusage popover, scrolled: Codex, Claude, and Grok heatmaps" width="330">
 
 <img src="docs/images/popover-3.png" alt="The meterusage popover, scrolled: full dashboard with heatmaps" width="330">
