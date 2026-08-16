@@ -35,3 +35,7 @@ credentials.json
 # anything captured from a live account stays out of the repo.
 Tests/**/Fixtures/**/*.live.json
 scratch/
+
+# Local agent policy. Keep private orchestration files out of public forks.
+CONTROLLER.md
+NO-LOOPS.md
