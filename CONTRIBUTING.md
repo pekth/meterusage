@@ -70,7 +70,7 @@ Do not mix unrelated fixes in the same commit.
 
 ## Build and test
 
-Run these checks before opening a pull request:
+Run these checks before a pull request:
 
 ```sh
 swift build
