@@ -13,5 +13,3 @@ public repository.
   logging, or provider integrations.
 - Update `README.md` or the relevant file under `docs/` when behavior or setup
   changes.
-
-The repository does not publish private agent orchestration instructions.
