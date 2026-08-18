@@ -34,6 +34,20 @@ final class MenuBarTests: XCTestCase {
         XCTAssertFalse(first.showsInMenuBar(.grok))
     }
 
+    @MainActor
+    func testOpenRouterNeverShowsInMenuBarEvenWhenSelected() async throws {
+        // OpenRouter is pay-as-you-go (no quota), so the tray must never show
+        // it even if the stored preference would include it.
+        let coordinator = try await Self.coordinator(
+            quotaWindows: [(Provider.codex, "Weekly", 82, nil)]
+        )
+
+        XCTAssertFalse(
+            coordinator.menuBarProviders.contains(.openRouter),
+            "OpenRouter must not appear as a menu-bar cluster"
+        )
+    }
+
     // MARK: - Tooltip
 
     @MainActor
