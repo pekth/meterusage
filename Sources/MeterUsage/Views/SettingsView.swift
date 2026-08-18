@@ -109,8 +109,6 @@ struct SettingsView: View {
                     Divider().overlay(MU.hairline)
                     MenuBarToggle(provider: .openCodeGo, isOn: $menuBarOpenCodeGo)
                     Divider().overlay(MU.hairline)
-                    MenuBarToggle(provider: .openRouter, isOn: $menuBarOpenRouter)
-                    Divider().overlay(MU.hairline)
                     MenuBarToggle(provider: .antigravity, isOn: $menuBarAntigravity)
                     Divider().overlay(MU.hairline)
                     MenuBarToggle(provider: .claude, isOn: $menuBarClaude)

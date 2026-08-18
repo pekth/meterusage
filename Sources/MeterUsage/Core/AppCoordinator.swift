@@ -371,9 +371,10 @@ final class AppCoordinator: ObservableObject {
     }
 
     /// Enabled providers the user also chose to show in the menu bar, in the
-    /// stable display order.
+    /// stable display order. OpenRouter is pay-as-you-go (no quota), so it is
+    /// always excluded from the tray regardless of the stored preference.
     var menuBarProviders: [Provider] {
-        visibleProviders.filter { preferences.showsInMenuBar($0) }
+        visibleProviders.filter { preferences.showsInMenuBar($0) && $0 != .openRouter }
     }
 
     var visibleActivityProviders: [Provider] {
