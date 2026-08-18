@@ -27,12 +27,6 @@ follows [Semantic Versioning](https://semver.org/).
 - The tray now honours provider-visibility changes immediately instead of
   waiting for the next scheduled refresh.
 
-### Removed
-
-- The Grok service-status row: x.ai's status page sits behind a Cloudflare bot
-  challenge that returns 403 to non-browser clients, so the app could not read
-  a live status and reported "Unknown" instead. The row is dropped until x.ai
-  exposes an ungated feed.
 
 ## [0.1.3] - 2026-08-16
 
