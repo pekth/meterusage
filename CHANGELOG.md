@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] - 2026-08-18
+
+### Added
+
+- **Menu-bar provider clusters** — every enabled provider now appears in the
+  system tray as its own compact `[mark] %` cluster, so you can glance at
+  several quotas at once (Codex, Grok, OpenCode Go, and friends) instead of a
+  single most-constrained figure.
+- **Real provider logos in the tray** — Codex and Claude use the same marks as
+  ClaudeWatch, and Grok, OpenCode Go, and Antigravity use their own logos.
+  Each is bundled as a tintable template image so the mark still carries the
+  provider's service-status colour.
+- **Per-provider tray selection** — a new "Menu bar" section in Settings picks
+  which providers show as clusters in the tray, independent of which appear in
+  the popover.
+- **Hover tooltip** — hovering the tray item shows a per-provider usage and
+  service-status summary plus the last-refresh time.
+
+### Changed
+
+- The tray now honours provider-visibility changes immediately instead of
+  waiting for the next scheduled refresh.
+
+### Removed
+
+- The Grok service-status row: x.ai's status page sits behind a Cloudflare bot
+  challenge that returns 403 to non-browser clients, so the app could not read
+  a live status and reported "Unknown" instead. The row is dropped until x.ai
+  exposes an ungated feed.
+
 ## [0.1.3] - 2026-08-16
 
 ### Added

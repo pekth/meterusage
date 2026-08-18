@@ -140,6 +140,21 @@ final class AppCoordinator: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.restartSchedule() }
             .store(in: &cancellables)
+        // The provider visibility and menu-bar selection are read by the
+        // popover and the status item. Preferences republishes those, but the
+        // coordinator's views observe *this* object, so a change must be
+        // forwarded here or the tray keeps drawing the old provider set until
+        // the next scheduled refresh.
+        preferences.$enabledProviders
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        preferences.$menuBarProviders
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 
     private func startClock() {
@@ -353,6 +368,12 @@ final class AppCoordinator: ObservableObject {
     var visibleQuotaProviders: [Provider] {
         let providers = Set(quotaSources.map(\.provider))
         return visibleProviders.filter { providers.contains($0) }
+    }
+
+    /// Enabled providers the user also chose to show in the menu bar, in the
+    /// stable display order.
+    var menuBarProviders: [Provider] {
+        visibleProviders.filter { preferences.showsInMenuBar($0) }
     }
 
     var visibleActivityProviders: [Provider] {

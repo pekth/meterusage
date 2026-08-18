@@ -8,8 +8,9 @@ A macOS menu-bar app that shows how much of your AI coding quota you have left.
 
 
 Codex, OpenRouter, Antigravity, Grok, OpenCode Go, and Claude Code all leave usage signals
-in different places. meterusage puts the useful numbers in your menu bar, with
-Codex first and each provider independently hideable.
+in different places. meterusage puts the useful numbers in your menu bar — each
+enabled provider as its own `[mark] %` cluster, with the marks colour-coded by
+service status and the figures by quota headroom.
 
 <img src="docs/images/menubar.png" alt="The meterusage menu-bar indicator showing 82%" height="24">
 

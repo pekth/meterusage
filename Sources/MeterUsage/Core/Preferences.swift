@@ -24,6 +24,12 @@ enum PrefKey {
     static let showGrok = "showProviderGrok"
     static let showOpenCodeGo = "showProviderOpenCodeGo"
     static let showOpenRouter = "showProviderOpenRouter"
+    static let menuBarClaude = "menuBarProviderClaude"
+    static let menuBarCodex = "menuBarProviderCodex"
+    static let menuBarAntigravity = "menuBarProviderAntigravity"
+    static let menuBarGrok = "menuBarProviderGrok"
+    static let menuBarOpenCodeGo = "menuBarProviderOpenCodeGo"
+    static let menuBarOpenRouter = "menuBarProviderOpenRouter"
     static let theme = "appearanceTheme"
     static let launchAtLogin = "launchAtLogin"
     static let showHeatmap = "showHeatmap"
@@ -67,6 +73,8 @@ final class Preferences: ObservableObject {
 
     @Published private(set) var refreshInterval: TimeInterval = Preferences.defaultRefreshInterval
     @Published private(set) var enabledProviders: Set<Provider> = Set(Provider.allCases)
+    /// Which enabled providers also appear as clusters in the menu bar.
+    @Published private(set) var menuBarProviders: Set<Provider> = Set(Provider.allCases)
     @Published private(set) var theme: AppTheme = .system
     @Published private(set) var showHeatmap: Bool = true
     @Published private(set) var showClaudeHeatmap: Bool = true
@@ -91,6 +99,14 @@ final class Preferences: ObservableObject {
             PrefKey.showGrok: false,
             PrefKey.showOpenCodeGo: true,
             PrefKey.showOpenRouter: true,
+            // Every provider shows in the menu bar until the user trims the set
+            // down to the ones they glance at.
+            PrefKey.menuBarClaude: true,
+            PrefKey.menuBarCodex: true,
+            PrefKey.menuBarAntigravity: true,
+            PrefKey.menuBarGrok: true,
+            PrefKey.menuBarOpenCodeGo: true,
+            PrefKey.menuBarOpenRouter: true,
             PrefKey.theme: AppTheme.system.rawValue,
             PrefKey.launchAtLogin: false,
             PrefKey.showHeatmap: true,
@@ -126,6 +142,15 @@ final class Preferences: ObservableObject {
         if defaults.bool(forKey: PrefKey.showClaude) { providers.insert(.claude) }
         if providers != enabledProviders { enabledProviders = providers }
 
+        var menuBar = Set<Provider>()
+        if defaults.bool(forKey: PrefKey.menuBarCodex) { menuBar.insert(.codex) }
+        if defaults.bool(forKey: PrefKey.menuBarAntigravity) { menuBar.insert(.antigravity) }
+        if defaults.bool(forKey: PrefKey.menuBarGrok) { menuBar.insert(.grok) }
+        if defaults.bool(forKey: PrefKey.menuBarOpenCodeGo) { menuBar.insert(.openCodeGo) }
+        if defaults.bool(forKey: PrefKey.menuBarOpenRouter) { menuBar.insert(.openRouter) }
+        if defaults.bool(forKey: PrefKey.menuBarClaude) { menuBar.insert(.claude) }
+        if menuBar != menuBarProviders { menuBarProviders = menuBar }
+
         let newTheme = AppTheme(rawValue: defaults.string(forKey: PrefKey.theme) ?? "") ?? .system
         if newTheme != theme { theme = newTheme }
 
@@ -140,6 +165,8 @@ final class Preferences: ObservableObject {
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }
+
+    func showsInMenuBar(_ provider: Provider) -> Bool { menuBarProviders.contains(provider) }
 }
 
 // MARK: - Launch at login
