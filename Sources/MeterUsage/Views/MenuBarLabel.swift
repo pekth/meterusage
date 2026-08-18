@@ -1,16 +1,32 @@
 import SwiftUI
+import AppKit
 
-/// The status-item content: a small meter glyph plus the tightest quota figure.
+/// The status-item content: one compact `[mark] percent` cluster per enabled
+/// provider that has data, so the tray shows every usage at once — the same
+/// multi-cluster idea as ClaudeWatch's Claude/Codex pair, extended to whatever
+/// providers the user has switched on.
+///
+/// Each cluster:
+///
+/// * **Mark** — the provider's own glyph. Codex uses the real logo asset
+///   (bundled, tintable as a template image); other providers use a close SF
+///   Symbol stand-in. The mark carries that provider's *service status* signal:
+///   amber on a degraded service, red on any outage, independent of its quota.
+/// * **Percent** — that provider's tightest window, tinted by quota headroom
+///   (green → amber → red).
+///
+/// A provider with no quota but a degraded-or-worse service shows its mark
+/// alone so the outage still flags itself. Providers with nothing at all are
+/// skipped, and an empty tray renders a lone em dash rather than "0%".
 ///
 /// Constraints that shaped this:
 ///
 /// * It is hosted inside the menu bar, whose appearance is independent of the
 ///   app's. Every colour is a dynamic token (see `SharedComponents`), so the
 ///   glyph stays legible on both a light and a dark bar without any observation.
-/// * The status item's width is recomputed whenever the view resizes. Numbers
-///   change every refresh, so the label is monospaced-digit *and* the numeric
-///   slot has a fixed width — otherwise the whole right side of the user's menu
-///   bar would shuffle sideways once a minute.
+/// * The status item's width is recomputed whenever the view resizes, so adding
+///   or hiding a provider reshapes the slot instead of clipping it. Numbers are
+///   monospaced-digit so the digits never shuffle sideways between refreshes.
 struct MenuBarLabel: View {
 
     @ObservedObject var coordinator: AppCoordinator
@@ -20,11 +36,24 @@ struct MenuBarLabel: View {
     var onWidthChange: (CGFloat) -> Void = { _ in }
 
     var body: some View {
-        HStack(spacing: 4) {
-            MeterGlyph(fraction: fraction, tint: tint)
-            Text(display)
-                .font(.system(size: 11, weight: .medium).monospacedDigit())
-                .foregroundColor(hasReading ? tint : MU.neutral)
+        HStack(spacing: 3) {
+            if clusters.isEmpty {
+                Text("—")
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundColor(MU.neutral)
+            } else {
+                ForEach(clusters, id: \.provider) { cluster in
+                    HStack(spacing: 2) {
+                        ProviderMark(provider: cluster.provider, tint: cluster.markTint)
+                            .frame(width: 13, height: 13)
+                        if let percent = cluster.percent {
+                            Text(percent)
+                                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                                .foregroundColor(cluster.numberTint)
+                        }
+                    }
+                }
+            }
         }
         .padding(.horizontal, 5)
         .frame(height: 22)
@@ -41,60 +70,160 @@ struct MenuBarLabel: View {
             }
         )
         .animation(.easeOut(duration: 0.3), value: fraction)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
     }
 
-    // MARK: Derived
+    // MARK: Clusters
 
-    private var reading: (provider: Provider, window: QuotaWindow)? {
-        coordinator.mostConstrained
+    private struct Cluster {
+        let provider: Provider
+        let percent: String?
+        let usedFraction: Double
+        let markTint: Color
+        let numberTint: Color
     }
 
-    private var hasReading: Bool { reading != nil }
+    private var clusters: [Cluster] {
+        coordinator.menuBarProviders.compactMap { provider in
+            let window = coordinator.quotas[provider]?.value?.windows
+                .max(by: { $0.usedPercent < $1.usedPercent })
 
-    private var fraction: Double { reading?.window.fraction ?? 0 }
+            let status = coordinator.statuses[provider]?.value
+            let markTint: Color
+            if let status {
+                markTint = Self.statusTint(status.severity)
+            } else if let window {
+                markTint = headroomColor(usedPercent: window.usedPercent)
+            } else {
+                markTint = MU.neutral
+            }
 
-    private var tint: Color {
-        guard let reading else { return MU.neutral }
-        // A degraded service is worth flagging even when quota is healthy, but
-        // it must not masquerade as a quota warning — hence tint only escalates,
-        // never de-escalates, the headroom colour.
-        let quotaTint = headroomColor(usedPercent: reading.window.usedPercent)
-        if let status = coordinator.worstStatus, status.severity >= .partialOutage {
-            return MU.alert
+            if let window {
+                return Cluster(
+                    provider: provider,
+                    percent: Fmt.percent(window.usedPercent),
+                    usedFraction: window.fraction,
+                    markTint: markTint,
+                    numberTint: headroomColor(usedPercent: window.usedPercent)
+                )
+            }
+            // No quota, but a degraded-or-worse service is worth a bare mark.
+            if let status, status.severity != .operational, status.severity != .unknown {
+                return Cluster(
+                    provider: provider,
+                    percent: nil,
+                    usedFraction: 0,
+                    markTint: markTint,
+                    numberTint: markTint
+                )
+            }
+            return nil
         }
-        return quotaTint
     }
 
-    /// An em dash, not "0%", when nothing has been read: zero is a claim.
-    private var display: String {
-        guard let reading else { return "—" }
-        return Fmt.percent(reading.window.usedPercent)
+    /// Animates on the tightest cluster so a meaningful change (a quota
+    /// crossing a colour band) eases rather than snapping.
+    private var fraction: Double {
+        clusters.map(\.usedFraction).max() ?? 0
+    }
+
+    /// Mirrors the popover's `severityColor` mapping, except that a partial
+    /// outage reads as an alert (red) rather than a warning, matching the old
+    /// tray behaviour where any partial outage escalated the whole label.
+    static func statusTint(_ severity: Severity) -> Color {
+        switch severity {
+        case .operational:   return MU.calm
+        case .degraded:      return MU.warn
+        case .partialOutage, .majorOutage: return MU.alert
+        case .unknown:       return MU.neutral
+        }
     }
 
     private var accessibilityText: String {
-        guard let reading else { return "Usage unavailable" }
-        return "\(reading.provider.displayName) \(reading.window.label) window, \(Fmt.percent(reading.window.usedPercent)) used"
+        if clusters.isEmpty { return "Usage unavailable" }
+        return clusters.map { cluster in
+            guard let percent = cluster.percent else {
+                return "\(cluster.provider.displayName) unavailable"
+            }
+            return "\(cluster.provider.displayName) \(percent) used"
+        }
+        .joined(separator: ", ")
     }
 }
 
-/// Vertical fill gauge, drawn rather than composed from SF Symbols so the fill
-/// level is continuous instead of snapping between symbol variants.
-private struct MeterGlyph: View {
-    let fraction: Double
+/// The compact provider glyph shown in the status item.
+///
+/// Codex uses the real logo bundled at `Resources/codex-logo.png`, rendered as
+/// a template image so it tints like any other glyph. When the asset is missing
+/// (e.g. a bare debug binary with no bundle), it falls back to the drawn
+/// `CodexMark` shape. The other providers have no vector mark in this app, so
+/// they use a close SF Symbol stand-in rather than a guessed logo.
+struct ProviderMark: View {
+    let provider: Provider
     let tint: Color
 
-    private let size = CGSize(width: 9, height: 13)
-
     var body: some View {
-        ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                .strokeBorder(tint.opacity(0.45), lineWidth: 1)
-            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                .fill(tint)
-                .frame(height: max(1.5, (size.height - 4) * fraction.clamped(to: 0...1)))
-                .padding(2)
+        Group {
+            switch provider {
+            case .codex, .grok, .openCodeGo, .antigravity:
+                bundledMark(named: Self.resourceName(for: provider))
+            case .claude:
+                ClaudeMascotShape()
+                    .fill(tint, style: FillStyle(eoFill: true))
+            case .openRouter:
+                Image(systemName: Self.symbol(for: provider))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(tint)
+            }
         }
-        .frame(width: size.width, height: size.height)
+    }
+
+    /// A bundled provider logo rendered as a template image so it tints like
+    /// any other glyph. Falls back to an SF Symbol when the asset is missing
+    /// (e.g. a bare debug binary with no bundle).
+    @ViewBuilder
+    private func bundledMark(named name: String) -> some View {
+        if let image = Self.bundledImage(named: name) {
+            Image(nsImage: image)
+                .resizable()
+                .renderingMode(.template)
+                .aspectRatio(contentMode: .fit)
+                .foregroundColor(tint)
+        } else {
+            Image(systemName: Self.symbol(for: provider))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(tint)
+        }
+    }
+
+    private static func bundledImage(named name: String) -> NSImage? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        image.isTemplate = true
+        return image
+    }
+
+    /// Bundle resource name (without extension) for providers that ship a logo
+    /// asset; `nil` would mean "no logo" but callers guard by provider first.
+    private static func resourceName(for provider: Provider) -> String {
+        switch provider {
+        case .codex:      return "codex-logo"
+        case .grok:       return "grok-logo"
+        case .openCodeGo: return "opencode-logo"
+        case .antigravity:return "antigravity-logo"
+        case .openRouter, .claude: return ""
+        }
+    }
+
+    static func symbol(for provider: Provider) -> String {
+        switch provider {
+        case .codex:      return "sparkle"
+        case .antigravity:return "sparkles"
+        case .grok:       return "eye"
+        case .openCodeGo: return "chevron.up.left.arrow.down.right"
+        case .openRouter: return "arrow.triangle.branch"
+        case .claude:     return "sparkles"
+        }
     }
 }

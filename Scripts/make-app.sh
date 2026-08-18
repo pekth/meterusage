@@ -56,6 +56,12 @@ mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"
 cp "${BIN_PATH}" "${APP_DIR}/Contents/MacOS/${EXECUTABLE}"
 cp "${INFO_PLIST_SRC}" "${APP_DIR}/Contents/Info.plist"
 
+# The provider marks used in the menu bar and settings preview. Drawn as
+# template images so they can be tinted by status/headroom at render time.
+for LOGO in codex-logo.png grok-logo.png opencode-logo.png antigravity-logo.png; do
+    cp "${ROOT_DIR}/Resources/${LOGO}" "${APP_DIR}/Contents/Resources/${LOGO}"
+done
+
 # Classic 8-byte package signature. Harmless, and some tooling still looks.
 printf 'APPL????' > "${APP_DIR}/Contents/PkgInfo"
 

@@ -19,6 +19,12 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showGrok) private var showGrok: Bool = false
     @AppStorage(PrefKey.showOpenCodeGo) private var showOpenCodeGo: Bool = true
     @AppStorage(PrefKey.showOpenRouter) private var showOpenRouter: Bool = true
+    @AppStorage(PrefKey.menuBarClaude) private var menuBarClaude: Bool = true
+    @AppStorage(PrefKey.menuBarCodex) private var menuBarCodex: Bool = true
+    @AppStorage(PrefKey.menuBarAntigravity) private var menuBarAntigravity: Bool = true
+    @AppStorage(PrefKey.menuBarGrok) private var menuBarGrok: Bool = true
+    @AppStorage(PrefKey.menuBarOpenCodeGo) private var menuBarOpenCodeGo: Bool = true
+    @AppStorage(PrefKey.menuBarOpenRouter) private var menuBarOpenRouter: Bool = true
     @AppStorage(PrefKey.theme) private var theme: String = AppTheme.system.rawValue
     @AppStorage(PrefKey.launchAtLogin) private var launchAtLogin: Bool = false
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
@@ -83,6 +89,31 @@ struct SettingsView: View {
                         subtitle: "Optional Claude Code activity",
                         isOn: $showClaude
                     )
+                    Divider().overlay(MU.hairline)
+                    Text("Enabled providers appear in the popover; the Menu bar section picks which also show in the tray.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                }
+            }
+
+            Group {
+                SectionHeader("Menu bar")
+                Card {
+                    Text("Pick which providers show as clusters in the menu bar.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                    Divider().overlay(MU.hairline)
+                    MenuBarToggle(provider: .codex, isOn: $menuBarCodex)
+                    Divider().overlay(MU.hairline)
+                    MenuBarToggle(provider: .grok, isOn: $menuBarGrok)
+                    Divider().overlay(MU.hairline)
+                    MenuBarToggle(provider: .openCodeGo, isOn: $menuBarOpenCodeGo)
+                    Divider().overlay(MU.hairline)
+                    MenuBarToggle(provider: .openRouter, isOn: $menuBarOpenRouter)
+                    Divider().overlay(MU.hairline)
+                    MenuBarToggle(provider: .antigravity, isOn: $menuBarAntigravity)
+                    Divider().overlay(MU.hairline)
+                    MenuBarToggle(provider: .claude, isOn: $menuBarClaude)
                 }
             }
 
@@ -260,3 +291,26 @@ private struct ProviderToggle: View {
         .accessibilityElement(children: .contain)
     }
 }
+
+/// Whether one provider appears as a cluster in the menu bar.
+private struct MenuBarToggle: View {
+    let provider: Provider
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            ProviderMark(provider: provider, tint: providerColor(provider))
+                .frame(width: 13, height: 13)
+            Text(provider.displayName)
+                .font(.muBody)
+                .foregroundColor(MU.text)
+            Spacer(minLength: 6)
+            Toggle("Show \(provider.displayName) in menu bar", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+

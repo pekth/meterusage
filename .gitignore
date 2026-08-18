@@ -39,3 +39,5 @@ scratch/
 # Local tooling files.
 CONTROLLER.md
 NO-LOOPS.md
+.claude/
+.handoff/

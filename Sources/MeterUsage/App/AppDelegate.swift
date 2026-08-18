@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// Owns the status item, the popover, and the object graph.
@@ -15,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
     private var preferences: Preferences?
     private var coordinator: AppCoordinator?
+    private var cancellables = Set<AnyCancellable>()
     /// `main.swift`'s top-level code is not main-actor isolated, so the delegate
     /// must be constructible from there. Construction touches nothing isolated;
     /// every stored property is populated later in
@@ -78,7 +80,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.action = #selector(statusItemClicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
 
+        // Keep the hover tooltip in lockstep with whatever is on screen. The
+        // coordinator publishes before it mutates, so the read happens on the
+        // next run-loop turn, after the values have settled.
+        coordinator.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.updateTooltip()
+                }
+            }
+            .store(in: &cancellables)
+        updateTooltip()
+
         statusItem = item
+    }
+
+    /// Refreshes the hover tooltip from the coordinator's current state.
+    private func updateTooltip() {
+        guard let coordinator else { return }
+        statusItem?.button?.toolTip = Self.tooltip(for: coordinator)
+    }
+
+/// Multi-line hover summary: one line per visible provider that has a reading
+/// or a degraded-or-worse service, then the last-refresh time. The status is
+/// named inline so the colour of the marks in the tray is never the only place
+/// an outage is surfaced.
+static func tooltip(for coordinator: AppCoordinator) -> String {
+        var lines: [String] = []
+
+        for provider in coordinator.menuBarProviders {
+            var parts: [String] = []
+            if let quota = coordinator.quotas[provider]?.value,
+               let window = quota.windows.max(by: { $0.usedPercent < $1.usedPercent }) {
+                parts.append("\(Fmt.percent(window.usedPercent)) used")
+                if let resets = window.resetsAt, let until = Fmt.timeUntil(resets) {
+                    parts.append("resets in \(until)")
+                }
+            }
+            if let service = coordinator.statuses[provider]?.value,
+               service.severity != .operational, service.severity != .unknown {
+                parts.append(service.severity.displayName)
+            }
+            if !parts.isEmpty {
+                lines.append("\(provider.displayName): \(parts.joined(separator: " · "))")
+            }
+        }
+
+        if lines.isEmpty {
+            lines.append("No usage data yet")
+        }
+        if let last = coordinator.lastRefreshedAt {
+            lines.append("Updated \(Fmt.timeSince(last))")
+        }
+        return lines.joined(separator: "\n")
     }
 
     @objc private func statusItemClicked() {
