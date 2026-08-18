@@ -62,13 +62,6 @@ follows [Semantic Versioning](https://semver.org/).
   (`{"error":"Invalid or expired credentials"}`) to a "not signed in" state
   instead of a generic failure.
 
-### Removed
-
-- The "Local activity" card (combined totals and per-model breakdown) and its
-  "Recent sessions" list; activity now surfaces through the per-provider
-  heatmaps.
-- The retired ClaudeWatch `claudewatch-agy-cache.json` fallback for
-  Antigravity usage and its documentation.
 
 ## [0.1.2] - 2026-08-15
 
