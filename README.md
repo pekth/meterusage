@@ -12,7 +12,7 @@ in different places. meterusage puts the useful numbers in your menu bar — eac
 enabled provider as its own `[mark] %` cluster, with the marks colour-coded by
 service status and the figures by quota headroom.
 
-<img src="docs/images/menubar.png" alt="The meterusage menu-bar indicator showing 82%" height="24">
+<img src="docs/images/menubar.png" alt="The meterusage menu-bar indicator showing provider clusters and usage" height="24">
 
 <img src="docs/images/popover.png" alt="The meterusage popover: service status, quotas, usage, and heatmaps" width="280"> <img src="docs/images/popover-2.png" alt="The meterusage popover, scrolled: Codex, Claude, and Grok heatmaps" width="280"> <img src="docs/images/popover-3.png" alt="The meterusage popover, scrolled: full dashboard with heatmaps" width="280">
 
@@ -31,6 +31,15 @@ connect and no key-entry screen. OpenRouter uses an existing
 
 ## What you get
 
+- **Menu-bar provider clusters** — every provider you switch on appears in the
+  system tray as its own compact `[mark] %` cluster, so you can see Codex,
+  Grok, OpenCode Go, and friends at a glance. Each mark is that provider's
+  real logo, tinted by service status, and the percentage is tinted by quota
+  headroom. Hover the tray item for a per-provider usage and status summary
+  plus the last-refresh time.
+- **Per-provider tray selection** — the "Menu bar" section of Settings picks
+  which providers show as clusters in the tray, independent of which appear in
+  the popover. OpenRouter is always excluded (pay-as-you-go, no quota window).
 - **Live Codex quota** — general weekly limits, model-specific limits such as
   GPT-5.3-Codex-Spark, reset-credit expiry details, credit balance, and plan,
   read through the `codex` CLI you're already signed in to. Codex credits also
