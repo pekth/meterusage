@@ -332,16 +332,14 @@ private struct WindowRow: View {
                         .font(.muNumber)
                         .foregroundColor(tint)
                 }
-                // Countdown and wall-clock on one line rather than two. Two
-                // lines per window cost four lines across the popover and
-                // pushed the per-model breakdown below the fold — and the two
-                // facts are one thought ("in 3h — that's 7:23 this morning"),
-                // so splitting them was never worth the height.
+            }
+            if !countdownLabel.isEmpty {
                 Text(resetLabel)
                     .font(.muCaption)
                     .foregroundColor(MU.textTertiary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.7)
+                    .layoutPriority(1)
             }
             MeterBar(fraction: isCodex ? 1 - window.fraction : window.fraction, tint: tint)
         }

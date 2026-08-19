@@ -279,7 +279,7 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
             groups.append(
                 QuotaGroup(
                     id: extraID,
-                    title: "\(extra.limitName ?? key) usage limits",
+                    title: extra.limitName ?? key,
                     windows: extraWindows
                 )
             )
