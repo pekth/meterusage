@@ -152,7 +152,7 @@ final class CodexQuotaSourceTests: XCTestCase {
 
         XCTAssertEqual(quota.groups.map(\.title), [
             "General usage limits",
-            "GPT-5.3-Codex-Spark usage limits"
+            "GPT-5.3-Codex-Spark"
         ])
         XCTAssertEqual(quota.groups[1].windows.first?.usedPercent, 0)
         XCTAssertEqual(quota.resetCreditCount, 2)
