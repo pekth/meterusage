@@ -40,8 +40,9 @@ private struct ProviderUsageRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            StatusDot(color: providerColor(provider), diameter: 8)
-                .padding(.top, 3)
+            ProviderMark(provider: provider, tint: providerColor(provider))
+                .frame(width: 13, height: 13)
+                .padding(.top, 2)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(provider.displayName)
@@ -208,7 +209,7 @@ private struct UsageWindowBars: View {
                 .foregroundColor(MU.textTertiary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-            Text("Share of last 30d usage")
+            Text("Share of last 30d usage · est. \(Pricing.snapshotLabel) rates")
                 .font(.muCaption)
                 .foregroundColor(MU.textTertiary)
         }

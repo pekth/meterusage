@@ -35,6 +35,7 @@ enum PrefKey {
     static let showHeatmap = "showHeatmap"
     static let showClaudeHeatmap = "showClaudeHeatmap"
     static let showCodexHeatmap = "showCodexHeatmap"
+    static let quotaAlerts = "quotaAlertsEnabled"
 }
 
 /// Popover appearance. The menu-bar label always follows the system menu bar.
@@ -79,6 +80,9 @@ final class Preferences: ObservableObject {
     @Published private(set) var showHeatmap: Bool = true
     @Published private(set) var showClaudeHeatmap: Bool = true
     @Published private(set) var showCodexHeatmap: Bool = true
+    /// Opt-in quota threshold notifications. Off by default so the app never
+    /// prompts for notification access until the user asks for the feature.
+    @Published private(set) var quotaAlertsEnabled: Bool = false
 
     private let defaults: UserDefaults
     private var observer: NSObjectProtocol?
@@ -111,7 +115,8 @@ final class Preferences: ObservableObject {
             PrefKey.launchAtLogin: false,
             PrefKey.showHeatmap: true,
             PrefKey.showClaudeHeatmap: true,
-            PrefKey.showCodexHeatmap: true
+            PrefKey.showCodexHeatmap: true,
+            PrefKey.quotaAlerts: false
         ])
         reload()
         observer = NotificationCenter.default.addObserver(
@@ -162,6 +167,9 @@ final class Preferences: ObservableObject {
 
         let codexHeatmap = defaults.bool(forKey: PrefKey.showCodexHeatmap)
         if codexHeatmap != showCodexHeatmap { showCodexHeatmap = codexHeatmap }
+
+        let alerts = defaults.bool(forKey: PrefKey.quotaAlerts)
+        if alerts != quotaAlertsEnabled { quotaAlertsEnabled = alerts }
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }

@@ -4,6 +4,40 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-08-21
+
+### Added
+
+- **Quota threshold notifications** — optional local alerts when a quota
+  window crosses 80% or 95% used, or an earned reset credit is about to
+  expire within 24 hours. Off by default; the "Alerts" section of Settings
+  opts in and requests notification permission at that moment, never at
+  launch. Alerts are edge-triggered, so a window above the threshold is
+  reported once, not every refresh.
+- **Copy diagnostics** — a "Copy diagnostics" row under Maintenance in
+  Settings copies a privacy-safe summary of each provider's status
+  ("quota: unavailable (failed)") for bug reports. The report carries state
+  categories only: no paths, account ids, or raw provider errors.
+- **7-day sparklines** — Codex and Claude quota cards now lead with a compact
+  last-7-days trend line (tokens, or sessions for Codex), answering "am I
+  burning faster than usual?" at a glance alongside the 26-week heatmap.
+- **Provider marks in the popover** — the plain colour dots that previously
+  identified providers in service-status rows, quota-card headers, usage
+  rows, and the Settings provider list are now each provider's real mark,
+  tinted by severity in the status rows.
+
+### Changed
+
+- **Per-source retry backoff** — a source that keeps failing (provider
+  outage, offline) is skipped by scheduled sweeps with an exponential 1m →
+  2m → 4m … 30m cap backoff instead of being retried every cycle. Explicit
+  refreshes (button, wake, popover open) always bypass backoff. Permanent
+  conditions (CLI not installed, not signed in, no data) never back off.
+- **Estimated costs disclose their rate vintage** — cost captions now carry
+  the rate-table snapshot month (e.g. "est. Jul 2026 rates"), and the
+  snapshot date in `Pricing.swift` is a machine-readable constant, so a
+  stale rate table reads as stale instead of silently drifting.
+
 ## [0.1.6] - 2026-08-19
 
 ### Changed

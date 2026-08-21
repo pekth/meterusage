@@ -14,6 +14,27 @@ import Foundation
 // publishes new rates: https://www.anthropic.com/pricing
 public enum Pricing {
 
+    /// Month the rate table below was last verified against the provider's
+    /// published prices, as "YYYY-MM". Machine-readable on purpose: views show
+    /// it beside estimated costs so a stale table is visible instead of silent,
+    /// and bumping the table without bumping this date is a review-visible
+    /// inconsistency rather than an invisible drift.
+    public static let snapshotYearMonth = "2026-07"
+
+    /// Human rendering of `snapshotYearMonth` for captions, e.g. "Jul 2026".
+    /// Falls back to the raw value if parsing ever fails, so the label can
+    /// never come out empty.
+    public static var snapshotLabel: String {
+        let parts = snapshotYearMonth.split(separator: "-")
+        guard parts.count == 2, let year = Int(parts[0]),
+              let month = Int(parts[1]), (1...12).contains(month) else {
+            return snapshotYearMonth
+        }
+        let names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        return "\(names[month - 1]) \(year)"
+    }
+
     /// USD per million tokens, by token kind, for one model family.
     public struct Rate: Equatable, Sendable {
         public let inputPerMTok: Double

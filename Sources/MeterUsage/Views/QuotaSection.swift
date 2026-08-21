@@ -96,7 +96,10 @@ struct QuotaSection: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 6) {
-            StatusDot(color: providerColor(provider), diameter: 7)
+            // The provider's real mark instead of a plain colour dot, so one
+            // glyph means one provider everywhere in the app.
+            ProviderMark(provider: provider, tint: providerColor(provider))
+                .frame(width: 13, height: 13)
             Text(provider.displayName)
                 .font(.muTitle)
                 .foregroundColor(MU.text)
@@ -147,7 +150,24 @@ struct QuotaSection: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             contentBody
+            sparklineFooter
             heatmapFooter
+        }
+    }
+
+    /// A 7-day trend line sharing the card with the quota windows. Shown
+    /// whenever local daily history exists for the provider — independent of
+    /// the heatmap switches, because "am I burning faster than usual?" is a
+    /// glance question while the grid is an exploration tool.
+    @ViewBuilder
+    private var sparklineFooter: some View {
+        if !heatmapDaily.isEmpty {
+            Divider().overlay(MU.hairline).padding(.vertical, 12)
+            SparklineView(
+                daily: heatmapDaily,
+                today: now,
+                intensity: heatmapIntensity == .sessions ? .sessions : .tokens
+            )
         }
     }
 
