@@ -72,7 +72,7 @@ public actor CodexLocalSource: LocalActivitySource {
 
     /// The UTC day a session belongs to: the start timestamp on the rollout's
     /// first event, or the file's modification date when that cannot be read.
-    static func sessionDay(for url: URL, fileManager: FileManager = .default) -> Date? {
+    public static func sessionDay(for url: URL, fileManager: FileManager = .default) -> Date? {
         guard let date = firstLineTimestamp(for: url) ?? modificationDate(for: url, fileManager: fileManager) else {
             return nil
         }

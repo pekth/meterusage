@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Reads OpenCode Go's account usage limits from its authenticated Zen API.
 ///
@@ -68,7 +71,7 @@ public struct OpenCodeGoQuotaSource: QuotaSource {
     /// `status` other than "ok" (e.g. "over_limit") is not an error here — the
     /// window still carries its percentage and reset, which is exactly what a
     /// user needs to see when they've hit a limit.
-    static func parse(data: Data, now: Date) throws -> ProviderQuota {
+    public static func parse(data: Data, now: Date) throws -> ProviderQuota {
         let response: UsageResponse
         do {
             // The Zen API emits fractional-second ISO8601 timestamps
@@ -134,7 +137,7 @@ public struct OpenCodeGoQuotaSource: QuotaSource {
     }
 
     /// The test seam: discovery logic, parameterised by the auth file URL.
-    static func discoverAPIKey(from authURL: URL) -> String? {
+    public static func discoverAPIKey(from authURL: URL) -> String? {
         guard let data = try? Data(contentsOf: authURL),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entry = object["opencode-go"] as? [String: Any] else {

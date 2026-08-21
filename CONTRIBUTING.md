@@ -5,9 +5,11 @@ pull request.
 
 ## Before you start
 
-meterusage is a macOS 13+ Swift menu-bar app. The package uses Swift tools
-version 5.9 and has no third-party package dependencies. Install Xcode Command
-Line Tools before building:
+meterusage has a full macOS 13+ SwiftUI menu-bar app and v1 tray shells for
+Linux and Windows. The package uses Swift tools version 5.9 and has no Swift
+package dependencies. The Linux shell also needs GTK3 and Ayatana AppIndicator3
+development libraries. The Windows shell needs the Swift for Windows toolchain
+and its WinSDK module. Install Xcode Command Line Tools before building on macOS:
 
 ```sh
 xcode-select --install
@@ -75,6 +77,21 @@ Run these checks before a pull request:
 ```sh
 swift build
 swift test
+```
+
+`swift test` is available in the macOS package. Linux and Windows packages
+currently define no test target. Run the platform executable with the matching
+product name:
+
+```sh
+swift run meterusage         # macOS
+swift run meterusage-linux   # Linux
+swift run meterusage-windows # Windows
+```
+
+On macOS, also assemble the app bundle when needed:
+
+```sh
 ./Scripts/make-app.sh
 ```
 
@@ -89,15 +106,17 @@ Demo data is synthetic. Use it for screenshots and manual checks. See
 
 ## Where to make changes
 
-- `Sources/MeterUsage/Services/` contains provider readers, pricing, and
+- `Sources/MeterUsageCore/Services/` contains provider readers, pricing, and
   service-status sources.
-- `Sources/MeterUsage/Core/` contains coordination and saved preferences.
+- `Sources/MeterUsageCore/Core/` contains coordination and saved preferences.
 - `Sources/MeterUsage/Views/` contains the SwiftUI menu-bar interface.
+- `Sources/MeterUsageLinux/` contains the GTK3/Ayatana tray shell.
+- `Sources/MeterUsageWindows/` contains the Win32 tray shell.
 - `Tests/MeterUsageTests/` contains unit tests and synthetic fixtures.
 
 When adding a provider or data source, use the existing `QuotaSource`,
 `UsageSource`, `LocalActivitySource`, or `StatusSource` contract in
-`Sources/MeterUsage/Services/DataSource.swift`. Keep provider failures isolated
+`Sources/MeterUsageCore/Services/DataSource.swift`. Keep provider failures isolated
 so one unavailable provider does not hide the others. Add or update the model,
 coordinator, settings, and tests only when the feature needs them.
 

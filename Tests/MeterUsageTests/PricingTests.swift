@@ -1,5 +1,5 @@
 import XCTest
-@testable import MeterUsage
+@testable import MeterUsageCore
 
 final class PricingTests: XCTestCase {
 

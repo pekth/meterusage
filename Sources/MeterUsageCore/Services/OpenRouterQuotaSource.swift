@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Reads OpenRouter's authenticated API-key usage and account-credit summaries.
 ///
@@ -71,11 +74,11 @@ public struct OpenRouterQuotaSource: QuotaSource {
         }
     }
 
-    static func parse(data: Data, now: Date) throws -> ProviderQuota {
+    public static func parse(data: Data, now: Date) throws -> ProviderQuota {
         try parse(data: data, creditsData: nil, now: now)
     }
 
-    static func parse(data: Data, creditsData: Data?, now: Date) throws -> ProviderQuota {
+    public static func parse(data: Data, creditsData: Data?, now: Date) throws -> ProviderQuota {
         let response: KeyResponse
         do {
             response = try JSONDecoder().decode(KeyResponse.self, from: data)

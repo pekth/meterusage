@@ -1,5 +1,5 @@
 import XCTest
-@testable import MeterUsage
+@testable import MeterUsageCore
 
 /// Fake `JSONRPCClient` that hands back canned bytes instead of spawning
 /// `codex app-server`. Every test in this file runs offline and needs no

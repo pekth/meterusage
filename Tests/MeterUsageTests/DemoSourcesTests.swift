@@ -1,5 +1,6 @@
 import XCTest
 @testable import MeterUsage
+@testable import MeterUsageCore
 
 /// Demo mode exists to make screenshots safe. These tests hold the two
 /// properties that makes true: it is off unless explicitly asked for, and the

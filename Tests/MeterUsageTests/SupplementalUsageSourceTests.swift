@@ -1,5 +1,5 @@
 import XCTest
-@testable import MeterUsage
+@testable import MeterUsageCore
 
 final class SupplementalUsageSourceTests: XCTestCase {
 
@@ -53,6 +53,28 @@ final class SupplementalUsageSourceTests: XCTestCase {
         XCTAssertEqual(first.enabledProviders, Set([.claude, .antigravity, .openRouter]))
         XCTAssertEqual(second.enabledProviders, first.enabledProviders)
         XCTAssertTrue(defaults.bool(forKey: PrefKey.launchAtLogin))
+    }
+
+    @MainActor
+    func testPreferencesMutationAPIsPersistAndReloadState() throws {
+        let suiteName = "MeterUsageTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let preferences = Preferences(defaults: defaults)
+
+        preferences.setRefreshInterval(10)
+        preferences.setProvider(.claude, enabled: true)
+        preferences.setProvider(.codex, enabled: false)
+
+        XCTAssertEqual(preferences.refreshInterval, Preferences.minimumRefreshInterval)
+        XCTAssertTrue(preferences.isEnabled(.claude))
+        XCTAssertFalse(preferences.isEnabled(.codex))
+
+        let reloaded = Preferences(defaults: defaults)
+        XCTAssertEqual(reloaded.refreshInterval, Preferences.minimumRefreshInterval)
+        XCTAssertTrue(reloaded.isEnabled(.claude))
+        XCTAssertFalse(reloaded.isEnabled(.codex))
     }
 
     func testAntigravityParsesCountOnlySessionHistory() throws {

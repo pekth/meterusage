@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 // MARK: - Provider service health
 //
@@ -147,7 +150,7 @@ public struct StatusPageSource: StatusSource {
     }
 
     /// Statuspage's documented component status vocabulary.
-    static func severity(for raw: String) -> Severity {
+    public static func severity(for raw: String) -> Severity {
         switch raw.lowercased() {
         case "operational":          return .operational
         case "degraded_performance": return .degraded

@@ -1,3 +1,4 @@
+import MeterUsageCore
 import SwiftUI
 
 /// Compact usage rows for providers whose native history is not a quota window.

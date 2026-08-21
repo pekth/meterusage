@@ -494,7 +494,7 @@ public enum SourceUnavailable: Error, Equatable, Sendable {
 // MARK: - Utilities
 
 extension Comparable {
-    func clamped(to range: ClosedRange<Self>) -> Self {
+    public func clamped(to range: ClosedRange<Self>) -> Self {
         min(max(self, range.lowerBound), range.upperBound)
     }
 }

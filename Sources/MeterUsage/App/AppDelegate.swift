@@ -1,3 +1,4 @@
+import MeterUsageCore
 import AppKit
 import Combine
 import SwiftUI

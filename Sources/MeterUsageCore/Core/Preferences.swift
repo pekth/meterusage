@@ -1,6 +1,10 @@
+import Foundation
+#if canImport(SwiftUI)
 import SwiftUI
+#endif
+#if canImport(Combine)
 import Combine
-import ServiceManagement
+#endif
 
 // MARK: - Preferences
 //
@@ -16,34 +20,34 @@ import ServiceManagement
 // Both paths address the same keys, so there is exactly one stored value per
 // setting and no synchronisation problem.
 
-enum PrefKey {
-    static let refreshInterval = "refreshIntervalSeconds"
-    static let showClaude = "showProviderClaude"
-    static let showCodex = "showProviderCodex"
-    static let showAntigravity = "showProviderAntigravity"
-    static let showGrok = "showProviderGrok"
-    static let showOpenCodeGo = "showProviderOpenCodeGo"
-    static let showOpenRouter = "showProviderOpenRouter"
-    static let menuBarClaude = "menuBarProviderClaude"
-    static let menuBarCodex = "menuBarProviderCodex"
-    static let menuBarAntigravity = "menuBarProviderAntigravity"
-    static let menuBarGrok = "menuBarProviderGrok"
-    static let menuBarOpenCodeGo = "menuBarProviderOpenCodeGo"
-    static let menuBarOpenRouter = "menuBarProviderOpenRouter"
-    static let theme = "appearanceTheme"
-    static let launchAtLogin = "launchAtLogin"
-    static let showHeatmap = "showHeatmap"
-    static let showClaudeHeatmap = "showClaudeHeatmap"
-    static let showCodexHeatmap = "showCodexHeatmap"
+public enum PrefKey {
+    public static let refreshInterval = "refreshIntervalSeconds"
+    public static let showClaude = "showProviderClaude"
+    public static let showCodex = "showProviderCodex"
+    public static let showAntigravity = "showProviderAntigravity"
+    public static let showGrok = "showProviderGrok"
+    public static let showOpenCodeGo = "showProviderOpenCodeGo"
+    public static let showOpenRouter = "showProviderOpenRouter"
+    public static let menuBarClaude = "menuBarProviderClaude"
+    public static let menuBarCodex = "menuBarProviderCodex"
+    public static let menuBarAntigravity = "menuBarProviderAntigravity"
+    public static let menuBarGrok = "menuBarProviderGrok"
+    public static let menuBarOpenCodeGo = "menuBarProviderOpenCodeGo"
+    public static let menuBarOpenRouter = "menuBarProviderOpenRouter"
+    public static let theme = "appearanceTheme"
+    public static let launchAtLogin = "launchAtLogin"
+    public static let showHeatmap = "showHeatmap"
+    public static let showClaudeHeatmap = "showClaudeHeatmap"
+    public static let showCodexHeatmap = "showCodexHeatmap"
 }
 
 /// Popover appearance. The menu-bar label always follows the system menu bar.
-enum AppTheme: String, CaseIterable, Identifiable {
+public enum AppTheme: String, CaseIterable, Identifiable {
     case system, light, dark
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .system: return "System"
         case .light:  return "Light"
@@ -51,39 +55,41 @@ enum AppTheme: String, CaseIterable, Identifiable {
         }
     }
 
-    var colorScheme: ColorScheme? {
+    #if canImport(SwiftUI)
+    public var colorScheme: ColorScheme? {
         switch self {
         case .system: return nil
         case .light:  return .light
         case .dark:   return .dark
         }
     }
+    #endif
 }
 
 @MainActor
-final class Preferences: ObservableObject {
+public final class Preferences: ObservableObject {
 
     /// Polling faster than this is pure waste: providers report coarse windows
     /// and every poll spawns a subprocess. Enforced here rather than trusted to
     /// the UI, so a hand-edited defaults value can't create a hot loop.
-    static let minimumRefreshInterval: TimeInterval = 30
-    static let defaultRefreshInterval: TimeInterval = 60
+    public static let minimumRefreshInterval: TimeInterval = 30
+    public static let defaultRefreshInterval: TimeInterval = 60
 
-    static let intervalChoices: [TimeInterval] = [30, 60, 120, 300, 900]
+    public static let intervalChoices: [TimeInterval] = [30, 60, 120, 300, 900]
 
-    @Published private(set) var refreshInterval: TimeInterval = Preferences.defaultRefreshInterval
-    @Published private(set) var enabledProviders: Set<Provider> = Set(Provider.allCases)
+    @Published public private(set) var refreshInterval: TimeInterval = Preferences.defaultRefreshInterval
+    @Published public private(set) var enabledProviders: Set<Provider> = Set(Provider.allCases)
     /// Which enabled providers also appear as clusters in the menu bar.
-    @Published private(set) var menuBarProviders: Set<Provider> = Set(Provider.allCases)
-    @Published private(set) var theme: AppTheme = .system
-    @Published private(set) var showHeatmap: Bool = true
-    @Published private(set) var showClaudeHeatmap: Bool = true
-    @Published private(set) var showCodexHeatmap: Bool = true
+    @Published public private(set) var menuBarProviders: Set<Provider> = Set(Provider.allCases)
+    @Published public private(set) var theme: AppTheme = .system
+    @Published public private(set) var showHeatmap: Bool = true
+    @Published public private(set) var showClaudeHeatmap: Bool = true
+    @Published public private(set) var showCodexHeatmap: Bool = true
 
     private let defaults: UserDefaults
     private var observer: NSObjectProtocol?
 
-    init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `register(defaults:)` supplies first-run values only. It never
         // replaces values the user has already saved in this suite.
@@ -164,39 +170,28 @@ final class Preferences: ObservableObject {
         if codexHeatmap != showCodexHeatmap { showCodexHeatmap = codexHeatmap }
     }
 
-    func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }
+    public func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }
 
-    func showsInMenuBar(_ provider: Provider) -> Bool { menuBarProviders.contains(provider) }
-}
-
-// MARK: - Launch at login
-
-/// Thin wrapper over `SMAppService`.
-///
-/// Kept separate from `Preferences` because registration can fail (the user can
-/// deny it in System Settings) and the stored toggle must then be corrected to
-/// match reality rather than lying about the app's state.
-enum LoginItem {
-
-    static var isEnabled: Bool {
-        SMAppService.mainApp.status == .enabled
+    public func setRefreshInterval(_ interval: TimeInterval) {
+        defaults.set(max(interval, Preferences.minimumRefreshInterval), forKey: PrefKey.refreshInterval)
+        reload()
     }
 
-    /// Returns the state actually achieved, which may differ from `enabled`.
-    @discardableResult
-    static func set(_ enabled: Bool) -> Bool {
-        do {
-            if enabled {
-                try SMAppService.mainApp.register()
-            } else if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
-            }
-        } catch {
-            // Registration is unavailable when running from a bare binary rather
-            // than an installed .app bundle. Nothing to surface beyond the
-            // toggle snapping back.
-            return isEnabled
+    public func setProvider(_ provider: Provider, enabled: Bool) {
+        defaults.set(enabled, forKey: Self.enabledKey(for: provider))
+        reload()
+    }
+
+    public func showsInMenuBar(_ provider: Provider) -> Bool { menuBarProviders.contains(provider) }
+
+    private static func enabledKey(for provider: Provider) -> String {
+        switch provider {
+        case .claude: return PrefKey.showClaude
+        case .codex: return PrefKey.showCodex
+        case .antigravity: return PrefKey.showAntigravity
+        case .grok: return PrefKey.showGrok
+        case .openCodeGo: return PrefKey.showOpenCodeGo
+        case .openRouter: return PrefKey.showOpenRouter
         }
-        return isEnabled
     }
 }

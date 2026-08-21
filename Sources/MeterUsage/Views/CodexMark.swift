@@ -1,3 +1,4 @@
+import MeterUsageCore
 import SwiftUI
 
 /// The pixel-mascot silhouette used for Claude in the menu bar, drawn as a

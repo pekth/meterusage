@@ -1,3 +1,4 @@
+import MeterUsageCore
 import SwiftUI
 
 /// GitHub-style contribution grid over the last 26 weeks.

@@ -1,3 +1,4 @@
+import MeterUsageCore
 import SwiftUI
 
 /// Settings pane, shown in place of the dashboard inside the same popover.

@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Reads Grok's live usage allowance from the same billing service the grok
 /// CLI talks to.
@@ -82,7 +85,7 @@ public struct GrokQuotaSource: QuotaSource {
     /// either way the "Weekly" or "Monthly" label is what the reset countdown
     /// hangs off. The reset time comes from `billingPeriodEnd`, with
     /// `currentPeriod.end` as a fallback.
-    static func parse(data: Data, now: Date) throws -> ProviderQuota {
+    public static func parse(data: Data, now: Date) throws -> ProviderQuota {
         // An auth-shaped error body means "not signed in" (grok login has not
         // been run, or the cached token expired), never a generic failure —
         // the user needs to know to sign in with the Grok CLI. Checked first
@@ -186,7 +189,7 @@ public struct GrokQuotaSource: QuotaSource {
     }
 
     /// The test seam: discovery logic, parameterised by the auth file URL.
-    static func discoverToken(from authURL: URL) -> String? {
+    public static func discoverToken(from authURL: URL) -> String? {
         guard let data = try? Data(contentsOf: authURL),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil

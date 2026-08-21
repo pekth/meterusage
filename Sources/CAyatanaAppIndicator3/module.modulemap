@@ -1,0 +1,5 @@
+module CAyatanaAppIndicator3 [system] {
+    header "shim.h"
+    link "ayatana-appindicator3"
+    export *
+}

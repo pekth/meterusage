@@ -1,23 +1,27 @@
 import Foundation
+#if canImport(Combine)
 import Combine
+#endif
+#if os(macOS)
 import AppKit
+#endif
 
 /// Outcome of one source poll: either data, or a reason there is none.
 ///
 /// Modelled explicitly rather than as `T?` because *why* a value is missing is
 /// the entire content of the empty state — "Codex CLI not found" and "couldn't
 /// read Codex usage" must not render the same way.
-enum Loaded<T> {
+public enum Loaded<T> {
     case idle
     case value(T)
     case missing(SourceUnavailable)
 
-    var value: T? {
+    public var value: T? {
         if case .value(let v) = self { return v }
         return nil
     }
 
-    var unavailable: SourceUnavailable? {
+    public var unavailable: SourceUnavailable? {
         if case .missing(let reason) = self { return reason }
         return nil
     }
@@ -29,28 +33,31 @@ enum Loaded<T> {
 /// app can be assembled with real sources, fixtures, or none at all, and adding
 /// a provider never touches this file.
 @MainActor
-final class AppCoordinator: ObservableObject {
+public final class AppCoordinator: ObservableObject {
+
+    /// `NSEC_PER_SEC` is Darwin-only; spell it out for Linux/Windows.
+    static let nanosecondsPerSecond: UInt64 = 1_000_000_000
 
     // MARK: Published state
 
-    @Published private(set) var quotas: [Provider: Loaded<ProviderQuota>] = [:]
-    @Published private(set) var activities: [Provider: Loaded<LocalActivity>] = [:]
-    @Published private(set) var usages: [Provider: Loaded<ProviderUsage>] = [:]
-    @Published private(set) var statuses: [Provider: Loaded<ServiceStatus>] = [:]
+    @Published public private(set) var quotas: [Provider: Loaded<ProviderQuota>] = [:]
+    @Published public private(set) var activities: [Provider: Loaded<LocalActivity>] = [:]
+    @Published public private(set) var usages: [Provider: Loaded<ProviderUsage>] = [:]
+    @Published public private(set) var statuses: [Provider: Loaded<ServiceStatus>] = [:]
     /// Subscription tier per provider. Kept in its own map rather than folded
     /// into `quotas` because a plan is read from a different place than the
     /// quota (account metadata vs. rate-limit endpoint) and either can be
     /// present without the other.
-    @Published private(set) var plans: [Provider: Loaded<PlanTier>] = [:]
-    @Published private(set) var isRefreshing = false
-    @Published private(set) var isClearingCache = false
-    @Published private(set) var lastRefreshedAt: Date?
+    @Published public private(set) var plans: [Provider: Loaded<PlanTier>] = [:]
+    @Published public private(set) var isRefreshing = false
+    @Published public private(set) var isClearingCache = false
+    @Published public private(set) var lastRefreshedAt: Date?
 
     /// Ticks once a minute purely so relative labels ("resets in 2h 14m") stay
     /// truthful between refreshes without re-polling any source.
-    @Published private(set) var clock = Date()
+    @Published public private(set) var clock = Date()
 
-    let preferences: Preferences
+    public let preferences: Preferences
 
     /// `true` when every number on screen is synthetic (see `DemoMode`).
     ///
@@ -58,7 +65,7 @@ final class AppCoordinator: ObservableObject {
     /// views stay ignorant of how the app was launched and the flag is decided
     /// exactly once, in the composition root. Defaults to `false`, so any
     /// caller that doesn't opt in gets the real thing.
-    let isDemoMode: Bool
+    public let isDemoMode: Bool
 
     // MARK: Sources
 
@@ -82,10 +89,14 @@ final class AppCoordinator: ObservableObject {
     private var refreshTask: Task<Void, Never>?
     private var scheduleTask: Task<Void, Never>?
     private var clockTask: Task<Void, Never>?
+    #if os(macOS)
     private var wakeObserver: NSObjectProtocol?
+    #endif
+    #if canImport(Combine)
     private var cancellables = Set<AnyCancellable>()
+    #endif
 
-    init(
+    public init(
         preferences: Preferences,
         isDemoMode: Bool = false,
         quotaSources: [QuotaSource] = [],
@@ -113,7 +124,7 @@ final class AppCoordinator: ObservableObject {
 
     // MARK: Lifecycle
 
-    func start() {
+    public func start() {
         observeWake()
         observePreferences()
         startClock()
@@ -125,6 +136,7 @@ final class AppCoordinator: ObservableObject {
     /// the nap, and the scheduled timer may not have fired during sleep. Refresh
     /// on wake so the first glance at the menu bar is never a lie.
     private func observeWake() {
+        #if os(macOS)
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -132,9 +144,11 @@ final class AppCoordinator: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
+        #endif
     }
 
     private func observePreferences() {
+        #if canImport(Combine)
         preferences.$refreshInterval
             .removeDuplicates()
             .dropFirst()
@@ -155,12 +169,22 @@ final class AppCoordinator: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        #endif
+    }
+
+    /// Preference-change hook for shells without a Combine pipeline (Linux,
+    /// Windows). Called after a shell writes new preference values so the
+    /// refresh schedule picks up the new interval. On Apple platforms the
+    /// Combine subscription above already handles this; calling this anyway is
+    /// harmless because `restartSchedule` cancels the previous timer first.
+    public func preferencesDidChange() {
+        restartSchedule()
     }
 
     private func startClock() {
         clockTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 60 * NSEC_PER_SEC)
+                try? await Task.sleep(nanoseconds: 60 * Self.nanosecondsPerSecond)
                 guard !Task.isCancelled else { return }
                 self?.clock = Date()
             }
@@ -172,7 +196,7 @@ final class AppCoordinator: ObservableObject {
         let interval = max(preferences.refreshInterval, Preferences.minimumRefreshInterval)
         scheduleTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(interval * Double(NSEC_PER_SEC)))
+                try? await Task.sleep(nanoseconds: UInt64(interval * Double(Self.nanosecondsPerSecond)))
                 guard !Task.isCancelled else { return }
                 self?.refresh()
             }
@@ -186,7 +210,7 @@ final class AppCoordinator: ObservableObject {
     /// Wake, timer and popover-open can all fire within the same second; running
     /// three concurrent sweeps would spawn duplicate CLI subprocesses for no
     /// benefit.
-    func refresh() {
+    public func refresh() {
         guard refreshTask == nil else { return }
         isRefreshing = true
         refreshTask = Task { [weak self] in
@@ -199,7 +223,7 @@ final class AppCoordinator: ObservableObject {
 
     /// Refreshes only if the data is older than `maxAge`. Called when the
     /// popover opens, so opening it repeatedly doesn't hammer the sources.
-    func refreshIfStale(maxAge: TimeInterval = 20) {
+    public func refreshIfStale(maxAge: TimeInterval = 20) {
         guard let last = lastRefreshedAt else { return refresh() }
         if Date().timeIntervalSince(last) > maxAge { refresh() }
     }
@@ -208,7 +232,7 @@ final class AppCoordinator: ObservableObject {
     /// the menu immediately reflects the provider's new limits and remaining
     /// reset credits. A non-reset outcome is treated as unavailable rather than
     /// presented as a successful mutation.
-    func consumeCodexReset(creditID: String) async throws {
+    public func consumeCodexReset(creditID: String) async throws {
         guard let resetConsumer else { throw SourceUnavailable.failed(.codex) }
         guard try await resetConsumer.consumeReset(creditID: creditID) else {
             throw SourceUnavailable.failed(.codex)
@@ -324,7 +348,7 @@ final class AppCoordinator: ObservableObject {
     /// reads them, and deleting from them would be a defect, not a feature. The
     /// path is rebuilt here from `HomeDirectory.real` rather than accepted from
     /// a caller so no call site can widen it.
-    func clearLocalCache() {
+    public func clearLocalCache() {
         guard !isClearingCache else { return }
         isClearingCache = true
         Task { [weak self] in
@@ -352,20 +376,36 @@ final class AppCoordinator: ObservableObject {
     }
 
     /// The single directory this app is allowed to delete from.
-    static var cacheDirectory: URL {
-        HomeDirectory.real
+    public static var cacheDirectory: URL {
+        #if os(macOS)
+        return HomeDirectory.real
             .appendingPathComponent("Library/Application Support", isDirectory: true)
             .appendingPathComponent("MeterUsage", isDirectory: true)
+        #elseif os(Windows)
+        let base = ProcessInfo.processInfo.environment["APPDATA"]
+            ?? HomeDirectory.real.appendingPathComponent("AppData/Roaming", isDirectory: true).path
+        return URL(fileURLWithPath: base, isDirectory: true)
+            .appendingPathComponent("MeterUsage", isDirectory: true)
+        #else
+        // XDG data home, defaulting to ~/.local/share.
+        if let xdg = ProcessInfo.processInfo.environment["XDG_DATA_HOME"], !xdg.isEmpty {
+            return URL(fileURLWithPath: xdg, isDirectory: true)
+                .appendingPathComponent("meterusage", isDirectory: true)
+        }
+        return HomeDirectory.real
+            .appendingPathComponent(".local/share", isDirectory: true)
+            .appendingPathComponent("meterusage", isDirectory: true)
+        #endif
     }
 
     // MARK: Derived state
 
     /// Providers the user has switched on, in a stable display order.
-    var visibleProviders: [Provider] {
+    public var visibleProviders: [Provider] {
         Provider.allCases.filter { preferences.isEnabled($0) }
     }
 
-    var visibleQuotaProviders: [Provider] {
+    public var visibleQuotaProviders: [Provider] {
         let providers = Set(quotaSources.map(\.provider))
         return visibleProviders.filter { providers.contains($0) }
     }
@@ -373,31 +413,31 @@ final class AppCoordinator: ObservableObject {
     /// Enabled providers the user also chose to show in the menu bar, in the
     /// stable display order. OpenRouter is pay-as-you-go (no quota), so it is
     /// always excluded from the tray regardless of the stored preference.
-    var menuBarProviders: [Provider] {
+    public var menuBarProviders: [Provider] {
         visibleProviders.filter { preferences.showsInMenuBar($0) && $0 != .openRouter }
     }
 
-    var visibleActivityProviders: [Provider] {
+    public var visibleActivityProviders: [Provider] {
         let providers = Set(activitySources.map(\.provider))
         return visibleProviders.filter { providers.contains($0) }
     }
 
-    var visibleUsageProviders: [Provider] {
+    public var visibleUsageProviders: [Provider] {
         let providers = Set(usageSources.map(\.provider))
         return visibleProviders.filter { providers.contains($0) }
     }
 
-    var visibleStatusProviders: [Provider] {
+    public var visibleStatusProviders: [Provider] {
         statusSources.map(\.provider)
     }
 
     /// Status sources describe service health, not provider usage. They remain
     /// visible even when the matching provider's usage card is switched off.
-    var statusProviders: [Provider] { visibleStatusProviders }
+    public var statusProviders: [Provider] { visibleStatusProviders }
 
     /// The single most-constrained window across every visible provider — the
     /// one number the menu bar shows.
-    var mostConstrained: (provider: Provider, window: QuotaWindow)? {
+    public var mostConstrained: (provider: Provider, window: QuotaWindow)? {
         visibleQuotaProviders
             .compactMap { quotas[$0]?.value }
             .flatMap { quota in quota.windows.map { (quota.provider, $0) } }
@@ -405,13 +445,13 @@ final class AppCoordinator: ObservableObject {
     }
 
     /// Worst known service severity, or `nil` when nothing has been checked.
-    var worstStatus: ServiceStatus? {
+    public var worstStatus: ServiceStatus? {
         statusProviders
             .compactMap { statuses[$0]?.value }
             .max { $0.severity.rawValue < $1.severity.rawValue }
     }
 
-    var combinedActivity: [LocalActivity] {
+    public var combinedActivity: [LocalActivity] {
         visibleActivityProviders.compactMap { activities[$0]?.value }
     }
 }

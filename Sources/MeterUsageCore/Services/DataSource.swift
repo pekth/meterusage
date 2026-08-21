@@ -1,4 +1,7 @@
 import Foundation
+#if os(Linux)
+import Glibc
+#endif
 
 // MARK: - Source contracts
 //
@@ -45,16 +48,35 @@ public protocol StatusSource: Sendable {
 public enum HomeDirectory {
     /// The user's real home directory.
     ///
-    /// `NSHomeDirectory()` returns the container path when an app is sandboxed,
-    /// which would silently point every source at an empty tree. Resolving via
-    /// the password database gives the real home in both cases, so behaviour
-    /// doesn't change if sandboxing is toggled later.
+    /// On macOS, `NSHomeDirectory()` returns the container path when an app is
+    /// sandboxed, which would silently point every source at an empty tree.
+    /// Resolving via the password database gives the real home in both cases,
+    /// so behaviour doesn't change if sandboxing is toggled later. Linux
+    /// resolves through the same password database; Windows has neither, so it
+    /// falls back to `USERPROFILE`.
     public static var real: URL {
+        #if os(Windows)
+        if let home = ProcessInfo.processInfo.environment["USERPROFILE"], !home.isEmpty {
+            return URL(fileURLWithPath: home, isDirectory: true)
+        }
+        let drive = ProcessInfo.processInfo.environment["HOMEDRIVE"] ?? "C:"
+        let path = ProcessInfo.processInfo.environment["HOMEPATH"] ?? "\\Users"
+        return URL(fileURLWithPath: drive + path, isDirectory: true)
+        #else
         if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
             let path = String(cString: dir)
             if !path.isEmpty { return URL(fileURLWithPath: path) }
         }
+        #if os(macOS)
         return URL(fileURLWithPath: NSHomeDirectory())
+        #else
+        if let home = getenv("HOME") {
+            let path = String(cString: home)
+            if !path.isEmpty { return URL(fileURLWithPath: path) }
+        }
+        return URL(fileURLWithPath: "/tmp")
+        #endif
+        #endif
     }
 }
 

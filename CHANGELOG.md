@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Portable `MeterUsageCore` source with v1 Linux GTK3/Ayatana and Windows
+  Win32 tray shells alongside the full macOS UI.
+
 ## [0.1.6] - 2026-08-19
 
 ### Changed

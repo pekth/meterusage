@@ -29,10 +29,10 @@ import Foundation
 /// can be toggled by accident and then forgotten, and a user staring at fake
 /// quota bars would have no way to tell. An env var has to be set on the launch
 /// that wants it, so demo mode cannot outlive the session that asked for it.
-enum DemoMode {
+public enum DemoMode {
 
     /// Set this to exactly `1` to launch in demo mode.
-    static let environmentKey = "METERUSAGE_DEMO"
+    public static let environmentKey = "METERUSAGE_DEMO"
 
     /// Whether demo mode is on for a given environment.
     ///
@@ -41,7 +41,7 @@ enum DemoMode {
     /// would let an unrelated variable of the same name flip the app into
     /// showing invented numbers, which is the one failure mode this feature
     /// must not have.
-    static func isEnabled(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+    public static func isEnabled(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
         environment[environmentKey] == "1"
     }
 }
@@ -54,10 +54,12 @@ enum DemoMode {
 /// Everything near 100% would read as an emergency and would render the whole
 /// colour scale in one alarming tint, so the user could not tell that the app
 /// distinguishes healthy from tight at all.
-struct DemoClaudeQuotaSource: QuotaSource {
-    let provider: Provider = .claude
+public struct DemoClaudeQuotaSource: QuotaSource {
+    public init() {}
 
-    func fetchQuota() async throws -> ProviderQuota {
+    public let provider: Provider = .claude
+
+    public func fetchQuota() async throws -> ProviderQuota {
         let now = Date()
         return ProviderQuota(
             provider: .claude,
@@ -82,10 +84,12 @@ struct DemoClaudeQuotaSource: QuotaSource {
 /// band the popover shows a single colour everywhere and the headroom scale
 /// looks broken rather than calm. 82% is tight enough to tint and low enough
 /// not to read as a crisis.
-struct DemoCodexQuotaSource: QuotaSource {
-    let provider: Provider = .codex
+public struct DemoCodexQuotaSource: QuotaSource {
+    public init() {}
 
-    func fetchQuota() async throws -> ProviderQuota {
+    public let provider: Provider = .codex
+
+    public func fetchQuota() async throws -> ProviderQuota {
         let now = Date()
         return ProviderQuota(
             provider: .codex,
@@ -141,10 +145,12 @@ struct DemoCodexQuotaSource: QuotaSource {
 /// Synthetic OpenRouter spend with a monthly key limit. The values are
 /// deliberately modest and entirely invented, so demo mode never exposes a
 /// real account balance while still exercising the dollar meter.
-struct DemoOpenRouterQuotaSource: QuotaSource {
-    let provider: Provider = .openRouter
+public struct DemoOpenRouterQuotaSource: QuotaSource {
+    public init() {}
 
-    func fetchQuota() async throws -> ProviderQuota {
+    public let provider: Provider = .openRouter
+
+    public func fetchQuota() async throws -> ProviderQuota {
         let now = Date()
         return ProviderQuota(
             provider: .openRouter,
@@ -167,10 +173,12 @@ struct DemoOpenRouterQuotaSource: QuotaSource {
 /// different headrooms — the rolling window tight (a real "I'm almost out")
 /// signal) and the weekly/monthly comfortable — so a screenshot shows the
 /// full headroom colour scale.
-struct DemoOpenCodeGoQuotaSource: QuotaSource {
-    let provider: Provider = .openCodeGo
+public struct DemoOpenCodeGoQuotaSource: QuotaSource {
+    public init() {}
 
-    func fetchQuota() async throws -> ProviderQuota {
+    public let provider: Provider = .openCodeGo
+
+    public func fetchQuota() async throws -> ProviderQuota {
         let now = Date()
         return ProviderQuota(
             provider: .openCodeGo,
@@ -188,10 +196,12 @@ struct DemoOpenCodeGoQuotaSource: QuotaSource {
 /// Synthetic Grok allowance. A single weekly window close to the rollover, so
 /// a screenshot shows both the percentage and the reset countdown that a
 /// weekly-only provider displays.
-struct DemoGrokQuotaSource: QuotaSource {
-    let provider: Provider = .grok
+public struct DemoGrokQuotaSource: QuotaSource {
+    public init() {}
 
-    func fetchQuota() async throws -> ProviderQuota {
+    public let provider: Provider = .grok
+
+    public func fetchQuota() async throws -> ProviderQuota {
         let now = Date()
         return ProviderQuota(
             provider: .grok,
@@ -209,24 +219,26 @@ struct DemoGrokQuotaSource: QuotaSource {
 /// Synthetic subscription tier. `.max5x` rather than `.max20x` so the badge
 /// shows a mid-tier plan — the common case, and the one where the percentages
 /// beside it most need the context.
-struct DemoPlanSource: PlanSource {
-    let provider: Provider = .claude
+public struct DemoPlanSource: PlanSource {
+    public init() {}
 
-    func fetchPlan() async throws -> PlanTier { .max5x }
+    public let provider: Provider = .claude
+
+    public func fetchPlan() async throws -> PlanTier { .max5x }
 }
 
 // MARK: - Status
 
 /// Synthetic service health. Operational, because a demo screenshot should not
 /// imply the provider is currently down.
-struct DemoStatusSource: StatusSource {
-    let provider: Provider
+public struct DemoStatusSource: StatusSource {
+    public let provider: Provider
 
-    init(provider: Provider = .codex) {
+    public init(provider: Provider = .codex) {
         self.provider = provider
     }
 
-    func fetchStatus() async throws -> ServiceStatus {
+    public func fetchStatus() async throws -> ServiceStatus {
         ServiceStatus(
             provider: provider,
             severity: .operational,
@@ -240,10 +252,12 @@ struct DemoStatusSource: StatusSource {
 
 /// Synthetic Antigravity activity. It intentionally reports sessions/messages
 /// only because that is all Antigravity's local history can prove.
-struct DemoAntigravityUsageSource: UsageSource {
-    let provider: Provider = .antigravity
+public struct DemoAntigravityUsageSource: UsageSource {
+    public init() {}
 
-    func fetchUsage() async throws -> ProviderUsage {
+    public let provider: Provider = .antigravity
+
+    public func fetchUsage() async throws -> ProviderUsage {
         ProviderUsage(
             provider: .antigravity,
             sessionCount: 18,
@@ -257,10 +271,12 @@ struct DemoAntigravityUsageSource: UsageSource {
 
 /// Synthetic Grok activity, using the same count-only contract as its local
 /// session summaries.
-struct DemoGrokUsageSource: UsageSource {
-    let provider: Provider = .grok
+public struct DemoGrokUsageSource: UsageSource {
+    public init() {}
 
-    func fetchUsage() async throws -> ProviderUsage {
+    public let provider: Provider = .grok
+
+    public func fetchUsage() async throws -> ProviderUsage {
         ProviderUsage(
             provider: .grok,
             sessionCount: 12,
@@ -274,10 +290,12 @@ struct DemoGrokUsageSource: UsageSource {
 
 /// Synthetic OpenCode Go activity with measured token/cost fields, so the demo
 /// exercises both count-only and token-aware usage rows.
-struct DemoOpenCodeGoUsageSource: UsageSource {
-    let provider: Provider = .openCodeGo
+public struct DemoOpenCodeGoUsageSource: UsageSource {
+    public init() {}
 
-    func fetchUsage() async throws -> ProviderUsage {
+    public let provider: Provider = .openCodeGo
+
+    public func fetchUsage() async throws -> ProviderUsage {
         let now = Date().addingTimeInterval(-55)
         return ProviderUsage(
             provider: .openCodeGo,
@@ -335,10 +353,12 @@ struct DemoOpenCodeGoUsageSource: UsageSource {
 /// em-dash cost cell, no footnote. Those "cost unavailable" renderings stay
 /// in the app for a future model with no published rate; the demo simply
 /// doesn't need to exercise them right now.
-struct DemoLocalActivitySource: LocalActivitySource {
-    let provider: Provider = .claude
+public struct DemoLocalActivitySource: LocalActivitySource {
+    public init() {}
 
-    func scan() async throws -> LocalActivity {
+    public let provider: Provider = .claude
+
+    public func scan() async throws -> LocalActivity {
         let now = Date()
         return LocalActivity(
             provider: .claude,
@@ -353,10 +373,12 @@ struct DemoLocalActivitySource: LocalActivitySource {
 /// (no token ledger), so the dedicated Codex heatmap renders the same way the
 /// real source's will. The days reuse `DemoActivityData` but strip tokens and
 /// keep only the per-day session counts, matching Codex's count-based data.
-struct DemoCodexActivitySource: LocalActivitySource {
-    let provider: Provider = .codex
+public struct DemoCodexActivitySource: LocalActivitySource {
+    public init() {}
 
-    func scan() async throws -> LocalActivity {
+    public let provider: Provider = .codex
+
+    public func scan() async throws -> LocalActivity {
         let now = Date()
         let daily = DemoActivityData.daily(now: now).map {
             DailyActivity(day: $0.day, tokens: TokenTotals(), estimatedCostUSD: 0, sessionCount: $0.sessionCount)
@@ -376,14 +398,14 @@ struct DemoCodexActivitySource: LocalActivitySource {
 /// Everything is derived from a fixed seed, so two runs on the same day produce
 /// the same figures. That matters for screenshots: a retake should differ only
 /// where time has genuinely moved on.
-enum DemoActivityData {
+public enum DemoActivityData {
 
     // MARK: Vocabulary
 
     /// Invented project names. Generic on purpose — a demo screenshot must
     /// never carry a real repository name, and these are also the strings the
     /// privacy tests assert contain no path separator.
-    static let projectNames = [
+    public static let projectNames = [
         "web-app",
         "api-server",
         "notes-cli",
@@ -412,7 +434,7 @@ enum DemoActivityData {
     /// Cache reads dominate real agentic sessions by an order of magnitude, and
     /// a demo that split tokens evenly would make the "in / out" caption under
     /// the total look nothing like a real one.
-    static func split(total: Int) -> TokenTotals {
+    public static func split(total: Int) -> TokenTotals {
         TokenTotals(
             input: Int(Double(total) * 0.06),
             output: Int(Double(total) * 0.04),
@@ -423,9 +445,9 @@ enum DemoActivityData {
 
     // MARK: Sessions
 
-    static let sessionCount = 58
+    public static let sessionCount = 58
 
-    static func sessions(now: Date) -> [SessionSummary] {
+    public static func sessions(now: Date) -> [SessionSummary] {
         var rng = DemoRandom(seed: 0x5EED_1234)
         return (0..<sessionCount).map { index in
             let model = model(forIndex: index)
@@ -456,9 +478,9 @@ enum DemoActivityData {
     /// on another project, and weeks where nothing shipped.
     private static let quietWeeks: Set<Int> = [2, 5, 11, 16, 21, 24]
 
-    static let heatmapWeeks = 26
+    public static let heatmapWeeks = 26
 
-    static func daily(now: Date) -> [DailyActivity] {
+    public static func daily(now: Date) -> [DailyActivity] {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .current
         let today = calendar.startOfDay(for: now)
@@ -505,10 +527,10 @@ enum DemoActivityData {
 /// figures, which is wrong for a screenshot source: a retake should differ only
 /// because time has passed, not because the data reshuffled. This is a plain
 /// LCG — it is a source of *variety*, never of anything security-relevant.
-struct DemoRandom {
+public struct DemoRandom {
     private var state: UInt64
 
-    init(seed: UInt64) { state = seed }
+    public init(seed: UInt64) { state = seed }
 
     private mutating func next() -> UInt64 {
         state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407

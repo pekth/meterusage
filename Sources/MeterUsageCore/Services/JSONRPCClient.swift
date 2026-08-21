@@ -101,50 +101,179 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
         }
     }
 
-    /// A GUI-launched app inherits a bare PATH (often just
-    /// `/usr/bin:/bin:/usr/sbin:/sbin`), which is not where Homebrew, a
-    /// manual install, or cargo puts `codex`. Probe the common install
-    /// locations directly instead of assuming PATH already has them.
-    private static func resolveCodexBinary() throws -> String {
-        let fm = FileManager.default
-        let candidates = [
-            "/opt/homebrew/bin/codex",
-            "/usr/local/bin/codex",
-            HomeDirectory.real.appendingPathComponent(".cargo/bin/codex").path,
-        ]
-        for candidate in candidates where fm.isExecutableFile(atPath: candidate) {
-            return candidate
+    /// Probes the platform's common install locations and inherited PATH.
+    /// Windows uses PATHEXT because native and npm installs use different
+    /// executable suffixes.
+    static func codexBinaryCandidates(
+        environment: [String: String],
+        homeDirectory: String,
+        windows: Bool
+    ) -> [String] {
+        let pathValue = ProcessPath.environmentValue(for: "PATH", in: environment, windows: windows) ?? ""
+        let pathDirectories = ProcessPath.entries(in: pathValue, windows: windows)
+        let fixedDirectories: [String]
+        if windows {
+            fixedDirectories = [
+                ProcessPath.environmentValue(for: "APPDATA", in: environment, windows: true)
+                    .map { ProcessPath.appending("npm", to: $0, windows: true) },
+                ProcessPath.appending(".cargo\\bin", to: homeDirectory, windows: true),
+            ].compactMap { $0 }
+        } else {
+            fixedDirectories = [
+                "/opt/homebrew/bin",
+                "/usr/local/bin",
+                ProcessPath.appending(".cargo/bin", to: homeDirectory, windows: false),
+            ]
         }
-        if let pathEnv = ProcessInfo.processInfo.environment["PATH"] {
-            for dir in pathEnv.split(separator: ":") {
-                let candidate = String(dir) + "/codex"
-                if fm.isExecutableFile(atPath: candidate) { return candidate }
+
+        let names = ProcessPath.executableNames(
+            for: "codex",
+            windows: windows,
+            pathExtensions: ProcessPath.environmentValue(for: "PATHEXT", in: environment, windows: windows)
+        )
+        var candidates: [String] = []
+        for directory in fixedDirectories + pathDirectories {
+            for name in names {
+                let candidate = ProcessPath.appending(name, to: directory, windows: windows)
+                let alreadyAdded = candidates.contains {
+                    windows
+                        ? $0.caseInsensitiveCompare(candidate) == .orderedSame
+                        : $0 == candidate
+                }
+                if !alreadyAdded { candidates.append(candidate) }
             }
         }
+        return candidates
+    }
+
+    private static func resolveCodexBinary() throws -> String {
+        let fm = FileManager.default
+        let candidates = codexBinaryCandidates(
+            environment: ProcessInfo.processInfo.environment,
+            homeDirectory: HomeDirectory.real.path,
+            windows: runsOnWindows
+        )
+        for candidate in candidates {
+            #if os(Windows)
+            var isDirectory: ObjCBool = false
+            if fm.fileExists(atPath: candidate, isDirectory: &isDirectory), !isDirectory.boolValue {
+                return candidate
+            }
+            #else
+            if fm.isExecutableFile(atPath: candidate) { return candidate }
+            #endif
+        }
         throw JSONRPCTransportError.processNotFound(path: "codex")
+    }
+
+    struct LaunchConfiguration: Equatable {
+        let executable: String
+        let arguments: [String]
+    }
+
+    static func launchConfiguration(
+        binary: String,
+        arguments: [String],
+        environment: [String: String],
+        windows: Bool
+    ) throws -> LaunchConfiguration {
+        let suffix = (binary as NSString).pathExtension.lowercased()
+        guard windows, suffix == "cmd" || suffix == "bat" else {
+            return LaunchConfiguration(executable: binary, arguments: arguments)
+        }
+
+        let unsafe = CharacterSet(charactersIn: "\"&|<>^%!\r\n")
+        guard binary.rangeOfCharacter(from: unsafe) == nil,
+              arguments.allSatisfy({ $0.rangeOfCharacter(from: unsafe) == nil }) else {
+            throw JSONRPCTransportError.processNotFound(path: binary)
+        }
+
+        let systemRoot = ProcessPath.environmentValue(
+            for: "SystemRoot",
+            in: environment,
+            windows: true
+        ) ?? "C:\\Windows"
+        let shell = ProcessPath.environmentValue(for: "ComSpec", in: environment, windows: true)
+            ?? ProcessPath.appending("System32\\cmd.exe", to: systemRoot, windows: true)
+        let quotedArguments = arguments.map { "\"\($0)\"" }.joined(separator: " ")
+        let command = "\"\"\(binary)\" \(quotedArguments)\""
+        return LaunchConfiguration(
+            executable: shell,
+            arguments: ["/d", "/s", "/c", command]
+        )
+    }
+
+    static func childPath(
+        binary: String,
+        environment: [String: String],
+        homeDirectory: String,
+        windows: Bool
+    ) -> String {
+        let extraPaths: [String]
+        if windows {
+            extraPaths = [
+                ProcessPath.directory(of: binary, windows: true),
+                ProcessPath.environmentValue(for: "APPDATA", in: environment, windows: true)
+                    .map { ProcessPath.appending("npm", to: $0, windows: true) },
+                ProcessPath.appending(".cargo\\bin", to: homeDirectory, windows: true),
+            ].compactMap { $0 }.filter { !$0.isEmpty }
+        } else {
+            extraPaths = [
+                "/opt/homebrew/bin",
+                "/usr/local/bin",
+                ProcessPath.appending(".cargo/bin", to: homeDirectory, windows: false),
+            ]
+        }
+        let uniqueExtraPaths = extraPaths.reduce(into: [String]()) { result, path in
+            let exists = result.contains {
+                windows ? $0.caseInsensitiveCompare(path) == .orderedSame : $0 == path
+            }
+            if !exists { result.append(path) }
+        }
+        let inheritedPath = ProcessPath.environmentValue(for: "PATH", in: environment, windows: windows)
+        let existingPath: String?
+        if let inheritedPath {
+            existingPath = inheritedPath
+        } else {
+            existingPath = windows ? nil : "/usr/bin:/bin"
+        }
+        return ProcessPath.prepending(uniqueExtraPaths, to: existingPath, windows: windows)
+    }
+
+    private static var runsOnWindows: Bool {
+        #if os(Windows)
+        true
+        #else
+        false
+        #endif
     }
 
     /// Synchronous by design: this runs inside a `Task.addTask` closure that
     /// already has its own thread from the cooperative pool's blocking-work
     /// allowance, and the whole call is raced against a timeout task above.
     private static func runExchange(binary: String, clientVersion: String, operation: Operation) throws -> Data {
+        var env = ProcessInfo.processInfo.environment
+        let launch = try launchConfiguration(
+            binary: binary,
+            arguments: ["app-server", "--stdio"],
+            environment: env,
+            windows: runsOnWindows
+        )
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: binary)
-        process.arguments = ["app-server", "--stdio"]
+        process.executableURL = URL(fileURLWithPath: launch.executable)
+        process.arguments = launch.arguments
 
         // Same PATH problem as binary resolution: the child's own
         // `#!/usr/bin/env node` shebang (codex-cli ships as a Node wrapper on
         // some install paths) needs `node` to be findable too. Prepend the
         // common install dirs onto whatever PATH we inherited rather than
         // replacing it, so we don't break anything the parent process set.
-        var env = ProcessInfo.processInfo.environment
-        let extraPaths = [
-            "/opt/homebrew/bin",
-            "/usr/local/bin",
-            HomeDirectory.real.appendingPathComponent(".cargo/bin").path,
-        ]
-        let existingPath = env["PATH"] ?? "/usr/bin:/bin"
-        env["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
+        env["PATH"] = childPath(
+            binary: binary,
+            environment: env,
+            homeDirectory: HomeDirectory.real.path,
+            windows: runsOnWindows
+        )
         process.environment = env
 
         let stdinPipe = Pipe()

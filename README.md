@@ -2,7 +2,9 @@
 
 # meterusage
 
-A macOS menu-bar app that shows how much of your AI coding quota you have left.
+A cross-platform tray app that shows how much of your AI coding quota you have
+left. macOS has the full SwiftUI menu-bar app. Linux and Windows have v1 tray
+shells with provider status and quota details in the tray menu or tooltip.
 
 <br clear="left">
 
@@ -24,6 +26,9 @@ git clone https://github.com/pekth/meterusage.git
 cd meterusage
 ./Scripts/make-app.sh && open dist/
 ```
+
+The bundle command is for macOS. Linux and Windows users should follow the
+source build and platform run commands below.
 
 Drag `MeterUsage.app` to Applications. That's the whole setup — no account to
 connect and no key-entry screen. OpenRouter uses an existing
@@ -124,8 +129,14 @@ is enforced by tests and hooks rather than promised in prose.
 
 ## Requirements
 
-- macOS 13 Ventura or later
-- Xcode command-line tools (`xcode-select --install`)
+- macOS 13 Ventura or later with Xcode command-line tools
+  (`xcode-select --install`). This is the full UI build.
+- Linux with Swift 5.9 or later, GTK3 development files, and Ayatana
+  AppIndicator3 development files. On Debian or Ubuntu, install
+  `libgtk-3-dev` and `libayatana-appindicator3-dev`. Linux uses the v1 GTK3
+  tray shell.
+- Windows 10 or later with the Swift for Windows toolchain and its WinSDK
+  module. Windows uses the v1 Win32 tray shell.
 - Optional: [`codex`](https://github.com/openai/codex) CLI, signed in, for live
   Codex quota
 - Optional: `OPENROUTER_API_KEY` or a local OpenRouter key file, for live
@@ -142,10 +153,29 @@ can hide providers that are not installed or not relevant to you.
 ## Build from source
 
 ```sh
-swift build            # debug binary
-swift test             # unit tests
-./Scripts/make-app.sh  # assembles dist/MeterUsage.app, ad-hoc signed
-./Scripts/make-icon.sh # regenerates the app icon (only when the design changes)
+swift build
+```
+
+On macOS, run the unit tests. The Linux and Windows packages currently have no
+test target:
+
+```sh
+swift test
+```
+
+Run the executable for the current platform:
+
+```sh
+swift run meterusage        # macOS full UI
+swift run meterusage-linux  # Linux GTK3/Ayatana tray shell
+swift run meterusage-windows # Windows Win32 tray shell
+```
+
+On macOS, assemble the application bundle with:
+
+```sh
+./Scripts/make-app.sh
+./Scripts/make-icon.sh # only when the icon design changes
 ```
 
 The icon is generated rather than hand-drawn: `Scripts/make-icon.swift` renders
@@ -153,9 +183,10 @@ it from the same geometry the menu-bar glyph uses, so the two stay the same
 mark. Both the 1024×1024 master and the `.icns` are committed, so a fresh clone
 builds a complete bundle without running the generator.
 
-No third-party dependencies. No Apple Developer account needed — the app is
-ad-hoc signed, so macOS will ask you to confirm the first launch via
-**System Settings → Privacy & Security**.
+The package has no Swift package dependencies. The Linux tray shell uses the
+system GTK3 and Ayatana AppIndicator3 libraries listed above. No Apple
+Developer account is needed for the macOS ad-hoc build. macOS asks you to
+confirm the first launch in **System Settings → Privacy & Security**.
 
 ### Demo mode
 
@@ -172,7 +203,7 @@ mistaken for real ones. See [docs/DEMO.md](docs/DEMO.md).
 ## Cost figures are estimates
 
 Costs are derived locally from token counts against a rate table in
-[`Pricing.swift`](Sources/MeterUsage/Services/Pricing.swift). Published rates
+[`Pricing.swift`](Sources/MeterUsageCore/Services/Pricing.swift). Published rates
 change and the table drifts. Treat every number here as awareness, not billing
 truth — your provider's dashboard is the only source of record.
 

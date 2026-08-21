@@ -40,7 +40,7 @@ public struct AntigravityUsageSource: UsageSource {
         throw SourceUnavailable.dataNotFound("Antigravity usage")
     }
 
-    static func parse(data: Data, now: Date) throws -> ProviderUsage {
+    public static func parse(data: Data, now: Date) throws -> ProviderUsage {
         let object = try JSONSerialization.jsonObject(with: data)
         let root = object as? [String: Any] ?? [:]
         let records = Self.sessionRecords(from: root)
@@ -265,7 +265,7 @@ public struct AntigravityUsageSource: UsageSource {
     /// Only `conversationId` and `timestamp` are read; a line's other fields
     /// (prompt text, workspace path) are deliberately ignored. A session's
     /// `startedAt` is its earliest prompt timestamp.
-    static func parseHistory(data: Data, now: Date) throws -> ProviderUsage {
+    public static func parseHistory(data: Data, now: Date) throws -> ProviderUsage {
         guard let text = String(data: data, encoding: .utf8) else {
             throw SourceUnavailable.failed(.antigravity)
         }
@@ -354,7 +354,7 @@ public struct GrokUsageSource: UsageSource {
             .filter { $0.lastPathComponent == "summary.json" }
     }
 
-    static func parse(summaries: [[String: Any]], now: Date) throws -> ProviderUsage {
+    public static func parse(summaries: [[String: Any]], now: Date) throws -> ProviderUsage {
         struct Record {
             let startedAt: Date
             let messages: Int
@@ -478,7 +478,7 @@ public struct OpenCodeGoUsageSource: UsageSource {
     /// window but still being worked on inside it counts, and all of its
     /// messages count. Filtering by `createdAt` under-counted the 24h window —
     /// a session started two days ago and touched today contributed nothing.
-    static func windows(from records: [Record], now: Date) -> [UsageWindow] {
+    public static func windows(from records: [Record], now: Date) -> [UsageWindow] {
         [("last 24h", 86_400.0), ("last 7d", 7 * 86_400.0), ("last 30d", 30 * 86_400.0)]
             .map { label, seconds in
                 let inWindow = records.filter { $0.updatedAt >= now.addingTimeInterval(-seconds) }
@@ -500,19 +500,19 @@ public struct OpenCodeGoUsageSource: UsageSource {
             }
     }
 
-    struct Record: Equatable {
-        let input: Int
-        let output: Int
-        let reasoning: Int
-        let cacheRead: Int
-        let cacheWrite: Int
-        let cost: Double
-        let messages: Int
-        let createdAt: Date
-        let updatedAt: Date
+    public struct Record: Equatable {
+        public let input: Int
+        public let output: Int
+        public let reasoning: Int
+        public let cacheRead: Int
+        public let cacheWrite: Int
+        public let cost: Double
+        public let messages: Int
+        public let createdAt: Date
+        public let updatedAt: Date
     }
 
-    static func parse(data: Data) throws -> [Record] {
+    public static func parse(data: Data) throws -> [Record] {
         guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             throw SourceUnavailable.failed(.openCodeGo)
         }

@@ -45,7 +45,7 @@ each claim is enforced rather than merely promised.
 Claude quota bars are a pure bonus. A companion tool must already have written
 a small JSON snapshot to disk; meterusage never prompts for it and never
 creates it. Implementation lives in
-`Sources/MeterUsage/Services/OptionalQuotaFileSource.swift`.
+`Sources/MeterUsageCore/Services/OptionalQuotaFileSource.swift`.
 
 Honest limits of that path:
 
@@ -85,7 +85,7 @@ contains. Nothing is silently estimated and labelled as authoritative.
 ## Cost figures are estimates
 
 Costs are computed locally from token counts against a rate table in
-`Sources/MeterUsage/Services/Pricing.swift`. Published rates change, and the
+`Sources/MeterUsageCore/Services/Pricing.swift`. Published rates change, and the
 table can drift. Treat every cost in this app as an approximation for
 awareness — never as a billing figure. Your provider's dashboard is the only
 source of truth for what you owe.
@@ -136,7 +136,7 @@ header comment for exactly that reason.
 
 Provider payloads and local transcripts both carry material that should not
 reach the screen, a cache, or a screenshot. `Privacy` in
-`Sources/MeterUsage/Services/DataSource.swift` is the single chokepoint:
+`Sources/MeterUsageCore/Services/DataSource.swift` is the single chokepoint:
 
 - Absolute paths contain your OS username, so project directories are reduced
   to their final component before entering the model layer.
