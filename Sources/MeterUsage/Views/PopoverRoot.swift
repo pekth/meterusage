@@ -197,7 +197,11 @@ private struct StatusStrip: View {
                     VStack(spacing: 8) {
                         ForEach(rows) { row in
                             HStack(spacing: 8) {
-                                StatusDot(color: severityColor(row.severity))
+                                // The provider's mark, tinted by service
+                                // severity so identity and health share one
+                                // glyph instead of a plain colour dot.
+                                ProviderMark(provider: row.provider, tint: severityColor(row.severity))
+                                    .frame(width: 13, height: 13)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(row.provider.displayName)
                                         .font(.muBody)

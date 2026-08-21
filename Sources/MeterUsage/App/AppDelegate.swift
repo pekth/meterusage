@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.preferences = preferences
         self.coordinator = coordinator
+        coordinator.quotaAlertService = QuotaAlertService(preferences: preferences)
 
         installStatusItem(coordinator: coordinator)
         installPopover(coordinator: coordinator, preferences: preferences)

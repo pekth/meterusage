@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Settings pane, shown in place of the dashboard inside the same popover.
 ///
@@ -30,6 +31,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
     @AppStorage(PrefKey.showClaudeHeatmap) private var showClaudeHeatmap: Bool = true
     @AppStorage(PrefKey.showCodexHeatmap) private var showCodexHeatmap: Bool = true
+    @AppStorage(PrefKey.quotaAlerts) private var quotaAlerts: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -149,6 +151,26 @@ struct SettingsView: View {
             }
 
             Group {
+                SectionHeader("Alerts")
+                Card {
+                    SettingToggle(
+                        title: "Quota alerts",
+                        subtitle: "Notify when a quota window crosses 80% or 95% used, or a reset credit is about to expire.",
+                        isOn: Binding(
+                            get: { quotaAlerts },
+                            set: { newValue in
+                                quotaAlerts = newValue
+                                // The permission prompt belongs to the exact
+                                // moment the user asks for alerts, not to app
+                                // launch.
+                                if newValue { coordinator.requestQuotaAlertAuthorization() }
+                            }
+                        )
+                    )
+                }
+            }
+
+            Group {
                 SectionHeader("Startup")
                 Card {
                     SettingToggle(
@@ -169,6 +191,8 @@ struct SettingsView: View {
                 SectionHeader("Maintenance")
                 Card {
                     CacheRow(coordinator: coordinator)
+                    Divider().overlay(MU.hairline)
+                    DiagnosticsRow(coordinator: coordinator)
                 }
             }
 
@@ -177,7 +201,7 @@ struct SettingsView: View {
             HStack {
                 Text("\(AppInfo.name) \(AppInfo.version)")
                 Spacer()
-                Text("No telemetry · all data stays local")
+                Text("No telemetry · all data stays local · est. \(Pricing.snapshotLabel) rates")
             }
             .font(.muCaption)
             .foregroundColor(MU.textTertiary)
@@ -238,6 +262,48 @@ private struct CacheRow: View {
     }
 }
 
+/// Copies a sanitized diagnostics summary to the clipboard.
+///
+/// The report carries state categories only ("quota: unavailable (failed)"),
+/// never raw provider errors, paths, or account detail — the same boundary the
+/// dashboard enforces. It exists so a user filing an issue can describe what
+/// their dashboard is doing without pasting anything sensitive.
+private struct DiagnosticsRow: View {
+    @ObservedObject var coordinator: AppCoordinator
+    @State private var copied = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Copy diagnostics")
+                    .font(.muBody)
+                    .foregroundColor(MU.text)
+                Text("Copies a privacy-safe summary of each provider's status for bug reports.")
+                    .font(.muCaption)
+                    .foregroundColor(MU.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 6)
+            Button(action: copy) {
+                Text(copied ? "Copied" : "Copy")
+            }
+            .controlSize(.small)
+            .help("Copy a sanitized diagnostics report to the clipboard.")
+        }
+    }
+
+    private func copy() {
+        let text = coordinator.diagnosticsText()
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        copied = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2 * NSEC_PER_SEC)
+            copied = false
+        }
+    }
+}
+
 private struct SettingToggle: View {
     let title: String
     var subtitle: String?
@@ -271,7 +337,10 @@ private struct ProviderToggle: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            StatusDot(color: providerColor(provider), diameter: 8)
+            // The provider's real mark, matching the Menu bar section and the
+            // tray, so one glyph means one provider everywhere in the app.
+            ProviderMark(provider: provider, tint: providerColor(provider))
+                .frame(width: 13, height: 13)
             VStack(alignment: .leading, spacing: 1) {
                 Text(provider.displayName)
                     .font(.muBody)

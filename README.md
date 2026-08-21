@@ -69,6 +69,27 @@ connect and no key-entry screen. OpenRouter uses an existing
   total**, and hovering a cell instantly previews the date and its tokens. A
   master **Show heatmap** switch plus per-provider Codex/Claude heatmap
   toggles in Settings control what is shown.
+- **7-day sparklines** — Codex and Claude quota cards lead with a compact
+  last-week trend line (tokens, or sessions for Codex), so "am I burning
+  faster than usual?" is a glance question rather than a grid exploration.
+- **Quota threshold alerts *(optional)*** — opt-in local notifications when a
+  quota window crosses 80% or 95% used, or an earned reset credit is about to
+  expire within 24 hours. Off by default; the **Alerts** section of Settings
+  opts in and requests notification permission at that moment, never at
+  launch. Alerts fire once per crossing, not every refresh.
+- **Provider marks everywhere** — every provider is identified by its real
+  mark throughout the popover and Settings, not a colour dot. In service
+  status rows the mark is tinted by severity, so health stays readable
+  without colour alone.
+- **Per-source retry backoff** — a source that keeps failing (outage,
+  offline) is skipped by scheduled refreshes with a capped exponential
+  backoff instead of being hammered every cycle. Explicit refreshes always
+  try every source, and permanent conditions (CLI not installed, not signed
+  in) never back off.
+- **Copy diagnostics** — the Maintenance section of Settings copies a
+  privacy-safe summary of every provider's status to the clipboard, so a bug
+  report can say "quota: unavailable (failed)" without pasting anything
+  sensitive.
 - **Colour-coded usage and status** — quota headroom uses calm/warning/alert
   bands, while provider identity and written service-severity badges remain
   understandable without relying on colour alone.
@@ -173,8 +194,11 @@ mistaken for real ones. See [docs/DEMO.md](docs/DEMO.md).
 
 Costs are derived locally from token counts against a rate table in
 [`Pricing.swift`](Sources/MeterUsage/Services/Pricing.swift). Published rates
-change and the table drifts. Treat every number here as awareness, not billing
-truth — your provider's dashboard is the only source of record.
+change and the table drifts — cost captions show the table's snapshot month
+(e.g. "est. Jul 2026 rates") so the vintage is never hidden, and the snapshot
+date is a machine-readable constant that must move when rates are updated.
+Treat every number here as awareness, not billing truth — your provider's
+dashboard is the only source of record.
 
 ## Contributing
 
