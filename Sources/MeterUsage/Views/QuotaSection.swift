@@ -341,17 +341,19 @@ private struct WindowRow: View {
     private var isCodex: Bool { provider == .codex }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+        VStack(alignment: .leading, spacing: 4) {
+            // One compact line per window: label, proportional bar, and a
+            // colour-coded value so the headroom band is readable at a glance.
+            HStack(spacing: 8) {
                 Text(isCodex ? "\(window.label) usage limit" : window.label)
                     .font(.muBody)
                     .foregroundColor(MU.textSecondary)
-                Spacer(minLength: 4)
-                if isCodex {
-                    Text(Fmt.remainingPercent(window.usedPercent))
-                        .font(.muNumber)
-                        .foregroundColor(tint)
-                }
+                    .lineLimit(1)
+                MeterBar(fraction: isCodex ? 1 - window.fraction : window.fraction, tint: tint)
+                Text(isCodex ? Fmt.remainingPercent(window.usedPercent) : Fmt.percent(window.usedPercent))
+                    .font(.muNumber)
+                    .foregroundColor(tint)
+                    .frame(minWidth: 44, alignment: .trailing)
             }
             if !countdownLabel.isEmpty {
                 Text(resetLabel)
@@ -361,7 +363,6 @@ private struct WindowRow: View {
                     .minimumScaleFactor(0.7)
                     .layoutPriority(1)
             }
-            MeterBar(fraction: isCodex ? 1 - window.fraction : window.fraction, tint: tint)
         }
         .help(helpLabel)
         .accessibilityElement(children: .combine)

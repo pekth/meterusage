@@ -34,18 +34,25 @@ struct SettingsView: View {
     @AppStorage(PrefKey.quotaAlerts) private var quotaAlerts: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
 
             Group {
                 SectionHeader("Refresh")
-                Card {
-                    Picker("", selection: $refreshInterval) {
-                        ForEach(Preferences.intervalChoices, id: \.self) { seconds in
-                            Text(Self.intervalLabel(seconds)).tag(seconds)
+                Card(padding: 10) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("Refresh every")
+                            .font(.muBody)
+                            .foregroundColor(MU.text)
+                            .fixedSize()
+                        Spacer(minLength: 6)
+                        Picker("", selection: $refreshInterval) {
+                            ForEach(Preferences.intervalChoices, id: \.self) { seconds in
+                                Text(Self.intervalLabel(seconds)).tag(seconds)
+                            }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
                     }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
 
                     Text("Also refreshes when the Mac wakes from sleep.")
                         .font(.muCaption)
@@ -55,78 +62,72 @@ struct SettingsView: View {
 
             Group {
                 SectionHeader("Providers")
-                Card {
-                    ProviderToggle(
+                Card(padding: 10) {
+                    ProviderRow(
                         provider: .codex,
                         subtitle: "Primary quota and usage",
-                        isOn: $showCodex
+                        isOn: $showCodex,
+                        menuBarIsOn: $menuBarCodex
                     )
                     Divider().overlay(MU.hairline)
-                    ProviderToggle(
+                    ProviderRow(
                         provider: .antigravity,
                         subtitle: "Local sessions and messages",
-                        isOn: $showAntigravity
+                        isOn: $showAntigravity,
+                        menuBarIsOn: $menuBarAntigravity
                     )
                     Divider().overlay(MU.hairline)
-                    ProviderToggle(
+                    ProviderRow(
                         provider: .grok,
                         subtitle: "Local session history",
-                        isOn: $showGrok
+                        isOn: $showGrok,
+                        menuBarIsOn: $menuBarGrok
                     )
                     Divider().overlay(MU.hairline)
-                    ProviderToggle(
+                    ProviderRow(
                         provider: .openCodeGo,
                         subtitle: "OpenCode Go token usage",
-                        isOn: $showOpenCodeGo
+                        isOn: $showOpenCodeGo,
+                        menuBarIsOn: $menuBarOpenCodeGo
                     )
                     Divider().overlay(MU.hairline)
-                    ProviderToggle(
+                    ProviderRow(
                         provider: .openRouter,
                         subtitle: "API usage and spending limit",
-                        isOn: $showOpenRouter
+                        isOn: $showOpenRouter,
+                        menuBarIsOn: nil
                     )
                     Divider().overlay(MU.hairline)
-                    ProviderToggle(
+                    ProviderRow(
                         provider: .claude,
                         subtitle: "Optional Claude Code activity",
-                        isOn: $showClaude
+                        isOn: $showClaude,
+                        menuBarIsOn: $menuBarClaude
                     )
                     Divider().overlay(MU.hairline)
-                    Text("Enabled providers appear in the popover; the Menu bar section picks which also show in the tray.")
+                    Text("The switch shows a provider here; the tray icon also puts it in the menu bar.")
                         .font(.muCaption)
                         .foregroundColor(MU.textTertiary)
-                }
-            }
-
-            Group {
-                SectionHeader("Menu bar")
-                Card {
-                    Text("Pick which providers show as clusters in the menu bar.")
-                        .font(.muCaption)
-                        .foregroundColor(MU.textTertiary)
-                    Divider().overlay(MU.hairline)
-                    MenuBarToggle(provider: .codex, isOn: $menuBarCodex)
-                    Divider().overlay(MU.hairline)
-                    MenuBarToggle(provider: .grok, isOn: $menuBarGrok)
-                    Divider().overlay(MU.hairline)
-                    MenuBarToggle(provider: .openCodeGo, isOn: $menuBarOpenCodeGo)
-                    Divider().overlay(MU.hairline)
-                    MenuBarToggle(provider: .antigravity, isOn: $menuBarAntigravity)
-                    Divider().overlay(MU.hairline)
-                    MenuBarToggle(provider: .claude, isOn: $menuBarClaude)
                 }
             }
 
             Group {
                 SectionHeader("Appearance")
-                Card {
-                    Picker("", selection: $theme) {
-                        ForEach(AppTheme.allCases) { option in
-                            Text(option.displayName).tag(option.rawValue)
+                Card(padding: 10) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("Theme")
+                            .font(.muBody)
+                            .foregroundColor(MU.text)
+                        Spacer(minLength: 6)
+                        Picker("", selection: $theme) {
+                            ForEach(AppTheme.allCases) { option in
+                                Text(option.displayName).tag(option.rawValue)
+                            }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .fixedSize()
                     }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
                     Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Show heatmap",
@@ -151,8 +152,8 @@ struct SettingsView: View {
             }
 
             Group {
-                SectionHeader("Alerts")
-                Card {
+                SectionHeader("General")
+                Card(padding: 10) {
                     SettingToggle(
                         title: "Quota alerts",
                         subtitle: "Notify when a quota window crosses 80% or 95% used, or a reset credit is about to expire.",
@@ -167,12 +168,7 @@ struct SettingsView: View {
                             }
                         )
                     )
-                }
-            }
-
-            Group {
-                SectionHeader("Startup")
-                Card {
+                    Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Launch at login",
                         subtitle: "Requires the app to be in /Applications.",
@@ -189,7 +185,7 @@ struct SettingsView: View {
 
             Group {
                 SectionHeader("Maintenance")
-                Card {
+                Card(padding: 10) {
                     CacheRow(coordinator: coordinator)
                     Divider().overlay(MU.hairline)
                     DiagnosticsRow(coordinator: coordinator)
@@ -199,9 +195,11 @@ struct SettingsView: View {
             Spacer(minLength: 0)
 
             HStack {
-                Text("\(AppInfo.name) \(AppInfo.version)")
+                Text("v\(AppInfo.version)")
                 Spacer()
                 Text("No telemetry · all data stays local · est. \(Pricing.snapshotLabel) rates")
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .font(.muCaption)
             .foregroundColor(MU.textTertiary)
@@ -325,20 +323,28 @@ private struct SettingToggle: View {
             Toggle("", isOn: $isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
-                .controlSize(.small)
+                .controlSize(.mini)
         }
     }
 }
 
-private struct ProviderToggle: View {
+/// One provider row in the merged Providers card.
+///
+/// The row carries one switch (popover visibility) and one small tray-icon
+/// button (menu-bar visibility). The icon needs no column caption: it is the
+/// same glyph the menu bar itself uses, tinted when active and grey when not.
+private struct ProviderRow: View {
     let provider: Provider
     let subtitle: String
     @Binding var isOn: Bool
+    var menuBarIsOn: Binding<Bool>?
+
+    @State private var hoveringTray = false
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            // The provider's real mark, matching the Menu bar section and the
-            // tray, so one glyph means one provider everywhere in the app.
+            // The provider's real mark, matching the dashboard and the tray,
+            // so one glyph means one provider everywhere in the app.
             ProviderMark(provider: provider, tint: providerColor(provider))
                 .frame(width: 13, height: 13)
             VStack(alignment: .leading, spacing: 1) {
@@ -348,34 +354,36 @@ private struct ProviderToggle: View {
                 Text(subtitle)
                     .font(.muCaption)
                     .foregroundColor(MU.textTertiary)
+                    .lineLimit(1)
             }
             Spacer(minLength: 6)
+            if let menuBarIsOn {
+                Button {
+                    menuBarIsOn.wrappedValue.toggle()
+                } label: {
+                    Image(systemName: "menubar.dock.rectangle")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(
+                            menuBarIsOn.wrappedValue
+                                ? MU.calm
+                                : (hoveringTray ? MU.textSecondary : MU.textTertiary.opacity(0.6))
+                        )
+                        .frame(width: 18, height: 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(hoveringTray ? MU.well : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(menuBarIsOn.wrappedValue
+                      ? "Hide \(provider.displayName) from the menu bar"
+                      : "Show \(provider.displayName) in the menu bar")
+                .onHover { hoveringTray = $0 }
+            }
             Toggle("Show \(provider.displayName)", isOn: $isOn)
                 .labelsHidden()
                 .toggleStyle(.switch)
-                .controlSize(.small)
-        }
-        .accessibilityElement(children: .contain)
-    }
-}
-
-/// Whether one provider appears as a cluster in the menu bar.
-private struct MenuBarToggle: View {
-    let provider: Provider
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            ProviderMark(provider: provider, tint: providerColor(provider))
-                .frame(width: 13, height: 13)
-            Text(provider.displayName)
-                .font(.muBody)
-                .foregroundColor(MU.text)
-            Spacer(minLength: 6)
-            Toggle("Show \(provider.displayName) in menu bar", isOn: $isOn)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
+                .controlSize(.mini)
         }
         .accessibilityElement(children: .contain)
     }

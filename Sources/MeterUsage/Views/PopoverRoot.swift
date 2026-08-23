@@ -190,12 +190,15 @@ private struct StatusStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             SectionHeader("Service status")
-            Card {
+            Card(padding: 10) {
                 if rows.isEmpty {
                     InfoState(message: "Not checked yet")
                 } else {
-                    VStack(spacing: 8) {
-                        ForEach(rows) { row in
+                    VStack(spacing: 0) {
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                            if index > 0 {
+                                Divider().overlay(MU.hairline)
+                            }
                             HStack(spacing: 8) {
                                 // The provider's mark, tinted by service
                                 // severity so identity and health share one
@@ -213,7 +216,7 @@ private struct StatusStrip: View {
                                         .truncationMode(.tail)
                                 }
                                 Spacer(minLength: 4)
-                                VStack(alignment: .trailing, spacing: 2) {
+                                VStack(alignment: .trailing, spacing: 3) {
                                     if let url = row.provider.statusPageURL {
                                         Button {
                                             openStatusPage(url)
@@ -230,6 +233,7 @@ private struct StatusStrip: View {
                                         .foregroundColor(MU.textTertiary)
                                 }
                             }
+                            .padding(.vertical, 6)
                         }
                     }
                 }
