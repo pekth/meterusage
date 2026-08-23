@@ -155,6 +155,11 @@ public struct GrokQuotaSource: QuotaSource {
     /// the way Codex's reset credits are surfaced (see `QuotaSection` /
     /// `QuotaResetConsumer`).
     ///
+    /// Re-verified 2026-08-23 against the live endpoint (both with and
+    /// without `format=credits`): the payload carries `creditUsagePercent`,
+    /// period windows, `productUsage`, `prepaidBalance`, and `onDemandCap` —
+    /// still no reset field, still no redeem endpoint.
+    ///
     /// The billing service emits fractional-second ISO8601 timestamps with a
     /// UTC offset (e.g. `2026-08-18T04:06:19.522482+00:00`), which the default
     /// whole-second formatter rejects. Parse fractional first, then fall back.
