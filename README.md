@@ -120,6 +120,18 @@ does **not** read any Claude credentials.
 | Codex service health | Public OpenAI Statuspage JSON, filtered to Codex, CLI, and login components. | Yes |
 | Claude service health | Public Claude Statuspage JSON, filtered to Claude/API components. | Yes |
 
+### Reset actions per provider
+
+- **Codex** — earned reset credits can be consumed in-app ("Use reset"): the
+  CLI's JSON-RPC API exposes both the credit list and a redeem call.
+- **Grok** — Grok offers a "redeem usage limit reset" feature, but only on
+  the account/web side. The CLI billing endpoint this app reads carries no
+  reset field and no redeem call (last verified 2026-08-23 against the live
+  endpoint; see the note in `GrokQuotaSource.swift`). Grok's weekly pool
+  resets automatically, so no action is offered. If the CLI API ever exposes
+  reset credits, surface them the way Codex's are (`QuotaSection` /
+  `QuotaResetConsumer`).
+
 ### Why there's no "Sign in with Claude" button
 
 Anthropic publishes no supported API for Claude subscription quota — the only
