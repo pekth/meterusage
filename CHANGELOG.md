@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-08-23
+
+### Changed
+
+- **Compact settings layout** — the separate "Providers" and "Menu bar"
+  sections merged into one card: each provider row carries its popover
+  switch plus a small tray-icon toggle for menu-bar visibility. Refresh
+  and Theme became inline label-plus-picker rows, Alerts and Startup
+  folded into a single "General" card, and card padding tightened
+  throughout.
+- **Tighter service status** — per-provider rows use a compact two-line
+  layout with hairline dividers; all status detail (description,
+  severity badge, checked time) is retained.
+- **Color-coded window percentages** — every quota window row now shows
+  its percentage in the headroom colour band (green/amber/red),
+  including providers that previously printed no figure.
+
+### Removed
+
+- The large hero percentage on quota cards: it duplicated the corner
+  summary and the per-window rows, and misread cards with several model
+  groups. The corner summary and window rows remain the single source
+  for each figure.
+
 ## [0.2.0] - 2026-08-21
 
 ### Added
