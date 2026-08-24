@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] - 2026-08-23
+
+### Added
+
+- **One-click update install** — the update banner's Install button now
+  downloads the release zip, verifies its SHA-256 against the digest GitHub
+  publishes with the asset (a missing or mismatched digest aborts), swaps
+  the bundle in place, and relaunches. Failed installs stay retryable from
+  the banner, and release notes remain reachable from its caption.
+
 ## [0.2.2] - 2026-08-23
 
 ### Added
