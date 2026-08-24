@@ -96,6 +96,18 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertThrowsError(try UpdateChecker.verifyDigest(data, expected: "md5:whatever"))
     }
 
+    func testInstallScriptCopiesBeforeMovingCurrentBundle() {
+        let script = UpdateChecker.installScript(
+            current: URL(fileURLWithPath: "/Applications/Meter's.app"),
+            stagedApp: URL(fileURLWithPath: "/tmp/MeterUsage.app")
+        )
+
+        XCTAssertTrue(script.contains("cp -R '/tmp/MeterUsage.app' \"$replacement\""))
+        XCTAssertTrue(script.contains("mv '/Applications/Meter'\\''s.app' \"$backup\""))
+        XCTAssertTrue(script.contains("if ! mv \"$replacement\" '/Applications/Meter'\\''s.app'; then"))
+        XCTAssertTrue(script.contains("mv \"$backup\" '/Applications/Meter'\\''s.app' || true"))
+    }
+
     // MARK: Dismissal
 
     func testDismissedVersionStaysHiddenButAvailableKeepsValue() {

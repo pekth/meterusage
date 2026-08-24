@@ -200,13 +200,7 @@ final class UpdateChecker: ObservableObject {
             throw URLError(.cannotWriteToFile)
         }
         installState = .installing
-        let script = """
-        #!/bin/bash
-        sleep 1
-        rm -rf '\(current.path)'
-        cp -R '\(stagedApp.path)' '\(current.path)'
-        open '\(current.path)'
-        """
+        let script = Self.installScript(current: current, stagedApp: stagedApp)
         let scriptURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("MeterUsageUpdateInstall.sh")
         try script.write(to: scriptURL, atomically: true, encoding: .utf8)
@@ -218,6 +212,34 @@ final class UpdateChecker: ObservableObject {
         process.arguments = [scriptURL.path]
         try process.run()
         NSApp.terminate(nil)
+    }
+
+    /// Copies the replacement before moving the running bundle aside. This
+    /// keeps a failed copy from deleting the only usable app bundle.
+    nonisolated static func installScript(current: URL, stagedApp: URL) -> String {
+        let currentPath = shellQuote(current.path)
+        let stagedPath = shellQuote(stagedApp.path)
+        return """
+        #!/bin/bash
+        set -eu
+        sleep 1
+        replacement=\(stagedPath).replacement.$$
+        backup=\(currentPath).backup.$$
+        rm -rf "$replacement"
+        cp -R \(stagedPath) "$replacement"
+        test -d "$replacement"
+        mv \(currentPath) "$backup"
+        if ! mv "$replacement" \(currentPath); then
+            mv "$backup" \(currentPath) || true
+            exit 1
+        fi
+        rm -rf "$backup"
+        open \(currentPath)
+        """
+    }
+
+    nonisolated private static func shellQuote(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// Runs the install end to end: download, verify, stage, swap, relaunch.
