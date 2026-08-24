@@ -448,6 +448,13 @@ final class AppCoordinator: ObservableObject {
         record(kind: "plan", provider: source.provider, result: result.unavailable)
     }
 
+    /// Downloads, verifies, and installs the visible update, then relaunches.
+    /// A no-op when there is no visible release or an install is running.
+    func installAvailableUpdate() {
+        guard let checker = updateChecker, let release = checker.visibleRelease else { return }
+        checker.downloadAndInstall(release)
+    }
+
     /// Collapses any thrown error to a displayable reason.
     ///
     /// Anything that isn't already a `SourceUnavailable` becomes `.failed`,

@@ -117,11 +117,8 @@ struct PopoverRoot: View {
             if let release = coordinator.updateChecker?.visibleRelease {
                 UpdateBanner(
                     release: release,
-                    onOpen: {
-                        if let url = release.url {
-                            openStatusPage(url)
-                        }
-                    },
+                    installState: coordinator.updateChecker?.installState ?? .idle,
+                    onInstall: { coordinator.installAvailableUpdate() },
                     onDismiss: { coordinator.updateChecker?.dismiss() }
                 )
             }
@@ -280,12 +277,14 @@ private struct StatusStrip: View {
 
 // MARK: - Update banner
 
-/// One-line notice that a newer release exists. Accent-tinted but calm: it
-/// sits above the status strip, links to the release page, and disappears for
-/// good once the user dismisses that version. Demo builds never see it.
+/// One-line notice that a newer release exists. The primary action downloads,
+/// verifies, and installs the update in place and relaunches; the caption
+/// links to the release page for anyone who wants the notes first. Demo
+/// builds never see it.
 private struct UpdateBanner: View {
     let release: UpdateChecker.Release
-    let onOpen: () -> Void
+    let installState: UpdateChecker.InstallState
+    let onInstall: () -> Void
     let onDismiss: () -> Void
 
     @State private var hoveringDismiss = false
@@ -300,17 +299,13 @@ private struct UpdateBanner: View {
                     Text("Update available — v\(release.version)")
                         .font(.muBody)
                         .foregroundColor(MU.text)
-                    Text("See what's new on the releases page.")
+                    caption
                         .font(.muCaption)
                         .foregroundColor(MU.textTertiary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 6)
-                Button(action: onOpen) {
-                    Text("View")
-                }
-                .controlSize(.small)
-                .help("Open the v\(release.version) release page")
+                actionButton
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .semibold))
@@ -325,6 +320,47 @@ private struct UpdateBanner: View {
                 .help("Dismiss this update notice")
                 .onHover { hoveringDismiss = $0 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var caption: some View {
+        if installState == .failed {
+            Text("Install failed — try again or update manually.")
+        } else if let url = release.url {
+            Button {
+                openStatusPage(url)
+            } label: {
+                Text("See what's new")
+                    .underline()
+            }
+            .buttonStyle(.plain)
+            .help("Open the v\(release.version) release page")
+        } else {
+            Text("Downloads and installs in place, then relaunches.")
+        }
+    }
+
+    @ViewBuilder
+    private var actionButton: some View {
+        switch installState {
+        case .downloading:
+            ProgressView()
+                .controlSize(.small)
+                .scaleEffect(0.6)
+                .frame(width: 40)
+                .help("Downloading the update")
+        case .installing:
+            Text("Relaunching…")
+                .font(.muCaption)
+                .foregroundColor(MU.textSecondary)
+                .frame(width: 40)
+        default:
+            Button(action: onInstall) {
+                Text(installState == .failed ? "Retry" : "Install")
+            }
+            .controlSize(.small)
+            .help("Download, verify, and install v\(release.version), then relaunch")
         }
     }
 }

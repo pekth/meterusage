@@ -115,7 +115,10 @@ can verify in the source:
    User-Agent string, the same as any web visit. The response's version tag
    is compared to the running build; a failed or rate-limited check is
    silently ignored. This check can be switched off in Settings → General →
-   "Check for updates".
+   "Check for updates". When you click Install, the release zip is downloaded
+   from the same release's asset URL and its SHA-256 is verified against the
+   digest GitHub publishes with the asset; a missing or mismatched digest
+   aborts the install.
 
 The local usage commands and file reads above add no outbound request. There is
 no analytics endpoint to disable because there is none.

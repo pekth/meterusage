@@ -119,7 +119,7 @@ does **not** read any Claude credentials.
 | OpenCode Go usage | Runs the local `opencode db --format json` command with a read-only query over numeric session usage fields and timestamps. Message bodies are never queried. | No |
 | Codex service health | Public OpenAI Statuspage JSON, filtered to Codex, CLI, and login components. | Yes |
 | Claude service health | Public Claude Statuspage JSON, filtered to Claude/API components. | Yes |
-| Update check | At most once a day, fetches the public GitHub Releases `latest` endpoint and compares the tag to the running version. A newer release shows a dismissible banner in the popover, plus a system notification when notification permission is already granted. Unauthenticated; no identifier or usage data is sent. Off-switch: Settings → General → "Check for updates". | Yes |
+| Update check | At most once a day, fetches the public GitHub Releases `latest` endpoint and compares the tag to the running version. A newer release shows a dismissible banner in the popover; its Install button downloads the release zip, verifies its SHA-256 against the digest published in the release metadata, swaps the bundle, and relaunches — only on click. A system notification also fires when notification permission is already granted. Unauthenticated; no identifier or usage data is sent. Off-switch: Settings → General → "Check for updates". | Yes |
 
 ### Reset actions per provider
 

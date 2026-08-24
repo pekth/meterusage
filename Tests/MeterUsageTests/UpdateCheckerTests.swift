@@ -1,4 +1,5 @@
 import XCTest
+import CryptoKit
 @testable import MeterUsage
 
 /// Version comparison, release parsing, and dismissal behavior for the
@@ -49,12 +50,20 @@ final class UpdateCheckerTests: XCTestCase {
 
     // MARK: Payload parsing
 
-    func testParseStripsTagPrefixAndKeepsURL() throws {
-        let json = #"{"tag_name":"v0.2.2","name":"v0.2.2","html_url":"https://github.com/pekth/meterusage/releases/tag/v0.2.2"}"#
+    func testParseStripsTagPrefixAndKeepsURLAndAssets() throws {
+        let json = """
+        {"tag_name":"v0.2.2","name":"v0.2.2","html_url":"https://github.com/pekth/meterusage/releases/tag/v0.2.2",
+         "assets":[{"name":"MeterUsage-0.2.2.zip",
+                    "browser_download_url":"https://github.com/pekth/meterusage/releases/download/v0.2.2/MeterUsage-0.2.2.zip",
+                    "digest":"sha256:abc123"}]}
+        """
         let release = try UpdateChecker.parse(data: Data(json.utf8))
         XCTAssertEqual(release.version, "0.2.2")
         XCTAssertEqual(release.tagName, "v0.2.2")
         XCTAssertEqual(release.url?.absoluteString, "https://github.com/pekth/meterusage/releases/tag/v0.2.2")
+        XCTAssertEqual(release.assets.count, 1)
+        XCTAssertEqual(release.appZip?.name, "MeterUsage-0.2.2.zip")
+        XCTAssertEqual(release.appZip?.digest, "sha256:abc123")
     }
 
     func testParseWithoutURL() throws {
@@ -62,11 +71,29 @@ final class UpdateCheckerTests: XCTestCase {
         let release = try UpdateChecker.parse(data: Data(json.utf8))
         XCTAssertEqual(release.version, "0.3.0")
         XCTAssertNil(release.url)
+        XCTAssertNil(release.appZip)
     }
 
     func testParseRejectsEmptyTag() {
         let json = #"{"tag_name":""}"#
         XCTAssertThrowsError(try UpdateChecker.parse(data: Data(json.utf8)))
+    }
+
+    // MARK: Digest verification
+
+    func testDigestVerificationAcceptsMatchingSHA256() throws {
+        let data = Data("meterusage".utf8)
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        XCTAssertNoThrow(try UpdateChecker.verifyDigest(data, expected: "sha256:\(digest)"))
+        // Case-insensitive hex.
+        XCTAssertNoThrow(try UpdateChecker.verifyDigest(data, expected: "sha256:\(digest.uppercased())"))
+    }
+
+    func testDigestVerificationRejectsMismatchAndMissingDigest() {
+        let data = Data("meterusage".utf8)
+        XCTAssertThrowsError(try UpdateChecker.verifyDigest(data, expected: "sha256:deadbeef"))
+        XCTAssertThrowsError(try UpdateChecker.verifyDigest(data, expected: nil))
+        XCTAssertThrowsError(try UpdateChecker.verifyDigest(data, expected: "md5:whatever"))
     }
 
     // MARK: Dismissal
@@ -81,7 +108,8 @@ final class UpdateCheckerTests: XCTestCase {
         checker.testOnly_setAvailable(UpdateChecker.Release(
             version: "0.2.2",
             tagName: "v0.2.2",
-            url: URL(string: "https://github.com/pekth/meterusage/releases/tag/v0.2.2")
+            url: URL(string: "https://github.com/pekth/meterusage/releases/tag/v0.2.2"),
+            assets: []
         ))
         XCTAssertEqual(checker.visibleRelease?.version, "0.2.2")
 
