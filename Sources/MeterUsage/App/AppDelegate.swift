@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import WidgetKit
 
 /// Owns the status item, the popover, and the object graph.
 ///
@@ -44,6 +45,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.preferences = preferences
         self.coordinator = coordinator
+        // Clicking a provider widget deep-links here (meterusage://widget/<provider>)
+        // and opens that provider's display options.
+        WidgetOptionsWindowController.shared.coordinator = coordinator
+        installURLOpenHandler()
+        // Each sweep's report lands in the widget snapshot file, and placed
+        // widgets re-read the moment it lands rather than at their next
+        // scheduled timeline slot.
+        coordinator.didPublishSnapshot = { [weak preferences] report in
+            var report = report
+            var byProvider: [String: Bool] = [:]
+            for provider in Provider.allCases {
+                let key = "widgetAllWindows.\(provider.rawValue)"
+                if let value = UserDefaults.standard.object(forKey: key) as? Bool {
+                    byProvider[provider.rawValue] = value
+                }
+            }
+            report.widgetOptions = WidgetOptions(
+                allWindowsMedium: preferences?.widgetMediumAllWindows ?? false,
+                allWindowsByProvider: byProvider.isEmpty ? nil : byProvider)
+            SnapshotStore.write(report)
+            WidgetCenter.shared.reloadAllTimelines()
+        }
         coordinator.quotaAlertService = QuotaAlertService(preferences: preferences)
         if !Composition.isDemoMode {
             // Demo builds never check for updates: an update banner would
@@ -177,6 +200,47 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
     @objc private func refreshNow() { coordinator?.refresh() }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    // MARK: Widget deep links
+
+    /// Handles meterusage://widget/<provider> — the URL a provider widget
+    /// opens when clicked — by showing that provider's display options.
+    ///
+    /// macOS delivers these both as the legacy GURL Apple Event and through
+    /// `application(_:open:)`; both paths funnel into `handleWidgetDeepLink`.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls { handleWidgetDeepLink(url) }
+    }
+
+    private func installURLOpenHandler() {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kAEInternetSuite),
+            andEventID: AEEventID(kAEGetURL))
+    }
+
+    @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor,
+                                         withReplyEvent reply: NSAppleEventDescriptor) {
+        NSLog("meterusage: GetURL event received")
+        guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue else {
+            NSLog("meterusage: GetURL event ignored (no direct object)")
+            return
+        }
+        handleWidgetDeepLink(URL(string: urlString))
+    }
+
+    private func handleWidgetDeepLink(_ url: URL?) {
+        guard let url, url.scheme == "meterusage", url.host == "widget" else {
+            NSLog("meterusage: deep link ignored: %@", url?.absoluteString ?? "nil")
+            return
+        }
+        let provider = url.lastPathComponent
+        guard !provider.isEmpty else { return }
+        NSLog("meterusage: opening widget options for %@", provider)
+        NSApp.activate(ignoringOtherApps: true)
+        WidgetOptionsWindowController.shared.show(providerRaw: provider)
+    }
 
     // MARK: Popover
 

@@ -27,6 +27,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.menuBarOpenCodeGo) private var menuBarOpenCodeGo: Bool = true
     @AppStorage(PrefKey.menuBarOpenRouter) private var menuBarOpenRouter: Bool = true
     @AppStorage(PrefKey.theme) private var theme: String = AppTheme.system.rawValue
+    @AppStorage(PrefKey.widgetMediumAllWindows) private var widgetMediumAllWindows: Bool = false
     @AppStorage(PrefKey.launchAtLogin) private var launchAtLogin: Bool = false
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
     @AppStorage(PrefKey.showClaudeHeatmap) private var showClaudeHeatmap: Bool = true
@@ -149,6 +150,17 @@ struct SettingsView: View {
                         isOn: $showClaudeHeatmap
                     )
                     .disabled(!showHeatmap)
+                }
+            }
+
+            Group {
+                SectionHeader("Edit usage display")
+                Card(padding: 10) {
+                    SettingToggle(
+                        title: "Show all windows on medium widgets",
+                        subtitle: "Off: a provider widget's medium size shows its current and weekly window. On: every window the provider reports.",
+                        isOn: $widgetMediumAllWindows
+                    )
                 }
             }
 

@@ -120,31 +120,35 @@ final class CodexLocalSourceTests: XCTestCase {
 
     // MARK: - Aggregation modes
 
-    /// Two dates in the same week. Weekly mode shades every day of that week
-    /// with the week's combined total.
-    private func thisWeek(_ offsetFromMonday: Int) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .current
-        let today = calendar.startOfDay(for: Date())
-        // Gregorian weekdays run Sunday(1)...Saturday(7); walk back to Monday.
-        let daysBackToMonday = (calendar.component(.weekday, from: today) - 2 + 7) % 7
-        let monday = calendar.date(byAdding: .day, value: -daysBackToMonday, to: today)!
-        return calendar.date(byAdding: .day, value: offsetFromMonday, to: monday)!
-    }
-
     private func cell(_ date: Date, in model: HeatmapView.Model) -> HeatmapView.Model.Cell? {
         model.columns.flatMap { $0 }.compactMap { $0 }.first { $0.date == date }
     }
 
+    /// A fixed mid-week anchor instead of the real clock. The model nils out
+    /// cells after `today`, so a live `Date()` made these tests fail every
+    /// Monday and Sunday: the "tuesday" cell was genuinely in the future and
+    /// therefore absent from the grid.
+    private func anchorWeekday(_ offsetFromMonday: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        // Wednesday, Aug 12 2026 at noon local — mid-week and mid-day, so
+        // neither the DST edge nor the week start can move it.
+        let anchor = calendar.date(from: DateComponents(year: 2026, month: 8, day: 12, hour: 12))!
+        let daysBackToMonday = (calendar.component(.weekday, from: anchor) - 2 + 7) % 7
+        let monday = calendar.date(byAdding: .day, value: -daysBackToMonday, to: anchor)!
+        // The model's cells sit at local midnight; noon must not leak in.
+        return calendar.startOfDay(for: calendar.date(byAdding: .day, value: offsetFromMonday, to: monday)!)
+    }
+
     func testWeeklyModeShadesWholeWeekWithWeekTotal() {
-        let monday = thisWeek(0)
-        let tuesday = thisWeek(1)
+        let monday = anchorWeekday(0)
+        let tuesday = anchorWeekday(1)
         let daily = [
             DailyActivity(day: monday, tokens: TokenTotals(input: 100), estimatedCostUSD: 0, sessionCount: 1),
             DailyActivity(day: tuesday, tokens: TokenTotals(input: 200), estimatedCostUSD: 0, sessionCount: 1)
         ]
 
-        let model = HeatmapView.Model(daily: daily, today: Date(), weeks: 26, mode: .weekly)
+        let model = HeatmapView.Model(daily: daily, today: anchorWeekday(6), weeks: 26, mode: .weekly)
 
         let mondayCell = try! XCTUnwrap(cell(monday, in: model))
         let tuesdayCell = try! XCTUnwrap(cell(tuesday, in: model))
@@ -158,14 +162,14 @@ final class CodexLocalSourceTests: XCTestCase {
     }
 
     func testCumulativeModeAccumulatesToPeak() {
-        let monday = thisWeek(0)
-        let tuesday = thisWeek(1)
+        let monday = anchorWeekday(0)
+        let tuesday = anchorWeekday(1)
         let daily = [
             DailyActivity(day: monday, tokens: TokenTotals(input: 100), estimatedCostUSD: 0, sessionCount: 1),
             DailyActivity(day: tuesday, tokens: TokenTotals(input: 200), estimatedCostUSD: 0, sessionCount: 1)
         ]
 
-        let model = HeatmapView.Model(daily: daily, today: Date(), weeks: 26, mode: .cumulative)
+        let model = HeatmapView.Model(daily: daily, today: anchorWeekday(6), weeks: 26, mode: .cumulative)
 
         let mondayCell = try! XCTUnwrap(cell(monday, in: model))
         let tuesdayCell = try! XCTUnwrap(cell(tuesday, in: model))

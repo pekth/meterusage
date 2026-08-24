@@ -47,6 +47,8 @@ BIN_PATH="$(swift build -c release --package-path "${ROOT_DIR}" --show-bin-path)
     exit 1
 }
 
+WIDGET_PROJECT="${ROOT_DIR}/MeterUsageWidget.xcodeproj"
+
 echo "==> Assembling ${APP_NAME}.app"
 # Replace rather than merge: a stale executable inside a rebuilt bundle is a
 # genuinely confusing failure to debug.
@@ -65,14 +67,85 @@ done
 # Classic 8-byte package signature. Harmless, and some tooling still looks.
 printf 'APPL????' > "${APP_DIR}/Contents/PkgInfo"
 
+echo "==> Building widget extension"
+# The WidgetKit extension MUST be built by Xcode, not hand-wrapped from a
+# SwiftPM executable: Xcode's app-extension target applies linker and
+# entry-point setup that ExtensionKit requires at load time. A hand-wrapped
+# SwiftPM binary registers with pluginkit but crashes on launch with
+# "Unrecognized extension type" and is silently dropped from the widget
+# gallery (verified 2026-08-24; see Sources/MeterUsageWidget).
+APPEX_DIR="${APP_DIR}/Contents/PlugIns/MeterUsageWidget.appex"
+WIDGET_BUILD_DIR="${ROOT_DIR}/.build/xcode-widget"
+if [ -d "${WIDGET_PROJECT}" ] && command -v xcodebuild >/dev/null 2>&1; then
+    WIDGET_VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${APP_DIR}/Contents/Info.plist")"
+    # Bump past the app's build number: WidgetKit and chronod cache widget
+    # metadata per bundle-id + version, and a reused version keeps serving
+    # stale descriptors (this bit us when the widget target changed shape).
+    WIDGET_BUILD="$(($( /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "${APP_DIR}/Contents/Info.plist") + 100))"
+    xcodebuild \
+        -project "${WIDGET_PROJECT}" \
+        -target MeterUsageWidget \
+        -configuration Release \
+        MARKETING_VERSION="${WIDGET_VERSION}" \
+        CURRENT_PROJECT_VERSION="${WIDGET_BUILD}" \
+        CONFIGURATION_BUILD_DIR="${WIDGET_BUILD_DIR}" \
+        CODE_SIGNING_ALLOWED=NO \
+        build >/dev/null
+    if [ -d "${WIDGET_BUILD_DIR}/MeterUsageWidget.appex" ]; then
+        mkdir -p "${APP_DIR}/Contents/PlugIns"
+        cp -R "${WIDGET_BUILD_DIR}/MeterUsageWidget.appex" "${APPEX_DIR}"
+        # The AppIntents extractor leaves the legacy mangledTypeName empty on
+        # this toolchain (only the V2 name is filled). The runtime resolves
+        # intent types for parameter decode through the legacy name, so an
+        # empty value makes every parameter arrive nil — the widget then
+        # ignores its own Edit-sheet selection. Patch V2 over it.
+        python3 - "${APPEX_DIR}/Contents/Resources/Metadata.appintents/extract.actionsdata" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path) as f:
+    d = json.load(f)
+changed = False
+for action in d.get('actions', {}).values():
+    if not action.get('mangledTypeName') and action.get('mangledTypeNameV2'):
+        action['mangledTypeName'] = action['mangledTypeNameV2']
+        changed = True
+if changed:
+    with open(path, 'w') as f:
+        json.dump(d, f)
+    print('patched empty mangledTypeName entries')
+PY
+    else
+        echo "warning: xcodebuild produced no appex; building without the widget extension." >&2
+    fi
+else
+    echo "warning: ${WIDGET_PROJECT##*/} or xcodebuild not found; building without the widget extension." >&2
+fi
+
 # Presence was checked up top, before anything was wiped. `Info.plist` already
 # declares `CFBundleIconFile`, so this only copies.
 cp "${ICON_SRC}" "${APP_DIR}/Contents/Resources/AppIcon.icns"
 
+# App Intents metadata: the system's Edit-Widget sheet for the configurable
+# widget is driven from indexed AppIntents metadata. Embedding the extension's
+# metadata bundle in the app as well matches what full Xcode projects ship,
+# and lsregister (run after install) is what makes the index actually refresh.
+if [ -d "${APPEX_DIR}/Contents/Resources/Metadata.appintents" ]; then
+    cp -R "${APPEX_DIR}/Contents/Resources/Metadata.appintents" "${APP_DIR}/Contents/Resources/Metadata.appintents"
+fi
+
 echo "==> Ad-hoc signing"
+# Sign the widget extension FIRST, with its entitlements (sandbox + app
+# group — the system refuses to load an unsandboxed widget provider). The
+# outer app is then signed without --deep: deep signing would re-sign the
+# nested appex and strip those entitlements.
+ENTITLEMENTS_SRC="${ROOT_DIR}/Resources/MeterUsageWidget.entitlements"
+if [ -d "${APPEX_DIR}" ]; then
+    codesign --force --sign - --timestamp=none --entitlements "${ENTITLEMENTS_SRC}" "${APPEX_DIR}"
+    codesign --verify --strict "${APPEX_DIR}"
+fi
 # `-s -` is the ad-hoc identity: no certificate, no team, nothing machine
 # specific baked into the bundle.
-codesign --force --deep --sign - --timestamp=none "${APP_DIR}"
+codesign --force --sign - --timestamp=none "${APP_DIR}"
 codesign --verify --deep --strict "${APP_DIR}"
 
 VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${APP_DIR}/Contents/Info.plist")"
