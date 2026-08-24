@@ -66,6 +66,15 @@ final class UpdateChecker: ObservableObject {
         }
     }
 
+    /// Clears discovered state and abandons any in-flight check. Called when
+    /// the user switches update checks off, so a banner already on screen
+    /// disappears with the setting instead of lingering until relaunch.
+    func reset() {
+        checkTask?.cancel()
+        checkTask = nil
+        available = nil
+    }
+
     private func performCheck() async {
         guard let release = try? await Self.fetch(endpoint: endpoint, session: session) else { return }
         guard Self.isNewer(release.version, than: AppInfo.version) else { return }

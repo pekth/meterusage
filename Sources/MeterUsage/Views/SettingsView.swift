@@ -32,6 +32,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showClaudeHeatmap) private var showClaudeHeatmap: Bool = true
     @AppStorage(PrefKey.showCodexHeatmap) private var showCodexHeatmap: Bool = true
     @AppStorage(PrefKey.quotaAlerts) private var quotaAlerts: Bool = false
+    @AppStorage(PrefKey.updateCheck) private var updateCheck: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -179,6 +180,12 @@ struct SettingsView: View {
                             // rather than with what was asked for.
                             set: { launchAtLogin = LoginItem.set($0) }
                         )
+                    )
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "Check for updates",
+                        subtitle: "Once a day, compare against GitHub Releases and show a banner when a newer version is out.",
+                        isOn: $updateCheck
                     )
                 }
             }

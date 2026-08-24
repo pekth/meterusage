@@ -36,6 +36,7 @@ enum PrefKey {
     static let showClaudeHeatmap = "showClaudeHeatmap"
     static let showCodexHeatmap = "showCodexHeatmap"
     static let quotaAlerts = "quotaAlertsEnabled"
+    static let updateCheck = "updateCheckEnabled"
     static let updateLastCheck = "updateLastCheckDate"
     static let updateDismissedVersion = "updateDismissedVersion"
     static let updateAnnouncedVersion = "updateAnnouncedVersion"
@@ -86,6 +87,10 @@ final class Preferences: ObservableObject {
     /// Opt-in quota threshold notifications. Off by default so the app never
     /// prompts for notification access until the user asks for the feature.
     @Published private(set) var quotaAlertsEnabled: Bool = false
+    /// Update-availability check. On by default: it is one unauthenticated
+    /// GET per day with no identifiers, and a user who wants zero outbound
+    /// update traffic can switch it off in Settings.
+    @Published private(set) var updateCheckEnabled: Bool = true
 
     private let defaults: UserDefaults
     private var observer: NSObjectProtocol?
@@ -119,7 +124,8 @@ final class Preferences: ObservableObject {
             PrefKey.showHeatmap: true,
             PrefKey.showClaudeHeatmap: true,
             PrefKey.showCodexHeatmap: true,
-            PrefKey.quotaAlerts: false
+            PrefKey.quotaAlerts: false,
+            PrefKey.updateCheck: true
         ])
         reload()
         observer = NotificationCenter.default.addObserver(
@@ -173,6 +179,9 @@ final class Preferences: ObservableObject {
 
         let alerts = defaults.bool(forKey: PrefKey.quotaAlerts)
         if alerts != quotaAlertsEnabled { quotaAlertsEnabled = alerts }
+
+        let updateCheck = defaults.bool(forKey: PrefKey.updateCheck)
+        if updateCheck != updateCheckEnabled { updateCheckEnabled = updateCheck }
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }

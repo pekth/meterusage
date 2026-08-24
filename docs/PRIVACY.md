@@ -114,7 +114,8 @@ can verify in the source:
    identifier, and no usage data — the server sees only your IP and a
    User-Agent string, the same as any web visit. The response's version tag
    is compared to the running build; a failed or rate-limited check is
-   silently ignored.
+   silently ignored. This check can be switched off in Settings → General →
+   "Check for updates".
 
 The local usage commands and file reads above add no outbound request. There is
 no analytics endpoint to disable because there is none.

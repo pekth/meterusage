@@ -95,6 +95,12 @@ final class AppCoordinator: ObservableObject {
     // MARK: Scheduling
 
     private var refreshTask: Task<Void, Never>?
+    /// Set when an explicit refresh arrives while a sweep is already in
+    /// flight. Without this, opening the popover during a scheduled sweep
+    /// would swallow the forced refresh — and that sweep may have skipped
+    /// backed-off sources, leaving stale numbers on screen until the next
+    /// manual open.
+    private var pendingForcedRefresh = false
     private var scheduleTask: Task<Void, Never>?
     private var clockTask: Task<Void, Never>?
     private var wakeObserver: NSObjectProtocol?
@@ -160,7 +166,9 @@ final class AppCoordinator: ObservableObject {
         observePreferences()
         startClock()
         restartSchedule()
-        updateChecker?.checkIfDue()
+        if preferences.updateCheckEnabled {
+            updateChecker?.checkIfDue()
+        }
         refresh()
     }
 
@@ -197,6 +205,21 @@ final class AppCoordinator: ObservableObject {
             .removeDuplicates()
             .dropFirst()
             .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        // Switching update checks off must clear any banner already on
+        // screen, not merely stop future checks.
+        preferences.$updateCheckEnabled
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] enabled in
+                guard let self, let checker = self.updateChecker else { return }
+                if enabled {
+                    checker.checkIfDue()
+                } else {
+                    checker.reset()
+                    self.objectWillChange.send()
+                }
+            }
             .store(in: &cancellables)
     }
 
@@ -244,13 +267,24 @@ final class AppCoordinator: ObservableObject {
     /// backoff is skipped until its delay elapses rather than retried every
     /// cycle.
     func refresh(scheduled: Bool = false) {
-        guard refreshTask == nil else { return }
+        guard refreshTask == nil else {
+            // A sweep already in flight must not swallow an explicit request:
+            // that sweep may be a scheduled one which skipped backed-off
+            // sources, so honouring the request after it lands is what keeps
+            // the popover from showing stale numbers until the next open.
+            if !scheduled { pendingForcedRefresh = true }
+            return
+        }
         isRefreshing = true
         refreshTask = Task { [weak self] in
             await self?.performRefresh(forceAll: !scheduled)
             self?.isRefreshing = false
             self?.lastRefreshedAt = Date()
             self?.refreshTask = nil
+            if self?.pendingForcedRefresh == true {
+                self?.pendingForcedRefresh = false
+                self?.refresh()
+            }
         }
     }
 
