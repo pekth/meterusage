@@ -164,6 +164,28 @@ final class QuotaAlertService {
         }
     }
 
+    /// Posts a one-shot "new version" notice, but only when notification
+    /// permission is *already* granted (e.g. via quota alerts). An update
+    /// notice is never worth a permission prompt the user didn't ask for, so
+    /// unauthorized users simply get the in-popover banner instead.
+    func postUpdateNotice(version: String) {
+        guard let center else { return }
+        Task {
+            let settings = await center.notificationSettings()
+            guard settings.authorizationStatus == .authorized
+                || settings.authorizationStatus == .provisional else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "MeterUsage \(version) is available"
+            content.body = "Open the MeterUsage popover to see what's new."
+            let request = UNNotificationRequest(
+                identifier: "update-\(version)",
+                content: content,
+                trigger: nil
+            )
+            try? await center.add(request)
+        }
+    }
+
     /// Builds the delivered notification. Bodies carry percentages and labels
     /// only — never account detail, paths, or raw provider payloads.
     private static func request(for event: QuotaAlertEvent) -> UNNotificationRequest {

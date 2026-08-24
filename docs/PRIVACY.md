@@ -92,7 +92,7 @@ source of truth for what you owe.
 
 ## What leaves your machine
 
-Five outbound requests or subprocess-backed provider checks, all of which you
+Six outbound requests or subprocess-backed provider checks, all of which you
 can verify in the source:
 
 1. The `codex` CLI subprocess contacts OpenAI's backend to read your rate
@@ -108,6 +108,13 @@ can verify in the source:
    (`cli-chat-proxy.grok.com/v1/billing`) with the OIDC bearer token re-read
    from `~/.grok/auth.json`, retaining only the allowance percent, period
    type, and reset time. No prompts or model requests are sent.
+6. At most once a day, meterusage fetches
+   `https://api.github.com/repos/pekth/meterusage/releases/latest` to check
+   for a newer release. The request is unauthenticated, carries no body, no
+   identifier, and no usage data — the server sees only your IP and a
+   User-Agent string, the same as any web visit. The response's version tag
+   is compared to the running build; a failed or rate-limited check is
+   silently ignored.
 
 The local usage commands and file reads above add no outbound request. There is
 no analytics endpoint to disable because there is none.

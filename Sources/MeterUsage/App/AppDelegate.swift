@@ -45,6 +45,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.preferences = preferences
         self.coordinator = coordinator
         coordinator.quotaAlertService = QuotaAlertService(preferences: preferences)
+        if !Composition.isDemoMode {
+            // Demo builds never check for updates: an update banner would
+            // spoil a marketing screenshot the same way a real quota would.
+            let checker = UpdateChecker()
+            checker.onNewRelease = { [weak coordinator] release in
+                coordinator?.quotaAlertService?.postUpdateNotice(version: release.version)
+            }
+            coordinator.updateChecker = checker
+        }
 
         installStatusItem(coordinator: coordinator)
         installPopover(coordinator: coordinator, preferences: preferences)

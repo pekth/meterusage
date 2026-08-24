@@ -114,6 +114,18 @@ struct PopoverRoot: View {
     private var dashboard: some View {
         VStack(alignment: .leading, spacing: 14) {
 
+            if let release = coordinator.updateChecker?.visibleRelease {
+                UpdateBanner(
+                    release: release,
+                    onOpen: {
+                        if let url = release.url {
+                            openStatusPage(url)
+                        }
+                    },
+                    onDismiss: { coordinator.updateChecker?.dismiss() }
+                )
+            }
+
             StatusStrip(
                 statuses: coordinator.statuses,
                 providers: coordinator.statusProviders,
@@ -262,6 +274,57 @@ private struct StatusStrip: View {
                 description: status.description,
                 checkedAt: status.checkedAt
             )
+        }
+    }
+}
+
+// MARK: - Update banner
+
+/// One-line notice that a newer release exists. Accent-tinted but calm: it
+/// sits above the status strip, links to the release page, and disappears for
+/// good once the user dismisses that version. Demo builds never see it.
+private struct UpdateBanner: View {
+    let release: UpdateChecker.Release
+    let onOpen: () -> Void
+    let onDismiss: () -> Void
+
+    @State private var hoveringDismiss = false
+
+    var body: some View {
+        Card(padding: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(MU.accent)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Update available — v\(release.version)")
+                        .font(.muBody)
+                        .foregroundColor(MU.text)
+                    Text("See what's new on the releases page.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                Button(action: onOpen) {
+                    Text("View")
+                }
+                .controlSize(.small)
+                .help("Open the v\(release.version) release page")
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(hoveringDismiss ? MU.text : MU.textTertiary)
+                        .frame(width: 18, height: 18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(hoveringDismiss ? MU.well : Color.clear)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("Dismiss this update notice")
+                .onHover { hoveringDismiss = $0 }
+            }
         }
     }
 }

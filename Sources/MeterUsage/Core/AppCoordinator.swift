@@ -79,6 +79,18 @@ final class AppCoordinator: ObservableObject {
     /// Optional quota-alert delivery. `nil` in tests and any build that does
     /// not want notifications; the coordinator never depends on it.
     var quotaAlertService: QuotaAlertService?
+    /// Optional update-availability checker. `nil` in demo builds (an update
+    /// banner would spoil marketing screenshots) and tests. Its published
+    /// state is forwarded to `objectWillChange` so the popover re-renders
+    /// without observing the checker directly.
+    var updateChecker: UpdateChecker? {
+        didSet {
+            guard let updateChecker, updateChecker !== oldValue else { return }
+            updateChecker.objectWillChange
+                .sink { [weak self] _ in self?.objectWillChange.send() }
+                .store(in: &cancellables)
+        }
+    }
 
     // MARK: Scheduling
 
@@ -148,6 +160,7 @@ final class AppCoordinator: ObservableObject {
         observePreferences()
         startClock()
         restartSchedule()
+        updateChecker?.checkIfDue()
         refresh()
     }
 

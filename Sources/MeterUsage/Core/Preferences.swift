@@ -36,6 +36,9 @@ enum PrefKey {
     static let showClaudeHeatmap = "showClaudeHeatmap"
     static let showCodexHeatmap = "showCodexHeatmap"
     static let quotaAlerts = "quotaAlertsEnabled"
+    static let updateLastCheck = "updateLastCheckDate"
+    static let updateDismissedVersion = "updateDismissedVersion"
+    static let updateAnnouncedVersion = "updateAnnouncedVersion"
 }
 
 /// Popover appearance. The menu-bar label always follows the system menu bar.
