@@ -8,25 +8,32 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **One-shot CLI** — `meterusage json [--force]` prints every enabled
-  provider's limits as stable snake_case JSON on stdout and exits, without
-  launching the menu-bar app. Agents and scripts can read quota without
-  scraping UI; `--force` is accepted for OpenUsage-style compatibility (the
-  CLI never caches). Output carries display names, percentages, reset
-  timestamps, plan labels, and credit balances only — the same privacy
-  contract as the popover.
+- **Scriptable CLI** — `meterusage json` prints every enabled provider's
+  limits as stable snake_case JSON on stdout and exits, without launching
+  the menu-bar app. Agents and scripts can read quota without scraping UI.
+  `--force` is accepted and ignored — output is always fresh. Output
+  carries display names, percentages, reset timestamps, plan labels, and
+  credit balances only — the same privacy contract as the popover.
 - **Notification Center widgets** — an automatic widget (whichever provider
   is closest to its limit) plus one widget per provider: Codex, Claude,
   Grok, Antigravity, OpenCode Go, OpenRouter. Small shows the worst window
   as a headline figure; medium lists windows with bars and reset
   countdowns — pinned providers default to their current and weekly
-  windows, with a per-provider "Show all windows" toggle (Settings →
-  Edit usage display, or click the widget). Widgets render the snapshot
-  the app rewrites after every refresh into a shared app-group container;
-  they read that one file and nothing else — no provider CLIs, no network.
-  The extension is built by `xcodebuild` from `MeterUsageWidget.xcodeproj`
-  (a SwiftPM-wrapped binary cannot load as a widget); builds without full
-  Xcode skip widgets with a warning.
+  windows. Click a provider widget to switch it to all windows instead;
+  a configurable widget with a right-click → Edit provider picker is also
+  included. Widgets render the snapshot the app rewrites after every
+  refresh into a shared app-group container; they read that one file and
+  nothing else — no provider CLIs, no network. The extension is built by
+  `xcodebuild` from `MeterUsageWidget.xcodeproj` (a SwiftPM-wrapped binary
+  cannot load as a widget); builds without full Xcode skip widgets with a
+  warning.
+
+### Fixed
+
+- Heatmap aggregation tests no longer fail every Monday and Sunday: they
+  anchored to the live clock, and the grid omits future cells, so the
+  tested "tomorrow" did not exist at the start of a week. They now use a
+  fixed mid-week anchor.
 
 ## [0.2.4] - 2026-08-24
 

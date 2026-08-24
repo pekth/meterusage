@@ -1,11 +1,12 @@
 import Foundation
 
-// MARK: - One-shot CLI mode
+// MARK: - Scriptable CLI mode
 //
-// `meterusage json [--force]` runs the binary headlessly: it polls the same
+// `meterusage json` runs the binary headlessly: it polls the same
 // quota sources the menu-bar app uses, prints a stable JSON report on stdout,
 // and exits. The app does not launch, no status item appears, and nothing is
-// cached between invocations — every run reads live state.
+// cached between invocations — every run reads live state. `--force` is
+// accepted and ignored for compatibility with other usage CLIs.
 //
 // Purpose: agents, scripts, and editor integrations can read quota without
 // scraping UI or reimplementing any source. Output carries only display
@@ -19,8 +20,9 @@ enum CliMode {
         arguments.dropFirst().contains { $0 == "json" || $0 == "--json" }
     }
 
-    /// Accepted for OpenUsage-style compatibility; this CLI never caches, so
-    /// every invocation already bypasses any freshness gate. Kept so scripts
+    /// Accepted so scripts written against other usage CLIs' conventions
+    /// work unchanged; this CLI never caches, so every invocation already
+    /// bypasses any freshness gate. Kept so scripts
     /// written against that convention work unchanged.
     static func wantsForce(_ arguments: [String]) -> Bool {
         arguments.dropFirst().contains("--force")

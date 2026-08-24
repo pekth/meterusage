@@ -93,7 +93,7 @@ connect and no key-entry screen. OpenRouter uses an existing
 - **Colour-coded usage and status** — quota headroom uses calm/warning/alert
   bands, while provider identity and written service-severity badges remain
   understandable without relying on colour alone.
-- **One-shot CLI** — `meterusage json` prints every enabled provider's
+- **Scriptable CLI** — `meterusage json` prints every enabled provider's
   limits as stable JSON and exits. Agents, scripts, and editor integrations
   read quota without touching the UI:
 
