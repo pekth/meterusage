@@ -40,19 +40,17 @@ struct Snapshot: Decodable {
     }
 
     struct Options: Decodable {
-        /// Medium widgets pinned to one provider list every window instead
-        /// of just the current and weekly ones. Global default.
-        var allWindowsMedium: Bool?
-        /// Per-provider override; wins over the global default.
+        /// Per-provider display override: medium widgets pinned to that
+        /// provider list every window instead of just the current and
+        /// weekly ones.
         var allWindowsByProvider: [String: Bool]?
 
         enum CodingKeys: String, CodingKey {
-            case allWindowsMedium = "all_windows_medium"
             case allWindowsByProvider = "all_windows_by_provider"
         }
 
         func allWindows(forProvider provider: String) -> Bool {
-            allWindowsByProvider?[provider] ?? allWindowsMedium ?? false
+            allWindowsByProvider?[provider] ?? false
         }
     }
 

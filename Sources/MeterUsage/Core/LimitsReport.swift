@@ -43,19 +43,15 @@ struct LimitsReport: Equatable, Sendable, Codable {
     }
 }
 
-/// User-chosen widget display behaviour, toggled in Settings →
-/// "Edit usage display" (global default) or in the per-provider panel that
-/// opens when a widget is clicked. Carried to the extension through the
-/// snapshot.
+/// User-chosen widget display behaviour, set per provider from the panel
+/// that opens when a widget is clicked. Carried to the extension through
+/// the snapshot.
 struct WidgetOptions: Equatable, Sendable, Codable {
-    /// Medium widgets pinned to one provider list every window instead of
-    /// just the current and weekly ones. Global default.
-    var allWindowsMedium: Bool
-    /// Per-provider override; wins over the global default when present.
+    /// Per-provider display override: medium widgets pinned to that provider
+    /// list every window instead of just the current and weekly ones.
     var allWindowsByProvider: [String: Bool]?
 
     enum CodingKeys: String, CodingKey {
-        case allWindowsMedium = "all_windows_medium"
         case allWindowsByProvider = "all_windows_by_provider"
     }
 }

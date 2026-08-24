@@ -52,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Each sweep's report lands in the widget snapshot file, and placed
         // widgets re-read the moment it lands rather than at their next
         // scheduled timeline slot.
-        coordinator.didPublishSnapshot = { [weak preferences] report in
+        coordinator.didPublishSnapshot = { report in
             var report = report
             var byProvider: [String: Bool] = [:]
             for provider in Provider.allCases {
@@ -62,7 +62,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             report.widgetOptions = WidgetOptions(
-                allWindowsMedium: preferences?.widgetMediumAllWindows ?? false,
                 allWindowsByProvider: byProvider.isEmpty ? nil : byProvider)
             SnapshotStore.write(report)
             WidgetCenter.shared.reloadAllTimelines()
