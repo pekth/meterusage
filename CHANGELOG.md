@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] - 2026-08-23
+
+### Added
+
+- **Update notifications** — at most once a day, the app checks the public
+  GitHub Releases feed and, when a newer version exists, shows a dismissible
+  banner in the popover with a link to the release page. If notification
+  permission is already granted (e.g. via quota alerts), a one-shot system
+  notice fires per version; it never requests permission on its own.
+  The check is unauthenticated, sends no identifier or usage data, and can
+  be switched off in Settings → General → "Check for updates".
+
+### Fixed
+
+- An explicit refresh requested while a scheduled sweep was in flight is no
+  longer swallowed — previously the popover could keep showing stale numbers
+  (for example right after a Codex reset) until the next manual open.
+
 ## [0.2.1] - 2026-08-23
 
 ### Changed
