@@ -1,0 +1,167 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4D000001 /* WidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D000002; };
+		4D000003 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D000004; };
+		4D000005 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D000006; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		4D000002 /* WidgetBundle.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = WidgetBundle.swift; sourceTree = "<group>"; };
+		4D000004 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		4D000006 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		4D000007 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Info.plist; sourceTree = "<group>"; };
+		4D000008 /* MeterUsageWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MeterUsageWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D000010 /* MeterUsageWidget */ = {isa = PBXGroup; children = (4D000002, 4D000007); path = Sources/MeterUsageWidget; sourceTree = SOURCE_ROOT; };
+		4D000011 /* Products */ = {isa = PBXGroup; children = (4D000008); name = Products; sourceTree = "<group>"; };
+		4D000012 /* Frameworks */ = {isa = PBXGroup; children = (4D000004, 4D000006); name = Frameworks; sourceTree = "<group>"; };
+		4D000013 /* Project */ = {isa = PBXGroup; children = (4D000010, 4D000012, 4D000011); sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4D000022 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D000003 /* WidgetKit.framework in Frameworks */,
+				4D000005 /* SwiftUI.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+/* (groups defined above in PBXFileReference) */
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4D000040 /* MeterUsageWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4D000050 /* Build configuration list for PBXNativeTarget "MeterUsageWidget" */;
+			buildPhases = (
+				4D000041 /* Sources */,
+				4D000022 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MeterUsageWidget;
+			productName = MeterUsageWidget;
+			productReference = 4D000008 /* MeterUsageWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4D000060 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					4D000040 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 4D000070 /* Build configuration list for PBXProject "MeterUsageWidget" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 4D000013 /* Project */;
+			productRefGroup = 4D000011 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4D000040 /* MeterUsageWidget */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4D000041 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D000001 /* WidgetBundle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		4D000071 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = NO;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		4D000051 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Resources/MeterUsageWidget.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Sources/MeterUsageWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = dev.meterusage.app.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4D000050 /* Build configuration list for PBXNativeTarget "MeterUsageWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D000051 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4D000070 /* Build configuration list for PBXProject "MeterUsageWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D000071 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4D000060 /* Project object */;
+}

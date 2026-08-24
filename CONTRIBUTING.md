@@ -84,8 +84,15 @@ Use demo mode to inspect the real UI without provider credentials:
 METERUSAGE_DEMO=1 swift run meterusage
 ```
 
-Demo data is synthetic. Use it for screenshots and manual checks. See
-[`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
+Demo data is synthetic. Use it for screenshots and manual checks.
+
+For a UI-affecting change, exercise the affected path and record what was
+inspected. Automated tests, release builds, and code-sign verification do not
+prove runtime UI behavior. Report untested paths explicitly. For release
+acceptance, check the popover, Settings, relaunch persistence, and offline or
+retry behavior only when the change can affect them.
+
+See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
 
 ## Where to make changes
 

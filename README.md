@@ -93,6 +93,20 @@ connect and no key-entry screen. OpenRouter uses an existing
 - **Colour-coded usage and status** — quota headroom uses calm/warning/alert
   bands, while provider identity and written service-severity badges remain
   understandable without relying on colour alone.
+- **One-shot CLI** — `meterusage json` prints every enabled provider's
+  limits as stable JSON and exits. Agents, scripts, and editor integrations
+  read quota without touching the UI:
+
+  ```sh
+  meterusage | jq '.providers[] | select(.provider == "codex")'
+  ```
+
+- **Notification Center widgets** — one widget per provider plus an
+  automatic "worst provider" widget. Small = headline figure; medium =
+  per-window bars with reset countdowns. Click a provider widget to
+  configure it (current+weekly vs all windows). Widgets read only the
+  snapshot file the app rewrites after every refresh — no provider CLIs,
+  no network. Requires a full Xcode install at build time (see below).
 - **Per-provider display settings** — hide any provider you do not use; Claude,
   Antigravity, and Grok start hidden, while Codex is the primary entry.
   Choices are saved locally and survive relaunches and app reinstalls.
@@ -181,6 +195,13 @@ swift test             # unit tests
 ./Scripts/make-app.sh  # assembles dist/MeterUsage.app, ad-hoc signed
 ./Scripts/make-icon.sh # regenerates the app icon (only when the design changes)
 ```
+
+The Notification Center widget is built by `xcodebuild` from
+`MeterUsageWidget.xcodeproj` — a full Xcode install is needed for it, not just
+the command line tools. Without one, `make-app.sh` still builds the app and
+skips the widget with a warning: a widget extension hand-wrapped from a
+SwiftPM binary registers but crashes at load and never appears in the gallery,
+so there is no fallback build for it.
 
 The icon is generated rather than hand-drawn: `Scripts/make-icon.swift` renders
 it from the same geometry the menu-bar glyph uses, so the two stay the same

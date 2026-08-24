@@ -30,6 +30,19 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<!-- Clicking a provider widget opens its display options in the app via
+	     this scheme (e.g. meterusage://widget/codex). -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>dev.meterusage.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>meterusage</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT licensed. No telemetry.</string>
 	<!-- Only outbound request the app makes is the public Statuspage JSON feed. -->

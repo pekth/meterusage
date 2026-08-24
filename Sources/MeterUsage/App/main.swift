@@ -13,6 +13,21 @@ import AppKit
 // This file must stay `main.swift`: top-level code is only permitted there, and
 // it is what gives SwiftPM an executable entry point.
 
+// One-shot headless mode: `meterusage json [--force]` prints the limits
+// report as JSON and exits before AppKit is ever touched, so it can run from
+// agents, cron, or scripts without launching the menu-bar app.
+if CliMode.wantsJSON(CommandLine.arguments) {
+    let report = await CliMode.run()
+    if let data = try? report.jsonData() {
+        FileHandle.standardOutput.write(data)
+        FileHandle.standardOutput.write(Data("\n".utf8))
+    } else {
+        FileHandle.standardError.write(Data("meterusage: could not encode report\n".utf8))
+        exit(1)
+    }
+    exit(0)
+}
+
 let app = NSApplication.shared
 
 // `.accessory`: no Dock tile, no app menu, but still able to show windows and
