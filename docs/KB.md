@@ -2,7 +2,7 @@
 
 Last verified: 2026-08-24
 
-Source revision: `9e8d9580057b75e41f37c1c96dd784e668cd446a`
+Source revision: `9003b78beecb051c7d31334602ecf59982c1e7da`
 
 ## Evidence boundary
 
@@ -10,7 +10,7 @@ This index records the meterusage source and documentation at the source revisio
 
 ## Current source and document state
 
-meterusage is a macOS menu-bar app that reads local and documented aggregate provider usage signals. The README documents source build and demo mode. Privacy boundaries are explicit: no direct Codex/Claude credential read; OpenRouter uses an existing key; Grok re-reads its CLI OIDC token; no prompts or code are sent; cost figures are estimates. External vault notes contain dated release and installation records. This index does not verify them and they must not be used as current release, installation, or runtime evidence.
+meterusage is a macOS menu-bar app that reads local and documented aggregate provider usage signals. The README documents source build and demo mode. Privacy boundaries are explicit: no direct Codex/Claude credential read; OpenRouter uses an existing key; Grok re-reads its CLI OIDC token; no prompts or code are sent; cost figures are estimates. This index does not establish release, installation, or runtime evidence.
 
 ## Best references
 
@@ -20,8 +20,6 @@ meterusage is a macOS menu-bar app that reads local and documented aggregate pro
 - [Companion file guide](COMPANION.md)
 - [Contributor guide](../CONTRIBUTING.md)
 - [Changelog](../CHANGELOG.md)
-
-Vault status: tilorah-vault/01-Products/meterusage/status.md
 
 ## Open verification gaps
 
