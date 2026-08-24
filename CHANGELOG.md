@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] - 2026-08-24
+
+### Fixed
+
+- **Fail-safe update install** — the installer now copies the new bundle to
+  a verified replacement before moving the old app aside, and rolls back
+  from a backup if the swap fails. Previously a failed copy during the
+  swap could leave the app deleted with no recovery.
+
 ## [0.2.3] - 2026-08-23
 
 ### Added
