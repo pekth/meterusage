@@ -214,7 +214,10 @@ final class AppCoordinator: ObservableObject {
             .sink { [weak self] enabled in
                 guard let self, let checker = self.updateChecker else { return }
                 if enabled {
-                    checker.checkIfDue()
+                    // Re-enabling is an explicit request: bypass the daily
+                    // gate so the banner reflects reality right away instead
+                    // of up to 24 hours later.
+                    checker.checkIfDue(interval: 0)
                 } else {
                     checker.reset()
                     self.objectWillChange.send()
