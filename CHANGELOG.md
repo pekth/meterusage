@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.6] - 2026-08-25
+
+### Fixed
+
+- **Codex usage display** — the menu-bar tray, the Notification Center
+  widget, and `meterusage json` now show Codex's regular weekly allowance
+  instead of a model-specific (Spark) window. The report that feeds the
+  widget and CLI carries each provider's regular allowance windows only;
+  the popover card still shows the full breakdown, and the duplicate
+  "General usage limits" window is gone.
+- **Widget click popup** — clicking a provider widget no longer opens a
+  per-widget display-options window. The options window, the
+  `meterusage://widget/...` deep link, and the snapshot `widget_options`
+  plumbing are removed.
+
 ## [0.2.5] - 2026-08-24
 
 ### Added
