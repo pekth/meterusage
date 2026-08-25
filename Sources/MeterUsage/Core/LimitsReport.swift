@@ -21,38 +21,19 @@ struct LimitsReport: Equatable, Sendable, Codable {
     var schema: Int
     var generatedAt: Date
     var providers: [ProviderReport]
-    /// Display options the widget honours. Optional so older readers ignore
-    /// it and older writers leave it nil (widget falls back to defaults).
-    var widgetOptions: WidgetOptions?
 
     init(schema: Int = LimitsReport.schemaVersion,
          generatedAt: Date,
-         providers: [ProviderReport],
-         widgetOptions: WidgetOptions? = nil) {
+         providers: [ProviderReport]) {
         self.schema = schema
         self.generatedAt = generatedAt
         self.providers = providers
-        self.widgetOptions = widgetOptions
     }
 
     enum CodingKeys: String, CodingKey {
         case schema
         case generatedAt = "generated_at"
         case providers
-        case widgetOptions = "widget_options"
-    }
-}
-
-/// User-chosen widget display behaviour, set per provider from the panel
-/// that opens when a widget is clicked. Carried to the extension through
-/// the snapshot.
-struct WidgetOptions: Equatable, Sendable, Codable {
-    /// Per-provider display override: medium widgets pinned to that provider
-    /// list every window instead of just the current and weekly ones.
-    var allWindowsByProvider: [String: Bool]?
-
-    enum CodingKeys: String, CodingKey {
-        case allWindowsByProvider = "all_windows_by_provider"
     }
 }
 
@@ -140,16 +121,17 @@ enum LimitsReporter {
         let providers = order.map { provider -> ProviderReport in
             switch quotas[provider] {
             case .value(let quota):
-                // Groups carry real windows (Codex nests its General and
-                // model-specific limits there), so flatten them in with any
-                // top-level windows — the popover renders groups, but a
-                // top-level-only report would silently drop most of them.
-                let allWindows = quota.windows + quota.groups.flatMap { $0.windows }
+                // The report is the glance-level usage view (tray, widget,
+                // CLI), so it carries the provider's regular allowance
+                // windows. Codex's model-specific windows live in `groups`;
+                // they stay out of the report so the widget shows the same
+                // regular usage the tray does, never a model-specific limit.
+                let windows = quota.windows
                 return ProviderReport(
                     provider: provider.rawValue,
                     status: "ok",
                     plan: quota.planType,
-                    windows: allWindows.map { WindowReport.from($0, now: now) },
+                    windows: windows.map { WindowReport.from($0, now: now) },
                     credits: quota.credits.map {
                         CreditsReport(
                             balance: $0.balance,

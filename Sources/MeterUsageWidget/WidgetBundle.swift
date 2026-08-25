@@ -26,9 +26,6 @@ import AppIntents
 struct Snapshot: Decodable {
     var generatedAt: Date
     var providers: [ProviderRow]
-    /// Display options chosen in the app's Settings. Nil in snapshots from
-    /// older app versions; every field defaults.
-    var options: Options?
 
     // The app encodes snake_case keys (LimitsReport's CodingKeys); the
     // mirror must match or every read decodes as garbage — which is exactly
@@ -36,22 +33,6 @@ struct Snapshot: Decodable {
     enum CodingKeys: String, CodingKey {
         case generatedAt = "generated_at"
         case providers
-        case options
-    }
-
-    struct Options: Decodable {
-        /// Per-provider display override: medium widgets pinned to that
-        /// provider list every window instead of just the current and
-        /// weekly ones.
-        var allWindowsByProvider: [String: Bool]?
-
-        enum CodingKeys: String, CodingKey {
-            case allWindowsByProvider = "all_windows_by_provider"
-        }
-
-        func allWindows(forProvider provider: String) -> Bool {
-            allWindowsByProvider?[provider] ?? false
-        }
     }
 
     struct ProviderRow: Decodable {
@@ -156,8 +137,7 @@ struct DisplayRow {
             guard let row = ok.first(where: { $0.provider == selectionRaw }) else { return [] }
             let windows = (row.windows ?? []).sorted { $0.usedPercent > $1.usedPercent }
             // Default medium view: the two windows that matter at a glance —
-            // the current (short) window and the weekly one. The Settings
-            // toggle "Show all windows" opts into the full list instead.
+            // the current (short) window and the weekly one.
             var selected = windows
             if currentAndWeeklyOnly {
                 let current = windows.first {
@@ -264,16 +244,11 @@ struct UsageWidgetView: View {
             }
         }
         .padding(12)
-        // Clicking a pinned widget opens its display options in the app.
-        .widgetURL(entry.selectionRaw.flatMap { URL(string: "meterusage://widget/\($0)") })
     }
 
     @ViewBuilder
     private func content(_ snapshot: Snapshot) -> some View {
-        let allWindows = entry.selectionRaw.map {
-            snapshot.options?.allWindows(forProvider: $0) ?? false
-        } ?? false
-        let rows = entry.displayRows(currentAndWeeklyOnly: !allWindows)
+        let rows = entry.displayRows(currentAndWeeklyOnly: entry.selectionRaw != nil)
         if family == .systemSmall {
             // Small: a single headline figure — the first row, which is the
             // worst window overall (automatic) or the pinned provider's.

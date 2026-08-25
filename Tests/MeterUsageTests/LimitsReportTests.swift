@@ -30,6 +30,39 @@ final class LimitsReportTests: XCTestCase {
         XCTAssertNil(report.providers[2].reason, "an idle source has no failure to report")
     }
 
+    func testBuild_carriesRegularWindowsOnly_notGroupWindows() {
+        // Codex nests its general allowance in a "General usage limits"
+        // group that mirrors the top-level `windows`, plus model-specific
+        // groups (e.g. GPT-5.3-Codex-Spark). The report is the glance view
+        // for the tray, widget, and CLI, so it must carry the regular
+        // allowance windows and never leak model-specific ones into the
+        // widget headline.
+        let general = QuotaWindow(label: "Weekly", usedPercent: 15, resetsAt: nil)
+        let quota = ProviderQuota(
+            provider: .codex,
+            windows: [general],
+            groups: [
+                QuotaGroup(id: "codex", title: "General usage limits", windows: [general]),
+                QuotaGroup(
+                    id: "codex_bengalfox",
+                    title: "GPT-5.3-Codex-Spark",
+                    windows: [
+                        QuotaWindow(label: "5-hour", usedPercent: 0, resetsAt: nil),
+                        QuotaWindow(label: "Weekly", usedPercent: 37, resetsAt: nil),
+                    ]
+                ),
+            ],
+            capturedAt: Date())
+
+        let report = LimitsReporter.build(
+            quotas: [.codex: .value(quota)],
+            order: [.codex])
+
+        let labels = report.providers.first?.windows.map { "\($0.label):\(Int($0.usedPercent))" } ?? []
+        XCTAssertEqual(labels, ["Weekly:15"],
+                       "only the regular allowance window belongs in the report")
+    }
+
     func testPrivacyContractNoCredentialsInShape() {
         // The report type is the whole machine surface; this pins its fields
         // so a future credential-bearing field cannot slip in silently.

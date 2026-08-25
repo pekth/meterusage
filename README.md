@@ -103,8 +103,8 @@ connect and no key-entry screen. OpenRouter uses an existing
 
 - **Notification Center widgets** — one widget per provider plus an
   automatic "worst provider" widget. Small = headline figure; medium =
-  per-window bars with reset countdowns. Click a provider widget to
-  configure it (current+weekly vs all windows). Widgets read only the
+  per-window bars with reset countdowns (current + weekly for a pinned
+  provider). Widgets read only the
   snapshot file the app rewrites after every refresh — no provider CLIs,
   no network. Requires a full Xcode install at build time (see below).
 - **Per-provider display settings** — hide any provider you do not use; Claude,
