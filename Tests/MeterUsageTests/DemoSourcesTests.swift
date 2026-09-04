@@ -158,7 +158,12 @@ final class DemoSourcesTests: XCTestCase {
 
         XCTAssertEqual(Set(usage.map(\.provider)), [.antigravity, .grok, .openCodeGo])
         XCTAssertTrue(usage.allSatisfy { $0.sessionCount > 0 && $0.messageCount > 0 })
-        XCTAssertNil(try XCTUnwrap(usage.first { $0.provider == .antigravity }).tokens)
+        // Antigravity mirrors its conversation-store reader: token totals
+        // with no cost estimate. Grok stays count-only.
+        let antigravity = try XCTUnwrap(usage.first { $0.provider == .antigravity })
+        XCTAssertNotNil(antigravity.tokens)
+        XCTAssertNil(antigravity.estimatedCostUSD)
+        XCTAssertNil(try XCTUnwrap(usage.first { $0.provider == .grok }).tokens)
         XCTAssertNil(try XCTUnwrap(usage.first { $0.provider == .grok }).estimatedCostUSD)
         let openCode = try XCTUnwrap(usage.first { $0.provider == .openCodeGo })
         XCTAssertNotNil(openCode.tokens)

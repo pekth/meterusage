@@ -327,13 +327,21 @@ public struct UsageWindow: Equatable, Sendable {
     public func shareOf30Days(referenceCost: Double) -> Double {
         referenceCost > 0 ? estimatedCostUSD / referenceCost : 0
     }
+
+    /// Share (0...1) of the reference 30-day tokens this window represents.
+    ///
+    /// For providers without monetary spend, rolling window bars represent their
+    /// fraction of the last-30-day token volume.
+    public func shareOf30Days(referenceTokens: Int) -> Double {
+        referenceTokens > 0 ? Double(tokens.total) / Double(referenceTokens) : 0
+    }
 }
 
 /// Provider usage whose source does not necessarily expose token economics.
 ///
-/// Antigravity and Grok persist sessions/messages but not billable token counts;
-/// OpenCode Go does expose token and cost totals. Keeping those fields optional
-/// prevents a zero from being mistaken for measured zero usage.
+/// Grok persists sessions/messages but not billable token counts, while
+/// Antigravity and OpenCode Go do expose token totals. Keeping those fields
+/// optional prevents a zero from being mistaken for measured zero usage.
 public struct ProviderUsage: Equatable, Sendable {
     public let provider: Provider
     public let sessionCount: Int

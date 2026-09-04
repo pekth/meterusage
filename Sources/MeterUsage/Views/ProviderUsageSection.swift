@@ -169,12 +169,11 @@ private struct ProviderUsageRow: View {
     }
 }
 
-/// Rolling usage windows (OpenCode Go) as bars.
+/// Rolling usage windows as bars.
 ///
-/// OpenCode exposes no quota limit, so a percentage cannot mean "of your
-/// allowance". Instead each window's bar is its share of the *last 30 days*
-/// cost — the reference window — so "last 24h at 45%" reads as "45% of this
-/// month's spend happened in the last day". The 30d row is always 100%.
+/// For providers without quota limits (like OpenCode Go), percentages reflect
+/// the share of the last-30-day reference window. If monetary spend is available,
+/// cost is used; otherwise token totals are used.
 private struct UsageWindowBars: View {
     let windows: [UsageWindow]
     let provider: Provider
@@ -182,6 +181,14 @@ private struct UsageWindowBars: View {
 
     private var referenceCost: Double {
         windows.first { $0.label == "last 30d" }?.estimatedCostUSD ?? 0
+    }
+
+    private var referenceTokens: Int {
+        windows.first { $0.label == "last 30d" }?.tokens.total ?? 0
+    }
+
+    private var usesCost: Bool {
+        referenceCost > 0
     }
 
     private var tint: Color { providerColor(provider) }
@@ -204,23 +211,45 @@ private struct UsageWindowBars: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("\(window.label), \(Fmt.percent(percent(of: window))) of last 30 days")
             }
-            Text("\(Fmt.count(count(of: "last 30d"))) sessions · \(Fmt.count(messages(of: "last 30d"))) messages · \(Fmt.compactCount(tokens(of: "last 30d").total)) tokens · ~\(Fmt.usd(referenceCost)) · updated \(Fmt.timeSince(now))")
+            Text(summaryLine)
                 .font(.muCaption)
                 .foregroundColor(MU.textTertiary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-            Text("Share of last 30d usage · est. \(Pricing.snapshotLabel) rates")
+            Text(captionLine)
                 .font(.muCaption)
                 .foregroundColor(MU.textTertiary)
         }
     }
 
+    private var summaryLine: String {
+        var parts = [
+            "\(Fmt.count(count(of: "last 30d"))) sessions",
+            "\(Fmt.count(messages(of: "last 30d"))) messages",
+            "\(Fmt.compactCount(tokens(of: "last 30d").total)) tokens"
+        ]
+        if usesCost {
+            parts.append("~\(Fmt.usd(referenceCost))")
+        }
+        parts.append("updated \(Fmt.timeSince(now))")
+        return parts.joined(separator: " · ")
+    }
+
+    private var captionLine: String {
+        usesCost
+            ? "Share of last 30d usage · est. \(Pricing.snapshotLabel) rates"
+            : "Share of last 30d tokens"
+    }
+
     private func percent(of window: UsageWindow) -> Double {
-        window.shareOf30Days(referenceCost: referenceCost) * 100
+        fraction(of: window) * 100
     }
 
     private func fraction(of window: UsageWindow) -> Double {
-        window.shareOf30Days(referenceCost: referenceCost)
+        if usesCost {
+            return window.shareOf30Days(referenceCost: referenceCost)
+        }
+        return window.shareOf30Days(referenceTokens: referenceTokens)
     }
 
     private func count(of label: String) -> Int {

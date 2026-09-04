@@ -94,6 +94,10 @@ struct QuotaSection: View {
 
     // MARK: Header
 
+    private var showsRemaining: Bool {
+        provider == .codex || provider == .antigravity
+    }
+
     private var header: some View {
         HStack(alignment: .center, spacing: 6) {
             // The provider's real mark instead of a plain colour dot, so one
@@ -111,7 +115,7 @@ struct QuotaSection: View {
             Spacer(minLength: 0)
 
             if let quota = state.value, let peak = quota.windows.map(\.usedPercent).max() {
-                Text(provider == .codex ? Fmt.remainingPercent(peak) : Fmt.percent(peak))
+                Text(showsRemaining ? Fmt.remainingPercent(peak) : Fmt.percent(peak))
                     .font(.muNumber)
                     .foregroundColor(headroomColor(usedPercent: peak))
             }
@@ -337,20 +341,29 @@ private struct WindowRow: View {
     let window: QuotaWindow
     let now: Date
 
-    private var tint: Color { headroomColor(usedPercent: window.usedPercent) }
+    private var showsRemaining: Bool {
+        provider == .codex || provider == .antigravity
+    }
+
     private var isCodex: Bool { provider == .codex }
+
+    private var tint: Color { headroomColor(usedPercent: window.usedPercent) }
+
+    private var windowTitle: String {
+        isCodex ? "\(window.label) usage limit" : window.label
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // One compact line per window: label, proportional bar, and a
             // colour-coded value so the headroom band is readable at a glance.
             HStack(spacing: 8) {
-                Text(isCodex ? "\(window.label) usage limit" : window.label)
+                Text(windowTitle)
                     .font(.muBody)
                     .foregroundColor(MU.textSecondary)
                     .lineLimit(1)
-                MeterBar(fraction: isCodex ? 1 - window.fraction : window.fraction, tint: tint)
-                Text(isCodex ? Fmt.remainingPercent(window.usedPercent) : Fmt.percent(window.usedPercent))
+                MeterBar(fraction: showsRemaining ? 1 - window.fraction : window.fraction, tint: tint)
+                Text(showsRemaining ? Fmt.remainingPercent(window.usedPercent) : Fmt.percent(window.usedPercent))
                     .font(.muNumber)
                     .foregroundColor(tint)
                     .frame(minWidth: 44, alignment: .trailing)
@@ -399,15 +412,15 @@ private struct WindowRow: View {
     }
 
     private var helpLabel: String {
-        let label = isCodex ? "\(window.label) usage limit" : window.label
+        let label = windowTitle
         guard let absolute = absoluteLabel else { return label }
         return "\(label) resets \(absolute)"
     }
 
     private var accessibilityLabel: String {
-        let label = isCodex ? "\(window.label) usage limit" : window.label
+        let label = windowTitle
         var parts = ["\(label): \(Fmt.percent(window.usedPercent)) used"]
-        if isCodex { parts.append(Fmt.remainingPercent(window.usedPercent)) }
+        if showsRemaining { parts.append(Fmt.remainingPercent(window.usedPercent)) }
         if !countdownLabel.isEmpty { parts.append(countdownLabel) }
         if let absolute = absoluteLabel { parts.append("at \(absolute)") }
         return parts.joined(separator: ". ")

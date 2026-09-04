@@ -411,6 +411,34 @@ final class SupplementalUsageSourceTests: XCTestCase {
         XCTAssertEqual(windows[0].shareOf30Days(referenceCost: 0), 0)
     }
 
+    func testWindowShareOfLast30DaysTokens() {
+        let windows = [
+            UsageWindow(label: "last 24h", sessionCount: 3, messageCount: 71,
+                        tokens: TokenTotals(input: 260_000), estimatedCostUSD: 0),
+            UsageWindow(label: "last 7d", sessionCount: 21, messageCount: 390,
+                        tokens: TokenTotals(input: 980_000), estimatedCostUSD: 0),
+            UsageWindow(label: "last 30d", sessionCount: 26, messageCount: 492,
+                        tokens: TokenTotals(input: 1_420_000), estimatedCostUSD: 0)
+        ]
+        let reference = windows.first { $0.label == "last 30d" }!.tokens.total
+
+        XCTAssertEqual(
+            windows[0].shareOf30Days(referenceTokens: reference),
+            Double(260_000) / Double(1_420_000), accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            windows[1].shareOf30Days(referenceTokens: reference),
+            Double(980_000) / Double(1_420_000), accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            windows[2].shareOf30Days(referenceTokens: reference),
+            1.0, accuracy: 0.0001
+        )
+
+        // Zero reference must read 0, never NaN.
+        XCTAssertEqual(windows[0].shareOf30Days(referenceTokens: 0), 0)
+    }
+
     /// Guards against the 64KB pipe-truncation failure mode: the real
     /// `opencode db` output for a busy account exceeds one 64KB pipe buffer, and
     /// a truncated payload must never be accepted as valid usage.

@@ -2,37 +2,60 @@ import Foundation
 
 // MARK: - Antigravity
 
-/// Reads Antigravity (agy) session and message counts.
+/// Reads Antigravity (agy) token usage and session/message counts.
 ///
-/// agy persists one JSON line per prompt to `history.jsonl` under its data
-/// directory. A native install keeps that at `~/.gemini/antigravity-cli/`, while
-/// containerised setups (e.g. the antigravity-docker wrapper) keep it inside the
-/// `antigravity-config` volume, which the host reaches through the container
-/// runtime. Only the `conversationId` and `timestamp` fields of each line are
-/// used; prompt text and workspace paths are never read.
+/// Modern agy builds persist each conversation as a SQLite database under
+/// `~/.gemini/antigravity-cli/conversations/`, and `AntigravityConversations`
+/// decodes the token usage stored there. A native install keeps that
+/// directory on the host, while containerised setups (e.g. the
+/// antigravity-docker wrapper) keep it inside the `antigravity-config`
+/// volume, which the host reaches through the container runtime. Only numeric
+/// usage fields and turn timestamps inside the databases are decoded; prompt
+/// text, tool payloads, and workspace paths are never read.
 ///
-/// Antigravity keeps session and message history, but not input/output token
-/// counts. This source therefore reports activity counts only and never turns
-/// a missing token total into a fabricated zero-cost estimate.
+/// When no conversation databases exist (older builds), the source falls back
+/// to `history.jsonl`, which carries session and message counts but no token
+/// data. In that fallback only the `conversationId` and `timestamp` fields of
+/// each line are used; prompt text and workspace paths are never read. Token
+/// totals are then left unknown rather than fabricated into a zero-cost
+/// estimate.
 public struct AntigravityUsageSource: UsageSource {
     public let provider: Provider = .antigravity
     private let historyURL: URL
+    private let conversationsDirectory: URL?
 
-    public init(historyURL: URL? = nil) {
+    public init(historyURL: URL? = nil, conversationsDirectory: URL? = nil) {
         self.historyURL = historyURL ?? HomeDirectory.real
             .appendingPathComponent(".gemini", isDirectory: true)
             .appendingPathComponent("antigravity-cli", isDirectory: true)
             .appendingPathComponent("history.jsonl")
+        self.conversationsDirectory = conversationsDirectory ?? HomeDirectory.real
+            .appendingPathComponent(".gemini", isDirectory: true)
+            .appendingPathComponent("antigravity-cli", isDirectory: true)
+            .appendingPathComponent("conversations", isDirectory: true)
     }
 
     public func fetchUsage() async throws -> ProviderUsage {
-        // 1. A native agy install keeps its history directly on the host.
+        // 1. A native agy install keeps its conversation databases, which
+        //    carry token usage, directly on the host.
+        if let conversationsDirectory,
+           let usage = try? AntigravityConversations.readUsage(in: conversationsDirectory, now: Date()) {
+            return usage
+        }
+        // 2. Older native installs keep only the prompt history.
         if let data = try? Data(contentsOf: historyURL),
            let usage = try? Self.parseHistory(data: data, now: Date()) {
             return usage
         }
-        // 2. Containerised agy keeps the same file inside the
+        // 3. Containerised agy keeps its conversation databases inside the
         //    `antigravity-config` volume, reachable through the runtime.
+        if let copied = Self.copyContainerConversations() {
+            defer { try? FileManager.default.removeItem(at: copied) }
+            if let usage = try? AntigravityConversations.readUsage(in: copied, now: Date()) {
+                return usage
+            }
+        }
+        // 4. Containerised agy on older builds keeps only the prompt history.
         if let historyData = Self.readContainerHistory(),
            let usage = try? Self.parseHistory(data: historyData, now: Date()) {
             return usage
@@ -209,6 +232,44 @@ public struct AntigravityUsageSource: UsageSource {
         process.waitUntilExit()
         guard process.terminationStatus == 0, !data.isEmpty else { return nil }
         return data
+    }
+
+    /// Copies agy's conversation databases out of the `antigravity-config`
+    /// container volume into a fresh temporary directory on the host.
+    ///
+    /// The volume lives inside the container-runtime VM, so it is read with a
+    /// throwaway `alpine` container that copies the stores to a bind-mounted
+    /// host directory. Sidecar WAL files are copied too so the copies carry
+    /// the same state the live CLI sees. Only database structure and numeric
+    /// usage fields are ever inspected afterwards. Returns `nil` when the
+    /// runtime is absent, the volume or image is missing, nothing could be
+    /// copied, or the temporary directory cannot be created. The caller owns
+    /// the returned directory and must remove it.
+    private static func copyContainerConversations() -> URL? {
+        guard let executable = resolveDockerExecutable(),
+              runtimeVolumeExists(executable, name: "antigravity-config"),
+              runtimeImageExists(executable, name: "alpine") else { return nil }
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meterusage-agy-conversations-\(UUID().uuidString)", isDirectory: true)
+        guard (try? FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)) != nil else {
+            return nil
+        }
+        _ = run(executable: executable, arguments: [
+            "run", "--rm",
+            "-v", "antigravity-config:/data:ro",
+            "-v", "\(destination.path):/out",
+            "alpine", "sh", "-c",
+            "cp /data/antigravity-cli/conversations/*.db "
+                + "/data/antigravity-cli/conversations/*-wal "
+                + "/data/antigravity-cli/conversations/*-shm /out/ 2>/dev/null; exit 0"
+        ])
+        let copied = (try? FileManager.default.contentsOfDirectory(at: destination, includingPropertiesForKeys: nil))?
+            .filter { $0.pathExtension == "db" } ?? []
+        guard !copied.isEmpty else {
+            try? FileManager.default.removeItem(at: destination)
+            return nil
+        }
+        return destination
     }
 
     private static func runtimeVolumeExists(_ executable: String, name: String) -> Bool {

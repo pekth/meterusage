@@ -53,8 +53,9 @@ connect and no key-entry screen. OpenRouter uses an existing
   billing service the Grok CLI uses. The OIDC token is re-read from
   `~/.grok/auth.json` on every refresh, so a `grok` re-login never leaves the
   app reading a stale credential until relaunch.
-- **Local provider usage** — Antigravity and Grok session/message counts, plus
-  OpenCode Go token totals, message counts, and estimated local cost.
+- **Local provider usage** — Antigravity token totals and session/message
+  counts, Grok session/message counts, and OpenCode Go token totals, message
+  counts, and estimated local cost.
 - **Claude quota bars *(optional)*** — shown only when a local companion has
   already written a usage snapshot. When that file includes a `limits[]`
   array (session / weekly_all / weekly_scoped), meterusage surfaces those
@@ -128,7 +129,8 @@ does **not** read any Claude credentials.
 | Codex activity | Counts sessions per day from `~/.codex/sessions/**/*.jsonl`, reading only the start timestamp on each rollout's first event (the file's modification date as a fallback). Session payloads are never opened. | No |
 | Claude activity | Streams `~/.claude/projects/**/*.jsonl` and sums usage fields. | No |
 | Claude quota *(optional)* | Reads an on-disk usage JSON if a companion already wrote one (e.g. `~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Parses legacy windows and, when present, `limits[]` (including Fable `weekly_scoped`). Does not fetch Anthropic quota. | No |
-| Antigravity usage | Reads session/message counts from agy's `history.jsonl`, preferring the native `~/.gemini/antigravity-cli/` location and falling back to the `antigravity-config` container volume when agy is containerised. Token totals are left unknown. | No |
+| Antigravity quota | Runs the agy CLI's own non-interactive `/usage` output inside the same container setup the user's agy wrapper uses, and reads only the model group, window label, percent remaining, and reset timestamp of each row. No prompt is sent: slash commands are handled locally by the CLI. The backend quota refresh happens inside the CLI. | Yes, by the CLI |
+| Antigravity usage | Decodes token totals, session/message counts, and rolling usage windows from agy's per-conversation SQLite stores under `~/.gemini/antigravity-cli/conversations/`, preferring the native location and falling back to the `antigravity-config` container volume when agy is containerised. Only numeric usage fields and turn timestamps inside the stores are decoded; prompt text, tool payloads, and workspace paths are never read. Older installs without conversation stores fall back to `history.jsonl`, where only the `conversationId` and `timestamp` fields of each line are used and token totals stay unknown. | No |
 | Grok usage | Reads session summaries under `~/.grok/sessions/**/summary.json`; only session dates and message counts are used. | No |
 | OpenCode Go usage | Runs the local `opencode db --format json` command with a read-only query over numeric session usage fields and timestamps. Message bodies are never queried. | No |
 | Codex service health | Public OpenAI Statuspage JSON, filtered to Codex, CLI, and login components. | Yes |
@@ -181,7 +183,7 @@ is enforced by tests and hooks rather than promised in prose.
 - Optional: [`opencode`](https://opencode.ai/), for OpenCode Go local usage
 - Optional: Grok CLI (signed in), for Grok session history and the live
   allowance window
-- Optional: the Antigravity (agy) CLI for Antigravity counts; containerised agy installs also need Docker or Podman
+- Optional: the Antigravity (agy) CLI for Antigravity token usage; containerised agy installs also need Docker or Podman
 - Optional: Claude Code, for Claude activity and the Claude heatmap
 
 Missing any provider is fine. Its row shows a calm empty state, and Settings

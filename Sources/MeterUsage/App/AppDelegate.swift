@@ -254,6 +254,9 @@ enum Composition {
             // OpenCode Go's rolling/weekly/monthly allowances, read from its
             // authenticated Zen usage endpoint.
             OpenCodeGoQuotaSource(),
+            // Antigravity's model-group allowance windows, read through the
+            // agy CLI's own non-interactive /usage output.
+            AntigravityQuotaSource(),
             // Grok's weekly subscription allowance, read from the same billing
             // service the grok CLI uses.
             GrokQuotaSource(),

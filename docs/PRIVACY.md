@@ -34,7 +34,8 @@ each claim is enforced rather than merely promised.
 | Claude activity | Streams your own transcript files under `~/.claude/projects/`, summing token-usage fields. | No |
 | Codex activity | Counts sessions per day from `~/.codex/sessions/**/*.jsonl`, reading only the start timestamp on each rollout's first event (falling back to the file's modification date). Session payloads are never opened. | No |
 | Claude quota *(optional)* | Read-only parse of a local usage snapshot if a companion already wrote one (`~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Supports legacy `five_hour` / `seven_day` / `weekly` shapes and, when present, a `limits[]` array (session / weekly_all / weekly_scoped, including Fable). meterusage does **not** fetch Anthropic quota and does **not** read Claude credentials. Absent by default and never requested. | No |
-| Antigravity usage | Reads only conversation-id grouping and timestamps from agy's `history.jsonl`, preferring the native `~/.gemini/antigravity-cli/` location and falling back to the `antigravity-config` container volume when agy is containerised. Prompt text and workspace paths in the history lines are never read. No prompt, code, or token fields are needed; token totals remain unknown. | No |
+| Antigravity quota | Runs `agy -p "/usage"` inside the same container image and volumes the user's agy wrapper uses, and reads only each row's model group, window label, percent remaining, and reset timestamp. No prompt or model request is sent; the CLI's own backend quota refresh runs inside the container. No credential leaves the volume. | Yes, by the CLI |
+| Antigravity usage | Decodes only numeric token-usage fields and turn timestamps from agy's per-conversation SQLite stores under `~/.gemini/antigravity-cli/conversations/`, preferring the native location and falling back to the `antigravity-config` container volume when agy is containerised. Prompt text, tool payloads, workspace paths, and identifiers inside the stores are never decoded. Older installs without conversation stores fall back to `history.jsonl`, where only the `conversationId` and `timestamp` fields of each line are read and token totals remain unknown. | No |
 | Grok usage | Reads only date and message-count fields from `~/.grok/sessions/**/summary.json`. It does not open chat-history content or context-window signal files. | No |
 | OpenCode Go usage | Invokes the local `opencode db --format json` command with a read-only SQL query selecting numeric token/cost fields, message counts, and timestamps from `session`. It never selects message bodies, prompts, tool arguments, or paths. | No |
 | Codex service health | Public, unauthenticated Statuspage JSON at `status.openai.com`, filtered to Codex, CLI, and login components. | Yes |
@@ -160,7 +161,8 @@ Because these conversions happen in the source layer rather than the view
 layer, there is no code path that renders the raw value.
 
 The supplemental sources apply the same boundary by construction: Antigravity
-and Grok reduce their stores to counts and dates, while OpenCode Go asks its
+reduces its conversation stores to numeric token fields and turn timestamps,
+Grok reduces its stores to counts and dates, and OpenCode Go asks its
 database command for numeric usage columns only. Provider names and metric
 colours are rendered alongside written labels, so colour is never the only
 meaningful signal.

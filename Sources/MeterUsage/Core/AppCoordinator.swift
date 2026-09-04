@@ -546,7 +546,8 @@ final class AppCoordinator: ObservableObject {
 
     var visibleUsageProviders: [Provider] {
         let providers = Set(usageSources.map(\.provider))
-        return visibleProviders.filter { providers.contains($0) }
+        let quotaProviders = Set(visibleQuotaProviders)
+        return visibleProviders.filter { providers.contains($0) && !quotaProviders.contains($0) }
     }
 
     var visibleStatusProviders: [Provider] {

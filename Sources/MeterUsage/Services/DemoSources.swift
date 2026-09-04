@@ -238,8 +238,8 @@ struct DemoStatusSource: StatusSource {
 
 // MARK: - Supplemental usage
 
-/// Synthetic Antigravity activity. It intentionally reports sessions/messages
-/// only because that is all Antigravity's local history can prove.
+/// Synthetic Antigravity activity, mirroring what the conversation-store
+/// reader proves: token totals plus session/message counts.
 struct DemoAntigravityUsageSource: UsageSource {
     let provider: Provider = .antigravity
 
@@ -248,6 +248,12 @@ struct DemoAntigravityUsageSource: UsageSource {
             provider: .antigravity,
             sessionCount: 18,
             messageCount: 246,
+            tokens: TokenTotals(
+                input: 4_210_000,
+                output: 386_000,
+                reasoning: 91_000,
+                cacheRead: 12_400_000
+            ),
             todaySessionCount: 2,
             todayMessageCount: 31,
             capturedAt: Date().addingTimeInterval(-75)
