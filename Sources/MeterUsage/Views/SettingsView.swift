@@ -33,6 +33,8 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showCodexHeatmap) private var showCodexHeatmap: Bool = true
     @AppStorage(PrefKey.quotaAlerts) private var quotaAlerts: Bool = false
     @AppStorage(PrefKey.updateCheck) private var updateCheck: Bool = true
+    @AppStorage(PrefKey.sideNotchPanel) private var sideNotchPanel: Bool = false
+    @AppStorage(PrefKey.menuBarCompact) private var menuBarCompact: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -129,6 +131,18 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                         .fixedSize()
                     }
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "Side notch panel",
+                        subtitle: "Floating usage rings on the right edge of the screen. Hover to expand.",
+                        isOn: $sideNotchPanel
+                    )
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "Compact menu bar",
+                        subtitle: "One small app mark instead of usage clusters — let the side notch panel carry the usage.",
+                        isOn: $menuBarCompact
+                    )
                     Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Show heatmap",

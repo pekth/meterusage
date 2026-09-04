@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
+    private var sideNotchPanel: SideNotchPanelController?
     private var preferences: Preferences?
     private var coordinator: AppCoordinator?
     private var cancellables = Set<AnyCancellable>()
@@ -65,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         installStatusItem(coordinator: coordinator)
         installPopover(coordinator: coordinator, preferences: preferences)
+        installSideNotchPanel(coordinator: coordinator, preferences: preferences)
         coordinator.start()
     }
 
@@ -185,6 +187,21 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
     @objc private func refreshNow() { coordinator?.refresh() }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    // MARK: Side notch panel
+
+    /// Shows or hides the floating right-edge strip as the preference flips.
+    /// The subscription replays the current value, so a panel enabled before
+    /// launch appears without a second call.
+    private func installSideNotchPanel(coordinator: AppCoordinator, preferences: Preferences) {
+        let controller = SideNotchPanelController(coordinator: coordinator)
+        preferences.$sideNotchPanelEnabled
+            .sink { [weak controller] enabled in
+                enabled ? controller?.show() : controller?.hide()
+            }
+            .store(in: &cancellables)
+        sideNotchPanel = controller
+    }
 
     // MARK: Popover
 

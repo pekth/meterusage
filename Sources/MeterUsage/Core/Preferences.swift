@@ -36,6 +36,19 @@ enum PrefKey {
     static let showClaudeHeatmap = "showClaudeHeatmap"
     static let showCodexHeatmap = "showCodexHeatmap"
     static let quotaAlerts = "quotaAlertsEnabled"
+    static let sideNotchPanel = "sideNotchPanelEnabled"
+    /// Where the user dragged the side notch panel, as "x,y" of the window's
+    /// top-right corner. Written by `SideNotchPanelController`; read at panel
+    /// construction only, so it deliberately has no `Preferences` property.
+    static let sideNotchPanelCorner = "sideNotchPanelCorner"
+    /// Compact menu bar: one small app mark instead of usage clusters. The
+    /// two surfaces are independent — the side notch panel carries the usage
+    /// for whoever enables both.
+    static let menuBarCompact = "menuBarCompactEnabled"
+    /// Set once the popover's welcome page is dismissed. Absent on first
+    /// run, which is what shows the page. Registered only; the view reads it
+    /// with `@AppStorage` and no `Preferences` property is wanted.
+    static let onboardingDone = "onboardingCompleted"
     static let updateCheck = "updateCheckEnabled"
     static let updateLastCheck = "updateLastCheckDate"
     static let updateDismissedVersion = "updateDismissedVersion"
@@ -87,6 +100,14 @@ final class Preferences: ObservableObject {
     /// Opt-in quota threshold notifications. Off by default so the app never
     /// prompts for notification access until the user asks for the feature.
     @Published private(set) var quotaAlertsEnabled: Bool = false
+    /// Opt-in floating usage strip on the right edge of the screen. Off by
+    /// default: a window pinned over every space is a big ask to make of
+    /// someone who only asked for a menu-bar meter.
+    @Published private(set) var sideNotchPanelEnabled: Bool = false
+    /// Compact menu bar: one small app mark instead of usage clusters.
+    /// Default on — the tray and the side notch panel are separate surfaces
+    /// that each decide what they carry, and the notch carries the usage.
+    @Published private(set) var menuBarCompactEnabled: Bool = true
     /// Update-availability check. On by default: it is one unauthenticated
     /// GET per day with no identifiers, and a user who wants zero outbound
     /// update traffic can switch it off in Settings.
@@ -125,6 +146,11 @@ final class Preferences: ObservableObject {
             PrefKey.showClaudeHeatmap: true,
             PrefKey.showCodexHeatmap: true,
             PrefKey.quotaAlerts: false,
+            PrefKey.sideNotchPanel: false,
+            // Compact menu bar is the default: the side notch panel carries
+            // the usage, so the tray stays one small mark. A user who already
+            // stored a value keeps theirs.
+            PrefKey.menuBarCompact: true,
             PrefKey.updateCheck: true
         ])
         reload()
@@ -179,6 +205,12 @@ final class Preferences: ObservableObject {
 
         let alerts = defaults.bool(forKey: PrefKey.quotaAlerts)
         if alerts != quotaAlertsEnabled { quotaAlertsEnabled = alerts }
+
+        let sideNotch = defaults.bool(forKey: PrefKey.sideNotchPanel)
+        if sideNotch != sideNotchPanelEnabled { sideNotchPanelEnabled = sideNotch }
+
+        let menuBarCompact = defaults.bool(forKey: PrefKey.menuBarCompact)
+        if menuBarCompact != menuBarCompactEnabled { menuBarCompactEnabled = menuBarCompact }
 
         let updateCheck = defaults.bool(forKey: PrefKey.updateCheck)
         if updateCheck != updateCheckEnabled { updateCheckEnabled = updateCheck }

@@ -36,6 +36,39 @@ struct MenuBarLabel: View {
     var onWidthChange: (CGFloat) -> Void = { _ in }
 
     var body: some View {
+        Group {
+            if coordinator.preferences.menuBarCompactEnabled {
+                // The tray and the side notch panel are independent surfaces.
+                // Compact mode carries no usage numbers at all: whoever turns
+                // it on reads usage from the notch panel (or the popover) and
+                // the tray stays a single access point.
+                CompactTrayGlyph()
+            } else {
+                trayClusters
+            }
+        }
+        .padding(.horizontal, 5)
+        .frame(height: 22)
+        // Natural width regardless of the hosting slot, so the measurement
+        // below reports what the label really needs instead of a clipped size.
+        .fixedSize(horizontal: true, vertical: false)
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { onWidthChange(proxy.size.width) }
+                    .onChange(of: proxy.size.width) { newWidth in
+                        onWidthChange(newWidth)
+                    }
+            }
+        )
+        .animation(.easeOut(duration: 0.3), value: fraction)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(coordinator.preferences.menuBarCompactEnabled ? "MeterUsage" : accessibilityText)
+    }
+
+    /// The per-provider `[mark] percent` clusters, unchanged from the original
+    /// tray layout.
+    private var trayClusters: some View {
         HStack(spacing: 3) {
             if clusters.isEmpty {
                 Text("—")
@@ -55,23 +88,6 @@ struct MenuBarLabel: View {
                 }
             }
         }
-        .padding(.horizontal, 5)
-        .frame(height: 22)
-        // Natural width regardless of the hosting slot, so the measurement
-        // below reports what the label really needs instead of a clipped size.
-        .fixedSize(horizontal: true, vertical: false)
-        .background(
-            GeometryReader { proxy in
-                Color.clear
-                    .onAppear { onWidthChange(proxy.size.width) }
-                    .onChange(of: proxy.size.width) { newWidth in
-                        onWidthChange(newWidth)
-                    }
-            }
-        )
-        .animation(.easeOut(duration: 0.3), value: fraction)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
     }
 
     // MARK: Clusters
@@ -152,6 +168,35 @@ struct MenuBarLabel: View {
     }
 }
 
+// MARK: - Compact tray glyph
+
+/// The one small mark the tray shows in compact mode, reused by the popover's
+/// welcome page so the onboarding text points at the real thing.
+///
+/// The same fill-gauge geometry the app icon is drawn from (see
+/// `Scripts/make-icon.swift`: 9×13 outline, 1pt stroke, fill rising from the
+/// bottom). The fill is deliberately fixed — the compact tray carries no
+/// usage numbers, so there is nothing here to tint by headroom or status.
+struct CompactTrayGlyph: View {
+
+    /// Same reading as the app icon, so the two read as one object.
+    private static let fillFraction: CGFloat = 0.72
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                .strokeBorder(MU.text, lineWidth: 1)
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(MU.text)
+                    .frame(height: geo.size.height * Self.fillFraction)
+            }
+            .padding(2)
+        }
+        .frame(width: 9, height: 13)
+    }
+}
+
 /// The compact provider glyph shown in the status item.
 ///
 /// Codex uses the real logo bundled at `Resources/codex-logo.png`, rendered as
@@ -221,7 +266,10 @@ struct ProviderMark: View {
         case .codex:      return "sparkle"
         case .antigravity:return "sparkles"
         case .grok:       return "eye"
-        case .openCodeGo: return "chevron.up.left.arrow.down.right"
+        // A real SF Symbol name: an invalid name renders as nothing, which
+        // silently blanked this provider's mark wherever no bundled logo
+        // exists (e.g. a bare debug binary).
+        case .openCodeGo: return "arrow.up.left.and.arrow.down.right"
         case .openRouter: return "arrow.triangle.branch"
         case .claude:     return "sparkles"
         }

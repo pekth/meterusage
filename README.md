@@ -36,7 +36,11 @@ connect and no key-entry screen. OpenRouter uses an existing
   Grok, OpenCode Go, and friends at a glance. Each mark is that provider's
   real logo, tinted by service status, and the percentage is tinted by quota
   headroom. Hover the tray item for a per-provider usage and status summary
-  plus the last-refresh time.
+  plus the last-refresh time. The tray and the side notch panel are separate
+  surfaces: the tray is **compact by default** (one small app mark, so the
+  notch panel carries the usage instead), and **Compact menu bar** in Settings
+  brings the full per-provider clusters back. A first-run welcome page in the
+  popover explains where usage lives.
 - **Per-provider tray selection** — the "Menu bar" section of Settings picks
   which providers show as clusters in the tray, independent of which appear in
   the popover. OpenRouter is always excluded (pay-as-you-go, no quota window).
@@ -102,6 +106,11 @@ connect and no key-entry screen. OpenRouter uses an existing
   meterusage | jq '.providers[] | select(.provider == "codex")'
   ```
 
+- **Opt-in side notch panel** — a floating strip of per-provider usage rings on
+  the right edge of the screen, just below the menu bar. Hovering expands a
+  detail card with per-window bars and reset times; the strip can be dragged
+  anywhere, and the position is remembered across launches. Off by default;
+  the **Side notch panel** switch in Settings turns it on.
 - **Notification Center widgets** — one widget per provider plus an
   automatic "worst provider" widget. Small = headline figure; medium =
   per-window bars with reset countdowns (current + weekly for a pinned

@@ -13,6 +13,10 @@ struct PopoverRoot: View {
     @ObservedObject var preferences: Preferences
 
     @State private var showingSettings = false
+    /// First-run welcome. Absent means never dismissed, which is what shows
+    /// the page; either button on it writes through and never returns.
+    @AppStorage(PrefKey.onboardingDone) private var onboardingDone = false
+    @AppStorage(PrefKey.sideNotchPanel) private var sideNotchPanel = false
 
     @State private var headerHeight: CGFloat = 44
     @State private var contentHeight: CGFloat = 0
@@ -96,6 +100,9 @@ struct PopoverRoot: View {
                 if showingSettings {
                     SettingsView(coordinator: coordinator)
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
+                } else if !onboardingDone {
+                    onboarding
+                        .transition(.opacity)
                 } else {
                     dashboard
                         .transition(.opacity.combined(with: .move(edge: .leading)))
@@ -109,6 +116,54 @@ struct PopoverRoot: View {
             )
         }
         .scrollIndicatorsHiddenIfAvailable()
+    }
+
+    // MARK: Onboarding
+
+    /// First-run page explaining where usage lives now.
+    ///
+    /// Exists because the compact menu bar is the default: a tray that once
+    /// showed every provider's figures now shows one mark, and a first-time
+    /// reader has no way to guess that the side notch panel carries what the
+    /// tray used to. The page says so once and both its buttons dismiss it
+    /// permanently — nobody should be re-greeted on every open.
+    private var onboarding: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader("Welcome")
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        CompactTrayGlyph()
+                        Text("The menu bar now shows one small mark.")
+                            .font(.muBody)
+                            .foregroundColor(MU.text)
+                    }
+                    Text("Your usage meters live in the side notch panel: a floating strip of rings on the right edge of the screen. Hover it to expand; drag it anywhere. Click the menu bar mark to open this popover anytime.")
+                        .font(.muBody)
+                        .foregroundColor(MU.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("You can change both in Settings at any time.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                }
+            }
+            HStack(spacing: 8) {
+                Button {
+                    sideNotchPanel = true
+                    onboardingDone = true
+                } label: {
+                    Text("Enable side notch panel")
+                }
+                .controlSize(.regular)
+                Spacer(minLength: 6)
+                Button {
+                    onboardingDone = true
+                } label: {
+                    Text("Continue")
+                }
+                .controlSize(.regular)
+            }
+        }
     }
 
     private var dashboard: some View {
