@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.9] - 2026-09-04
+
+### Fixed
+
+- **Side notch panel hover no longer thrashes** — hovering the panel used to
+  pop it open and closed nonstop. SwiftUI's per-view tracking areas are
+  rebuilt on every layout pass, and the panel's own resize churn delivered
+  exit/enter pairs while the pointer sat still. Hover detection now runs
+  through one stable AppKit tracking area (`inVisibleRect`) that reports only
+  true boundary crossings, expansion is instant (one layout pass, one
+  resize), and a collapse waits 250 ms so churn can never beat a re-enter.
+- **Dragging the side notch panel now sticks** — the drag was recorded only
+  while AppKit reported a `leftMouseDragged` current event, which its own
+  background-drag session does not do, so the position was never saved and
+  the panel reset to the default anchor on the next expand or collapse. The
+  programmatic placements that must be excluded are already known (`isPlacing`
+  and the one-time launch auto-fit), and everything else is a real drag.
+- **Fixture clock anchoring** — parsing tests that counted per-day windows
+  from `now - N` offsets flaked at every midnight; their `now` is anchored to
+  midday so relative offsets always land inside one day.
+
 ## [0.2.8] - 2026-09-04
 
 ### Added
