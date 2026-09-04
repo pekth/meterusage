@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.7] - 2026-09-03
+
+### Added
+
+- **Antigravity quota windows** — the Antigravity card now shows the same
+  weekly and five-hour allowance bars the agy CLI's `/usage` panel shows,
+  grouped by model family (Claude and GPT models, Gemini Models), with remaining
+  allowance percentages, headroom progress bars, and reset countdowns. Read through
+  the agy CLI's own non-interactive `/usage` output; no prompt is sent.
+- **Antigravity token usage** — meterusage decodes the numeric
+  usage fields stored in agy's per-conversation SQLite databases
+  (`~/.gemini/antigravity-cli/conversations/`, or the `antigravity-config`
+  volume for containerised installs) and computes rolling 24h/7d/30d windows.
+  Prompt text, tool payloads, and workspace paths are never decoded; older
+  installs without the databases fall back to the previous `history.jsonl`
+  counts.
+- **Token-based usage bars** — `UsageWindowBars` now supports calculating
+  progress from token share when cost is unavailable or $0.00, omitting
+  unnecessary cost disclaimers.
+
 ## [0.2.6] - 2026-08-25
 
 ### Fixed
