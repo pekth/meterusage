@@ -194,7 +194,12 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
     /// The subscription replays the current value, so a panel enabled before
     /// launch appears without a second call.
     private func installSideNotchPanel(coordinator: AppCoordinator, preferences: Preferences) {
-        let controller = SideNotchPanelController(coordinator: coordinator)
+        let controller = SideNotchPanelController(
+            coordinator: coordinator,
+            onOpenSettings: { [weak self] in
+                self?.togglePopover()
+            }
+        )
         preferences.$sideNotchPanelEnabled
             .sink { [weak controller] enabled in
                 enabled ? controller?.show() : controller?.hide()

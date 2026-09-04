@@ -329,6 +329,23 @@ enum Fmt {
         }
     }
 
+    /// Lowercase compact token counts like "20.3m", "1.25b", "450k".
+    static func tokenCountString(_ count: Int) -> String {
+        let v = Double(count)
+        if v >= 1_000_000_000 {
+            let b = v / 1_000_000_000
+            return b >= 10 ? String(format: "%.1fb", b) : String(format: "%.2fb", b)
+        } else if v >= 1_000_000 {
+            return String(format: "%.1fm", v / 1_000_000)
+        } else if v >= 10_000 {
+            return String(format: "%.0fk", v / 1_000)
+        } else if v >= 1_000 {
+            return String(format: "%.1fk", v / 1_000)
+        } else {
+            return "\(count)"
+        }
+    }
+
     /// An exact, grouped whole-number count for provider credit units.
     /// Credits are not currency and must never inherit a dollar symbol or
     /// compact `1.8K` notation when the provider reports `1843`.

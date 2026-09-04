@@ -97,16 +97,11 @@ final class SideNotchPanelController {
     private var isPlacing = false
     /// True once the first programmatic placement has run. AppKit resizes a
     /// borderless panel by itself when its content view first lays out, and
-    /// that launch frame must never be recorded as a drag. After the first
-    /// placement, every move that is not one of ours is a user drag — note
-    /// that `NSApp.currentEvent` cannot be the discriminator: during AppKit's
-    /// own background-drag session it does not reliably report a
-    /// `leftMouseDragged` event, and a guard on it silently rejected every
-    /// real drag.
+    /// that launch frame must never be recorded as a drag.
     private var hasPlaced = false
     private var cancellables = Set<AnyCancellable>()
 
-    init(coordinator: AppCoordinator) {
+    init(coordinator: AppCoordinator, onOpenSettings: @escaping () -> Void = {}) {
         let panel = NSPanel(
             contentRect: .zero,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -133,6 +128,7 @@ final class SideNotchPanelController {
         let host = NSHostingView(
             rootView: SideNotchPanelView(
                 coordinator: coordinator,
+                onOpenSettings: onOpenSettings,
                 onSizeChange: { [weak self, weak panel] size in
                     guard let self, let panel else { return }
                     self.contentSize = size
@@ -148,12 +144,13 @@ final class SideNotchPanelController {
 
         // Every user-initiated move records the corner so it survives
         // relaunches, screen changes, and expansion. Programmatic placements
-        // are excluded by the `isPlacing` window around our own `setFrame`
-        // calls, and the one-time launch auto-fit by `hasPlaced`.
+        // are excluded by checking `isPlacing` and requiring an active mouse
+        // drag (`pressedMouseButtons != 0`).
         NotificationCenter.default
             .publisher(for: NSWindow.didMoveNotification, object: panel)
             .sink { [weak self] _ in
                 guard let self, !self.isPlacing, self.hasPlaced else { return }
+                guard NSEvent.pressedMouseButtons != 0 else { return }
                 let corner = CGPoint(x: self.panel.frame.maxX, y: self.panel.frame.maxY)
                 self.userCorner = corner
                 UserDefaults.standard.set(
@@ -204,8 +201,11 @@ final class SideNotchPanelController {
             )
         }
         isPlacing = true
-        panel.setFrame(frame, display: false)
-        isPlacing = false
+        panel.setFrame(frame, display: true)
+        panel.invalidateShadow()
+        DispatchQueue.main.async { [weak self] in
+            self?.isPlacing = false
+        }
         hasPlaced = true
     }
 }

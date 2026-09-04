@@ -41,6 +41,17 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertLessThan(expanded.minY, collapsed.minY)
     }
 
+    // MARK: - Token formatting
+
+    func testTokenCountStringFormatting() {
+        XCTAssertEqual(Fmt.tokenCountString(1_250_000_000), "1.25b")
+        XCTAssertEqual(Fmt.tokenCountString(20_300_000), "20.3m")
+        XCTAssertEqual(Fmt.tokenCountString(450_000), "450k")
+        XCTAssertEqual(Fmt.tokenCountString(2_500), "2.5k")
+        XCTAssertEqual(Fmt.tokenCountString(500), "500")
+        XCTAssertEqual(Fmt.tokenCountString(0), "0")
+    }
+
     // MARK: - Entries
 
     @MainActor
