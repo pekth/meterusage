@@ -2,6 +2,14 @@ import XCTest
 import SQLite3
 @testable import MeterUsage
 
+/// A "now" anchored to midday so relative fixture offsets (`now - 3600`)
+/// always land inside one calendar day. The parsing tests count per-day
+/// windows; a wall-clock `Date()` flaked at every midnight, when an offset
+/// that read as "today" at 23:59 is yesterday at 00:01.
+private func fixtureNow() -> Date {
+    Calendar.current.startOfDay(for: Date()).addingTimeInterval(12 * 3_600)
+}
+
 final class AntigravityConversationsTests: XCTestCase {
     // MARK: Synthetic protobuf encoding
 
@@ -79,7 +87,7 @@ final class AntigravityConversationsTests: XCTestCase {
     // MARK: Aggregation
 
     func testAggregationSumsTokensAndCountsUserTurns() throws {
-        let now = Date()
+        let now = fixtureNow()
         let today = Calendar.current.startOfDay(for: now)
         let twoDaysAgo = today.addingTimeInterval(-2 * 86_400 + 3_600)
 
@@ -122,7 +130,7 @@ final class AntigravityConversationsTests: XCTestCase {
     }
 
     func testAggregationWithoutAnyTokenLeavesTokensNil() throws {
-        let now = Date()
+        let now = fixtureNow()
         let database = AntigravityConversations.Database(
             stepBlobs: [stepBlob(source: 4, seconds: UInt64(now.addingTimeInterval(-60).timeIntervalSince1970))]
         )
@@ -203,7 +211,7 @@ final class AntigravityConversationsTests: XCTestCase {
     }
 
     func testReadUsageFromSQLiteStore() throws {
-        let now = Date()
+        let now = fixtureNow()
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("meterusage-agy-tests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

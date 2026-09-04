@@ -95,6 +95,15 @@ final class SideNotchPanelController {
     /// an expansion resize would be recorded as a "drag" and freeze the
     /// position even though the user never moved anything.
     private var isPlacing = false
+    /// True once the first programmatic placement has run. AppKit resizes a
+    /// borderless panel by itself when its content view first lays out, and
+    /// that launch frame must never be recorded as a drag. After the first
+    /// placement, every move that is not one of ours is a user drag — note
+    /// that `NSApp.currentEvent` cannot be the discriminator: during AppKit's
+    /// own background-drag session it does not reliably report a
+    /// `leftMouseDragged` event, and a guard on it silently rejected every
+    /// real drag.
+    private var hasPlaced = false
     private var cancellables = Set<AnyCancellable>()
 
     init(coordinator: AppCoordinator) {
@@ -139,16 +148,12 @@ final class SideNotchPanelController {
 
         // Every user-initiated move records the corner so it survives
         // relaunches, screen changes, and expansion. Programmatic placements
-        // are excluded twice over: the `isPlacing` window around our own
-        // `setFrame` calls, and the event check — AppKit also resizes a
-        // borderless panel by itself when its content view first lays out,
-        // and recording that launch frame as a "drag" would pin the panel to
-        // a position the user never chose.
+        // are excluded by the `isPlacing` window around our own `setFrame`
+        // calls, and the one-time launch auto-fit by `hasPlaced`.
         NotificationCenter.default
             .publisher(for: NSWindow.didMoveNotification, object: panel)
             .sink { [weak self] _ in
-                guard let self, !self.isPlacing else { return }
-                guard NSApp.currentEvent?.type == .leftMouseDragged else { return }
+                guard let self, !self.isPlacing, self.hasPlaced else { return }
                 let corner = CGPoint(x: self.panel.frame.maxX, y: self.panel.frame.maxY)
                 self.userCorner = corner
                 UserDefaults.standard.set(
@@ -201,5 +206,6 @@ final class SideNotchPanelController {
         isPlacing = true
         panel.setFrame(frame, display: false)
         isPlacing = false
+        hasPlaced = true
     }
 }

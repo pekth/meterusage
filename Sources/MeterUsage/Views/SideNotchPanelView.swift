@@ -21,19 +21,21 @@ struct SideNotchPanelView: View {
     var onSizeChange: (CGSize) -> Void = { _ in }
 
     @State private var isExpanded = false
+    /// Collapse hysteresis: a real pointer exit schedules the collapse, but a
+    /// re-enter before it fires cancels it. Without the grace window, the
+    /// tracking-area churn caused by the panel's own resize can deliver a
+    /// spurious exit while the pointer is still geometrically inside — the
+    /// panel then thrashes open/closed nonstop while hovered.
+    @State private var collapseTask: Task<Void, Never>?
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
+            // Instant insert, deliberately: animating the layout change makes
+            // the panel resize across many frames, and every frame risks a
+            // tracking update that flips the hover state and restarts the
+            // cycle. One layout pass means one resize.
             if isExpanded {
                 detailCard
-                    // Opacity only, deliberately: a slide transition offsets
-                    // the card mid-flight while the window is being resized
-                    // around it, and the repeated resize callbacks interrupt
-                    // that animation so the card can end up stuck offset and
-                    // clipped (bars cut at the window edge, percent column
-                    // gone). A fade changes no layout, so the size callback
-                    // reports the final width once and the panel settles.
-                    .transition(.opacity)
             }
             strip
         }
@@ -46,10 +48,21 @@ struct SideNotchPanelView: View {
                     .onChange(of: proxy.size.height) { _ in onSizeChange(proxy.size) }
             }
         )
-        .onHover { hovering in
-            isExpanded = hovering
-        }
-        .animation(.easeOut(duration: 0.2), value: isExpanded)
+        .background(
+            HoverSensor { hovering in
+                if hovering {
+                    collapseTask?.cancel()
+                    collapseTask = nil
+                    isExpanded = true
+                } else {
+                    collapseTask = Task {
+                        try? await Task.sleep(nanoseconds: 250_000_000)
+                        guard !Task.isCancelled else { return }
+                        isExpanded = false
+                    }
+                }
+            }
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
     }
@@ -197,6 +210,59 @@ struct SideNotchPanelView: View {
         if entries.isEmpty { return "Usage unavailable" }
         return entries.map { "\($0.provider.displayName) \(Fmt.percent($0.usedPercent)) used" }
             .joined(separator: ", ")
+    }
+}
+
+// MARK: - Hover sensor
+
+/// Reports pointer presence for the panel with one AppKit-level tracking area.
+///
+/// SwiftUI's `.onHover` installs per-view tracking areas that are rebuilt on
+/// every layout pass. During the panel's own resize that churn delivers
+/// exit/enter pairs while the pointer is still geometrically inside, which
+/// used to thrash the panel open/closed nonstop. A single `NSTrackingArea`
+/// covering this view's bounds is stable: AppKit evaluates containment and
+/// fires only on true boundary crossings.
+private struct HoverSensor: NSViewRepresentable {
+    let onHover: (Bool) -> Void
+
+    func makeNSView(context: Context) -> SensorView {
+        let view = SensorView()
+        view.onHover = onHover
+        return view
+    }
+
+    func updateNSView(_ view: SensorView, context: Context) {
+        view.onHover = onHover
+    }
+
+    final class SensorView: NSView {
+        var onHover: (Bool) -> Void = { _ in }
+        private var tracking: NSTrackingArea?
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            // Installed once, with `.inVisibleRect`: AppKit then evaluates the
+            // cursor against the view's visible rect as it changes and fires
+            // only on true boundary crossings. Re-adding an area per layout
+            // pass is not an option here — AppKit reports mouseExited for a
+            // removed area the pointer was inside, and the replacement only
+            // re-enters on the next mouse event, so every resize synthesized
+            // an exit while the pointer sat still.
+            guard tracking == nil else { return }
+            let area = NSTrackingArea(
+                rect: .zero,
+                options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self,
+                userInfo: nil
+            )
+            addTrackingArea(area)
+            tracking = area
+        }
+
+        override func mouseEntered(with event: NSEvent) { onHover(true) }
+
+        override func mouseExited(with event: NSEvent) { onHover(false) }
     }
 }
 

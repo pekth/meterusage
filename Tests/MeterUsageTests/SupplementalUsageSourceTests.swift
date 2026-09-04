@@ -1,6 +1,14 @@
 import XCTest
 @testable import MeterUsage
 
+/// A "now" anchored to midday so relative fixture offsets (`now - 3600`)
+/// always land inside one calendar day. The parsing tests count per-day
+/// windows; a wall-clock `Date()` flaked at every midnight, when an offset
+/// that read as "today" at 23:59 is yesterday at 00:01.
+private func fixtureNow() -> Date {
+    Calendar.current.startOfDay(for: Date()).addingTimeInterval(12 * 3_600)
+}
+
 final class SupplementalUsageSourceTests: XCTestCase {
 
     func testProviderOrderIsCodexFirst() {
@@ -79,7 +87,7 @@ final class SupplementalUsageSourceTests: XCTestCase {
     }
 
     func testAntigravityParsesFractionalSecondTimestamps() throws {
-        let now = Date()
+        let now = fixtureNow()
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let object: [String: Any] = [
@@ -161,7 +169,7 @@ final class SupplementalUsageSourceTests: XCTestCase {
     }
 
     func testAntigravityFetchReadsNativeHistoryFile() async throws {
-        let now = Date()
+        let now = fixtureNow()
         let lines = [
             ["conversationId": "conv-a", "timestamp": now.addingTimeInterval(-300).timeIntervalSince1970 * 1000],
             ["conversationId": "conv-a", "timestamp": now.addingTimeInterval(-200).timeIntervalSince1970 * 1000],
@@ -212,7 +220,7 @@ final class SupplementalUsageSourceTests: XCTestCase {
     }
 
     func testGrokParsesFractionalSecondSummaryTimestamps() throws {
-        let now = Date()
+        let now = fixtureNow()
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let todayStart = Calendar.current.startOfDay(for: now)
