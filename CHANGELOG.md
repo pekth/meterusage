@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.10] - 2026-09-04
+
+### Added
+
+- **Per-provider hover detail cards in side notch** — hovering any individual
+  provider in the floating side notch panel expands a dedicated card aligned with
+  that provider via an arrow beak, showing its rate limit windows, progress bars,
+  reset countdowns, token usage summaries, and service status.
+- **Bottom-hover settings gear** — the settings gear icon in the side notch panel
+  remains tucked away and only appears when hovering at the bottom of the strip,
+  keeping the panel minimal and compact.
+
+### Changed
+
+- **Consistent "Used" quota on side notch** — all provider rings, meter tracks,
+  and card captions uniformly display percentage used (`% Used`), matching the
+  behavior across all providers.
+
+### Fixed
+
+- **Side notch window rendering & drag stability** — fixed transparent backing
+  buffer ghosting on window resizes, eliminated layout thrashing from
+  intermediate frame updates, and prevented window resize events from
+  misinterpreting programmatic layout passes as user drags.
+
 ## [0.2.9] - 2026-09-04
 
 ### Fixed
@@ -84,7 +109,7 @@ follows [Semantic Versioning](https://semver.org/).
   instead of a model-specific (Spark) window. The report that feeds the
   widget and CLI carries each provider's regular allowance windows only;
   the popover card still shows the full breakdown, and the duplicate
-  "General usage limits" window is gone.
+  \"General usage limits\" window is gone.
 - **Widget click popup** — clicking a provider widget no longer opens a
   per-widget display-options window. The options window, the
   `meterusage://widget/...` deep link, and the snapshot `widget_options`
@@ -118,7 +143,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 - Heatmap aggregation tests no longer fail every Monday and Sunday: they
   anchored to the live clock, and the grid omits future cells, so the
-  tested "tomorrow" did not exist at the start of a week. They now use a
+  tested \"tomorrow\" did not exist at the start of a week. They now use a
   fixed mid-week anchor.
 
 ## [0.2.4] - 2026-08-24
@@ -150,7 +175,7 @@ follows [Semantic Versioning](https://semver.org/).
   permission is already granted (e.g. via quota alerts), a one-shot system
   notice fires per version; it never requests permission on its own.
   The check is unauthenticated, sends no identifier or usage data, and can
-  be switched off in Settings → General → "Check for updates".
+  be switched off in Settings → General → \"Check for updates\".
 
 ### Fixed
 
@@ -162,11 +187,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **Compact settings layout** — the separate "Providers" and "Menu bar"
+- **Compact settings layout** — the separate \"Providers\" and \"Menu bar\"
   sections merged into one card: each provider row carries its popover
   switch plus a small tray-icon toggle for menu-bar visibility. Refresh
   and Theme became inline label-plus-picker rows, Alerts and Startup
-  folded into a single "General" card, and card padding tightened
+  folded into a single \"General\" card, and card padding tightened
   throughout.
 - **Tighter service status** — per-provider rows use a compact two-line
   layout with hairline dividers; all status detail (description,
@@ -188,17 +213,17 @@ follows [Semantic Versioning](https://semver.org/).
 
 - **Quota threshold notifications** — optional local alerts when a quota
   window crosses 80% or 95% used, or an earned reset credit is about to
-  expire within 24 hours. Off by default; the "Alerts" section of Settings
+  expire within 24 hours. Off by default; the \"Alerts\" section of Settings
   opts in and requests notification permission at that moment, never at
   launch. Alerts are edge-triggered, so a window above the threshold is
   reported once, not every refresh.
-- **Copy diagnostics** — a "Copy diagnostics" row under Maintenance in
+- **Copy diagnostics** — a \"Copy diagnostics\" row under Maintenance in
   Settings copies a privacy-safe summary of each provider's status
-  ("quota: unavailable (failed)") for bug reports. The report carries state
+  (\"quota: unavailable (failed)\") for bug reports. The report carries state
   categories only: no paths, account ids, or raw provider errors.
 - **7-day sparklines** — Codex and Claude quota cards now lead with a compact
-  last-7-days trend line (tokens, or sessions for Codex), answering "am I
-  burning faster than usual?" at a glance alongside the 26-week heatmap.
+  last-7-days trend line (tokens, or sessions for Codex), answering \"am I
+  burning faster than usual?\" at a glance alongside the 26-week heatmap.
 - **Provider marks in the popover** — the plain colour dots that previously
   identified providers in service-status rows, quota-card headers, usage
   rows, and the Settings provider list are now each provider's real mark,
@@ -212,7 +237,7 @@ follows [Semantic Versioning](https://semver.org/).
   refreshes (button, wake, popover open) always bypass backoff. Permanent
   conditions (CLI not installed, not signed in, no data) never back off.
 - **Estimated costs disclose their rate vintage** — cost captions now carry
-  the rate-table snapshot month (e.g. "est. Jul 2026 rates"), and the
+  the rate-table snapshot month (e.g. \"est. Jul 2026 rates\"), and the
   snapshot date in `Pricing.swift` is a machine-readable constant, so a
   stale rate table reads as stale instead of silently drifting.
 
@@ -221,7 +246,7 @@ follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Codex quota rows keep the reset countdown and local reset time on one line.
-- Model-specific quota headings drop the redundant "usage limits" suffix, so
+- Model-specific quota headings drop the redundant \"usage limits\" suffix, so
   headings such as `Weekly` and `GPT-5.3-Codex-Spark` stay compact.
 
 ## [0.1.5] - 2026-08-18
@@ -230,7 +255,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 - **OpenRouter removed from the system tray** — OpenRouter is pay-as-you-go
   (no quota window), so it no longer appears as a menu-bar cluster or in the
-  "Menu bar" tray-selection section of Settings. It still works as before in
+  \"Menu bar\" tray-selection section of Settings. It still works as before in
   the popover.
 
 ## [0.1.4] - 2026-08-18
@@ -245,7 +270,7 @@ follows [Semantic Versioning](https://semver.org/).
   ClaudeWatch, and Grok, OpenCode Go, and Antigravity use their own logos.
   Each is bundled as a tintable template image so the mark still carries the
   provider's service-status colour.
-- **Per-provider tray selection** — a new "Menu bar" section in Settings picks
+- **Per-provider tray selection** — a new \"Menu bar\" section in Settings picks
   which providers show as clusters in the tray, independent of which appear in
   the popover.
 - **Hover tooltip** — hovering the tray item shows a per-provider usage and
@@ -270,7 +295,7 @@ follows [Semantic Versioning](https://semver.org/).
   cumulative aggregation with a segmented control.
 - **Instant hover tooltip** on heatmap cells showing the date and token count
   (sessions for token-less Codex), floating above the hovered cell.
-- **Settings** — a master "Show heatmap" switch plus per-provider Codex and
+- **Settings** — a master \"Show heatmap\" switch plus per-provider Codex and
   Claude heatmap toggles.
 
 ### Changed
@@ -282,7 +307,7 @@ follows [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Grok quota maps the billing service's string-form 401 body
-  (`{"error":"Invalid or expired credentials"}`) to a "not signed in" state
+  (`{\"error\":\"Invalid or expired credentials\"}`) to a \"not signed in\" state
   instead of a generic failure.
 
 
