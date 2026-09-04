@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.8] - 2026-09-04
+
+### Added
+
+- **Side notch panel** — an opt-in floating strip of per-provider usage rings on
+  the right edge of the screen, just below the menu bar. Hovering expands a
+  detail card with per-window bars, percentages, and reset times; the strip can
+  be dragged anywhere and the position survives relaunches and screen changes.
+  Data comes from the same coordinator that feeds the tray and popover, and demo
+  mode works unchanged.
+- **First-run welcome** — the popover greets a first run with a page explaining
+  where usage lives now (compact tray, side notch panel, and this popover).
+  Either button dismisses it permanently; the enable button turns the panel on
+  from the page.
+
+### Changed
+
+- **Compact menu bar by default** — the tray now shows one small app mark (the
+  same fill-gauge geometry the app icon is drawn from) instead of per-provider
+  clusters, so the side notch panel can carry the usage. The tray and the panel
+  are independent switches; **Compact menu bar** in Settings brings the full
+  per-provider clusters back, and existing users who stored a value keep theirs.
+
+### Fixed
+
+- The OpenCode Go mark no longer renders as nothing where no bundled logo
+  exists (the SF Symbol fallback carried an invalid name).
+- The side notch panel's expanded card no longer strands itself offset inside
+  the window after hover, which clipped the bars and percent column.
+
 ## [0.2.7] - 2026-09-03
 
 ### Added
