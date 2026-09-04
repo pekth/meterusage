@@ -107,10 +107,15 @@ connect and no key-entry screen. OpenRouter uses an existing
   ```
 
 - **Opt-in side notch panel** — a floating strip of per-provider usage rings on
-  the right edge of the screen, just below the menu bar. Hovering expands a
-  detail card with per-window bars and reset times; the strip can be dragged
-  anywhere, and the position is remembered across launches. Off by default;
-  the **Side notch panel** switch in Settings turns it on.
+  the right edge of the screen, just below the menu bar. Every ring, progress
+  bar, and detail caption uniformly displays percentage used (`% Used`). Hovering
+  any provider expands a dedicated detail card aligned beside that provider
+  with an arrow beak, showing its rate limit windows, progress bars, reset
+  countdowns, token usage summaries, and service status. A settings gear icon
+  remains tucked away and only appears when hovering at the bottom of the
+  strip, keeping the panel minimal and compact. The strip can be dragged
+  anywhere, and the position is remembered across relaunches and screen changes.
+  Off by default; the **Side notch panel** switch in Settings turns it on.
 - **Notification Center widgets** — one widget per provider plus an
   automatic "worst provider" widget. Small = headline figure; medium =
   per-window bars with reset countdowns (current + weekly for a pinned
