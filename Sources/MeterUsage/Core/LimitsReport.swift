@@ -184,6 +184,7 @@ extension LimitsReport {
 // The file hand-off between the running app and the WidgetKit extension,
 // which runs out-of-process and shares nothing with us.
 
+@MainActor
 enum SnapshotStore {
 
     /// The app group both sides agree on. The sandboxed widget may read only
@@ -192,16 +193,56 @@ enum SnapshotStore {
     /// filesystem; the sandbox maps the same path for the widget.
     static let groupIdentifier = "group.dev.meterusage.app"
 
-    /// Written after every refresh sweep. Best-effort in both directions:
-    /// a failed write leaves the previous snapshot in place, and a failed
-    /// delete is harmless because readers treat any unreadable file as
-    /// "no data".
-    static func write(_ report: LimitsReport) {
-        let url = fileURL
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if let data = try? report.jsonData() {
-            try? data.write(to: url, options: .atomic)
+    /// Half the widget's one-hour stale boundary. This keeps an unchanged but
+    /// healthy report fresh without requesting a reload on every app sweep.
+    static let heartbeatInterval: TimeInterval = 30 * 60
+
+    struct PublishState {
+        private var schema: Int?
+        private var providers: [ProviderReport]?
+        private var lastSuccessfulWriteAt: Date?
+
+        @MainActor
+        mutating func shouldWrite(_ report: LimitsReport, now: Date) -> Bool {
+            guard schema == report.schema,
+                  providers == report.providers,
+                  let lastSuccessfulWriteAt else { return true }
+            return now.timeIntervalSince(lastSuccessfulWriteAt) >= SnapshotStore.heartbeatInterval
+        }
+
+        @MainActor
+        mutating func recordSuccessfulWrite(_ report: LimitsReport, now: Date) {
+            schema = report.schema
+            providers = report.providers
+            lastSuccessfulWriteAt = now
+        }
+    }
+
+    private static var publishState = PublishState()
+
+    /// Writes a changed report or a heartbeat. Returns true only after a
+    /// successful write, so a failed write retries on the next app sweep.
+    static func write(_ report: LimitsReport) -> Bool {
+        write(report, state: &publishState, now: Date(), writer: writeData)
+    }
+
+    static func write(_ report: LimitsReport, state: inout PublishState, now: Date,
+                      writer: (Data, URL) -> Bool) -> Bool {
+        guard state.shouldWrite(report, now: now),
+              let data = try? report.jsonData(),
+              writer(data, fileURL) else { return false }
+        state.recordSuccessfulWrite(report, now: now)
+        return true
+    }
+
+    private static func writeData(_ data: Data, to url: URL) -> Bool {
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: url, options: .atomic)
+            return true
+        } catch {
+            return false
         }
     }
 

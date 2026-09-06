@@ -107,4 +107,48 @@ final class LimitsReportTests: XCTestCase {
         XCTAssertEqual(decoded?.providers.first?.windows.first?.label, "Weekly")
         XCTAssertNil(decoded?.providers.first?.windows.first?.resetsAt)
     }
+
+    @MainActor
+    func testSnapshotWritePublishesChangesAndHeartbeatsBeforeStaleBoundary() {
+        let provider = ProviderReport(provider: "codex", status: "ok")
+        let first = LimitsReport(generatedAt: Date(timeIntervalSince1970: 1), providers: [provider])
+        let later = LimitsReport(generatedAt: Date(timeIntervalSince1970: 2), providers: [provider])
+        var state = SnapshotStore.PublishState()
+        var writes = 0
+        let writer: (Data, URL) -> Bool = { _, _ in
+            writes += 1
+            return true
+        }
+
+        XCTAssertTrue(SnapshotStore.write(first, state: &state, now: Date(timeIntervalSince1970: 1), writer: writer))
+        XCTAssertFalse(SnapshotStore.write(later, state: &state,
+                                           now: Date(timeIntervalSince1970: 1_800), writer: writer))
+        XCTAssertTrue(SnapshotStore.write(later, state: &state,
+                                          now: Date(timeIntervalSince1970: 1_801), writer: writer))
+
+        var changedProvider = provider
+        changedProvider.plan = "plus"
+        XCTAssertTrue(SnapshotStore.write(LimitsReport(
+            generatedAt: Date(timeIntervalSince1970: 3), providers: [changedProvider]),
+            state: &state, now: Date(timeIntervalSince1970: 1_802), writer: writer))
+        XCTAssertEqual(writes, 3)
+    }
+
+    @MainActor
+    func testSnapshotWriteRetriesAfterFailure() {
+        let report = LimitsReport(generatedAt: Date(timeIntervalSince1970: 1),
+                                  providers: [ProviderReport(provider: "codex", status: "ok")])
+        var state = SnapshotStore.PublishState()
+        var attempts = 0
+        let writer: (Data, URL) -> Bool = { _, _ in
+            attempts += 1
+            return attempts > 1
+        }
+
+        XCTAssertFalse(SnapshotStore.write(report, state: &state,
+                                            now: Date(timeIntervalSince1970: 1), writer: writer))
+        XCTAssertTrue(SnapshotStore.write(report, state: &state,
+                                           now: Date(timeIntervalSince1970: 2), writer: writer))
+        XCTAssertEqual(attempts, 2)
+    }
 }

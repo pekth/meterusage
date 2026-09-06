@@ -46,11 +46,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.preferences = preferences
         self.coordinator = coordinator
-        // Each sweep's report lands in the widget snapshot file, and placed
-        // widgets re-read the moment it lands rather than at their next
-        // scheduled timeline slot.
+        // A changed report or heartbeat lands in the widget snapshot file.
+        // Placed widgets re-read it rather than waiting for their next timeline slot.
         coordinator.didPublishSnapshot = { report in
-            SnapshotStore.write(report)
+            guard SnapshotStore.write(report) else { return }
             WidgetCenter.shared.reloadAllTimelines()
         }
         coordinator.quotaAlertService = QuotaAlertService(preferences: preferences)

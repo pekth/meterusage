@@ -5,8 +5,7 @@ import Foundation
 // `meterusage json` runs the binary headlessly: it polls the same
 // quota sources the menu-bar app uses, prints a stable JSON report on stdout,
 // and exits. The app does not launch, no status item appears, and nothing is
-// cached between invocations — every run reads live state. `--force` is
-// accepted and ignored for compatibility with other usage CLIs.
+// cached between invocations: every run reads live state.
 //
 // Purpose: agents, scripts, and editor integrations can read quota without
 // scraping UI or reimplementing any source. Output carries only display
@@ -18,14 +17,6 @@ enum CliMode {
     /// True when argv asks for headless JSON output rather than the app.
     static func wantsJSON(_ arguments: [String]) -> Bool {
         arguments.dropFirst().contains { $0 == "json" || $0 == "--json" }
-    }
-
-    /// Accepted so scripts written against other usage CLIs' conventions
-    /// work unchanged; this CLI never caches, so every invocation already
-    /// bypasses any freshness gate. Kept so scripts
-    /// written against that convention work unchanged.
-    static func wantsForce(_ arguments: [String]) -> Bool {
-        arguments.dropFirst().contains("--force")
     }
 
     /// Per-source timeout. A hung provider subprocess (e.g. a wedged `codex`
@@ -75,18 +66,69 @@ enum CliMode {
     }
 }
 
-/// Race a throwing async call against a timeout. The timeout arm throws, so a
-/// slow loser surfaces as an ordinary failure at the call site.
+private final class TimeoutState<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, Error>?
+    private var result: Result<Value, Error>?
+    private var workers: [Task<Void, Never>] = []
+
+    func install(_ continuation: CheckedContinuation<Value, Error>) {
+        lock.lock()
+        let result = self.result
+        if result == nil { self.continuation = continuation }
+        lock.unlock()
+        if let result { continuation.resume(with: result) }
+    }
+
+    func addWorker(_ worker: Task<Void, Never>) {
+        lock.lock()
+        let finished = result != nil
+        if !finished { workers.append(worker) }
+        lock.unlock()
+        if finished { worker.cancel() }
+    }
+
+    func finish(_ result: Result<Value, Error>) {
+        lock.lock()
+        guard self.result == nil else { lock.unlock(); return }
+        self.result = result
+        let continuation = self.continuation
+        self.continuation = nil
+        let workers = self.workers
+        self.workers.removeAll()
+        lock.unlock()
+        workers.forEach { $0.cancel() }
+        continuation?.resume(with: result)
+    }
+}
+
+/// Race a throwing async call against a timeout without awaiting a
+/// non-cooperative loser. Late completion is ignored after the first result.
 func withTimeout<T: Sendable>(_ seconds: TimeInterval,
                               _ body: @escaping @Sendable () async throws -> T) async throws -> T {
-    try await withThrowingTaskGroup(of: T.self) { group in
-        group.addTask { try await body() }
-        group.addTask {
-            try await Task.sleep(nanoseconds: UInt64(seconds * Double(NSEC_PER_SEC)))
-            throw CancellationError()
+    let state = TimeoutState<T>()
+    return try await withTaskCancellationHandler(operation: {
+        try await withCheckedThrowingContinuation { continuation in
+            state.install(continuation)
+            let operation = Task {
+                do {
+                    try Task.checkCancellation()
+                    state.finish(.success(try await body()))
+                }
+                catch { state.finish(.failure(error)) }
+            }
+            state.addWorker(operation)
+            let timer = Task {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(seconds * Double(NSEC_PER_SEC)))
+                    state.finish(.failure(CancellationError()))
+                } catch {
+                    state.finish(.failure(error))
+                }
+            }
+            state.addWorker(timer)
         }
-        guard let first = try await group.next() else { throw CancellationError() }
-        group.cancelAll()
-        return first
-    }
+    }, onCancel: {
+        state.finish(.failure(CancellationError()))
+    })
 }

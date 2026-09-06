@@ -13,11 +13,16 @@ set -euo pipefail
 fail=0
 note() { printf '  %s\n' "$1" >&2; }
 
-staged=$(git diff --cached --name-only --diff-filter=ACM)
-[ -z "$staged" ] && exit 0
+staged_file=$(mktemp "${TMPDIR:-/tmp}/meterusage-staged.XXXXXX")
+trap 'rm -f "$staged_file"' EXIT
+git diff --cached --name-only -z --diff-filter=ACMR > "$staged_file"
+[ ! -s "$staged_file" ] && exit 0
 
 # 1) Provider token prefixes and JWTs, matched against added lines only.
-added=$(git diff --cached --unified=0 -- $staged | grep '^+' | grep -v '^+++' || true)
+if ! added=$(git diff --cached --unified=0 -- | sed -n '/^+/ { /^+++/!p; }'); then
+  note "BLOCKED: could not read staged diff"
+  exit 1
+fi
 
 scan() { # <label> <regex>
   if printf '%s' "$added" | grep -qE "$2"; then
@@ -57,12 +62,12 @@ scan "Apple DEVELOPMENT_TEAM value"          'DEVELOPMENT_TEAM[[:space:]]*=[[:sp
 scan "Tailscale host"                        '[a-z0-9-]+\.ts\.net'
 
 # 3) Files that should never be tracked regardless of content.
-for f in $staged; do
+while IFS= read -r -d '' f; do
   case "$f" in
     *auth.json|*.credentials.json|*credentials.json|.env|.env.*|*.p12|*.pem|*.key)
       note "BLOCKED: credential-shaped file staged: $f"; fail=1 ;;
   esac
-done
+done < "$staged_file"
 
 if [ "$fail" -ne 0 ]; then
   cat >&2 <<'EOF'

@@ -1,14 +1,16 @@
 # Project knowledge
 
-Last verified: 2026-08-25
+Last verified: 2026-09-06
 
 ## Repository state
 
 - Default branch: `main`.
-- Verified source revision: `d063600a69dde634b4b9a4d86e3bc534a1611c91`.
+- Verified base revision: `a2dec557f6254b14922a5aef7c6b3dcca96ee0e5`.
 - The clean checkout was verified before this documentation change. This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
+
+- Tracked `.githooks` guards are inactive until a user configures Git's `core.hooksPath`. The pre-commit hook reads staged changes and fails closed on a matching credential shape. Run `bash .githooks/test-pre-commit.sh` for its synthetic space-path, rename, and staged-denial fixture.
 
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, widgets, and a scriptable JSON CLI.
 - The app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target, a widget target, and a test target. `Package.swift` is the source for this package structure.
@@ -16,6 +18,8 @@ Last verified: 2026-08-25
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
 - `CHANGELOG.md` records version 0.2.6 as the latest repository release entry, with Codex display and widget changes dated 2026-08-25. This is repository release-note state, not proof of a published release.
 - `CONTRIBUTING.md` requires focused changes, synthetic fixtures, and `swift build`, `swift test`, and `Scripts/make-app.sh` before a code pull request.
+- The headless JSON CLI bounds each provider poll. A provider that ignores cancellation cannot keep the calling CLI invocation open after the timeout; late completion is ignored. [`CliJSON.swift`](../Sources/MeterUsage/Core/CliJSON.swift) implements this boundary.
+- Widget snapshots publish when the report schema or provider payload changes, and at a 30-minute heartbeat while provider data is unchanged. A failed snapshot write remains eligible for retry. [`LimitsReport.swift`](../Sources/MeterUsage/Core/LimitsReport.swift) and [`AppDelegate.swift`](../Sources/MeterUsage/App/AppDelegate.swift) define this behavior.
 
 ## Verification gaps
 
