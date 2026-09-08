@@ -124,8 +124,9 @@ connect and no key-entry screen. OpenRouter uses an existing
   with an arrow beak, showing its rate limit windows, progress bars, reset
   countdowns, token usage summaries, and service status. The strip is a fixed
   black hardware-like object in every appearance — dark ring discs, vivid
-  state bands, white figures — with a settings orb (a quiet arc that wakes
-  into a gear on hover) tucked below the rings. At rest the strip folds to a
+  state bands, white figures — with a settings orb that only appears when
+  hovering the bottom of the strip (a quiet arc that wakes into a gear).
+  At rest the strip folds to a
   slim pill and unfolds on hover; **Keep open** pins it unfolded, clicking a
   ring refetches only that provider, and a right-click menu offers Keep open,
   Refresh now, and Hide. The strip can be dragged

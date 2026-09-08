@@ -80,6 +80,7 @@ struct SideNotchPanelView: View {
     @State private var hoveredProvider: Provider?
     @State private var isHoveringPanel = false
     @State private var isHoveringSettings = false
+    @State private var isHoveringBottom = false
     @State private var refreshingProviders: Set<Provider> = []
     /// Collapse hysteresis: a pointer exit schedules collapse, but a
     /// re-enter before the delay fires cancels it. 450ms — deliberately
@@ -88,7 +89,7 @@ struct SideNotchPanelView: View {
 
     /// Unfolded while pinned or while the pointer is on the panel.
     private var isOpen: Bool {
-        isPinned || isHoveringPanel || hoveredProvider != nil || isHoveringSettings
+        isPinned || isHoveringPanel || hoveredProvider != nil || isHoveringBottom || isHoveringSettings
     }
 
     var body: some View {
@@ -139,6 +140,7 @@ struct SideNotchPanelView: View {
             hoveredProvider = nil
             isHoveringPanel = false
             isHoveringSettings = false
+            isHoveringBottom = false
         }
     }
 
@@ -263,16 +265,18 @@ struct SideNotchPanelView: View {
                             isHoveringPanel = true
                             hoveredProvider = entry.provider
                             isHoveringSettings = false
+                            isHoveringBottom = false
                         }
                         Self.setHandCursor(hovering)
                     }
                 }
 
-                // Settings orb: a quiet arc at rest below the strip that wakes
-                // into a gear on hover. Always present, never gated behind a
-                // hotspot hunt — the readings stay the point, but settings
-                // stay findable.
-                settingsOrb
+                // Settings orb: tucked away until the pointer reaches the
+                // bottom of the strip, then a quiet arc that wakes into a
+                // gear on hover. The readings stay the point.
+                if isHoveringBottom || isHoveringSettings {
+                    settingsOrb
+                }
             }
         }
         .padding(.vertical, 12)
@@ -281,6 +285,20 @@ struct SideNotchPanelView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Notch.body)
         )
+        .overlay(alignment: .bottom) {
+            if !isHoveringBottom && !entries.isEmpty {
+                Color.clear
+                    .frame(height: 20)
+                    .contentShape(Rectangle())
+                    .onHover { hovering in
+                        if hovering {
+                            cancelFold()
+                            hoveredProvider = nil
+                            isHoveringBottom = true
+                        }
+                    }
+            }
+        }
     }
 
     private var settingsOrb: some View {
