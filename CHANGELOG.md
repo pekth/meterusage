@@ -4,6 +4,45 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.11] - 2026-09-07
+
+### Added
+
+- **Side notch folded pill and headline windows** — the panel folds to a slim
+  pill with ring-tint dots, unfolds on hover, and each ring follows its
+  provider's headline window tinted by quota headroom.
+- **Quota archive** — the last good quota reading per provider persists across
+  launches, so a cold start without reachability opens on dated numbers
+  instead of blank rings. Only displayed labels, percents, and reset times are
+  stored; clearing the app cache deletes the file.
+- **Draggable strip with side-flipping hover card** — the strip drags anywhere
+  and remembers its corner; the detail card docks left or right automatically
+  depending on room, top-aligned with the strip and clamped on-screen.
+- **VoiceOver ring details** — each ring exposes its reading plus Show/Hide
+  details actions driving the same hover card.
+
+### Changed
+
+- **Popover and settings match the side notch theme** — dashboard and settings
+  surfaces use the notch's fixed hardware blacks with vivid state bands, so the
+  tray popover reads as one object with the strip. Light variants stay adaptive
+  for the menu-bar tray; provider tints and native control accents unchanged.
+- **Hover-only strip** — ring click-to-refresh and the bottom settings orb are
+  gone; refresh lives in the right-click menu. Hover cards, pinning, and fold
+  hysteresis unchanged.
+- **Black hardware notch look** — pure-black body, near-black card, vivid state
+  bands, white figures; rings shrunk to 26pt with a compact strip and pill.
+
+### Fixed
+
+- **Side notch window sizing** — the expanded card can no longer strand the
+  window too narrow (instant unfold, layout-stable bottom edge), and placements
+  ignore sub-point measurement wobble instead of re-framing under the cursor.
+- **MainActor isolation in quota archive path** — the archive resolves its own
+  cache URL instead of reading through the coordinator.
+- **SwiftUI Color initializer and cursor type-check** — existing initializers
+  and an out-of-line cursor helper where the checker timed out.
+
 ## [0.2.10] - 2026-09-04
 
 ### Added
