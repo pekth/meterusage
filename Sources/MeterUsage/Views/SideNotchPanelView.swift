@@ -185,7 +185,7 @@ struct SideNotchPanelView: View {
     /// Slim resting pill shown when the panel is neither pinned nor hovered.
     /// Dots reuse the entries' ring tints so headroom stays readable at rest.
     private var foldedPill: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             ForEach(entries.prefix(5)) { entry in
                 Circle()
                     .fill(entry.ringTint)
@@ -197,8 +197,8 @@ struct SideNotchPanelView: View {
                     .frame(width: 8, height: 8)
             }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 6)
         .background(
             Capsule(style: .continuous)
                 .fill(Notch.body)
@@ -225,14 +225,14 @@ struct SideNotchPanelView: View {
     // MARK: - Strip
 
     private var strip: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 6) {
             if entries.isEmpty {
                 Text("—")
                     .font(.muNumber)
                     .foregroundColor(Notch.subtext)
             } else {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                    VStack(spacing: 3) {
+                    VStack(spacing: 2) {
                         QuotaRing(
                             fraction: entry.fraction,
                             tint: entry.ringTint,
@@ -241,7 +241,7 @@ struct SideNotchPanelView: View {
                             reduceMotion: reduceMotion
                         )
                         Text(Fmt.percent(entry.usedPercent))
-                            .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
                             .foregroundColor(Notch.text)
                     }
                     .contentShape(Rectangle())
@@ -279,8 +279,8 @@ struct SideNotchPanelView: View {
                 }
             }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Notch.body)
@@ -464,9 +464,9 @@ struct SideNotchPanelView: View {
 
     private func ringCenterY(for provider: Provider) -> CGFloat {
         guard let index = entries.firstIndex(where: { $0.provider == provider }) else {
-            return 34
+            return 28
         }
-        return 34 + CGFloat(index) * 73
+        return 28 + CGFloat(index) * 63
     }
 
     private func cardTopOffset(for provider: Provider) -> CGFloat {
@@ -710,7 +710,7 @@ private struct QuotaRing: View {
                 // carries the state, and the mark steps back.
                 .opacity(fraction >= 1 ? 0.5 : 1.0)
         }
-        .frame(width: 44, height: 44)
+        .frame(width: 40, height: 40)
         // A ring that jumps reads as a glitch; one that sweeps reads as a
         // measurement.
         .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.65), value: fraction)
