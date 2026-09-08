@@ -142,7 +142,9 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
                 }
             }
             if let service = coordinator.statuses[provider]?.value,
-               service.severity != .operational, service.severity != .unknown {
+               service.severity != .operational {
+                // Unknown reads as its own word, never silence: a check that
+                // cannot report is information, not health.
                 parts.append(service.severity.displayName)
             }
             if !parts.isEmpty {

@@ -138,11 +138,11 @@ struct PopoverRoot: View {
                             .font(.muBody)
                             .foregroundColor(MU.text)
                     }
-                    Text("Your usage meters live in the side notch panel: a floating strip of rings on the right edge of the screen. Hover it to expand; drag it anywhere. Click the menu bar mark to open this popover anytime.")
+                    Text("Your usage meters live in the side notch panel: a floating strip of rings. Hover any ring for its detail card — the card flips sides to stay on screen — and drag the strip anywhere. Click the menu bar mark to open this popover anytime.")
                         .font(.muBody)
                         .foregroundColor(MU.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("You can change both in Settings at any time.")
+                    Text("You can change this in Settings at any time.")
                         .font(.muCaption)
                         .foregroundColor(MU.textTertiary)
                 }

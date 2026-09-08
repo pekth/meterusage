@@ -3,8 +3,9 @@ import AppKit
 
 /// Settings pane, shown in place of the dashboard inside the same popover.
 ///
-/// A separate window would be a second thing to manage for four toggles, and a
-/// menu-bar app that opens windows loses its "glance and dismiss" quality.
+/// A separate window would be a second thing to manage for a handful of
+/// toggles, and a menu-bar app that opens windows loses its "glance and
+/// dismiss" quality.
 ///
 /// Every control binds `@AppStorage` directly. `Preferences` observes the same
 /// keys and republishes, so changing the interval here restarts the coordinator's
@@ -108,10 +109,6 @@ struct SettingsView: View {
                         isOn: $showClaude,
                         menuBarIsOn: $menuBarClaude
                     )
-                    Divider().overlay(MU.hairline)
-                    Text("The switch shows a provider here; the tray icon also puts it in the menu bar.")
-                        .font(.muCaption)
-                        .foregroundColor(MU.textTertiary)
                 }
             }
 
@@ -134,7 +131,7 @@ struct SettingsView: View {
                         )
                     }
                     Divider().overlay(MU.hairline)
-                    Text("Switching a provider off above stops its credential being read at all. It does not sign you out of the tool that owns the account.")
+                    Text("Switching a provider off above stops reading its credential entirely. It does not sign you out of that tool.")
                         .font(.muCaption)
                         .foregroundColor(MU.textTertiary)
                 }
@@ -160,13 +157,13 @@ struct SettingsView: View {
                     Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Side notch panel",
-                        subtitle: "Floating usage rings on the right edge of the screen. Hover to expand.",
+                        subtitle: "Floating usage rings. Hover a ring for details; drag the strip anywhere.",
                         isOn: $sideNotchPanel
                     )
                     Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Keep panel open",
-                        subtitle: "Never fold the side notch panel to its resting pill. Click a ring to refresh just that provider.",
+                        subtitle: "Never fold the side notch panel to its resting pill.",
                         isOn: $sideNotchPanelPinned
                     )
                     .disabled(!sideNotchPanel)
@@ -204,7 +201,7 @@ struct SettingsView: View {
                 Card(padding: 10) {
                     SettingToggle(
                         title: "Quota alerts",
-                        subtitle: "Notify when a quota window crosses 80% or 95% used, or a reset credit is about to expire.",
+                        subtitle: "Notify at 80% and 95% used, and before reset credits expire.",
                         isOn: Binding(
                             get: { quotaAlerts },
                             set: { newValue in
@@ -231,7 +228,7 @@ struct SettingsView: View {
                     Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Check for updates",
-                        subtitle: "Once a day, compare against GitHub Releases and show a banner when a newer version is out.",
+                        subtitle: "Check GitHub Releases once a day and show a banner when a newer version is out.",
                         isOn: $updateCheck
                     )
                 }
@@ -412,27 +409,32 @@ private struct ProviderRow: View {
             }
             Spacer(minLength: 6)
             if let menuBarIsOn {
-                Button {
-                    menuBarIsOn.wrappedValue.toggle()
-                } label: {
-                    Image(systemName: "menubar.dock.rectangle")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(
-                            menuBarIsOn.wrappedValue
-                                ? MU.calm
-                                : (hoveringTray ? MU.textSecondary : MU.textTertiary.opacity(0.6))
-                        )
-                        .frame(width: 18, height: 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(hoveringTray ? MU.well : Color.clear)
-                        )
+                HStack(spacing: 4) {
+                    Text("Side notch")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                    Button {
+                        menuBarIsOn.wrappedValue.toggle()
+                    } label: {
+                        Image(systemName: "circle")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(
+                                menuBarIsOn.wrappedValue
+                                    ? MU.calm
+                                    : (hoveringTray ? MU.textSecondary : MU.textTertiary.opacity(0.6))
+                            )
+                            .frame(width: 18, height: 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(hoveringTray ? MU.well : Color.clear)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(menuBarIsOn.wrappedValue
+                          ? "Hide \(provider.displayName) from the side notch and menu bar"
+                          : "Show \(provider.displayName) in the side notch and menu bar")
+                    .onHover { hoveringTray = $0 }
                 }
-                .buttonStyle(.plain)
-                .help(menuBarIsOn.wrappedValue
-                      ? "Hide \(provider.displayName) from the menu bar"
-                      : "Show \(provider.displayName) in the menu bar")
-                .onHover { hoveringTray = $0 }
             }
             Toggle("Show \(provider.displayName)", isOn: $isOn)
                 .labelsHidden()

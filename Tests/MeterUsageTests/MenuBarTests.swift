@@ -85,6 +85,17 @@ final class MenuBarTests: XCTestCase {
     }
 
     @MainActor
+    func testTooltipNamesUnknownServiceInsteadOfSilence() async throws {
+        let coordinator = try await Self.coordinator(
+            quotaWindows: [(Provider.codex, "Weekly", 82, nil)],
+            statuses: [(Provider.grok, Severity.unknown)]
+        )
+
+        let tooltip = AppDelegate.tooltip(for: coordinator)
+        XCTAssertTrue(tooltip.contains("Grok: Unknown"), tooltip)
+    }
+
+    @MainActor
     func testTooltipShowsNoDataWhenNothingHasLoaded() throws {
         let suiteName = "MeterUsageTests-" + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

@@ -361,9 +361,11 @@ struct SideNotchPanelView: View {
                 }
             }
 
-            // Service status alert if degraded or outage
+            // Service status badge for anything but operational. Unknown gets
+            // its neutral badge rather than silence: an unreadable check is
+            // information, not health.
             if let status = coordinator.statuses[provider]?.value,
-               status.severity != .operational && status.severity != .unknown {
+               status.severity != .operational {
                 StatusBadge(severity: status.severity)
             }
 
