@@ -93,16 +93,17 @@ struct SideNotchPanelView: View {
     }
 
     var body: some View {
+        // No transition here by design: the hosting panel resizes itself
+        // from this view's measured size, and an animated swap reports
+        // mid-flight sizes that strand the window too narrow for the card.
+        // The unfold reads fine as an instant reveal; the rings keep springs.
         Group {
             if isOpen {
                 openPanel
-                    .transition(.opacity)
             } else {
                 foldedPill
-                    .transition(.opacity)
             }
         }
-        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: isOpen)
         .background(
             GeometryReader { proxy in
                 Color.clear
@@ -307,18 +308,18 @@ struct SideNotchPanelView: View {
                 if isHoveringSettings {
                     Circle()
                         .fill(Notch.disc)
-                        .frame(width: 30, height: 30)
+                        .frame(width: 22, height: 22)
                     Image(systemName: "gearshape")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundColor(Notch.text)
                 } else {
                     Circle()
                         .trim(from: 0.05, to: 0.7)
-                        .stroke(Notch.orbGrey, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                        .frame(width: 26, height: 26)
+                        .stroke(Notch.orbGrey, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .frame(width: 19, height: 19)
                 }
             }
-            .frame(width: 30, height: 30)
+            .frame(width: 22, height: 22)
         }
         .buttonStyle(.plain)
         .help("Settings")
