@@ -641,20 +641,6 @@ final class AppCoordinator: ObservableObject {
     /// visible even when the matching provider's usage card is switched off.
     var statusProviders: [Provider] { visibleStatusProviders }
 
-    /// The single most-constrained headline across every visible provider —
-    /// the one number the menu bar shows. Each provider contributes its
-    /// declared headline window (never its biggest), so the figure keeps a
-    /// stable subject per provider across resets.
-    var mostConstrained: (provider: Provider, window: QuotaWindow)? {
-        visibleQuotaProviders
-            .compactMap { provider in
-                quotas[provider]?.value.flatMap { quota in
-                    provider.headlineWindow(from: quota.windows).map { (provider, $0) }
-                }
-            }
-            .max { $0.1.usedPercent < $1.1.usedPercent }
-    }
-
     /// Worst known service severity, or `nil` when nothing has been checked.
     var worstStatus: ServiceStatus? {
         statusProviders

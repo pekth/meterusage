@@ -135,7 +135,9 @@ connect and no key-entry screen. OpenRouter uses an existing
   Reduce Motion removes the animation rather than shortening it.
   Off by default; the **Side notch panel** switch in Settings turns it on.
 - **Notification Center widgets** — one widget per provider plus an
-  automatic "worst provider" widget. Small = headline figure; medium =
+  automatic "worst provider" widget. Each shows its provider's headline
+  window — the same subject as the tray, never the busiest window.
+  Small = headline figure; medium =
   per-window bars with reset countdowns (current + weekly for a pinned
   provider). Widgets read only the
   snapshot file the app rewrites after every refresh — no provider CLIs,

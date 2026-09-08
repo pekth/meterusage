@@ -63,6 +63,37 @@ struct Snapshot: Decodable {
                 case usedPercent = "used_percent"
                 case resetsAt = "resets_at"
             }
+
+            /// The provider's current-session window. Mirrors the app's
+            /// `QuotaWindow.isSessionWindow` — duplicated, not shared, because
+            /// this extension decodes the snapshot schema standalone.
+            var isSessionWindow: Bool {
+                let l = label.lowercased()
+                return l == "5-hour" || l.contains("session")
+            }
+        }
+
+        /// The window the automatic widget shows for this provider. Mirrors
+        /// the app's declared headline rule (`Provider.headlineWindow`) so
+        /// the widget never disagrees with the tray about what a ring means:
+        /// a named subject per provider, `nil` when genuinely absent rather
+        /// than another window promoted into its place.
+        var headlineWindow: Window? {
+            let windows = self.windows ?? []
+            switch provider {
+            case "codex":
+                if let session = windows.first(where: \.isSessionWindow) { return session }
+                return windows.count == 1 ? windows[0] : nil
+            case "claude":
+                if let session = windows.first(where: \.isSessionWindow) { return session }
+                return windows.first(where: { $0.label == "7-day" })
+            case "openCodeGo":
+                return windows.first(where: { $0.label.lowercased() == "rolling" })
+            default:
+                // Single-window providers and dynamic group labels (Grok,
+                // Antigravity) have no session concept: busiest wins.
+                return windows.max(by: { $0.usedPercent < $1.usedPercent })
+            }
         }
     }
 }
@@ -161,10 +192,11 @@ struct DisplayRow {
             }
         }
 
-        // Automatic: one row per provider, its busiest window, busiest
-        // provider first.
+        // Automatic: one row per provider, its headline window, busiest
+        // provider first. Headline, never busiest-window: the subject must
+        // match the tray, especially on reset days.
         return ok.compactMap { row -> DisplayRow? in
-            guard let window = (row.windows ?? []).max(by: { $0.usedPercent < $1.usedPercent }) else {
+            guard let window = row.headlineWindow else {
                 return nil
             }
             return DisplayRow(title: row.displayName,
