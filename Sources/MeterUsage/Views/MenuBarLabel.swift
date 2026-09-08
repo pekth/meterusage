@@ -129,8 +129,9 @@ struct MenuBarLabel: View {
                     isStale: isStale
                 )
             }
-            // No quota, but a degraded-or-worse service is worth a bare mark.
-            if let status, status.severity != .operational, status.severity != .unknown {
+            // No quota, but a non-operational service is worth a bare mark —
+            // degraded and outages in their band tint, unknown in neutral.
+            if let status, status.severity != .operational {
                 return Cluster(
                     provider: provider,
                     percent: nil,
