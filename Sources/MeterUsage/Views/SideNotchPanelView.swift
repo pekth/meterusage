@@ -225,7 +225,7 @@ struct SideNotchPanelView: View {
     // MARK: - Strip
 
     private var strip: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             if entries.isEmpty {
                 Text("—")
                     .font(.muNumber)
@@ -241,7 +241,7 @@ struct SideNotchPanelView: View {
                             reduceMotion: reduceMotion
                         )
                         Text(Fmt.percent(entry.usedPercent))
-                            .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                            .font(.system(size: 10, weight: .semibold).monospacedDigit())
                             .foregroundColor(Notch.text)
                     }
                     .contentShape(Rectangle())
@@ -279,8 +279,8 @@ struct SideNotchPanelView: View {
                 }
             }
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 6)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Notch.body)
@@ -464,9 +464,9 @@ struct SideNotchPanelView: View {
 
     private func ringCenterY(for provider: Provider) -> CGFloat {
         guard let index = entries.firstIndex(where: { $0.provider == provider }) else {
-            return 28
+            return 22
         }
-        return 28 + CGFloat(index) * 63
+        return 22 + CGFloat(index) * 51
     }
 
     private func cardTopOffset(for provider: Provider) -> CGFloat {
@@ -699,18 +699,18 @@ private struct QuotaRing: View {
             Circle()
                 .fill(Notch.disc)
             Circle()
-                .stroke(Notch.track, lineWidth: 3.5)
+                .stroke(Notch.track, lineWidth: 3)
             Circle()
                 .trim(from: 0, to: fraction.clamped(to: 0...1))
-                .stroke(tint, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+                .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             ProviderMark(provider: provider, tint: markTint)
-                .frame(width: 14, height: 14)
+                .frame(width: 11, height: 11)
                 // A hit limit dims the glyph: the full orange ring already
                 // carries the state, and the mark steps back.
                 .opacity(fraction >= 1 ? 0.5 : 1.0)
         }
-        .frame(width: 40, height: 40)
+        .frame(width: 32, height: 32)
         // A ring that jumps reads as a glitch; one that sweeps reads as a
         // measurement.
         .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.65), value: fraction)
