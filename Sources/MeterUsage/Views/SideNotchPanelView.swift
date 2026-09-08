@@ -29,20 +29,20 @@ enum NotchBand: Equatable {
 }
 
 enum Notch {
-    static let body = Color(srgbRed: 0, green: 0, blue: 0)
-    static let card = Color(srgbRed: 0.04, green: 0.04, blue: 0.04)
-    static let disc = Color(srgbRed: 0.16, green: 0.16, blue: 0.16)
-    static let track = Color(srgbRed: 0.23, green: 0.23, blue: 0.23)
+    static let body = Color(red: 0, green: 0, blue: 0)
+    static let card = Color(red: 0.04, green: 0.04, blue: 0.04)
+    static let disc = Color(red: 0.16, green: 0.16, blue: 0.16)
+    static let track = Color(red: 0.23, green: 0.23, blue: 0.23)
     static let text = Color.white
     static let subtext = Color(white: 1, opacity: 0.55)
     static let orbGrey = Color(white: 1, opacity: 0.35)
 
     static func color(usedPercent: Double) -> Color {
         switch NotchBand.band(usedPercent: usedPercent) {
-        case .plenty:       return Color(srgbRed: 0.16, green: 0.88, blue: 0.48)
-        case .gettingClose: return Color(srgbRed: 0.96, green: 0.89, blue: 0.0)
+        case .plenty:       return Color(red: 0.16, green: 0.88, blue: 0.48)
+        case .gettingClose: return Color(red: 0.96, green: 0.89, blue: 0.0)
         case .nearlyOut, .atLimit:
-            return Color(srgbRed: 1.0, green: 0.27, blue: 0.0)
+            return Color(red: 1.0, green: 0.27, blue: 0.0)
         }
     }
 }
@@ -147,6 +147,17 @@ struct SideNotchPanelView: View {
         collapseTask = nil
     }
 
+    /// Pushes/pops (never stamps) the pointing hand over a ring, so leaving
+    /// restores whatever cursor the app underneath had chosen. Static and
+    /// out-of-line to keep the cell's view-builder expression cheap to check.
+    private static func setHandCursor(_ hovering: Bool) {
+        if hovering {
+            NSCursor.pointingHand.push()
+        } else {
+            NSCursor.pop()
+        }
+    }
+
     private var openPanel: some View {
         HStack(alignment: .top, spacing: 0) {
             if let hovered = hoveredProvider, entries.contains(where: { $0.provider == hovered }) {
@@ -246,10 +257,8 @@ struct SideNotchPanelView: View {
                             isHoveringPanel = true
                             hoveredProvider = entry.provider
                             isHoveringSettings = false
-                            NSCursor.pointingHand.push()
-                        } else {
-                            NSCursor.pop()
                         }
+                        Self.setHandCursor(hovering)
                     }
                 }
 
