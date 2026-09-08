@@ -15,8 +15,14 @@ import Foundation
 
 enum QuotaArchive {
 
+    /// Computed directly instead of reading through `AppCoordinator`: that
+    /// type is `@MainActor`-isolated and this enum must stay nonisolated so
+    /// `load`/`save` remain callable (and testable) off the main actor.
     static var defaultURL: URL {
-        AppCoordinator.cacheDirectory.appendingPathComponent("quota-archive.json")
+        HomeDirectory.real
+            .appendingPathComponent("Library/Application Support", isDirectory: true)
+            .appendingPathComponent("MeterUsage", isDirectory: true)
+            .appendingPathComponent("quota-archive.json")
     }
 
     private struct Stored: Codable {

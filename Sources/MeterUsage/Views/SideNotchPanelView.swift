@@ -35,7 +35,6 @@ enum Notch {
     static let track = Color(red: 0.23, green: 0.23, blue: 0.23)
     static let text = Color.white
     static let subtext = Color(white: 1, opacity: 0.55)
-    static let orbGrey = Color(white: 1, opacity: 0.35)
 
     static func color(usedPercent: Double) -> Color {
         switch NotchBand.band(usedPercent: usedPercent) {
@@ -44,6 +43,20 @@ enum Notch {
         case .nearlyOut, .atLimit:
             return Color(red: 1.0, green: 0.27, blue: 0.0)
         }
+    }
+}
+
+// MARK: - Measured strip size
+//
+// The card-side math needs the strip's size, which only exists after layout.
+// This preference carries it up without affecting layout (a background reader
+// is zero-size). The card always starts at the top edge, so its height is
+// never needed.
+
+private struct StripSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
     }
 }
 
@@ -60,28 +73,31 @@ enum Notch {
 // headroom, and the mark is tinted by service status. A provider with no
 // headline reading is skipped rather than drawn as an empty ring.
 //
-// Interaction (borrowed from codenotch's notch, adapted to this strip):
-// the panel folds to a slim pill and unfolds on hover; "Keep open" pins it
-// unfolded across relaunches; clicking a ring refetches only that provider
-// so one cell never spends the others' rate-limit budget.
+// Interaction: the panel folds to a slim pill and unfolds on hover;
+// "Keep open" pins it unfolded across relaunches. Hover only — rings and
+// settings carry no click action; refresh lives in the context menu.
 
 struct SideNotchPanelView: View {
 
     @ObservedObject var coordinator: AppCoordinator
-    var onOpenSettings: () -> Void = {}
+    /// The hosting controller, observed for the card side only: dragging the
+    /// strip across the screen flips the card left/right, which must
+    /// re-render the panel. (Both live for the life of the app, so the
+    /// reference cycle is harmless.)
+    @ObservedObject var panel: SideNotchPanelController
     /// Reports the view's natural size so the hosting panel can keep its
     /// top-right corner pinned while the content grows and shrinks. Same
     /// contract as `MenuBarLabel.onWidthChange`.
     var onSizeChange: (CGSize) -> Void = { _ in }
+    /// Reports the strip alone (card excluded) so the controller can track
+    /// the strip's screen rect for the card-side math.
+    var onStripSizeChange: (CGSize) -> Void = { _ in }
 
     @AppStorage(PrefKey.sideNotchPanelPinned) private var isPinned = false
     @AppStorage(PrefKey.sideNotchPanel) private var panelEnabled = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hoveredProvider: Provider?
     @State private var isHoveringPanel = false
-    @State private var isHoveringSettings = false
-    @State private var isHoveringBottom = false
-    @State private var refreshingProviders: Set<Provider> = []
     /// Collapse hysteresis: a pointer exit schedules collapse, but a
     /// re-enter before the delay fires cancels it. 450ms — deliberately
     /// longer than a tooltip grace, so the fold never feels twitchy.
@@ -89,7 +105,7 @@ struct SideNotchPanelView: View {
 
     /// Unfolded while pinned or while the pointer is on the panel.
     private var isOpen: Bool {
-        isPinned || isHoveringPanel || hoveredProvider != nil || isHoveringBottom || isHoveringSettings
+        isPinned || isHoveringPanel || hoveredProvider != nil
     }
 
     var body: some View {
@@ -129,8 +145,8 @@ struct SideNotchPanelView: View {
             Divider()
             Button("Hide panel") { panelEnabled = false }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
+        // Children stay navigable (rings carry their own labels and detail
+        // actions below); the folded pill labels itself separately.
     }
 
     private func scheduleFold() {
@@ -140,8 +156,6 @@ struct SideNotchPanelView: View {
             guard !Task.isCancelled else { return }
             hoveredProvider = nil
             isHoveringPanel = false
-            isHoveringSettings = false
-            isHoveringBottom = false
         }
     }
 
@@ -150,35 +164,50 @@ struct SideNotchPanelView: View {
         collapseTask = nil
     }
 
-    /// Pushes/pops (never stamps) the pointing hand over a ring, so leaving
-    /// restores whatever cursor the app underneath had chosen. Static and
-    /// out-of-line to keep the cell's view-builder expression cheap to check.
-    private static func setHandCursor(_ hovering: Bool) {
-        if hovering {
-            NSCursor.pointingHand.push()
-        } else {
-            NSCursor.pop()
+    private var openPanel: some View {
+        HStack(alignment: .top, spacing: 0) {
+            // Ring exit clears nothing on purpose, so the pointer can slide
+            // off a ring onto its card to read it. A provider that leaves
+            // `entries` mid-hover must not keep a card mounted for data no
+            // longer shown.
+            if !panel.cardOnRight {
+                cardColumn
+            }
+            strip
+            if panel.cardOnRight {
+                cardColumn
+            }
+        }
+        .fixedSize()
+        .onPreferenceChange(StripSizeKey.self, perform: onStripSizeChange)
+        .onChange(of: panel.isDragging) { dragging in
+            // A drop can strand a hover from before the drag (the mouse never
+            // re-enters to refresh it): always reopen from a clean hover.
+            if !dragging { hoveredProvider = nil }
         }
     }
 
-    private var openPanel: some View {
-        HStack(alignment: .top, spacing: 0) {
-            if let hovered = hoveredProvider, entries.contains(where: { $0.provider == hovered }) {
-                detailCard(for: hovered)
-                    .id(hovered)
-                    .overlay(alignment: .topTrailing) {
-                        ArrowBeakView()
-                            .offset(x: 6.5, y: beakYOnCard(for: hovered))
-                    }
-                    .padding(.top, cardTopOffset(for: hovered))
-                    .padding(.trailing, 8)
-                    .onHover { hovering in
-                        if hovering { cancelFold() }
-                    }
-            }
-            strip
+    /// Hover card docked beside the strip — left on a right-parked strip,
+    /// right once the strip crosses to the left half of the screen. Hidden
+    /// while dragging: a slim strip tracks the cursor, and the side settles
+    /// on drop.
+    @ViewBuilder
+    private var cardColumn: some View {
+        if !panel.isDragging,
+           let hovered = hoveredProvider,
+           entries.contains(where: { $0.provider == hovered }) {
+            detailCard(for: hovered)
+                .id(hovered)
+                .accessibilityElement(children: .combine)
+                .overlay(alignment: panel.cardOnRight ? .topLeading : .topTrailing) {
+                    ArrowBeakView()
+                        .scaleEffect(x: panel.cardOnRight ? -1 : 1, y: 1)
+                        .offset(x: panel.cardOnRight ? -3.5 : 3.5, y: beakYOnCard(for: hovered))
+                }
+                .onHover { hovering in
+                    if hovering { cancelFold() }
+                }
         }
-        .fixedSize()
     }
 
     // MARK: - Folded pill
@@ -246,7 +275,23 @@ struct SideNotchPanelView: View {
                             .foregroundColor(Notch.text)
                     }
                     .contentShape(Rectangle())
-                    .scaleEffect(refreshingProviders.contains(entry.provider) ? 0.92 : 1.0)
+                    // VoiceOver reaches this panel without the window ever
+                    // taking key focus (nonactivating by design, so Tab never
+                    // arrives): each ring is therefore an accessible element
+                    // with an explicit details action instead of a focusable
+                    // control. The action drives the same card state as hover —
+                    // explicit activation wins, and a later mouse enter still
+                    // re-asserts, so the two inputs never fight.
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(accessibilityRingText(for: entry))
+                    .accessibilityAction(named: "Show details") {
+                        cancelFold()
+                        isHoveringPanel = true
+                        hoveredProvider = entry.provider
+                    }
+                    .accessibilityAction(named: "Hide details") {
+                        hoveredProvider = nil
+                    }
                     // A remembered reading is dated information: dim it so it
                     // never passes for a live number.
                     .opacity(entry.isStale ? 0.55 : 1.0)
@@ -258,78 +303,36 @@ struct SideNotchPanelView: View {
                             .delay(min(Double(index) * 0.03, 0.12)),
                         value: entry.fraction
                     )
-                    .help("Click to refresh \(entry.provider.displayName)")
-                    .onTapGesture { refreshRing(entry.provider) }
                     .onHover { hovering in
                         if hovering {
                             cancelFold()
                             isHoveringPanel = true
                             hoveredProvider = entry.provider
-                            isHoveringSettings = false
-                            isHoveringBottom = false
                         }
-                        Self.setHandCursor(hovering)
                     }
-                }
-
-                // Settings orb: tucked away until the pointer reaches the
-                // bottom of the strip, then a quiet arc that wakes into a
-                // gear on hover. The readings stay the point.
-                if isHoveringBottom || isHoveringSettings {
-                    settingsOrb
                 }
             }
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 6)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Notch.body)
+            GeometryReader { proxy in
+                Color.clear.preference(key: StripSizeKey.self, value: proxy.size)
+            }
         )
-        .overlay(alignment: .bottom) {
-            if !isHoveringBottom && !entries.isEmpty {
-                Color.clear
-                    .frame(height: 20)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        if hovering {
-                            cancelFold()
-                            hoveredProvider = nil
-                            isHoveringBottom = true
-                        }
-                    }
-            }
-        }
-    }
-
-    private var settingsOrb: some View {
-        Button(action: onOpenSettings) {
-            ZStack {
-                if isHoveringSettings {
-                    Circle()
-                        .fill(Notch.disc)
-                        .frame(width: 22, height: 22)
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Notch.text)
-                } else {
-                    Circle()
-                        .trim(from: 0.05, to: 0.7)
-                        .stroke(Notch.orbGrey, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                        .frame(width: 19, height: 19)
-                }
-            }
-            .frame(width: 22, height: 22)
-        }
-        .buttonStyle(.plain)
-        .help("Settings")
-        .onHover { hovering in
-            isHoveringSettings = hovering
-            if hovering {
-                cancelFold()
-                hoveredProvider = nil
-            }
-        }
+        .background(
+            // Square on the card side for the flush dock, round on the
+            // exposed side — mirrored when the card flips right, so the
+            // outer silhouette stays round and the joint stays square.
+            UnevenRoundedRectangle(
+                topLeadingRadius: panel.cardOnRight ? 20 : 0,
+                bottomLeadingRadius: panel.cardOnRight ? 20 : 0,
+                bottomTrailingRadius: panel.cardOnRight ? 0 : 20,
+                topTrailingRadius: panel.cardOnRight ? 0 : 20,
+                style: .continuous
+            )
+            .fill(Notch.body)
+        )
     }
 
     // MARK: - Detail card for hovered provider
@@ -348,11 +351,13 @@ struct SideNotchPanelView: View {
                 Text("\(provider.displayName) Usage")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Notch.text)
+                    .lineLimit(1)
                 Spacer(minLength: 6)
                 if let countdown = headerResetCountdown(for: provider) {
                     Text("Resets in \(countdown)")
                         .font(.system(size: 11, weight: .regular))
                         .foregroundColor(Notch.subtext)
+                        .lineLimit(1)
                 }
             }
 
@@ -370,6 +375,7 @@ struct SideNotchPanelView: View {
                             Text(windowDisplayTitle(for: window, provider: provider))
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(Notch.text)
+                                .lineLimit(1)
 
                             // Fixed-width track so layout never collapses or jumps
                             ZStack(alignment: .leading) {
@@ -390,6 +396,8 @@ struct SideNotchPanelView: View {
                                     Text("Resets \(Fmt.absoluteMoment(resetsAt, now: coordinator.clock))")
                                         .font(.system(size: 11, weight: .regular))
                                         .foregroundColor(Notch.subtext)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.85)
                                 }
                             }
                         }
@@ -454,10 +462,21 @@ struct SideNotchPanelView: View {
             }
         }
         .padding(14)
-        .frame(width: 250)
+        .frame(width: SideNotchPanelLayout.cardWidth)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Notch.card)
+            // Square on the strip side: the card docks flush against the
+            // strip with no transparent gap, so no desktop hairline can show
+            // through between them. Mirrored with the side: round outside,
+            // square at the joint. The beak straddles the remaining tonal
+            // step between the two blacks.
+            UnevenRoundedRectangle(
+                topLeadingRadius: panel.cardOnRight ? 0 : 16,
+                bottomLeadingRadius: panel.cardOnRight ? 0 : 16,
+                bottomTrailingRadius: panel.cardOnRight ? 16 : 0,
+                topTrailingRadius: panel.cardOnRight ? 16 : 0,
+                style: .continuous
+            )
+            .fill(Notch.card)
         )
     }
 
@@ -470,15 +489,10 @@ struct SideNotchPanelView: View {
         return 19 + CGFloat(index) * 43
     }
 
-    private func cardTopOffset(for provider: Provider) -> CGFloat {
-        let center = ringCenterY(for: provider)
-        return max(0, center - 37)
-    }
-
+    /// Beak height on the card. The card always starts at the top edge, so
+    /// this is just the ring's center less half the beak.
     private func beakYOnCard(for provider: Provider) -> CGFloat {
-        let center = ringCenterY(for: provider)
-        let offset = cardTopOffset(for: provider)
-        return center - offset - 6
+        ringCenterY(for: provider) - 6
     }
 
     private func windowDisplayTitle(for window: QuotaWindow, provider: Provider) -> String {
@@ -486,19 +500,6 @@ struct SideNotchPanelView: View {
             return "Current session"
         }
         return window.label
-    }
-
-    /// Click-to-refresh for one ring. Refetches only that provider so one
-    /// cell never spends the others' rate-limit budget. A second click while
-    /// one is in flight is ignored.
-    private func refreshRing(_ provider: Provider) {
-        guard !refreshingProviders.contains(provider) else { return }
-        refreshingProviders.insert(provider)
-        coordinator.refresh(provider: provider)
-        Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            refreshingProviders.remove(provider)
-        }
     }
 
     private func headerResetCountdown(for provider: Provider) -> String? {
@@ -617,6 +618,10 @@ struct SideNotchPanelView: View {
             statuses: coordinator.statuses,
             archivedQuotas: coordinator.archivedQuotas
         )
+    }
+
+    private func accessibilityRingText(for entry: Entry) -> String {
+        "\(entry.provider.displayName) \(Fmt.percent(entry.usedPercent)) used\(entry.isStale ? ", last known reading" : "")"
     }
 
     private var accessibilityText: String {
