@@ -225,7 +225,7 @@ struct SideNotchPanelView: View {
     // MARK: - Strip
 
     private var strip: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 3) {
             if entries.isEmpty {
                 Text("—")
                     .font(.muNumber)
@@ -241,7 +241,7 @@ struct SideNotchPanelView: View {
                             reduceMotion: reduceMotion
                         )
                         Text(Fmt.percent(entry.usedPercent))
-                            .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                            .font(.system(size: 9, weight: .semibold).monospacedDigit())
                             .foregroundColor(Notch.text)
                     }
                     .contentShape(Rectangle())
@@ -464,9 +464,9 @@ struct SideNotchPanelView: View {
 
     private func ringCenterY(for provider: Provider) -> CGFloat {
         guard let index = entries.firstIndex(where: { $0.provider == provider }) else {
-            return 22
+            return 19
         }
-        return 22 + CGFloat(index) * 51
+        return 19 + CGFloat(index) * 43
     }
 
     private func cardTopOffset(for provider: Provider) -> CGFloat {
@@ -699,18 +699,18 @@ private struct QuotaRing: View {
             Circle()
                 .fill(Notch.disc)
             Circle()
-                .stroke(Notch.track, lineWidth: 3)
+                .stroke(Notch.track, lineWidth: 2.5)
             Circle()
                 .trim(from: 0, to: fraction.clamped(to: 0...1))
-                .stroke(tint, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             ProviderMark(provider: provider, tint: markTint)
-                .frame(width: 11, height: 11)
+                .frame(width: 9, height: 9)
                 // A hit limit dims the glyph: the full orange ring already
                 // carries the state, and the mark steps back.
                 .opacity(fraction >= 1 ? 0.5 : 1.0)
         }
-        .frame(width: 32, height: 32)
+        .frame(width: 26, height: 26)
         // A ring that jumps reads as a glitch; one that sweeps reads as a
         // measurement.
         .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.65), value: fraction)
