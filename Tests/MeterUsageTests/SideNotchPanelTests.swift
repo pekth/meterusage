@@ -41,6 +41,80 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertLessThan(expanded.minY, collapsed.minY)
     }
 
+    func testCardStaysLeftByDefault() {
+        let screen = NSRect(x: 0, y: 0, width: 4270, height: 1112)
+        XCTAssertFalse(SideNotchPanelLayout.cardOnRight(
+            stripTopRightX: 4262, stripWidth: 50, screenFrame: screen, cardWidth: 250
+        ))
+    }
+
+    func testCardFlipsRightWhenTheStripMovesLeft() {
+        let screen = NSRect(x: 0, y: 0, width: 4270, height: 1112)
+        XCTAssertTrue(SideNotchPanelLayout.cardOnRight(
+            stripTopRightX: 200, stripWidth: 50, screenFrame: screen, cardWidth: 250
+        ))
+    }
+
+    func testCardPicksTheRoomierSideWhenNeitherFits() {
+        let screen = NSRect(x: 0, y: 0, width: 400, height: 1112)
+        // 250pt card overflows on both sides here: left holds 140pt against
+        // 210pt right, so right wins; mirrored, left wins 250pt to 100pt.
+        XCTAssertTrue(SideNotchPanelLayout.cardOnRight(
+            stripTopRightX: 190, stripWidth: 50, screenFrame: screen, cardWidth: 250
+        ))
+        XCTAssertFalse(SideNotchPanelLayout.cardOnRight(
+            stripTopRightX: 300, stripWidth: 50, screenFrame: screen, cardWidth: 250
+        ))
+    }
+
+    func testCardLeftGrowsAwayFromTheStrip() {
+        let screen = NSRect(x: 0, y: 0, width: 4270, height: 1112)
+        let corner = CGPoint(x: 4262, y: 1077)
+        let withoutCard = SideNotchPanelLayout.notchFrame(
+            stripTopRight: corner, totalSize: CGSize(width: 50, height: 220),
+            stripWidth: 50, cardOnRight: false, screenFrame: screen
+        )
+        let withCard = SideNotchPanelLayout.notchFrame(
+            stripTopRight: corner, totalSize: CGSize(width: 300, height: 340),
+            stripWidth: 50, cardOnRight: false, screenFrame: screen
+        )
+        // Strip's top-right corner is identical: the card grows left and down.
+        XCTAssertEqual(withoutCard.maxX, withCard.maxX)
+        XCTAssertEqual(withoutCard.maxY, withCard.maxY)
+        XCTAssertEqual(withCard.minX, 4262 - 300)
+    }
+
+    func testCardRightGrowsAwayFromTheStrip() {
+        let screen = NSRect(x: 0, y: 0, width: 4270, height: 1112)
+        let corner = CGPoint(x: 300, y: 1077)
+        let withoutCard = SideNotchPanelLayout.notchFrame(
+            stripTopRight: corner, totalSize: CGSize(width: 50, height: 220),
+            stripWidth: 50, cardOnRight: true, screenFrame: screen
+        )
+        let withCard = SideNotchPanelLayout.notchFrame(
+            stripTopRight: corner, totalSize: CGSize(width: 300, height: 340),
+            stripWidth: 50, cardOnRight: true, screenFrame: screen
+        )
+        // Strip's left edge is identical: the card grows right and down.
+        XCTAssertEqual(withoutCard.minX, withCard.minX)
+        XCTAssertEqual(withoutCard.maxY, withCard.maxY)
+        XCTAssertEqual(withCard.minX, 300 - 50)
+        XCTAssertEqual(withCard.maxX, 300 - 50 + 300)
+    }
+
+    func testNotchFrameClampsIntoTheScreen() {
+        let screen = NSRect(x: 0, y: 0, width: 800, height: 600)
+        let frame = SideNotchPanelLayout.notchFrame(
+            stripTopRight: CGPoint(x: 790, y: 100),
+            totalSize: CGSize(width: 300, height: 400),
+            stripWidth: 50, cardOnRight: false, screenFrame: screen
+        )
+        XCTAssertGreaterThanOrEqual(frame.minX, screen.minX)
+        XCTAssertGreaterThanOrEqual(frame.minY, screen.minY)
+        XCTAssertLessThanOrEqual(frame.maxX, screen.maxX)
+        XCTAssertLessThanOrEqual(frame.maxY, screen.maxY)
+    }
+
     // MARK: - Token formatting
 
     func testTokenCountStringFormatting() {

@@ -34,33 +34,39 @@ private func rgb(_ r: Int, _ g: Int, _ b: Int, _ a: CGFloat = 1) -> NSColor {
 enum MU {
 
     // Surfaces ------------------------------------------------------------
+    //
+    // Fixed hardware blacks, matching the side notch (pure-black body,
+    // near-black card): the popover and settings read as one object with the
+    // strip in every appearance the theme setting allows. Light variants stay
+    // adaptive — the menu-bar tray shares these values and must survive a
+    // light menu bar.
 
     /// Popover backdrop. Deliberately not `windowBackgroundColor`: the popover
     /// already vibrancy-blurs, so a near-transparent wash reads cleaner.
-    static let canvas = dynamicColor(light: rgb(250, 250, 252), dark: rgb(28, 28, 32))
+    static let canvas = dynamicColor(light: rgb(250, 250, 252), dark: rgb(0, 0, 0))
 
     /// Raised card fill.
-    static let surface = dynamicColor(light: rgb(255, 255, 255), dark: rgb(40, 40, 46))
+    static let surface = dynamicColor(light: rgb(255, 255, 255), dark: rgb(10, 10, 12))
 
     /// Recessed fill, used for meter tracks and heatmap empty cells.
-    static let well = dynamicColor(light: rgb(236, 236, 241), dark: rgb(53, 53, 60))
+    static let well = dynamicColor(light: rgb(236, 236, 241), dark: rgb(41, 41, 46))
 
     static let hairline = dynamicColor(light: rgb(0, 0, 0, 0.08), dark: rgb(255, 255, 255, 0.10))
 
     // Text ----------------------------------------------------------------
 
-    static let text = dynamicColor(light: rgb(24, 24, 28), dark: rgb(240, 240, 245))
-    static let textSecondary = dynamicColor(light: rgb(104, 104, 116), dark: rgb(160, 160, 172))
-    static let textTertiary = dynamicColor(light: rgb(146, 146, 158), dark: rgb(122, 122, 134))
+    static let text = dynamicColor(light: rgb(24, 24, 28), dark: rgb(255, 255, 255))
+    static let textSecondary = dynamicColor(light: rgb(104, 104, 116), dark: rgb(140, 140, 140))
+    static let textTertiary = dynamicColor(light: rgb(146, 146, 158), dark: rgb(102, 102, 110))
 
     // Semantic ------------------------------------------------------------
 
     /// Plenty of headroom.
-    static let calm = dynamicColor(light: rgb(28, 150, 108), dark: rgb(70, 200, 150))
+    static let calm = dynamicColor(light: rgb(28, 150, 108), dark: rgb(41, 224, 122))
     /// Getting close.
-    static let warn = dynamicColor(light: rgb(190, 130, 20), dark: rgb(230, 175, 60))
+    static let warn = dynamicColor(light: rgb(190, 130, 20), dark: rgb(245, 227, 0))
     /// Nearly exhausted.
-    static let alert = dynamicColor(light: rgb(198, 60, 55), dark: rgb(240, 110, 100))
+    static let alert = dynamicColor(light: rgb(198, 60, 55), dark: rgb(255, 69, 0))
     /// Informational, never alarming — used for "nothing here yet" states.
     static let neutral = dynamicColor(light: rgb(120, 120, 132), dark: rgb(150, 150, 162))
 
@@ -470,6 +476,13 @@ enum Fmt {
         return f
     }()
 
+    /// Localised "today"/"tomorrow" with zero visible change in English.
+    private static let relativeDayName: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.dateTimeStyle = .named
+        return f
+    }()
+
     /// Wall-clock rendering of a reset, in the user's own time zone.
     ///
     /// The countdown answers "can I keep working?"; this answers "when do I get
@@ -477,12 +490,15 @@ enum Fmt {
     /// or tomorrow carries a weekday and date, because "11:11" five days out is
     /// worse than no timestamp at all.
     static func absoluteMoment(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let today = calendar.startOfDay(for: now)
         if calendar.isDate(date, inSameDayAs: now) {
-            return "today \(clockOnly.string(from: date))"
+            let day = relativeDayName.localizedString(for: today, relativeTo: now)
+            return "\(day) \(clockOnly.string(from: date))"
         }
-        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now),
+        if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
            calendar.isDate(date, inSameDayAs: tomorrow) {
-            return "tomorrow \(clockOnly.string(from: date))"
+            let day = relativeDayName.localizedString(for: tomorrow, relativeTo: now)
+            return "\(day) \(clockOnly.string(from: date))"
         }
         return weekdayAndClock.string(from: date)
     }

@@ -118,17 +118,19 @@ connect and no key-entry screen. OpenRouter uses an existing
   ```
 
 - **Opt-in side notch panel** — a floating strip of per-provider usage rings on
-  the right edge of the screen, just below the menu bar. Every ring, progress
+  the right edge of the screen, just below the menu bar, that can be dragged
+  anywhere. Every ring, progress
   bar, and detail caption uniformly displays percentage used (`% Used`). Hovering
   any provider expands a dedicated detail card aligned beside that provider
   with an arrow beak, showing its rate limit windows, progress bars, reset
-  countdowns, token usage summaries, and service status. The strip is a fixed
+  countdowns, token usage summaries, and service status. The card docks left
+  or right automatically depending on room, top-aligned with the strip. The
+  strip is a fixed
   black hardware-like object in every appearance — dark ring discs, vivid
-  state bands, white figures — with a settings orb that only appears when
-  hovering the bottom of the strip (a quiet arc that wakes into a gear).
+  state bands, white figures.
   At rest the strip folds to a
-  slim pill and unfolds on hover; **Keep open** pins it unfolded, clicking a
-  ring refetches only that provider, and a right-click menu offers Keep open,
+  slim pill and unfolds on hover; **Keep open** pins it unfolded, the strip is
+  hover-only throughout, and a right-click menu offers Keep open,
   Refresh now, and Hide. The strip can be dragged
   anywhere, and the position is remembered across relaunches and screen changes.
   Rings sweep to new readings on springs with a short per-cell stagger, and
