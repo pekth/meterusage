@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.12] - 2026-09-07
+
+### Added
+
+- **VoiceOver ring details in side notch** — each ring exposes its reading with
+  Show/Hide details actions driving the same hover card as the pointer.
+- **Unknown service status surfacing** — an unreadable check reads as
+  "Unknown" in the tooltip, a neutral tray mark, and the hover-card badge
+  instead of silence.
+
+### Changed
+
+- **Simpler settings and onboarding copy** — shorter subtitles, a labeled
+  "Side notch" control per provider row, and a welcome page describing
+  hover cards, side-flipping, and dragging.
+- **Single-line hover card rows** — titles, countdowns, and reset times shrink
+  to fit instead of wrapping; reset times use localized day names.
+
 ## [0.2.11] - 2026-09-07
 
 ### Added
