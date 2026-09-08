@@ -174,9 +174,21 @@ final class SideNotchPanelTests: XCTestCase {
         )
     }
 
+    func testNotchBandThresholdsMatchHeadroomScale() {
+        // The notch hues differ from the popover, but the thresholds must
+        // not: severity can never disagree between the two surfaces.
+        XCTAssertEqual(NotchBand.band(usedPercent: 0), .plenty)
+        XCTAssertEqual(NotchBand.band(usedPercent: 49.9), .plenty)
+        XCTAssertEqual(NotchBand.band(usedPercent: 50), .gettingClose)
+        XCTAssertEqual(NotchBand.band(usedPercent: 79.9), .gettingClose)
+        XCTAssertEqual(NotchBand.band(usedPercent: 80), .nearlyOut)
+        XCTAssertEqual(NotchBand.band(usedPercent: 99.9), .nearlyOut)
+        XCTAssertEqual(NotchBand.band(usedPercent: 100), .atLimit)
+        XCTAssertEqual(NotchBand.band(usedPercent: 140), .atLimit)
+    }
+
     @MainActor
-    func testHeadlineWindowKeepsMaxForAntigravity() {
-        // Dynamic per-group labels carry no session concept: most-constrained
+    func testHeadlineWindowKeepsMaxForAntigravity() {        // Dynamic per-group labels carry no session concept: most-constrained
         // stays the honest figure there.
         let windows = [
             QuotaWindow(label: "Gemini 3h", usedPercent: 20, resetsAt: nil),

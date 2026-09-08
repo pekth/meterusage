@@ -117,9 +117,10 @@ connect and no key-entry screen. OpenRouter uses an existing
   bar, and detail caption uniformly displays percentage used (`% Used`). Hovering
   any provider expands a dedicated detail card aligned beside that provider
   with an arrow beak, showing its rate limit windows, progress bars, reset
-  countdowns, token usage summaries, and service status. A settings gear icon
-  remains tucked away and only appears when hovering at the bottom of the
-  strip, keeping the panel minimal and compact. At rest the strip folds to a
+  countdowns, token usage summaries, and service status. The strip is a fixed
+  black hardware-like object in every appearance — dark ring discs, vivid
+  state bands, white figures — with a settings orb (a quiet arc that wakes
+  into a gear on hover) tucked below the rings. At rest the strip folds to a
   slim pill and unfolds on hover; **Keep open** pins it unfolded, clicking a
   ring refetches only that provider, and a right-click menu offers Keep open,
   Refresh now, and Hide. The strip can be dragged

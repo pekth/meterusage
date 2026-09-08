@@ -110,7 +110,9 @@ final class SideNotchPanelController {
         )
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // The notch carries its own black body in every appearance, so it
+        // casts no shadow of its own — same call as the reference design.
+        panel.hasShadow = false
         panel.level = .statusBar
         // Drag anywhere on the strip or the expanded card. The content is
         // plain shapes, so nothing on it needs to claim a mouse-down.

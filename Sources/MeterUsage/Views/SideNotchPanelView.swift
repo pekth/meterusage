@@ -1,6 +1,52 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Notch palette
+//
+// The side panel is a hardware-like object: fixed black in every appearance,
+// never the app's dynamic surfaces. Values below follow the codenotch design
+// frame (reference only — nothing is shared with that project): pure-black
+// body, near-black card, dark-grey ring fill and track, vivid state bands,
+// white figures. Provider marks keep their existing tints; only the panel
+// chrome and state colours live here.
+
+/// Ring state band. Same thresholds as the app's headroom scale, so severity
+/// never disagrees between the notch and the popover — only the hues differ.
+enum NotchBand: Equatable {
+    case plenty
+    case gettingClose
+    case nearlyOut
+    case atLimit
+
+    static func band(usedPercent: Double) -> NotchBand {
+        switch usedPercent {
+        case ..<50:  return .plenty
+        case ..<80:  return .gettingClose
+        case ..<100: return .nearlyOut
+        default:     return .atLimit
+        }
+    }
+}
+
+enum Notch {
+    static let body = Color(srgbRed: 0, green: 0, blue: 0)
+    static let card = Color(srgbRed: 0.04, green: 0.04, blue: 0.04)
+    static let disc = Color(srgbRed: 0.16, green: 0.16, blue: 0.16)
+    static let track = Color(srgbRed: 0.23, green: 0.23, blue: 0.23)
+    static let text = Color.white
+    static let subtext = Color(white: 1, opacity: 0.55)
+    static let orbGrey = Color(white: 1, opacity: 0.35)
+
+    static func color(usedPercent: Double) -> Color {
+        switch NotchBand.band(usedPercent: usedPercent) {
+        case .plenty:       return Color(srgbRed: 0.16, green: 0.88, blue: 0.48)
+        case .gettingClose: return Color(srgbRed: 0.96, green: 0.89, blue: 0.0)
+        case .nearlyOut, .atLimit:
+            return Color(srgbRed: 1.0, green: 0.27, blue: 0.0)
+        }
+    }
+}
+
 // MARK: - Side notch panel view
 //
 // The content of the floating right-edge strip: one progress ring per menu-bar
@@ -33,7 +79,6 @@ struct SideNotchPanelView: View {
     @State private var hoveredProvider: Provider?
     @State private var isHoveringPanel = false
     @State private var isHoveringSettings = false
-    @State private var isHoveringBottom = false
     @State private var refreshingProviders: Set<Provider> = []
     /// Collapse hysteresis: a pointer exit schedules collapse, but a
     /// re-enter before the delay fires cancels it. 450ms — deliberately
@@ -42,7 +87,7 @@ struct SideNotchPanelView: View {
 
     /// Unfolded while pinned or while the pointer is on the panel.
     private var isOpen: Bool {
-        isPinned || isHoveringPanel || hoveredProvider != nil || isHoveringBottom || isHoveringSettings
+        isPinned || isHoveringPanel || hoveredProvider != nil || isHoveringSettings
     }
 
     var body: some View {
@@ -90,7 +135,6 @@ struct SideNotchPanelView: View {
             hoveredProvider = nil
             isHoveringPanel = false
             isHoveringSettings = false
-            isHoveringBottom = false
         }
     }
 
@@ -132,7 +176,7 @@ struct SideNotchPanelView: View {
             }
             if entries.isEmpty {
                 Circle()
-                    .fill(MU.neutral)
+                    .fill(Color(white: 1, opacity: 0.4))
                     .frame(width: 6, height: 6)
             }
         }
@@ -140,11 +184,7 @@ struct SideNotchPanelView: View {
         .padding(.horizontal, 5)
         .background(
             Capsule(style: .continuous)
-                .fill(MU.surface)
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .strokeBorder(MU.hairline, lineWidth: 1)
+                .fill(Notch.body)
         )
         .fixedSize()
         .contentShape(Rectangle())
@@ -166,7 +206,7 @@ struct SideNotchPanelView: View {
             if entries.isEmpty {
                 Text("—")
                     .font(.muNumber)
-                    .foregroundColor(MU.neutral)
+                    .foregroundColor(Notch.subtext)
             } else {
                 ForEach(entries) { entry in
                     VStack(spacing: 3) {
@@ -177,8 +217,8 @@ struct SideNotchPanelView: View {
                             markTint: entry.markTint
                         )
                         Text(Fmt.percent(entry.usedPercent))
-                            .font(.system(size: 10, weight: .medium).monospacedDigit())
-                            .foregroundColor(entry.ringTint)
+                            .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                            .foregroundColor(Notch.text)
                     }
                     .contentShape(Rectangle())
                     .scaleEffect(refreshingProviders.contains(entry.provider) ? 0.92 : 1.0)
@@ -193,7 +233,6 @@ struct SideNotchPanelView: View {
                             isHoveringPanel = true
                             hoveredProvider = entry.provider
                             isHoveringSettings = false
-                            isHoveringBottom = false
                             NSCursor.pointingHand.push()
                         } else {
                             NSCursor.pop()
@@ -201,54 +240,47 @@ struct SideNotchPanelView: View {
                     }
                 }
 
-                if isHoveringBottom {
-                    Button(action: onOpenSettings) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(isHoveringSettings ? MU.text : MU.textTertiary)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                Circle()
-                                    .fill(isHoveringSettings ? MU.well : Color.clear)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .help("Settings")
-                    .onHover { hovering in
-                        isHoveringSettings = hovering
-                        if hovering {
-                            cancelFold()
-                            hoveredProvider = nil
-                            isHoveringBottom = true
-                        } else {
-                            isHoveringBottom = false
-                        }
-                    }
-                }
+                // Settings orb: a quiet arc at rest below the strip that wakes
+                // into a gear on hover. Always present, never gated behind a
+                // hotspot hunt — the readings stay the point, but settings
+                // stay findable.
+                settingsOrb
             }
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 10)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(MU.surface)
+                .fill(Notch.body)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(MU.hairline, lineWidth: 1)
-        )
-        .overlay(alignment: .bottom) {
-            if !isHoveringBottom && !entries.isEmpty {
-                Color.clear
-                    .frame(height: 20)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        if hovering {
-                            cancelFold()
-                            hoveredProvider = nil
-                            isHoveringBottom = true
-                        }
-                    }
+    }
+
+    private var settingsOrb: some View {
+        Button(action: onOpenSettings) {
+            ZStack {
+                if isHoveringSettings {
+                    Circle()
+                        .fill(Notch.disc)
+                        .frame(width: 30, height: 30)
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Notch.text)
+                } else {
+                    Circle()
+                        .trim(from: 0.05, to: 0.7)
+                        .stroke(Notch.orbGrey, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .frame(width: 26, height: 26)
+                }
+            }
+            .frame(width: 30, height: 30)
+        }
+        .buttonStyle(.plain)
+        .help("Settings")
+        .onHover { hovering in
+            isHoveringSettings = hovering
+            if hovering {
+                cancelFold()
+                hoveredProvider = nil
             }
         }
     }
@@ -268,12 +300,12 @@ struct SideNotchPanelView: View {
                     .frame(width: 14, height: 14)
                 Text("\(provider.displayName) Usage")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(MU.text)
+                    .foregroundColor(Notch.text)
                 Spacer(minLength: 6)
                 if let countdown = headerResetCountdown(for: provider) {
                     Text("Resets in \(countdown)")
                         .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(MU.textTertiary)
+                        .foregroundColor(Notch.subtext)
                 }
             }
 
@@ -290,27 +322,27 @@ struct SideNotchPanelView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(windowDisplayTitle(for: window, provider: provider))
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(MU.text)
+                                .foregroundColor(Notch.text)
 
                             // Fixed-width track so layout never collapses or jumps
                             ZStack(alignment: .leading) {
                                 Capsule(style: .continuous)
-                                    .fill(MU.well)
-                                    .frame(width: 222, height: 5)
+                                    .fill(Notch.track)
+                                    .frame(width: 222, height: 4)
                                 Capsule(style: .continuous)
-                                    .fill(headroomColor(usedPercent: window.usedPercent))
-                                    .frame(width: max(222 * window.fraction.clamped(to: 0...1), window.fraction > 0 ? 3 : 0), height: 5)
+                                    .fill(Notch.color(usedPercent: window.usedPercent))
+                                    .frame(width: max(222 * window.fraction.clamped(to: 0...1), window.fraction > 0 ? 3 : 0), height: 4)
                             }
 
                             HStack {
                                 Text("\(Fmt.percent(window.usedPercent)) Used")
                                     .font(.system(size: 11, weight: .regular))
-                                    .foregroundColor(MU.text)
+                                    .foregroundColor(Notch.text)
                                 Spacer()
                                 if let resetsAt = window.resetsAt {
                                     Text("Resets \(Fmt.absoluteMoment(resetsAt, now: coordinator.clock))")
                                         .font(.system(size: 11, weight: .regular))
-                                        .foregroundColor(MU.textTertiary)
+                                        .foregroundColor(Notch.subtext)
                                 }
                             }
                         }
@@ -320,10 +352,10 @@ struct SideNotchPanelView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Account balance")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(MU.text)
+                        .foregroundColor(Notch.text)
                     Text(credits.unit == .dollars ? Fmt.usd(credits.balance) : Fmt.credits(credits.balance))
                         .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                        .foregroundColor(MU.text)
+                        .foregroundColor(Notch.text)
                 }
             }
 
@@ -333,17 +365,17 @@ struct SideNotchPanelView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Token usage")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(MU.text)
+                        .foregroundColor(Notch.text)
 
                     if let today = tokenUsage.todayText {
                         HStack {
                             Text("Today")
                                 .font(.system(size: 11, weight: .regular))
-                                .foregroundColor(MU.text)
+                                .foregroundColor(Notch.text)
                             Spacer()
                             Text(today)
                                 .font(.system(size: 11, weight: .regular).monospacedDigit())
-                                .foregroundColor(MU.textTertiary)
+                                .foregroundColor(Notch.subtext)
                         }
                     }
 
@@ -351,11 +383,11 @@ struct SideNotchPanelView: View {
                         HStack {
                             Text("Last 30 days")
                                 .font(.system(size: 11, weight: .regular))
-                                .foregroundColor(MU.text)
+                                .foregroundColor(Notch.text)
                             Spacer()
                             Text(last30)
                                 .font(.system(size: 11, weight: .regular).monospacedDigit())
-                                .foregroundColor(MU.textTertiary)
+                                .foregroundColor(Notch.subtext)
                         }
                     }
                 }
@@ -367,22 +399,18 @@ struct SideNotchPanelView: View {
             if isStale, let quota {
                 Text("Last reading \(Fmt.timeSince(quota.capturedAt, now: coordinator.clock))")
                     .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(MU.textTertiary)
+                    .foregroundColor(Notch.subtext)
             } else if let last = coordinator.lastRefreshedAt {
                 Text("Updated \(Fmt.timeSince(last, now: coordinator.clock))")
                     .font(.system(size: 10, weight: .regular))
-                    .foregroundColor(MU.textTertiary)
+                    .foregroundColor(Notch.subtext)
             }
         }
         .padding(14)
         .frame(width: 250)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(MU.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(MU.hairline, lineWidth: 1)
+                .fill(Notch.card)
         )
     }
 
@@ -390,9 +418,9 @@ struct SideNotchPanelView: View {
 
     private func ringCenterY(for provider: Provider) -> CGFloat {
         guard let index = entries.firstIndex(where: { $0.provider == provider }) else {
-            return 31
+            return 34
         }
-        return 31 + CGFloat(index) * 65
+        return 34 + CGFloat(index) * 73
     }
 
     private func cardTopOffset(for provider: Provider) -> CGFloat {
@@ -521,13 +549,13 @@ struct SideNotchPanelView: View {
             if let status = statuses[provider]?.value {
                 markTint = MenuBarLabel.statusTint(status.severity)
             } else {
-                markTint = headroomColor(usedPercent: window.usedPercent)
+                markTint = Notch.color(usedPercent: window.usedPercent)
             }
             return Entry(
                 provider: provider,
                 usedPercent: window.usedPercent,
                 fraction: window.fraction,
-                ringTint: headroomColor(usedPercent: window.usedPercent),
+                ringTint: Notch.color(usedPercent: window.usedPercent),
                 markTint: markTint,
                 resetsAt: window.resetsAt,
                 isStale: live == nil
@@ -568,17 +596,9 @@ private struct TriangleArrow: Shape {
 
 private struct ArrowBeakView: View {
     var body: some View {
-        ZStack {
-            TriangleArrow()
-                .fill(MU.surface)
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: 0))
-                path.addLine(to: CGPoint(x: 7, y: 6))
-                path.addLine(to: CGPoint(x: 0, y: 12))
-            }
-            .stroke(MU.hairline, lineWidth: 1)
-        }
-        .frame(width: 7, height: 12)
+        TriangleArrow()
+            .fill(Notch.card)
+            .frame(width: 7, height: 12)
     }
 }
 
@@ -630,15 +650,20 @@ private struct QuotaRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(MU.well, lineWidth: 3.5)
+                .fill(Notch.disc)
+            Circle()
+                .stroke(Notch.track, lineWidth: 3.5)
             Circle()
                 .trim(from: 0, to: fraction.clamped(to: 0...1))
                 .stroke(tint, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             ProviderMark(provider: provider, tint: markTint)
                 .frame(width: 14, height: 14)
+                // A hit limit dims the glyph: the full orange ring already
+                // carries the state, and the mark steps back.
+                .opacity(fraction >= 1 ? 0.5 : 1.0)
         }
-        .frame(width: 38, height: 38)
+        .frame(width: 44, height: 44)
         .animation(.easeOut(duration: 0.35), value: fraction)
     }
 }
