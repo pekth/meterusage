@@ -666,6 +666,20 @@ final class AppCoordinator: ObservableObject {
         visibleActivityProviders.compactMap { activities[$0]?.value }
     }
 
+    /// Whose readings these are: the plan the provider reports (when it
+    /// reports one) and the tool holding the credential. No identity is
+    /// read — a plan tier is context for the percentages, never an account.
+    struct ProviderAccount {
+        let plan: String?
+        let via: String
+    }
+
+    func account(for provider: Provider) -> ProviderAccount {
+        let plan = plans[provider]?.value?.displayName
+            ?? quotas[provider]?.value?.planType
+        return ProviderAccount(plan: plan, via: provider.sourceLabel)
+    }
+
     /// Sanitized diagnostics for the "Copy diagnostics" button. Built from the
     /// same published state the views read, so it can never carry more than the
     /// popover shows — see `DiagnosticsReport`.

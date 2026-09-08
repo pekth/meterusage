@@ -50,6 +50,11 @@ connect and no key-entry screen. OpenRouter uses an existing
 - **Per-provider tray selection** — the "Menu bar" section of Settings picks
   which providers show as clusters in the tray, independent of which appear in
   the popover. OpenRouter is always excluded (pay-as-you-go, no quota window).
+- **Accounts in Settings** — the Accounts section names whose readings these
+  are: each provider's reported plan beside the tool holding the credential
+  ("Pro · via Codex CLI"). The app signs in nowhere, so there is no account
+  to connect — and switching a provider off stops its credential being read
+  at all without signing you out of the owning tool.
 - **Live Codex quota** — general weekly limits, model-specific limits such as
   GPT-5.3-Codex-Spark, reset-credit expiry details, credit balance, and plan,
   read through the `codex` CLI you're already signed in to. Codex credits also
@@ -125,6 +130,8 @@ connect and no key-entry screen. OpenRouter uses an existing
   ring refetches only that provider, and a right-click menu offers Keep open,
   Refresh now, and Hide. The strip can be dragged
   anywhere, and the position is remembered across relaunches and screen changes.
+  Rings sweep to new readings on springs with a short per-cell stagger, and
+  Reduce Motion removes the animation rather than shortening it.
   Off by default; the **Side notch panel** switch in Settings turns it on.
 - **Notification Center widgets** — one widget per provider plus an
   automatic "worst provider" widget. Small = headline figure; medium =

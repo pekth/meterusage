@@ -222,6 +222,20 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
             return windows.max(by: { $0.usedPercent < $1.usedPercent })
         }
     }
+
+    /// The tool holding the credential these readings are borrowed from.
+    /// Display-only: this app runs no sign-in flow of its own.
+    public var sourceLabel: String {
+        switch self {
+        case .codex: return "Codex CLI"
+        case .claude: return "Claude Code"
+        case .antigravity: return "agy CLI"
+        case .grok: return "Grok CLI"
+        case .openCodeGo: return "OpenCode"
+        case .openRouter: return "API key"
+        }
+    }
+
     /// Public provider status page for the providers whose machine-readable
     /// feed is shown in the dashboard. Other providers remain linkless rather
     /// than sending the user to a guessed or unrelated page.

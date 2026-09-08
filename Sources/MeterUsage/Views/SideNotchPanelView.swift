@@ -76,6 +76,7 @@ struct SideNotchPanelView: View {
 
     @AppStorage(PrefKey.sideNotchPanelPinned) private var isPinned = false
     @AppStorage(PrefKey.sideNotchPanel) private var panelEnabled = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hoveredProvider: Provider?
     @State private var isHoveringPanel = false
     @State private var isHoveringSettings = false
@@ -94,10 +95,13 @@ struct SideNotchPanelView: View {
         Group {
             if isOpen {
                 openPanel
+                    .transition(.opacity)
             } else {
                 foldedPill
+                    .transition(.opacity)
             }
         }
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: isOpen)
         .background(
             GeometryReader { proxy in
                 Color.clear
@@ -208,13 +212,14 @@ struct SideNotchPanelView: View {
                     .font(.muNumber)
                     .foregroundColor(Notch.subtext)
             } else {
-                ForEach(entries) { entry in
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                     VStack(spacing: 3) {
                         QuotaRing(
                             fraction: entry.fraction,
                             tint: entry.ringTint,
                             provider: entry.provider,
-                            markTint: entry.markTint
+                            markTint: entry.markTint,
+                            reduceMotion: reduceMotion
                         )
                         Text(Fmt.percent(entry.usedPercent))
                             .font(.system(size: 13, weight: .semibold).monospacedDigit())
@@ -225,6 +230,14 @@ struct SideNotchPanelView: View {
                     // A remembered reading is dated information: dim it so it
                     // never passes for a live number.
                     .opacity(entry.isStale ? 0.55 : 1.0)
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    // Cells trail each other behind the unfold, capped so a
+                    // long list never drags.
+                    .animation(
+                        reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)
+                            .delay(min(Double(index) * 0.03, 0.12)),
+                        value: entry.fraction
+                    )
                     .help("Click to refresh \(entry.provider.displayName)")
                     .onTapGesture { refreshRing(entry.provider) }
                     .onHover { hovering in
@@ -646,6 +659,7 @@ private struct QuotaRing: View {
     let tint: Color
     let provider: Provider
     let markTint: Color
+    var reduceMotion = false
 
     var body: some View {
         ZStack {
@@ -664,6 +678,8 @@ private struct QuotaRing: View {
                 .opacity(fraction >= 1 ? 0.5 : 1.0)
         }
         .frame(width: 44, height: 44)
-        .animation(.easeOut(duration: 0.35), value: fraction)
+        // A ring that jumps reads as a glitch; one that sweeps reads as a
+        // measurement.
+        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.65), value: fraction)
     }
 }

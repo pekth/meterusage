@@ -116,6 +116,31 @@ struct SettingsView: View {
             }
 
             Group {
+                SectionHeader("Accounts")
+                Card(padding: 10) {
+                    // Whose readings these are. This app signs in nowhere: every
+                    // number is borrowed from a credential a tool on this Mac
+                    // already holds, so each row names the owning tool and the
+                    // plan it reports. No address, no account id — a plan tier
+                    // is context for the percentages, never an identity.
+                    ForEach(Array(Provider.allCases.enumerated()), id: \.element) { index, provider in
+                        if index > 0 {
+                            Divider().overlay(MU.hairline)
+                        }
+                        AccountRow(
+                            provider: provider,
+                            account: coordinator.account(for: provider),
+                            enabled: coordinator.preferences.isEnabled(provider)
+                        )
+                    }
+                    Divider().overlay(MU.hairline)
+                    Text("Switching a provider off above stops its credential being read at all. It does not sign you out of the tool that owns the account.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                }
+            }
+
+            Group {
                 SectionHeader("Appearance")
                 Card(padding: 10) {
                     HStack(alignment: .center, spacing: 8) {
@@ -415,6 +440,37 @@ private struct ProviderRow: View {
                 .controlSize(.mini)
         }
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// One row of the Accounts section: the provider's mark, its reported plan
+/// (when the provider reports one), and the tool holding the credential.
+/// Read-only — visibility lives in the Providers section above.
+private struct AccountRow: View {
+    let provider: Provider
+    let account: AppCoordinator.ProviderAccount
+    let enabled: Bool
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            ProviderMark(provider: provider, tint: providerColor(provider))
+                .frame(width: 13, height: 13)
+            Text(provider.displayName)
+                .font(.muBody)
+                .foregroundColor(MU.text)
+            if let plan = account.plan {
+                PlanBadge(text: plan)
+            }
+            Spacer(minLength: 6)
+            Text("via \(account.via)")
+                .font(.muCaption)
+                .foregroundColor(MU.textTertiary)
+                .lineLimit(1)
+        }
+        // A hidden provider is not read at all, so its row steps back.
+        .opacity(enabled ? 1.0 : 0.5)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(provider.displayName), \(account.plan ?? "plan unknown"), via \(account.via)")
     }
 }
 
