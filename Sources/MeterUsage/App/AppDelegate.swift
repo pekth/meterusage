@@ -131,11 +131,14 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
 
         for provider in coordinator.menuBarProviders {
             var parts: [String] = []
-            if let quota = coordinator.quotas[provider]?.value,
-               let window = quota.windows.max(by: { $0.usedPercent < $1.usedPercent }) {
+            if let display = coordinator.displayQuota(for: provider),
+               let window = provider.headlineWindow(from: display.quota.windows) {
                 parts.append("\(Fmt.percent(window.usedPercent)) used")
                 if let resets = window.resetsAt, let until = Fmt.timeUntil(resets) {
                     parts.append("resets in \(until)")
+                }
+                if display.isStale {
+                    parts.append("last reading \(Fmt.timeSince(display.quota.capturedAt))")
                 }
             }
             if let service = coordinator.statuses[provider]?.value,

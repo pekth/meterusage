@@ -55,7 +55,7 @@ final class SideNotchPanelTests: XCTestCase {
     // MARK: - Entries
 
     @MainActor
-    func testEntriesTakeTightestWindowInMenuBarOrder() async throws {
+    func testEntriesTakeHeadlineWindowInMenuBarOrder() async throws {
         let coordinator = try await Self.coordinator(quotas: [
             // Grok listed first in the fixtures but Codex must lead: ordering
             // follows the stable display order, not the sweep order.
@@ -72,6 +72,118 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertEqual(entries.map(\.provider), [.codex, .grok])
         XCTAssertEqual(entries[0].usedPercent, 80)
         XCTAssertEqual(entries[1].usedPercent, 40)
+    }
+
+    @MainActor
+    func testEntriesKeepSessionSubjectAfterReset() async throws {
+        // The 5-hour window just reset to ~0% while Weekly sits at 72: the
+        // ring must read the fresh session, not promote the weekly into its
+        // place at exactly the moment someone is looking at it.
+        let coordinator = try await Self.coordinator(quotas: [
+            (Provider.codex, [("Weekly", 72.0, 3600), ("5-hour", 12.0, 3600)]),
+        ])
+
+        let entries = SideNotchPanelView.entries(
+            menuBarProviders: coordinator.menuBarProviders,
+            quotas: coordinator.quotas,
+            statuses: coordinator.statuses
+        )
+
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].usedPercent, 12)
+    }
+
+    @MainActor
+    func testEntriesShowLoneWindowForSingleAllowancePlans() async throws {
+        // Plans reporting a single window (`secondary == null`) have no
+        // session to name: the lone allowance is the headline as-is.
+        let coordinator = try await Self.coordinator(quotas: [
+            (Provider.codex, [("Weekly", 31.0, 3600)]),
+        ])
+
+        let entries = SideNotchPanelView.entries(
+            menuBarProviders: coordinator.menuBarProviders,
+            quotas: coordinator.quotas,
+            statuses: coordinator.statuses
+        )
+
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].usedPercent, 31)
+    }
+
+    @MainActor
+    func testEntriesPreferRollingForOpenCodeGo() async throws {
+        let coordinator = try await Self.coordinator(quotas: [
+            (Provider.openCodeGo, [("Rolling", 20.0, 3600), ("Weekly", 77.0, 3600)]),
+        ])
+
+        let entries = SideNotchPanelView.entries(
+            menuBarProviders: coordinator.menuBarProviders,
+            quotas: coordinator.quotas,
+            statuses: coordinator.statuses
+        )
+
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].usedPercent, 20)
+    }
+
+    @MainActor
+    func testEntriesKeepClaudeSessionAtZeroAfterReset() async throws {
+        // Same reset-survival rule as Codex: a fresh 5-hour window reads 0%,
+        // which is the truth — not the 61% weekly beside it.
+        let coordinator = try await Self.coordinator(quotas: [
+            (Provider.claude, [("5-hour", 0.0, 3600), ("Weekly · All models", 61.0, 3600)]),
+        ])
+
+        let entries = SideNotchPanelView.entries(
+            menuBarProviders: coordinator.menuBarProviders,
+            quotas: coordinator.quotas,
+            statuses: coordinator.statuses
+        )
+
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].usedPercent, 0)
+    }
+
+    @MainActor
+    func testEntriesFallBackToLegacySevenDayForClaude() async throws {
+        // Writers that never emit a session window still get a ring from the
+        // bare legacy key — but a limits[]-shaped weekly is never promoted.
+        let legacy = try await Self.coordinator(quotas: [
+            (Provider.claude, [("7-day", 44.0, 3600)]),
+        ])
+        let legacyEntries = SideNotchPanelView.entries(
+            menuBarProviders: legacy.menuBarProviders,
+            quotas: legacy.quotas,
+            statuses: legacy.statuses
+        )
+        XCTAssertEqual(legacyEntries.count, 1)
+        XCTAssertEqual(legacyEntries[0].usedPercent, 44)
+
+        let transient = try await Self.coordinator(quotas: [
+            (Provider.claude, [("Weekly · All models", 61.0, 3600)]),
+        ])
+        let transientEntries = SideNotchPanelView.entries(
+            menuBarProviders: transient.menuBarProviders,
+            quotas: transient.quotas,
+            statuses: transient.statuses
+        )
+        XCTAssertTrue(
+            transientEntries.isEmpty,
+            "a session-less limits[] snapshot must show no ring, not the weekly wearing its place"
+        )
+    }
+
+    @MainActor
+    func testHeadlineWindowKeepsMaxForAntigravity() {
+        // Dynamic per-group labels carry no session concept: most-constrained
+        // stays the honest figure there.
+        let windows = [
+            QuotaWindow(label: "Gemini 3h", usedPercent: 20, resetsAt: nil),
+            QuotaWindow(label: "Claude 5h", usedPercent: 65, resetsAt: nil),
+        ]
+        XCTAssertEqual(Provider.antigravity.headlineWindow(from: windows)?.usedPercent, 65)
+        XCTAssertNil(Provider.codex.headlineWindow(from: []))
     }
 
     @MainActor
@@ -193,6 +305,53 @@ final class SideNotchPanelTests: XCTestCase {
     }
 
     @MainActor
+    func testSideNotchPanelPinnedDefaultsOffAndPersists() throws {
+        let suiteName = "MeterUsageTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let first = Preferences(defaults: defaults)
+        XCTAssertFalse(first.sideNotchPanelPinned)
+
+        defaults.set(true, forKey: PrefKey.sideNotchPanelPinned)
+        let second = Preferences(defaults: defaults)
+        XCTAssertTrue(second.sideNotchPanelPinned)
+    }
+
+    @MainActor
+    func testRefreshProviderOnlyLoadsThatProvider() async throws {
+        let suiteName = "MeterUsageTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(true, forKey: PrefKey.showGrok)
+
+        let preferences = Preferences(defaults: defaults)
+        let coordinator = AppCoordinator(
+            preferences: preferences,
+            quotaSources: [
+                StubQuotaSource(provider: .codex, windows: [
+                    QuotaWindow(label: "Weekly", usedPercent: 30, resetsAt: nil),
+                ]),
+                StubQuotaSource(provider: .grok, windows: [
+                    QuotaWindow(label: "Weekly", usedPercent: 40, resetsAt: nil),
+                ]),
+            ],
+            quotaArchiveURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("meterusage-tests-" + UUID().uuidString + ".json")
+        )
+
+        // A single-provider refresh must load that provider without touching
+        // the other: one cell never spends the others' rate-limit budget.
+        coordinator.refresh(provider: .codex)
+        for _ in 0..<200 {
+            if coordinator.lastRefreshedAt != nil { break }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertNotNil(coordinator.quotas[.codex]?.value)
+        XCTAssertNil(coordinator.quotas[.grok]?.value)
+    }
+
+    @MainActor
     func testOnboardingFlagStartsAbsentAndPersists() throws {
         // Absent is what shows the welcome page; either button writes it
         // through and the page never returns. The flag flows through
@@ -218,6 +377,8 @@ final class SideNotchPanelTests: XCTestCase {
         let suiteName = "MeterUsageTests-" + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(true, forKey: PrefKey.showClaude)
+        defaults.set(true, forKey: PrefKey.showAntigravity)
         defaults.set(true, forKey: PrefKey.showGrok)
 
         let preferences = Preferences(defaults: defaults)
@@ -230,7 +391,11 @@ final class SideNotchPanelTests: XCTestCase {
                         QuotaWindow(label: label, usedPercent: percent, resetsAt: reset.map { Date().addingTimeInterval($0) })
                     }
                 )
-            }
+            },
+            // Never touch the real archive: a remembered reading on the
+            // developer's own machine must not leak into fixture assertions.
+            quotaArchiveURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("meterusage-tests-" + UUID().uuidString + ".json")
         )
 
         coordinator.refresh()

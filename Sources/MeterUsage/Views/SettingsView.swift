@@ -34,6 +34,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.quotaAlerts) private var quotaAlerts: Bool = false
     @AppStorage(PrefKey.updateCheck) private var updateCheck: Bool = true
     @AppStorage(PrefKey.sideNotchPanel) private var sideNotchPanel: Bool = false
+    @AppStorage(PrefKey.sideNotchPanelPinned) private var sideNotchPanelPinned: Bool = false
     @AppStorage(PrefKey.menuBarCompact) private var menuBarCompact: Bool = true
 
     var body: some View {
@@ -137,6 +138,13 @@ struct SettingsView: View {
                         subtitle: "Floating usage rings on the right edge of the screen. Hover to expand.",
                         isOn: $sideNotchPanel
                     )
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "Keep panel open",
+                        subtitle: "Never fold the side notch panel to its resting pill. Click a ring to refresh just that provider.",
+                        isOn: $sideNotchPanelPinned
+                    )
+                    .disabled(!sideNotchPanel)
                     Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Compact menu bar",

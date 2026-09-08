@@ -35,7 +35,13 @@ connect and no key-entry screen. OpenRouter uses an existing
   system tray as its own compact `[mark] %` cluster, so you can see Codex,
   Grok, OpenCode Go, and friends at a glance. Each mark is that provider's
   real logo, tinted by service status, and the percentage is tinted by quota
-  headroom. Hover the tray item for a per-provider usage and status summary
+  headroom. Each cluster shows the provider's declared current window
+  (Codex 5-hour session, OpenCode Go rolling allowance) — never whichever
+  window happens to be highest — so the figure keeps a stable subject across
+  resets instead of swapping to the weekly the moment the session rolls over.
+  The last good reading is remembered on disk, so a cold start with no
+  connection still shows dated, dimmed numbers instead of a blank tray.
+  Hover the tray item for a per-provider usage and status summary
   plus the last-refresh time. The tray and the side notch panel are separate
   surfaces: the tray is **compact by default** (one small app mark, so the
   notch panel carries the usage instead), and **Compact menu bar** in Settings
@@ -113,7 +119,10 @@ connect and no key-entry screen. OpenRouter uses an existing
   with an arrow beak, showing its rate limit windows, progress bars, reset
   countdowns, token usage summaries, and service status. A settings gear icon
   remains tucked away and only appears when hovering at the bottom of the
-  strip, keeping the panel minimal and compact. The strip can be dragged
+  strip, keeping the panel minimal and compact. At rest the strip folds to a
+  slim pill and unfolds on hover; **Keep open** pins it unfolded, clicking a
+  ring refetches only that provider, and a right-click menu offers Keep open,
+  Refresh now, and Hide. The strip can be dragged
   anywhere, and the position is remembered across relaunches and screen changes.
   Off by default; the **Side notch panel** switch in Settings turns it on.
 - **Notification Center widgets** — one widget per provider plus an

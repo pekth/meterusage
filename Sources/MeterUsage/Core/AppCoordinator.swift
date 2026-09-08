@@ -44,6 +44,11 @@ final class AppCoordinator: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published private(set) var isClearingCache = false
     @Published private(set) var lastRefreshedAt: Date?
+    /// Last good quota per provider, restored from disk at launch. Feeds only
+    /// the ambient surfaces (notch, tray, tooltip) when live data is absent —
+    /// always rendered dimmed and dated, never as a live number.
+    @Published private(set) var archivedQuotas: [Provider: ProviderQuota] = [:]
+    private let quotaArchiveURL: URL
 
     /// Ticks once a minute purely so relative labels ("resets in 2h 14m") stay
     /// truthful between refreshes without re-polling any source.
@@ -146,7 +151,8 @@ final class AppCoordinator: ObservableObject {
         usageSources: [UsageSource] = [],
         statusSources: [StatusSource] = [],
         planSources: [PlanSource] = [],
-        activitySourceFactory: (() -> [LocalActivitySource])? = nil
+        activitySourceFactory: (() -> [LocalActivitySource])? = nil,
+        quotaArchiveURL: URL? = nil
     ) {
         self.preferences = preferences
         self.isDemoMode = isDemoMode
@@ -157,6 +163,9 @@ final class AppCoordinator: ObservableObject {
         self.usageSources = usageSources
         self.statusSources = statusSources
         self.planSources = planSources
+        let archiveURL = quotaArchiveURL ?? QuotaArchive.defaultURL
+        self.quotaArchiveURL = archiveURL
+        self.archivedQuotas = QuotaArchive.load(from: archiveURL)
     }
 
     // No `deinit`: one coordinator is created by the app delegate and lives for
@@ -302,6 +311,31 @@ final class AppCoordinator: ObservableObject {
         if Date().timeIntervalSince(last) > maxAge { refresh() }
     }
 
+    /// Refreshes only one provider's quota, usage, status, and plan sources.
+    ///
+    /// An explicit per-ring request: it bypasses backoff like any other
+    /// user-initiated refresh, but never spends the other providers'
+    /// rate-limit budget. Used by the side notch panel's click-to-refresh.
+    func refresh(provider: Provider) {
+        guard refreshTask == nil else {
+            // A sweep is already running; fall back to a forced full refresh
+            // afterwards rather than dropping the request.
+            pendingForcedRefresh = true
+            return
+        }
+        isRefreshing = true
+        refreshTask = Task { [weak self] in
+            await self?.performRefresh(providers: [provider])
+            self?.isRefreshing = false
+            self?.lastRefreshedAt = Date()
+            self?.refreshTask = nil
+            if self?.pendingForcedRefresh == true {
+                self?.pendingForcedRefresh = false
+                self?.refresh()
+            }
+        }
+    }
+
     /// Performs the explicitly confirmed Codex reset and refreshes all data so
     /// the menu immediately reflects the provider's new limits and remaining
     /// reset credits. A non-reset outcome is treated as unavailable rather than
@@ -358,6 +392,53 @@ final class AppCoordinator: ObservableObject {
         // here performs I/O or reaches WidgetKit.
         didPublishSnapshot?(
             LimitsReporter.build(quotas: quotas, order: visibleQuotaProviders, now: clock))
+        saveArchive()
+    }
+
+    /// Single-provider variant of the sweep above. Loads only the named
+    /// provider's sources; status sources stay included because hiding usage
+    /// must not hide the health signal.
+    private func performRefresh(providers: [Provider]) async {
+        let wanted = Set(providers)
+        await withTaskGroup(of: Void.self) { group in
+            for source in quotaSources where wanted.contains(source.provider) && preferences.isEnabled(source.provider) {
+                group.addTask { [weak self] in await self?.load(quota: source) }
+            }
+            for source in activitySources where wanted.contains(source.provider) && preferences.isEnabled(source.provider) {
+                group.addTask { [weak self] in await self?.load(activity: source) }
+            }
+            for source in usageSources where wanted.contains(source.provider) && preferences.isEnabled(source.provider) {
+                group.addTask { [weak self] in await self?.load(usage: source) }
+            }
+            for source in statusSources where wanted.contains(source.provider) {
+                group.addTask { [weak self] in await self?.load(status: source) }
+            }
+            for source in planSources where wanted.contains(source.provider) && preferences.isEnabled(source.provider) {
+                group.addTask { [weak self] in await self?.load(plan: source) }
+            }
+        }
+        clock = Date()
+        quotaAlertService?.process(quotas: quotas)
+        didPublishSnapshot?(
+            LimitsReporter.build(quotas: quotas, order: visibleQuotaProviders, now: clock))
+        saveArchive()
+    }
+
+    /// The quota an ambient surface should render: the live reading when
+    /// present, otherwise the archived last-good reading marked stale. `nil`
+    /// only when neither exists — the honest "we do not know" case.
+    func displayQuota(for provider: Provider) -> (quota: ProviderQuota, isStale: Bool)? {
+        if let live = quotas[provider]?.value {
+            return (live, false)
+        }
+        if let remembered = archivedQuotas[provider] {
+            return (remembered, true)
+        }
+        return nil
+    }
+
+    private func saveArchive() {
+        QuotaArchive.save(archivedQuotas, to: quotaArchiveURL)
     }
 
     private func isBackedOff(kind: String, provider: Provider, now: Date) -> Bool {
@@ -394,7 +475,9 @@ final class AppCoordinator: ObservableObject {
     private func load(quota source: QuotaSource) async {
         let result: Loaded<ProviderQuota>
         do {
-            result = .value(try await source.fetchQuota())
+            let quota = try await source.fetchQuota()
+            result = .value(quota)
+            archivedQuotas[source.provider] = quota
         } catch {
             result = .missing(Self.reason(for: error, provider: source.provider))
         }
@@ -558,12 +641,17 @@ final class AppCoordinator: ObservableObject {
     /// visible even when the matching provider's usage card is switched off.
     var statusProviders: [Provider] { visibleStatusProviders }
 
-    /// The single most-constrained window across every visible provider — the
-    /// one number the menu bar shows.
+    /// The single most-constrained headline across every visible provider —
+    /// the one number the menu bar shows. Each provider contributes its
+    /// declared headline window (never its biggest), so the figure keeps a
+    /// stable subject per provider across resets.
     var mostConstrained: (provider: Provider, window: QuotaWindow)? {
         visibleQuotaProviders
-            .compactMap { quotas[$0]?.value }
-            .flatMap { quota in quota.windows.map { (quota.provider, $0) } }
+            .compactMap { provider in
+                quotas[provider]?.value.flatMap { quota in
+                    provider.headlineWindow(from: quota.windows).map { (provider, $0) }
+                }
+            }
             .max { $0.1.usedPercent < $1.1.usedPercent }
     }
 

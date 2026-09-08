@@ -85,6 +85,8 @@ struct MenuBarLabel: View {
                                 .foregroundColor(cluster.numberTint)
                         }
                     }
+                    // A remembered reading never passes for a live number.
+                    .opacity(cluster.isStale ? 0.55 : 1.0)
                 }
             }
         }
@@ -98,12 +100,14 @@ struct MenuBarLabel: View {
         let usedFraction: Double
         let markTint: Color
         let numberTint: Color
+        let isStale: Bool
     }
 
     private var clusters: [Cluster] {
         coordinator.menuBarProviders.compactMap { provider in
-            let window = coordinator.quotas[provider]?.value?.windows
-                .max(by: { $0.usedPercent < $1.usedPercent })
+            let display = coordinator.displayQuota(for: provider)
+            let window = display.flatMap { provider.headlineWindow(from: $0.quota.windows) }
+            let isStale = display?.isStale ?? false
 
             let status = coordinator.statuses[provider]?.value
             let markTint: Color
@@ -121,7 +125,8 @@ struct MenuBarLabel: View {
                     percent: Fmt.percent(window.usedPercent),
                     usedFraction: window.fraction,
                     markTint: markTint,
-                    numberTint: headroomColor(usedPercent: window.usedPercent)
+                    numberTint: headroomColor(usedPercent: window.usedPercent),
+                    isStale: isStale
                 )
             }
             // No quota, but a degraded-or-worse service is worth a bare mark.
@@ -131,14 +136,15 @@ struct MenuBarLabel: View {
                     percent: nil,
                     usedFraction: 0,
                     markTint: markTint,
-                    numberTint: markTint
+                    numberTint: markTint,
+                    isStale: false
                 )
             }
             return nil
         }
     }
 
-    /// Animates on the tightest cluster so a meaningful change (a quota
+    /// Animates on the largest headline cluster so a meaningful change (a quota
     /// crossing a colour band) eases rather than snapping.
     private var fraction: Double {
         clusters.map(\.usedFraction).max() ?? 0
@@ -162,7 +168,7 @@ struct MenuBarLabel: View {
             guard let percent = cluster.percent else {
                 return "\(cluster.provider.displayName) unavailable"
             }
-            return "\(cluster.provider.displayName) \(percent) used"
+            return "\(cluster.provider.displayName) \(percent) used\(cluster.isStale ? ", last known" : "")"
         }
         .joined(separator: ", ")
     }

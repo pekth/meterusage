@@ -90,7 +90,11 @@ final class MenuBarTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let coordinator = AppCoordinator(preferences: Preferences(defaults: defaults))
+        let coordinator = AppCoordinator(
+            preferences: Preferences(defaults: defaults),
+            quotaArchiveURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("meterusage-tests-" + UUID().uuidString + ".json")
+        )
         let tooltip = AppDelegate.tooltip(for: coordinator)
         XCTAssertEqual(tooltip, "No usage data yet")
     }
@@ -117,7 +121,9 @@ final class MenuBarTests: XCTestCase {
             quotaSources: quotaWindows.map {
                 StubQuotaSource(provider: $0.0, label: $0.1, percent: $0.2, resetsAt: $0.3.map { Date().addingTimeInterval($0) })
             },
-            statusSources: statuses.map { StubStatusSource(provider: $0.0, severity: $0.1) }
+            statusSources: statuses.map { StubStatusSource(provider: $0.0, severity: $0.1) },
+            quotaArchiveURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("meterusage-tests-" + UUID().uuidString + ".json")
         )
 
         coordinator.refresh()

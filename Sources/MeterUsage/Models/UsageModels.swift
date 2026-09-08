@@ -27,6 +27,15 @@ public struct QuotaWindow: Equatable, Sendable {
 
     /// Fraction 0...1, convenient for progress bars.
     public var fraction: Double { usedPercent / 100 }
+
+    /// Whether this window is the provider's current-session window: the
+    /// "5-hour" label every session-shaped source uses, or a label carrying
+    /// the word "session". Matches `SideNotchPanelView.windowDisplayTitle`,
+    /// which renders these as "Current session".
+    public var isSessionWindow: Bool {
+        let label = label.lowercased()
+        return label == "5-hour" || label.contains("session")
+    }
 }
 
 /// A named group of quota windows, such as the general account allowance or a
@@ -144,7 +153,7 @@ public struct ProviderQuota: Equatable, Sendable {
     }
 }
 
-public enum Provider: String, CaseIterable, Sendable {
+public enum Provider: String, CaseIterable, Codable, Sendable {
     case codex
     case antigravity
     case grok
@@ -163,6 +172,56 @@ public enum Provider: String, CaseIterable, Sendable {
         }
     }
 
+    /// The window the ring, tray cluster, and tooltip headline mean for this
+    /// provider — declared by name, never positional and never "whichever is
+    /// biggest".
+    ///
+    /// A positional (`windows.first`) or most-constrained (`max usedPercent`)
+    /// rule lets the subject move: right after the session window resets to
+    /// ~0%, the weekly window quietly slides into its place, and the ring
+    /// keeps its shape while changing what it measures — at exactly the
+    /// moment someone is most likely looking at it. Naming the window stops
+    /// that drift: a fresh session reads 0%, which is the truth, and a
+    /// genuinely absent headline yields `nil` (dash/skip) rather than
+    /// promoting another window into its place.
+    ///
+    /// Rules per provider:
+    /// - Codex: the "5-hour" current session; a lone single window (plans
+    ///   that report only one allowance, e.g. `secondary == null`) is that
+    ///   plan's allowance and is returned as-is.
+    /// - Claude: the "5-hour" session, falling back to the bare legacy
+    ///   "7-day" key for writers that never emit a session window. A
+    ///   `limits[]`-shaped weekly ("Weekly · …") is never a fallback: the
+    ///   upstream array transiently drops the session right after it resets,
+    ///   and promoting the weekly there is the exact drift this exists to stop.
+    /// - OpenCode Go: the "Rolling" current allowance.
+    /// - Grok / OpenRouter: single-window providers; the lone window is the
+    ///   headline. (More than one would be a new provider shape with no
+    ///   declared concept, so the max is kept as a visible fallback.)
+    /// - Antigravity: dynamic per-group labels with no session concept, so
+    ///   the most-constrained window stays the honest "about to get cut off"
+    ///   figure.
+    public func headlineWindow(from windows: [QuotaWindow]) -> QuotaWindow? {
+        switch self {
+        case .codex:
+            if let session = windows.first(where: { $0.isSessionWindow }) {
+                return session
+            }
+            return windows.count == 1 ? windows[0] : nil
+        case .claude:
+            if let session = windows.first(where: { $0.isSessionWindow }) {
+                return session
+            }
+            return windows.first(where: { $0.label == "7-day" })
+        case .openCodeGo:
+            return windows.first(where: { $0.label.lowercased() == "rolling" })
+        case .grok, .openRouter:
+            if windows.count == 1 { return windows[0] }
+            return windows.max(by: { $0.usedPercent < $1.usedPercent })
+        case .antigravity:
+            return windows.max(by: { $0.usedPercent < $1.usedPercent })
+        }
+    }
     /// Public provider status page for the providers whose machine-readable
     /// feed is shown in the dashboard. Other providers remain linkless rather
     /// than sending the user to a guessed or unrelated page.

@@ -1,16 +1,23 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Side notch panel view
 //
 // The content of the floating right-edge strip: one progress ring per menu-bar
 // provider, each with its used percent underneath. Hovering any provider in
 // the strip expands a dedicated detail card beside the strip with per-window
-// bars and reset times.
+// bars and reset times. Provider marks are untouched by this view's
+// interaction layer: fold, pin, click-to-refresh, and cursor only.
 //
 // Data comes straight from the coordinator, exactly like the menu-bar label:
-// the tightest window per provider drives the ring, tinted by quota headroom,
-// and the mark is tinted by service status. A provider with no quota reading is
-// skipped rather than drawn as an empty ring.
+// each provider's declared headline window drives its ring, tinted by quota
+// headroom, and the mark is tinted by service status. A provider with no
+// headline reading is skipped rather than drawn as an empty ring.
+//
+// Interaction (borrowed from codenotch's notch, adapted to this strip):
+// the panel folds to a slim pill and unfolds on hover; "Keep open" pins it
+// unfolded across relaunches; clicking a ring refetches only that provider
+// so one cell never spends the others' rate-limit budget.
 
 struct SideNotchPanelView: View {
 
@@ -21,34 +28,31 @@ struct SideNotchPanelView: View {
     /// contract as `MenuBarLabel.onWidthChange`.
     var onSizeChange: (CGSize) -> Void = { _ in }
 
+    @AppStorage(PrefKey.sideNotchPanelPinned) private var isPinned = false
+    @AppStorage(PrefKey.sideNotchPanel) private var panelEnabled = true
     @State private var hoveredProvider: Provider?
+    @State private var isHoveringPanel = false
     @State private var isHoveringSettings = false
     @State private var isHoveringBottom = false
+    @State private var refreshingProviders: Set<Provider> = []
     /// Collapse hysteresis: a pointer exit schedules collapse, but a
-    /// re-enter before the delay fires cancels it.
+    /// re-enter before the delay fires cancels it. 450ms — deliberately
+    /// longer than a tooltip grace, so the fold never feels twitchy.
     @State private var collapseTask: Task<Void, Never>?
 
+    /// Unfolded while pinned or while the pointer is on the panel.
+    private var isOpen: Bool {
+        isPinned || isHoveringPanel || hoveredProvider != nil || isHoveringBottom || isHoveringSettings
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            if let hovered = hoveredProvider, entries.contains(where: { $0.provider == hovered }) {
-                detailCard(for: hovered)
-                    .id(hovered)
-                    .overlay(alignment: .topTrailing) {
-                        ArrowBeakView()
-                            .offset(x: 6.5, y: beakYOnCard(for: hovered))
-                    }
-                    .padding(.top, cardTopOffset(for: hovered))
-                    .padding(.trailing, 8)
-                    .onHover { hovering in
-                        if hovering {
-                            collapseTask?.cancel()
-                            collapseTask = nil
-                        }
-                    }
+        Group {
+            if isOpen {
+                openPanel
+            } else {
+                foldedPill
             }
-            strip
         }
-        .fixedSize()
         .background(
             GeometryReader { proxy in
                 Color.clear
@@ -62,18 +66,96 @@ struct SideNotchPanelView: View {
                 if hovering {
                     collapseTask?.cancel()
                     collapseTask = nil
+                    isHoveringPanel = true
                 } else {
-                    collapseTask = Task {
-                        try? await Task.sleep(nanoseconds: 250_000_000)
-                        guard !Task.isCancelled else { return }
-                        hoveredProvider = nil
-                        isHoveringSettings = false
-                        isHoveringBottom = false
-                    }
+                    scheduleFold()
                 }
             }
         )
+        .contextMenu {
+            Toggle("Keep open", isOn: $isPinned)
+            Button("Refresh now") { coordinator.refresh() }
+            Divider()
+            Button("Hide panel") { panelEnabled = false }
+        }
         .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private func scheduleFold() {
+        collapseTask?.cancel()
+        collapseTask = Task {
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard !Task.isCancelled else { return }
+            hoveredProvider = nil
+            isHoveringPanel = false
+            isHoveringSettings = false
+            isHoveringBottom = false
+        }
+    }
+
+    private func cancelFold() {
+        collapseTask?.cancel()
+        collapseTask = nil
+    }
+
+    private var openPanel: some View {
+        HStack(alignment: .top, spacing: 0) {
+            if let hovered = hoveredProvider, entries.contains(where: { $0.provider == hovered }) {
+                detailCard(for: hovered)
+                    .id(hovered)
+                    .overlay(alignment: .topTrailing) {
+                        ArrowBeakView()
+                            .offset(x: 6.5, y: beakYOnCard(for: hovered))
+                    }
+                    .padding(.top, cardTopOffset(for: hovered))
+                    .padding(.trailing, 8)
+                    .onHover { hovering in
+                        if hovering { cancelFold() }
+                    }
+            }
+            strip
+        }
+        .fixedSize()
+    }
+
+    // MARK: - Folded pill
+
+    /// Slim resting pill shown when the panel is neither pinned nor hovered.
+    /// Dots reuse the entries' ring tints so headroom stays readable at rest.
+    private var foldedPill: some View {
+        VStack(spacing: 5) {
+            ForEach(entries.prefix(5)) { entry in
+                Circle()
+                    .fill(entry.ringTint)
+                    .frame(width: 6, height: 6)
+            }
+            if entries.isEmpty {
+                Circle()
+                    .fill(MU.neutral)
+                    .frame(width: 6, height: 6)
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(MU.surface)
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(MU.hairline, lineWidth: 1)
+        )
+        .fixedSize()
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering {
+                cancelFold()
+                isHoveringPanel = true
+            } else {
+                scheduleFold()
+            }
+        }
         .accessibilityLabel(accessibilityText)
     }
 
@@ -99,13 +181,22 @@ struct SideNotchPanelView: View {
                             .foregroundColor(entry.ringTint)
                     }
                     .contentShape(Rectangle())
+                    .scaleEffect(refreshingProviders.contains(entry.provider) ? 0.92 : 1.0)
+                    // A remembered reading is dated information: dim it so it
+                    // never passes for a live number.
+                    .opacity(entry.isStale ? 0.55 : 1.0)
+                    .help("Click to refresh \(entry.provider.displayName)")
+                    .onTapGesture { refreshRing(entry.provider) }
                     .onHover { hovering in
                         if hovering {
-                            collapseTask?.cancel()
-                            collapseTask = nil
+                            cancelFold()
+                            isHoveringPanel = true
                             hoveredProvider = entry.provider
                             isHoveringSettings = false
                             isHoveringBottom = false
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
                         }
                     }
                 }
@@ -126,8 +217,7 @@ struct SideNotchPanelView: View {
                     .onHover { hovering in
                         isHoveringSettings = hovering
                         if hovering {
-                            collapseTask?.cancel()
-                            collapseTask = nil
+                            cancelFold()
                             hoveredProvider = nil
                             isHoveringBottom = true
                         } else {
@@ -154,8 +244,7 @@ struct SideNotchPanelView: View {
                     .contentShape(Rectangle())
                     .onHover { hovering in
                         if hovering {
-                            collapseTask?.cancel()
-                            collapseTask = nil
+                            cancelFold()
                             hoveredProvider = nil
                             isHoveringBottom = true
                         }
@@ -167,7 +256,12 @@ struct SideNotchPanelView: View {
     // MARK: - Detail card for hovered provider
 
     private func detailCard(for provider: Provider) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        // The card follows the ring: live reading when present, otherwise
+        // the archived last-good reading, dated as such.
+        let display = coordinator.displayQuota(for: provider)
+        let quota = display?.quota
+        let isStale = display?.isStale ?? false
+        return VStack(alignment: .leading, spacing: 10) {
             // Header: icon, "[Provider] Usage", and reset countdown
             HStack(alignment: .center, spacing: 8) {
                 ProviderMark(provider: provider, tint: providerColor(provider))
@@ -190,7 +284,7 @@ struct SideNotchPanelView: View {
             }
 
             // Rate limit windows
-            if let quota = coordinator.quotas[provider]?.value, !quota.windows.isEmpty {
+            if let quota, !quota.windows.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(quota.windows.enumerated()), id: \.offset) { _, window in
                         VStack(alignment: .leading, spacing: 4) {
@@ -222,7 +316,7 @@ struct SideNotchPanelView: View {
                         }
                     }
                 }
-            } else if let quota = coordinator.quotas[provider]?.value, let credits = quota.credits {
+            } else if let quota, let credits = quota.credits {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Account balance")
                         .font(.system(size: 11, weight: .semibold))
@@ -267,8 +361,14 @@ struct SideNotchPanelView: View {
                 }
             }
 
-            // Timestamp
-            if let last = coordinator.lastRefreshedAt {
+            // Timestamp: a remembered reading is dated by its own capture,
+            // never by the last sweep — presenting it under "just now"
+            // would be a lie.
+            if isStale, let quota {
+                Text("Last reading \(Fmt.timeSince(quota.capturedAt, now: coordinator.clock))")
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundColor(MU.textTertiary)
+            } else if let last = coordinator.lastRefreshedAt {
                 Text("Updated \(Fmt.timeSince(last, now: coordinator.clock))")
                     .font(.system(size: 10, weight: .regular))
                     .foregroundColor(MU.textTertiary)
@@ -313,8 +413,21 @@ struct SideNotchPanelView: View {
         return window.label
     }
 
+    /// Click-to-refresh for one ring. Refetches only that provider so one
+    /// cell never spends the others' rate-limit budget. A second click while
+    /// one is in flight is ignored.
+    private func refreshRing(_ provider: Provider) {
+        guard !refreshingProviders.contains(provider) else { return }
+        refreshingProviders.insert(provider)
+        coordinator.refresh(provider: provider)
+        Task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            refreshingProviders.remove(provider)
+        }
+    }
+
     private func headerResetCountdown(for provider: Provider) -> String? {
-        guard let quota = coordinator.quotas[provider]?.value else { return nil }
+        guard let quota = coordinator.displayQuota(for: provider)?.quota else { return nil }
         let windowsWithReset = quota.windows.compactMap { w -> (QuotaWindow, Date)? in
             guard let r = w.resetsAt, r > coordinator.clock else { return nil }
             return (w, r)
@@ -385,6 +498,9 @@ struct SideNotchPanelView: View {
         let ringTint: Color
         let markTint: Color
         let resetsAt: Date?
+        /// True when the ring shows the archived last-good reading because
+        /// the live fetch has nothing. Rendered dimmed, never as live.
+        let isStale: Bool
 
         var id: Provider { provider }
     }
@@ -392,11 +508,15 @@ struct SideNotchPanelView: View {
     static func entries(
         menuBarProviders: [Provider],
         quotas: [Provider: Loaded<ProviderQuota>],
-        statuses: [Provider: Loaded<ServiceStatus>]
+        statuses: [Provider: Loaded<ServiceStatus>],
+        archivedQuotas: [Provider: ProviderQuota] = [:]
     ) -> [Entry] {
         menuBarProviders.compactMap { provider in
-            guard let window = quotas[provider]?.value?.windows
-                .max(by: { $0.usedPercent < $1.usedPercent }) else { return nil }
+            let live = quotas[provider]?.value
+            let quota = live ?? archivedQuotas[provider]
+            guard let windows = quota?.windows,
+                  let window = provider.headlineWindow(from: windows)
+            else { return nil }
             let markTint: Color
             if let status = statuses[provider]?.value {
                 markTint = MenuBarLabel.statusTint(status.severity)
@@ -409,7 +529,8 @@ struct SideNotchPanelView: View {
                 fraction: window.fraction,
                 ringTint: headroomColor(usedPercent: window.usedPercent),
                 markTint: markTint,
-                resetsAt: window.resetsAt
+                resetsAt: window.resetsAt,
+                isStale: live == nil
             )
         }
     }
@@ -418,14 +539,17 @@ struct SideNotchPanelView: View {
         Self.entries(
             menuBarProviders: coordinator.menuBarProviders,
             quotas: coordinator.quotas,
-            statuses: coordinator.statuses
+            statuses: coordinator.statuses,
+            archivedQuotas: coordinator.archivedQuotas
         )
     }
 
     private var accessibilityText: String {
         if entries.isEmpty { return "Usage unavailable" }
-        return entries.map { "\($0.provider.displayName) \(Fmt.percent($0.usedPercent)) used" }
-            .joined(separator: ", ")
+        return entries.map {
+            "\($0.provider.displayName) \(Fmt.percent($0.usedPercent)) used\($0.isStale ? ", last known" : "")"
+        }
+        .joined(separator: ", ")
     }
 }
 

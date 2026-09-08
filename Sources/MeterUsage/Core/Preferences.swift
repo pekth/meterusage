@@ -37,6 +37,7 @@ enum PrefKey {
     static let showCodexHeatmap = "showCodexHeatmap"
     static let quotaAlerts = "quotaAlertsEnabled"
     static let sideNotchPanel = "sideNotchPanelEnabled"
+    static let sideNotchPanelPinned = "sideNotchPanelPinned"
     /// Where the user dragged the side notch panel, as "x,y" of the window's
     /// top-right corner. Written by `SideNotchPanelController`; read at panel
     /// construction only, so it deliberately has no `Preferences` property.
@@ -104,6 +105,9 @@ final class Preferences: ObservableObject {
     /// default: a window pinned over every space is a big ask to make of
     /// someone who only asked for a menu-bar meter.
     @Published private(set) var sideNotchPanelEnabled: Bool = false
+    /// Keep the side notch panel unfolded. Off by default so the strip gets
+    /// out of the way until hovered; persisted across relaunches.
+    @Published private(set) var sideNotchPanelPinned: Bool = false
     /// Compact menu bar: one small app mark instead of usage clusters.
     /// Default on — the tray and the side notch panel are separate surfaces
     /// that each decide what they carry, and the notch carries the usage.
@@ -147,6 +151,7 @@ final class Preferences: ObservableObject {
             PrefKey.showCodexHeatmap: true,
             PrefKey.quotaAlerts: false,
             PrefKey.sideNotchPanel: false,
+            PrefKey.sideNotchPanelPinned: false,
             // Compact menu bar is the default: the side notch panel carries
             // the usage, so the tray stays one small mark. A user who already
             // stored a value keeps theirs.
@@ -208,6 +213,9 @@ final class Preferences: ObservableObject {
 
         let sideNotch = defaults.bool(forKey: PrefKey.sideNotchPanel)
         if sideNotch != sideNotchPanelEnabled { sideNotchPanelEnabled = sideNotch }
+
+        let sideNotchPinned = defaults.bool(forKey: PrefKey.sideNotchPanelPinned)
+        if sideNotchPinned != sideNotchPanelPinned { sideNotchPanelPinned = sideNotchPinned }
 
         let menuBarCompact = defaults.bool(forKey: PrefKey.menuBarCompact)
         if menuBarCompact != menuBarCompactEnabled { menuBarCompactEnabled = menuBarCompact }
