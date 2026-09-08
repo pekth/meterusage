@@ -183,23 +183,29 @@ struct SideNotchPanelView: View {
     /// Slim resting pill shown when the panel is neither pinned nor hovered.
     /// Dots reuse the entries' ring tints so headroom stays readable at rest.
     private var foldedPill: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 6) {
             ForEach(entries.prefix(5)) { entry in
                 Circle()
                     .fill(entry.ringTint)
-                    .frame(width: 6, height: 6)
+                    .frame(width: 8, height: 8)
             }
             if entries.isEmpty {
                 Circle()
                     .fill(Color(white: 1, opacity: 0.4))
-                    .frame(width: 6, height: 6)
+                    .frame(width: 8, height: 8)
             }
         }
         .padding(.vertical, 12)
-        .padding(.horizontal, 5)
+        .padding(.horizontal, 8)
         .background(
             Capsule(style: .continuous)
                 .fill(Notch.body)
+        )
+        .overlay(
+            // The one border in the notch: without it the resting pill
+            // vanishes into dark wallpapers. Track-grey keeps it a whisper.
+            Capsule(style: .continuous)
+                .strokeBorder(Notch.track, lineWidth: 1)
         )
         .fixedSize()
         .contentShape(Rectangle())
