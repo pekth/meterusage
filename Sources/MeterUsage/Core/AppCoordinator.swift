@@ -336,6 +336,11 @@ final class AppCoordinator: ObservableObject {
         }
     }
 
+    /// Whether a Codex rate limit reset action is currently usable.
+    var canUseCodexReset: Bool {
+        resetConsumer != nil
+    }
+
     /// Performs the explicitly confirmed Codex reset and refreshes all data so
     /// the menu immediately reflects the provider's new limits and remaining
     /// reset credits. A non-reset outcome is treated as unavailable rather than

@@ -57,6 +57,7 @@ enum PrefKey {
     static let showPacingBurnRate = "showPacingBurnRate"
     static let showActivityTelemetry = "showActivityTelemetry"
     static let showDailyActivityChart = "showDailyActivityChart"
+    static let showSideNotchResetButton = "showSideNotchResetButton"
 }
 
 /// Popover appearance. The menu-bar label always follows the system menu bar.
@@ -122,6 +123,7 @@ final class Preferences: ObservableObject {
     @Published private(set) var showPacingBurnRate: Bool = true
     @Published private(set) var showActivityTelemetry: Bool = true
     @Published private(set) var showDailyActivityChart: Bool = true
+    @Published private(set) var showSideNotchResetButton: Bool = true
 
     private let defaults: UserDefaults
     private var observer: NSObjectProtocol?
@@ -165,7 +167,8 @@ final class Preferences: ObservableObject {
             PrefKey.updateCheck: true,
             PrefKey.showPacingBurnRate: true,
             PrefKey.showActivityTelemetry: true,
-            PrefKey.showDailyActivityChart: true
+            PrefKey.showDailyActivityChart: true,
+            PrefKey.showSideNotchResetButton: true
         ])
         reload()
         observer = NotificationCenter.default.addObserver(
@@ -240,6 +243,9 @@ final class Preferences: ObservableObject {
 
         let chart = defaults.bool(forKey: PrefKey.showDailyActivityChart)
         if chart != showDailyActivityChart { showDailyActivityChart = chart }
+
+        let sideNotchReset = defaults.object(forKey: PrefKey.showSideNotchResetButton) == nil ? true : defaults.bool(forKey: PrefKey.showSideNotchResetButton)
+        if sideNotchReset != showSideNotchResetButton { showSideNotchResetButton = sideNotchReset }
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }

@@ -452,6 +452,41 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: PrefKey.onboardingDone))
     }
 
+    @MainActor
+    func testSideNotchResetButtonDefaultsOnAndPersists() throws {
+        let suiteName = "MeterUsageTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let first = Preferences(defaults: defaults)
+        XCTAssertTrue(first.showSideNotchResetButton)
+
+        defaults.set(false, forKey: PrefKey.showSideNotchResetButton)
+        let second = Preferences(defaults: defaults)
+        XCTAssertFalse(second.showSideNotchResetButton)
+    }
+
+    private struct StubResetConsumer: QuotaResetConsumer {
+        func consumeReset(creditID: String) async throws -> Bool { true }
+    }
+
+    @MainActor
+    func testCoordinatorCanUseCodexResetReflectsConsumer() throws {
+        let suiteName = "MeterUsageTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let prefs = Preferences(defaults: defaults)
+
+        let withoutConsumer = AppCoordinator(preferences: prefs)
+        XCTAssertFalse(withoutConsumer.canUseCodexReset)
+
+        let withConsumer = AppCoordinator(
+            preferences: prefs,
+            resetConsumer: StubResetConsumer()
+        )
+        XCTAssertTrue(withConsumer.canUseCodexReset)
+    }
+
     // MARK: - Helpers
 
     /// Builds a coordinator with stub quota sources and lets one refresh sweep
