@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.13] - 2026-09-09
+
+### Added
+
+- **Burn rate and pacing indicators** — quota windows now show whether usage
+  is "burning fast", "well paced", "on pace", or "exhausted early" based on time
+  elapsed in the reset period.
+- **Provider activity telemetry** — hover cards display streak metrics (longest
+  and current active days), token volumes (lifetime, 30-day, today, peak), and
+  session counts across providers including OpenCode Go and Grok.
+- **30-day daily activity charts** — visual daily volume histograms in hover
+  detail cards showing recent daily activity patterns.
+- **Settings customization** — independent toggles to turn pacing burn rate,
+  activity telemetry, and daily charts on or off.
+
+### Changed
+
+- **Cleaned telemetry layout** — removed longest chat metric across all providers
+  for a balanced, uncluttered card grid.
+
+### Fixed
+
+- **Codex activity telemetry** — restored the missing 30-day activity histogram
+  and streak tracking under the Codex side notch hover card.
+
 ## [0.2.12] - 2026-09-07
 
 ### Added
