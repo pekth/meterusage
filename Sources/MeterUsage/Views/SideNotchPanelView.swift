@@ -100,17 +100,23 @@ struct SideNotchPanelView: View {
     @AppStorage(PrefKey.showPacingBurnRate) private var showPacingBurnRate = true
     @AppStorage(PrefKey.showActivityTelemetry) private var showActivityTelemetry = true
     @AppStorage(PrefKey.showDailyActivityChart) private var showDailyActivityChart = true
+    @AppStorage(PrefKey.showSideNotchResetButton) private var showSideNotchResetButton = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hoveredProvider: Provider?
     @State private var isHoveringPanel = false
+    @State private var confirmingResetID: String?
+    @State private var consumingResetID: String?
+    @State private var resetStatusMessage: String?
+    @State private var resetErrorMessage: String?
     /// Collapse hysteresis: a pointer exit schedules collapse, but a
     /// re-enter before the delay fires cancels it. 450ms — deliberately
     /// longer than a tooltip grace, so the fold never feels twitchy.
     @State private var collapseTask: Task<Void, Never>?
 
-    /// Unfolded while pinned or while the pointer is on the panel.
+    /// Unfolded while pinned, while the pointer is on the panel, or while a
+    /// reset action / confirmation is active.
     private var isOpen: Bool {
-        isPinned || isHoveringPanel || hoveredProvider != nil
+        isPinned || isHoveringPanel || hoveredProvider != nil || confirmingResetID != nil || consumingResetID != nil
     }
 
     var body: some View {
@@ -145,6 +151,17 @@ struct SideNotchPanelView: View {
             }
         )
         .contextMenu {
+            if showSideNotchResetButton,
+               let codexQuota = coordinator.displayQuota(for: .codex)?.quota,
+               let credit = codexQuota.resetCredits.first(where: { isAvailable($0) }) {
+                Button("Use Codex reset (\(credit.title))...") {
+                    cancelFold()
+                    isHoveringPanel = true
+                    hoveredProvider = .codex
+                    confirmingResetID = credit.id
+                }
+                Divider()
+            }
             Toggle("Keep open", isOn: $isPinned)
             Button("Refresh now") { coordinator.refresh() }
             Divider()
@@ -155,10 +172,12 @@ struct SideNotchPanelView: View {
     }
 
     private func scheduleFold() {
+        guard confirmingResetID == nil && consumingResetID == nil else { return }
         collapseTask?.cancel()
         collapseTask = Task {
             try? await Task.sleep(nanoseconds: 450_000_000)
             guard !Task.isCancelled else { return }
+            guard confirmingResetID == nil && consumingResetID == nil else { return }
             hoveredProvider = nil
             isHoveringPanel = false
         }
@@ -188,7 +207,9 @@ struct SideNotchPanelView: View {
         .onChange(of: panel.isDragging) { dragging in
             // A drop can strand a hover from before the drag (the mouse never
             // re-enters to refresh it): always reopen from a clean hover.
-            if !dragging { hoveredProvider = nil }
+            if !dragging && confirmingResetID == nil && consumingResetID == nil {
+                hoveredProvider = nil
+            }
         }
     }
 
@@ -198,12 +219,13 @@ struct SideNotchPanelView: View {
     /// on drop.
     @ViewBuilder
     private var cardColumn: some View {
+        let activeHovered = hoveredProvider ?? ((confirmingResetID != nil || consumingResetID != nil) ? .codex : nil)
         if !panel.isDragging,
-           let hovered = hoveredProvider,
+           let hovered = activeHovered,
            entries.contains(where: { $0.provider == hovered }) {
             detailCard(for: hovered)
                 .id(hovered)
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .contain)
                 .overlay(alignment: panel.cardOnRight ? .topLeading : .topTrailing) {
                     ArrowBeakView()
                         .scaleEffect(x: panel.cardOnRight ? -1 : 1, y: 1)
@@ -445,6 +467,14 @@ struct SideNotchPanelView: View {
                 }
             }
 
+            // Usage limit resets (Codex)
+            if showSideNotchResetButton,
+               provider == .codex,
+               let quota,
+               (quota.resetCreditCount ?? 0) > 0 || !quota.resetCredits.isEmpty {
+                resetCreditsSection(quota: quota)
+            }
+
             // Activity Telemetry 2-column grid
             if showActivityTelemetry, let tel = telemetry(for: provider) {
                 telemetryView(tel: tel, provider: provider)
@@ -636,6 +666,190 @@ struct SideNotchPanelView: View {
             return "Current session"
         }
         return window.label
+    }
+
+    // MARK: - Reset credits
+
+    @ViewBuilder
+    private func resetCreditsSection(quota: ProviderQuota) -> some View {
+        let count = quota.resetCreditCount ?? quota.resetCredits.count
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Usage limit resets")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Notch.text)
+                Spacer(minLength: 4)
+                Text("\(count) available")
+                    .font(.system(size: 10, weight: .regular))
+                    .foregroundColor(Notch.subtext)
+            }
+
+            if let statusMsg = resetStatusMessage {
+                HStack(spacing: 5) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(Notch.surplus)
+                    Text(statusMsg)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(Notch.surplus)
+                }
+                .padding(.vertical, 2)
+            } else if let errorMsg = resetErrorMessage {
+                HStack(spacing: 5) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(Notch.deficit)
+                    Text(errorMsg)
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(Notch.deficit)
+                }
+                .padding(.vertical, 2)
+            }
+
+            if quota.resetCredits.isEmpty {
+                if count > 0 && resetStatusMessage == nil && resetErrorMessage == nil {
+                    Text("\(count) reset credit\(count == 1 ? "" : "s") available")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(Notch.subtext)
+                }
+            } else {
+                ForEach(Array(quota.resetCredits.enumerated()), id: \.element.id) { idx, credit in
+                    let available = isAvailable(credit)
+                    let isConfirming = confirmingResetID == credit.id
+                    let isConsuming = consumingResetID == credit.id
+
+                    if idx > 0 {
+                        Divider()
+                            .overlay(Notch.track.opacity(0.6))
+                    }
+
+                    HStack(alignment: .center, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(credit.title)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Notch.text)
+                                .lineLimit(1)
+                            if let expiresAt = credit.expiresAt {
+                                Text("Expires \(Fmt.expiryMoment(expiresAt))")
+                                    .font(.system(size: 9.5, weight: .regular))
+                                    .foregroundColor(Notch.subtext)
+                                    .lineLimit(1)
+                            }
+                        }
+
+                        Spacer(minLength: 4)
+
+                        if isConsuming {
+                            HStack(spacing: 4) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("Resetting...")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(Notch.subtext)
+                            }
+                        } else if isConfirming {
+                            HStack(spacing: 4) {
+                                Button {
+                                    executeReset(creditID: credit.id)
+                                } label: {
+                                    Text("Confirm")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 7)
+                                        .padding(.vertical, 2.5)
+                                        .background(
+                                            Capsule(style: .continuous)
+                                                .fill(Color(red: 0.85, green: 0.2, blue: 0.2))
+                                        )
+                                }
+                                .buttonStyle(.plain)
+
+                                Button {
+                                    confirmingResetID = nil
+                                } label: {
+                                    Text("Cancel")
+                                        .font(.system(size: 10, weight: .regular))
+                                        .foregroundColor(Notch.subtext)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2.5)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        } else if available {
+                            Button {
+                                confirmingResetID = credit.id
+                            } label: {
+                                Text("Use reset")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(Notch.text)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2.5)
+                                    .background(
+                                        Capsule(style: .continuous)
+                                            .fill(Notch.track)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(consumingResetID != nil || !coordinator.canUseCodexReset)
+                        } else {
+                            Text(statusLabel(for: credit))
+                                .font(.system(size: 9.5, weight: .regular))
+                                .foregroundColor(Notch.subtext)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+
+                if quota.resetCredits.count < count {
+                    Text("\(count - quota.resetCredits.count) more available")
+                        .font(.system(size: 9.5, weight: .regular))
+                        .foregroundColor(Notch.subtext)
+                }
+            }
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+        )
+    }
+
+    private func isAvailable(_ credit: QuotaResetCredit) -> Bool {
+        guard credit.status?.lowercased() == "available" || credit.status == nil else { return false }
+        guard let expiresAt = credit.expiresAt else { return true }
+        return expiresAt > coordinator.clock
+    }
+
+    private func statusLabel(for credit: QuotaResetCredit) -> String {
+        guard let status = credit.status, !status.isEmpty else { return "Available" }
+        return status.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    private func executeReset(creditID: String) {
+        confirmingResetID = nil
+        consumingResetID = creditID
+        resetErrorMessage = nil
+        resetStatusMessage = nil
+        Task { @MainActor in
+            do {
+                try await coordinator.consumeCodexReset(creditID: creditID)
+                consumingResetID = nil
+                resetStatusMessage = "Reset applied ✓"
+                Task {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    if resetStatusMessage == "Reset applied ✓" {
+                        resetStatusMessage = nil
+                    }
+                }
+            } catch {
+                consumingResetID = nil
+                resetErrorMessage = "Reset failed. Try again."
+                Task {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    if resetErrorMessage == "Reset failed. Try again." {
+                        resetErrorMessage = nil
+                    }
+                }
+            }
+        }
     }
 
     private func headerResetCountdown(for provider: Provider) -> String? {

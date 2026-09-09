@@ -40,6 +40,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showPacingBurnRate) private var showPacingBurnRate: Bool = true
     @AppStorage(PrefKey.showActivityTelemetry) private var showActivityTelemetry: Bool = true
     @AppStorage(PrefKey.showDailyActivityChart) private var showDailyActivityChart: Bool = true
+    @AppStorage(PrefKey.showSideNotchResetButton) private var showSideNotchResetButton: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -168,6 +169,13 @@ struct SettingsView: View {
                         title: "Keep panel open",
                         subtitle: "Never fold the side notch panel to its resting pill.",
                         isOn: $sideNotchPanelPinned
+                    )
+                    .disabled(!sideNotchPanel)
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "Codex limit resets",
+                        subtitle: "Show limit reset actions in the side notch hover card and context menu.",
+                        isOn: $showSideNotchResetButton
                     )
                     .disabled(!sideNotchPanel)
                     Divider().overlay(MU.hairline)
