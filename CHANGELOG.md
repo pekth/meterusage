@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.14] - 2026-09-09
+
+### Added
+
+- **Codex limit resets in side notch** — floating side notch detail cards now
+  display available Codex rate limit resets with expiration moments and an
+  inline 2-step confirmation action (`Use reset` → `Confirm` / `Cancel`).
+- **Side notch context menu reset action** — quick shortcut to trigger
+  the next available Codex limit reset directly from the side notch right-click menu.
+- **Customizable reset toggle** — new "Codex limit resets" setting under
+  Settings → Side notch to turn reset actions on or off (enabled by default).
+
+### Fixed
+
+- **Panel fold prevention during reset** — side notch remains pinned open while
+  a reset action or confirmation is in flight, preventing accidental card collapse.
+
 ## [0.2.13] - 2026-09-09
 
 ### Added
