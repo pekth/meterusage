@@ -171,11 +171,27 @@ public actor ClaudeLocalSource: LocalActivitySource {
             }
             .sorted { $0.day < $1.day }
 
+        let sortedSessions = sessions.sorted { $0.startedAt < $1.startedAt }
+        let now = Date()
+        let items = sortedSessions.map {
+            TelemetrySessionItem(
+                startedAt: $0.startedAt,
+                tokens: $0.tokens.total,
+                messageCount: $0.messageCount
+            )
+        }
+        let telemetry = TelemetryCalculator.calculate(
+            sessions: items,
+            daily: daily,
+            now: now
+        )
+
         return LocalActivity(
             provider: .claude,
-            sessions: sessions.sorted { $0.startedAt < $1.startedAt },
+            sessions: sortedSessions,
             daily: daily,
-            scannedAt: Date()
+            scannedAt: now,
+            telemetry: telemetry
         )
     }
 

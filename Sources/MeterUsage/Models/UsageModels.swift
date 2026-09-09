@@ -10,6 +10,70 @@ import Foundation
 // hostname, installation id, or absolute filesystem path. Project identity is
 // a display name only, already stripped of its path by the source that made it.
 
+
+/// Burn rate pacing status: deficit (burning fast), surplus (well paced),
+/// or on pace (within +/- 2%).
+public enum QuotaPaceStatus: Equatable, Sendable {
+    case deficit(Double)
+    case surplus(Double)
+    case onPace
+
+    public var isDeficit: Bool {
+        if case .deficit = self { return true }
+        return false
+    }
+
+    public var isSurplus: Bool {
+        if case .surplus = self { return true }
+        return false
+    }
+
+    public var text: String {
+        switch self {
+        case .deficit: return "burning fast"
+        case .surplus: return "well paced"
+        case .onPace:   return "on pace"
+        }
+    }
+}
+
+/// Pacing metrics computed for a rate-limit window.
+public struct QuotaPace: Equatable, Sendable {
+    public let usedPercent: Double
+    public let remainingPercent: Double
+    public let elapsedPercent: Double
+    public let deficitPercent: Double
+    public let burnRate: Double
+    public let projectedExhaustion: Date?
+    public let status: QuotaPaceStatus
+
+    public init(
+        usedPercent: Double,
+        remainingPercent: Double,
+        elapsedPercent: Double,
+        deficitPercent: Double,
+        burnRate: Double,
+        projectedExhaustion: Date? = nil,
+        status: QuotaPaceStatus
+    ) {
+        self.usedPercent = usedPercent
+        self.remainingPercent = remainingPercent
+        self.elapsedPercent = elapsedPercent
+        self.deficitPercent = deficitPercent
+        self.burnRate = burnRate
+        self.projectedExhaustion = projectedExhaustion
+        self.status = status
+    }
+
+    /// User-facing status string, handling early exhaustion clearly.
+    public func statusText(usedPercent: Double) -> String {
+        if usedPercent >= 100.0 {
+            return "exhausted early"
+        }
+        return status.text
+    }
+}
+
 /// A single rate-limit window reported by a provider.
 public struct QuotaWindow: Equatable, Sendable {
     /// Human label for the window, e.g. "5-hour", "Weekly".
@@ -19,10 +83,88 @@ public struct QuotaWindow: Equatable, Sendable {
     /// When the window rolls over. `nil` when the provider does not say.
     public let resetsAt: Date?
 
-    public init(label: String, usedPercent: Double, resetsAt: Date?) {
+    /// Window duration in minutes, if known (e.g. 300 for 5-hour, 10080 for weekly).
+    public let windowDurationMins: Int?
+
+    public init(label: String, usedPercent: Double, resetsAt: Date? = nil, windowDurationMins: Int? = nil) {
         self.label = label
         self.usedPercent = usedPercent.clamped(to: 0...100)
         self.resetsAt = resetsAt
+        self.windowDurationMins = windowDurationMins
+    }
+
+    /// Effective window duration in minutes, derived from `windowDurationMins`
+    /// or inferred from the window label.
+    public var effectiveDurationMins: Int? {
+        if let windowDurationMins, windowDurationMins > 0 {
+            return windowDurationMins
+        }
+        let lower = label.lowercased()
+        if lower.contains("weekly") || lower.contains("7-day") || lower.contains("7 day") {
+            return 10_080
+        }
+        if lower.contains("5-hour") || lower.contains("5 hour") || lower.contains("session") {
+            return 300
+        }
+        if lower.contains("monthly") || lower.contains("30-day") || lower.contains("30 day") {
+            return 43_200
+        }
+        if lower.contains("rolling") || lower.contains("daily") || lower.contains("24h") {
+            return 1_440
+        }
+        return nil
+    }
+
+    /// Computes pacing and burn rate relative to the window's rollover time.
+    public func pace(now: Date = Date()) -> QuotaPace? {
+        guard let resetsAt, resetsAt > now,
+              let durationMins = effectiveDurationMins, durationMins > 0 else {
+            return nil
+        }
+        let durationSecs = Double(durationMins) * 60.0
+        let windowStart = resetsAt.addingTimeInterval(-durationSecs)
+        let elapsedSecs = now.timeIntervalSince(windowStart)
+        guard elapsedSecs >= 0 else { return nil }
+
+        let elapsedFraction = min(max(elapsedSecs / durationSecs, 0.0), 1.0)
+        let elapsedPercent = elapsedFraction * 100.0
+        let remainingPercent = max(0.0, 100.0 - usedPercent)
+        let deficitPercent = usedPercent - elapsedPercent
+
+        let burnRate: Double
+        if elapsedFraction > 0.005 {
+            burnRate = (usedPercent / 100.0) / elapsedFraction
+        } else {
+            burnRate = 1.0
+        }
+
+        var projectedExhaustion: Date? = nil
+        if burnRate > 1.0 && usedPercent < 100.0 && usedPercent > 0.5 {
+            let totalLifetimeSeconds = (100.0 / usedPercent) * elapsedSecs
+            let projectedEnd = windowStart.addingTimeInterval(totalLifetimeSeconds)
+            if projectedEnd < resetsAt {
+                projectedExhaustion = projectedEnd
+            }
+        }
+
+        let status: QuotaPaceStatus
+        if abs(deficitPercent) <= 2.0 {
+            status = .onPace
+        } else if deficitPercent > 2.0 {
+            status = .deficit(deficitPercent)
+        } else {
+            status = .surplus(abs(deficitPercent))
+        }
+
+        return QuotaPace(
+            usedPercent: usedPercent,
+            remainingPercent: remainingPercent,
+            elapsedPercent: elapsedPercent,
+            deficitPercent: deficitPercent,
+            burnRate: burnRate,
+            projectedExhaustion: projectedExhaustion,
+            status: status
+        )
     }
 
     /// Fraction 0...1, convenient for progress bars.
@@ -335,18 +477,94 @@ public struct DailyActivity: Equatable, Sendable {
     }
 }
 
+
+public struct DailyVolumePoint: Equatable, Sendable {
+    public let day: Date
+    public let tokens: Int
+    public let sessionCount: Int
+
+    public init(day: Date, tokens: Int = 0, sessionCount: Int = 0) {
+        self.day = day
+        self.tokens = max(tokens, 0)
+        self.sessionCount = max(sessionCount, 0)
+    }
+}
+
+public struct ProviderTelemetry: Equatable, Sendable {
+    public let lifetimeTokens: Int?
+    public let peakDailyTokens: Int?
+    public let longestChatSeconds: TimeInterval?
+    public let currentStreakDays: Int
+    public let longestStreakDays: Int
+    public let todayTokens: Int?
+    public let last30DaysTokens: Int?
+    public let totalSessions: Int?
+    public let totalMessages: Int?
+    public let todaySessions: Int?
+    public let todayMessages: Int?
+    public let dailyHistory: [DailyVolumePoint]
+
+    public init(
+        lifetimeTokens: Int? = nil,
+        peakDailyTokens: Int? = nil,
+        longestChatSeconds: TimeInterval? = nil,
+        currentStreakDays: Int = 0,
+        longestStreakDays: Int = 0,
+        todayTokens: Int? = nil,
+        last30DaysTokens: Int? = nil,
+        totalSessions: Int? = nil,
+        totalMessages: Int? = nil,
+        todaySessions: Int? = nil,
+        todayMessages: Int? = nil,
+        dailyHistory: [DailyVolumePoint] = []
+    ) {
+        self.lifetimeTokens = lifetimeTokens
+        self.peakDailyTokens = peakDailyTokens
+        self.longestChatSeconds = longestChatSeconds
+        self.currentStreakDays = max(currentStreakDays, 0)
+        self.longestStreakDays = max(longestStreakDays, 0)
+        self.todayTokens = todayTokens
+        self.last30DaysTokens = last30DaysTokens
+        self.totalSessions = totalSessions
+        self.totalMessages = totalMessages
+        self.todaySessions = todaySessions
+        self.todayMessages = todayMessages
+        self.dailyHistory = dailyHistory
+    }
+}
+
 /// Everything computed locally for one provider.
 public struct LocalActivity: Equatable, Sendable {
     public let provider: Provider
     public let sessions: [SessionSummary]
     public let daily: [DailyActivity]
     public let scannedAt: Date
+    private let customTelemetry: ProviderTelemetry?
 
-    public init(provider: Provider, sessions: [SessionSummary], daily: [DailyActivity], scannedAt: Date) {
+    public init(provider: Provider, sessions: [SessionSummary], daily: [DailyActivity], scannedAt: Date, telemetry: ProviderTelemetry? = nil) {
         self.provider = provider
         self.sessions = sessions
         self.daily = daily
         self.scannedAt = scannedAt
+        self.customTelemetry = telemetry
+    }
+
+    /// Computed activity telemetry from sessions and daily data.
+    public var telemetry: ProviderTelemetry? {
+        if let custom = customTelemetry {
+            return custom
+        }
+        if !daily.isEmpty || !sessions.isEmpty {
+            let items = sessions.map {
+                TelemetrySessionItem(
+                    startedAt: $0.startedAt,
+                    tokens: $0.tokens.total,
+                    messageCount: $0.messageCount
+                )
+            }
+            return TelemetryCalculator.calculate(sessions: items, daily: daily, now: scannedAt)
+        }
+        return nil
     }
 
     public static func empty(_ provider: Provider) -> LocalActivity {
@@ -426,6 +644,7 @@ public struct ProviderUsage: Equatable, Sendable {
     /// Rolling windows (e.g. "last 24h", "last 7d", "last 30d") computed from
     /// the source's own records. Nil when the source has no timestamps.
     public let usageWindows: [UsageWindow]?
+    public let telemetry: ProviderTelemetry?
     public let capturedAt: Date
 
     public init(
@@ -437,6 +656,7 @@ public struct ProviderUsage: Equatable, Sendable {
         todaySessionCount: Int = 0,
         todayMessageCount: Int = 0,
         usageWindows: [UsageWindow]? = nil,
+        telemetry: ProviderTelemetry? = nil,
         capturedAt: Date
     ) {
         self.provider = provider
@@ -447,6 +667,7 @@ public struct ProviderUsage: Equatable, Sendable {
         self.todaySessionCount = max(todaySessionCount, 0)
         self.todayMessageCount = max(todayMessageCount, 0)
         self.usageWindows = usageWindows
+        self.telemetry = telemetry
         self.capturedAt = capturedAt
     }
 }

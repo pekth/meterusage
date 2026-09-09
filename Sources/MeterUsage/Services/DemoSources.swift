@@ -267,13 +267,32 @@ struct DemoGrokUsageSource: UsageSource {
     let provider: Provider = .grok
 
     func fetchUsage() async throws -> ProviderUsage {
-        ProviderUsage(
+        let now = Date().addingTimeInterval(-65)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        let history = (0..<30).map { i -> DailyVolumePoint in
+            let day = calendar.date(byAdding: .day, value: -(29 - i), to: today) ?? today
+            let sessions = (i % 4 == 0) ? 0 : (i % 3 + 1)
+            return DailyVolumePoint(day: day, tokens: 0, sessionCount: sessions)
+        }
+        let tel = ProviderTelemetry(
+            longestChatSeconds: 3 * 3600 + 42 * 60,
+            currentStreakDays: 3,
+            longestStreakDays: 14,
+            totalSessions: 124,
+            totalMessages: 1_840,
+            todaySessions: 2,
+            todayMessages: 28,
+            dailyHistory: history
+        )
+        return ProviderUsage(
             provider: .grok,
-            sessionCount: 12,
-            messageCount: 184,
-            todaySessionCount: 1,
-            todayMessageCount: 22,
-            capturedAt: Date().addingTimeInterval(-65)
+            sessionCount: 124,
+            messageCount: 1_840,
+            todaySessionCount: 2,
+            todayMessageCount: 28,
+            telemetry: tel,
+            capturedAt: now
         )
     }
 }
@@ -294,7 +313,6 @@ struct DemoOpenCodeGoUsageSource: UsageSource {
             todaySessionCount: 3,
             todayMessageCount: 71,
             usageWindows: [
-                // 30d is the reference, so 24h/7d shares render meaningful bars.
                 UsageWindow(
                     label: "last 24h",
                     sessionCount: 3,
@@ -317,6 +335,20 @@ struct DemoOpenCodeGoUsageSource: UsageSource {
                     estimatedCostUSD: 16.33
                 )
             ],
+            telemetry: ProviderTelemetry(
+                lifetimeTokens: 5_530_000_000,
+                peakDailyTokens: 412_000_000,
+                longestChatSeconds: 14 * 3600 + 40 * 60,
+                currentStreakDays: 5,
+                longestStreakDays: 42,
+                todayTokens: 86_000_000,
+                last30DaysTokens: 1_840_000_000,
+                dailyHistory: (0..<30).map { i in
+                    let day = Calendar.current.date(byAdding: .day, value: -(29 - i), to: Calendar.current.startOfDay(for: now)) ?? now
+                    let tokens = (i % 7 == 0 || i % 7 == 6) ? 15_000_000 : (50_000_000 + (i * 11_000_000) % 250_000_000)
+                    return DailyVolumePoint(day: day, tokens: tokens, sessionCount: max(1, tokens / 20_000_000))
+                }
+            ),
             capturedAt: now
         )
     }
@@ -367,11 +399,37 @@ struct DemoCodexActivitySource: LocalActivitySource {
         let daily = DemoActivityData.daily(now: now).map {
             DailyActivity(day: $0.day, tokens: TokenTotals(), estimatedCostUSD: 0, sessionCount: $0.sessionCount)
         }
+        let cal = Calendar.current
+        let startOfToday = cal.startOfDay(for: now)
+        let sampleTokens = [
+            120_000_000, 310_000_000, 450_000_000, 200_000_000, 680_000_000,
+            910_000_000, 540_000_000, 720_000_000, 380_000_000, 1_100_000_000,
+            1_690_000_000, 840_000_000, 620_000_000, 490_000_000, 930_000_000,
+            780_000_000, 410_000_000, 650_000_000, 820_000_000, 510_000_000,
+            390_000_000, 740_000_000, 880_000_000, 600_000_000, 950_000_000,
+            1_250_000_000, 430_000_000, 560_000_000, 710_000_000, 399_300_000
+        ]
+        let history = (0..<30).map { i -> DailyVolumePoint in
+            let day = cal.date(byAdding: .day, value: -(29 - i), to: startOfToday) ?? now
+            let tok = i < sampleTokens.count ? sampleTokens[i] : 400_000_000
+            return DailyVolumePoint(day: day, tokens: tok, sessionCount: max(1, tok / 50_000_000))
+        }
+        let telemetry = ProviderTelemetry(
+            lifetimeTokens: 60_000_000_000,
+            peakDailyTokens: 1_690_000_000,
+            longestChatSeconds: 24 * 3600 + 23 * 60,
+            currentStreakDays: 3,
+            longestStreakDays: 132,
+            todayTokens: 399_300_000,
+            last30DaysTokens: 18_940_000_000,
+            dailyHistory: history
+        )
         return LocalActivity(
             provider: .codex,
             sessions: [],
             daily: daily,
-            scannedAt: now
+            scannedAt: now,
+            telemetry: telemetry
         )
     }
 }

@@ -50,11 +50,19 @@ public actor CodexLocalSource: LocalActivitySource {
             }
             .sorted { $0.day < $1.day }
 
+        let now = Date()
+        let telemetry = TelemetryCalculator.calculate(
+            sessions: [],
+            daily: daily,
+            now: now
+        )
+
         return LocalActivity(
             provider: .codex,
             sessions: [],
             daily: daily,
-            scannedAt: Date()
+            scannedAt: now,
+            telemetry: telemetry
         )
     }
 
@@ -99,22 +107,26 @@ public actor CodexLocalSource: LocalActivitySource {
         return date
     }
 
-    /// Codex emits fractional-second UTC timestamps (e.g.
-    /// `2026-08-16T00:55:18.713Z`), which the default whole-second formatter
-    /// rejects. Parse fractional first, then fall back.
-    private static func parseTimestamp(_ raw: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: raw) { return date }
-
-        let whole = ISO8601DateFormatter()
-        whole.formatOptions = [.withInternetDateTime]
-        return whole.date(from: raw)
-    }
-
     private static let utcCalendar: Calendar = {
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "UTC")!
+        cal.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
         return cal
+    }()
+
+    private static func parseTimestamp(_ raw: String) -> Date? {
+        if let d = isoFractional.date(from: raw) { return d }
+        return isoPlain.date(from: raw)
+    }
+
+    private static let isoFractional: ISO8601DateFormatter = {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fmt
+    }()
+
+    private static let isoPlain: ISO8601DateFormatter = {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime]
+        return fmt
     }()
 }

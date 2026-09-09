@@ -103,6 +103,16 @@ enum AntigravityConversations {
 
         let todayTurns = sessions.flatMap(\.userTurns).filter { $0 >= today }
         let tokens = sessions.reduce(TokenTotals()) { $0 + $1.tokens }
+        let telemetryItems = sessions.compactMap { s -> TelemetrySessionItem? in
+            guard let started = s.userTurns.first ?? s.lastActivity else { return nil }
+            return TelemetrySessionItem(
+                startedAt: started,
+                endedAt: s.lastActivity,
+                tokens: s.tokens.total,
+                messageCount: s.messageCount
+            )
+        }
+        let telemetry = TelemetryCalculator.calculate(sessions: telemetryItems, now: now)
         return ProviderUsage(
             provider: .antigravity,
             sessionCount: sessions.count,
@@ -113,6 +123,7 @@ enum AntigravityConversations {
             }.count,
             todayMessageCount: todayTurns.count,
             usageWindows: windows(from: sessions, now: now),
+            telemetry: telemetry,
             capturedAt: sessions.compactMap(\.lastActivity).max() ?? now
         )
     }

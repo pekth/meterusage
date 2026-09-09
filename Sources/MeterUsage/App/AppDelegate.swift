@@ -298,11 +298,15 @@ enum Composition {
     static func usageSources() -> [UsageSource] {
         if isDemoMode {
             return [
-                DemoAntigravityUsageSource()
+                DemoAntigravityUsageSource(),
+                DemoOpenCodeGoUsageSource(),
+                DemoGrokUsageSource()
             ]
         }
         return [
-            AntigravityUsageSource()
+            AntigravityUsageSource(),
+            OpenCodeGoUsageSource(),
+            GrokUsageSource()
         ]
     }
 

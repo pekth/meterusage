@@ -341,6 +341,8 @@ private struct WindowRow: View {
     let window: QuotaWindow
     let now: Date
 
+    @AppStorage(PrefKey.showPacingBurnRate) private var showPacingBurnRate: Bool = true
+
     private var showsRemaining: Bool {
         provider == .codex || provider == .antigravity
     }
@@ -369,12 +371,24 @@ private struct WindowRow: View {
                     .frame(minWidth: 44, alignment: .trailing)
             }
             if !countdownLabel.isEmpty {
-                Text(resetLabel)
-                    .font(.muCaption)
-                    .foregroundColor(MU.textTertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .layoutPriority(1)
+                HStack(spacing: 4) {
+                    Text(resetLabel)
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    if showPacingBurnRate, let pace = window.pace(now: now) {
+                        Text("·")
+                            .font(.muCaption)
+                            .foregroundColor(MU.textTertiary)
+                        Text(pace.statusText(usedPercent: window.usedPercent))
+                            .font(.muCaption)
+                            .foregroundColor(pace.status.isDeficit ? MU.deficit : (pace.status.isSurplus ? MU.surplus : MU.textTertiary))
+                            .fontWeight(pace.status.isDeficit ? .semibold : .regular)
+                            .lineLimit(1)
+                    }
+                }
+                .layoutPriority(1)
             }
         }
         .help(helpLabel)

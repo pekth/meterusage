@@ -37,6 +37,9 @@ struct SettingsView: View {
     @AppStorage(PrefKey.sideNotchPanel) private var sideNotchPanel: Bool = false
     @AppStorage(PrefKey.sideNotchPanelPinned) private var sideNotchPanelPinned: Bool = false
     @AppStorage(PrefKey.menuBarCompact) private var menuBarCompact: Bool = true
+    @AppStorage(PrefKey.showPacingBurnRate) private var showPacingBurnRate: Bool = true
+    @AppStorage(PrefKey.showActivityTelemetry) private var showActivityTelemetry: Bool = true
+    @AppStorage(PrefKey.showDailyActivityChart) private var showDailyActivityChart: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -193,6 +196,29 @@ struct SettingsView: View {
                         isOn: $showClaudeHeatmap
                     )
                     .disabled(!showHeatmap)
+                }
+            }
+
+            Group {
+                SectionHeader("Pacing & Telemetry")
+                Card(padding: 10) {
+                    SettingToggle(
+                        title: "Pacing & burn rate",
+                        subtitle: "Show pacing status (well paced, burning fast) on quota limit bars.",
+                        isOn: $showPacingBurnRate
+                    )
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "Activity telemetry",
+                        subtitle: "Show lifetime tokens, peak volume, chat durations, and streaks.",
+                        isOn: $showActivityTelemetry
+                    )
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
+                        title: "30-day activity chart",
+                        subtitle: "Show daily activity volume histogram bar chart on detail cards.",
+                        isOn: $showDailyActivityChart
+                    )
                 }
             }
 

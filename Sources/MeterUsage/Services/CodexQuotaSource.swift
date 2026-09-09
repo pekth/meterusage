@@ -320,7 +320,8 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
             return QuotaWindow(
                 label: label(for: window),
                 usedPercent: window.usedPercent,
-                resetsAt: window.resetsAt?.date
+                resetsAt: window.resetsAt?.date,
+                windowDurationMins: window.windowDurationMins
             )
         }
     }

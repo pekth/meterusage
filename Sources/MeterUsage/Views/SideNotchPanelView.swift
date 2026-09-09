@@ -35,6 +35,8 @@ enum Notch {
     static let track = Color(red: 0.23, green: 0.23, blue: 0.23)
     static let text = Color.white
     static let subtext = Color(white: 1, opacity: 0.55)
+    static let deficit = Color(red: 1.0, green: 0.584, blue: 0.0) // #FF9500 amber
+    static let surplus = Color(red: 0.204, green: 0.78, blue: 0.349) // #34C759 calm green
 
     static func color(usedPercent: Double) -> Color {
         switch NotchBand.band(usedPercent: usedPercent) {
@@ -95,6 +97,9 @@ struct SideNotchPanelView: View {
 
     @AppStorage(PrefKey.sideNotchPanelPinned) private var isPinned = false
     @AppStorage(PrefKey.sideNotchPanel) private var panelEnabled = true
+    @AppStorage(PrefKey.showPacingBurnRate) private var showPacingBurnRate = true
+    @AppStorage(PrefKey.showActivityTelemetry) private var showActivityTelemetry = true
+    @AppStorage(PrefKey.showDailyActivityChart) private var showDailyActivityChart = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hoveredProvider: Provider?
     @State private var isHoveringPanel = false
@@ -373,11 +378,22 @@ struct SideNotchPanelView: View {
             if let quota, !quota.windows.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(quota.windows.enumerated()), id: \.offset) { _, window in
+                        let pace = showPacingBurnRate ? window.pace(now: coordinator.clock) : nil
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(windowDisplayTitle(for: window, provider: provider))
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(Notch.text)
-                                .lineLimit(1)
+                            HStack {
+                                Text(windowDisplayTitle(for: window, provider: provider))
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Notch.text)
+                                    .lineLimit(1)
+                                Spacer()
+                                if let resetsAt = window.resetsAt {
+                                    Text("Resets \(Fmt.absoluteMoment(resetsAt, now: coordinator.clock))")
+                                        .font(.system(size: 11, weight: .regular))
+                                        .foregroundColor(Notch.subtext)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.85)
+                                }
+                            }
 
                             // Fixed-width track so layout never collapses or jumps
                             ZStack(alignment: .leading) {
@@ -389,17 +405,30 @@ struct SideNotchPanelView: View {
                                     .frame(width: max(222 * window.fraction.clamped(to: 0...1), window.fraction > 0 ? 3 : 0), height: 4)
                             }
 
-                            HStack {
-                                Text("\(Fmt.percent(window.usedPercent)) Used")
-                                    .font(.system(size: 11, weight: .regular))
-                                    .foregroundColor(Notch.text)
-                                Spacer()
-                                if let resetsAt = window.resetsAt {
-                                    Text("Resets \(Fmt.absoluteMoment(resetsAt, now: coordinator.clock))")
-                                        .font(.system(size: 11, weight: .regular))
+                            if let pace {
+                                HStack(spacing: 4) {
+                                    Text("\(Fmt.percent(window.usedPercent)) Used")
+                                        .foregroundColor(Notch.text)
+                                    Text("·")
                                         .foregroundColor(Notch.subtext)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.85)
+                                    Text("\(Fmt.percent(pace.remainingPercent)) left")
+                                        .foregroundColor(Notch.subtext)
+                                    Text("·")
+                                        .foregroundColor(Notch.subtext)
+                                    Text(pace.statusText(usedPercent: window.usedPercent))
+                                        .foregroundColor(pace.status.isDeficit ? Notch.deficit : (pace.status.isSurplus ? Notch.surplus : Notch.subtext))
+                                        .fontWeight(pace.status.isDeficit ? .semibold : .regular)
+                                    Spacer(minLength: 0)
+                                }
+                                .font(.system(size: 10.5, weight: .regular))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                            } else {
+                                HStack {
+                                    Text("\(Fmt.percent(window.usedPercent)) Used")
+                                        .font(.system(size: 11, weight: .regular))
+                                        .foregroundColor(Notch.text)
+                                    Spacer()
                                 }
                             }
                         }
@@ -416,8 +445,10 @@ struct SideNotchPanelView: View {
                 }
             }
 
-            // Token usage summary
-            if let tokenUsage = tokenUsage(for: provider),
+            // Activity Telemetry 2-column grid
+            if showActivityTelemetry, let tel = telemetry(for: provider) {
+                telemetryView(tel: tel, provider: provider)
+            } else if let tokenUsage = tokenUsage(for: provider),
                (tokenUsage.todayText != nil || tokenUsage.last30DaysText != nil) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Token usage")
@@ -450,6 +481,11 @@ struct SideNotchPanelView: View {
                 }
             }
 
+            // 30-day activity histogram
+            if showDailyActivityChart, let tel = telemetry(for: provider), tel.dailyHistory.count >= 7 {
+                dailyActivityChart(history: tel.dailyHistory, provider: provider)
+            }
+
             // Timestamp: a remembered reading is dated by its own capture,
             // never by the last sweep — presenting it under "just now"
             // would be a lie.
@@ -480,6 +516,104 @@ struct SideNotchPanelView: View {
             )
             .fill(Notch.card)
         )
+    }
+
+    private func telemetry(for provider: Provider) -> ProviderTelemetry? {
+        if let tel = coordinator.usages[provider]?.value?.telemetry {
+            return tel
+        }
+        if let tel = coordinator.activities[provider]?.value?.telemetry {
+            return tel
+        }
+        return nil
+    }
+
+    private func telemetryView(tel: ProviderTelemetry, provider: Provider) -> some View {
+        let col1: [(String, String)]
+        let col2: [(String, String)]
+
+        if tel.lifetimeTokens != nil {
+            col1 = [
+                tel.lifetimeTokens.map { ("Lifetime tokens", Fmt.telemetryTokens($0)) },
+                (tel.longestStreakDays > 0 ? ("Longest streak", Fmt.streakDays(tel.longestStreakDays)) : nil),
+                tel.last30DaysTokens.map { ("30-day tokens", Fmt.telemetryTokens($0)) }
+            ].compactMap { $0 }
+
+            col2 = [
+                tel.peakDailyTokens.map { ("Peak tokens", Fmt.telemetryTokens($0)) },
+                (tel.currentStreakDays > 0 ? ("Current streak", Fmt.streakDays(tel.currentStreakDays)) : nil),
+                tel.todayTokens.map { ("Today", Fmt.telemetryTokens($0)) }
+            ].compactMap { $0 }
+        } else {
+            col1 = [
+                tel.totalSessions.map { ("Total sessions", Fmt.count($0)) },
+                (tel.longestStreakDays > 0 ? ("Longest streak", Fmt.streakDays(tel.longestStreakDays)) : nil)
+            ].compactMap { $0 }
+
+            col2 = [
+                tel.totalMessages.map { ("Total messages", Fmt.count($0)) },
+                (tel.currentStreakDays > 0 ? ("Current streak", Fmt.streakDays(tel.currentStreakDays)) : nil),
+                tel.todaySessions.map { ("Today", $0 == 1 ? "1 session" : "\($0) sessions") }
+            ].compactMap { $0 }
+        }
+
+        return HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(col1, id: \.0) { label, value in
+                    VStack(alignment: .leading, spacing: 1.5) {
+                        Text(label)
+                            .font(.system(size: 9.5, weight: .regular))
+                            .foregroundColor(Notch.subtext)
+                        Text(value)
+                            .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
+                            .foregroundColor(Notch.text)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(col2, id: \.0) { label, value in
+                    VStack(alignment: .leading, spacing: 1.5) {
+                        Text(label)
+                            .font(.system(size: 9.5, weight: .regular))
+                            .foregroundColor(Notch.subtext)
+                        Text(value)
+                            .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
+                            .foregroundColor(Notch.text)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(width: 222)
+    }
+
+    private func dailyActivityChart(history: [DailyVolumePoint], provider: Provider) -> some View {
+        let maxTokens = history.map(\.tokens).max() ?? 0
+        let maxSessions = history.map(\.sessionCount).max() ?? 0
+        let usesTokens = maxTokens > 0
+        let peakValue = Double(usesTokens ? maxTokens : maxSessions)
+        let safeMax = peakValue > 0 ? peakValue : 1.0
+
+        return HStack(alignment: .bottom, spacing: 2.2) {
+            ForEach(Array(history.enumerated()), id: \.offset) { index, point in
+                let value = Double(usesTokens ? point.tokens : point.sessionCount)
+                let heightFrac = max(0.08, min(1.0, value / safeMax))
+                let isToday = index == history.count - 1
+                let hasActivity = value > 0
+
+                RoundedRectangle(cornerRadius: 1.2, style: .continuous)
+                    .fill(
+                        isToday
+                            ? providerColor(provider)
+                            : (hasActivity ? Notch.subtext.opacity(0.85) : Notch.track.opacity(0.6))
+                    )
+                    .frame(width: 5, height: heightFrac * 22)
+            }
+        }
+        .frame(width: 222, height: 24, alignment: .bottom)
+        .padding(.vertical, 2)
     }
 
     // MARK: - Geometry helpers

@@ -63,6 +63,10 @@ enum MU {
 
     /// Plenty of headroom.
     static let calm = dynamicColor(light: rgb(28, 150, 108), dark: rgb(41, 224, 122))
+    /// Pacing deficit (amber / orange).
+    static let deficit = dynamicColor(light: rgb(220, 110, 0), dark: rgb(255, 149, 0))
+    /// Pacing surplus (calm green).
+    static let surplus = dynamicColor(light: rgb(28, 150, 108), dark: rgb(52, 199, 89))
     /// Getting close.
     static let warn = dynamicColor(light: rgb(190, 130, 20), dark: rgb(245, 227, 0))
     /// Nearly exhausted.
@@ -323,6 +327,43 @@ struct InfoState: View {
 
 enum Fmt {
 
+    /// Telemetry tokens format matching reference style: "60.00B", "1.69B", "399.3M", "45.2K", "120".
+    static func telemetryTokens(_ value: Int) -> String {
+        let v = Double(value)
+        if v >= 1_000_000_000 {
+            let b = v / 1_000_000_000
+            return b >= 10 ? String(format: "%.2fB", b) : String(format: "%.2fB", b)
+        } else if v >= 1_000_000 {
+            return String(format: "%.1fM", v / 1_000_000)
+        } else if v >= 10_000 {
+            return String(format: "%.1fK", v / 1_000)
+        } else if v >= 1_000 {
+            return String(format: "%.1fK", v / 1_000)
+        } else {
+            return "\(value)"
+        }
+    }
+
+    /// Chat duration formatted like "24h 23m", "2h 5m", "42m", "15s".
+    static func durationHMin(_ duration: TimeInterval) -> String {
+        let totalSeconds = Int(max(0, duration))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else if minutes > 0 {
+            let seconds = totalSeconds % 60
+            return seconds > 0 ? "\(minutes)m \(seconds)s" : "\(minutes)m"
+        } else {
+            return "\(totalSeconds)s"
+        }
+    }
+
+    /// Streak days formatted like "3d", "132d".
+    static func streakDays(_ days: Int) -> String {
+        "\(days)d"
+    }
+
     /// "12.4M", "874K", "312" — keeps token columns narrow and stable.
     static func compactCount(_ value: Int) -> String {
         let v = Double(value)
@@ -492,13 +533,11 @@ enum Fmt {
     static func absoluteMoment(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         let today = calendar.startOfDay(for: now)
         if calendar.isDate(date, inSameDayAs: now) {
-            let day = relativeDayName.localizedString(for: today, relativeTo: now)
-            return "\(day) \(clockOnly.string(from: date))"
+            return "today at \(clockOnly.string(from: date))"
         }
         if let tomorrow = calendar.date(byAdding: .day, value: 1, to: today),
            calendar.isDate(date, inSameDayAs: tomorrow) {
-            let day = relativeDayName.localizedString(for: tomorrow, relativeTo: now)
-            return "\(day) \(clockOnly.string(from: date))"
+            return "tomorrow at \(clockOnly.string(from: date))"
         }
         return weekdayAndClock.string(from: date)
     }

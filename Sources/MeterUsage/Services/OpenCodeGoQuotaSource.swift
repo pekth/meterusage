@@ -104,9 +104,9 @@ public struct OpenCodeGoQuotaSource: QuotaSource {
         }
 
         let windows = [
-            QuotaWindow(label: "Rolling", usedPercent: response.usage.rolling.percent, resetsAt: response.usage.rolling.resetsAt),
-            QuotaWindow(label: "Weekly", usedPercent: response.usage.weekly.percent, resetsAt: response.usage.weekly.resetsAt),
-            QuotaWindow(label: "Monthly", usedPercent: response.usage.monthly.percent, resetsAt: response.usage.monthly.resetsAt)
+            QuotaWindow(label: "Rolling", usedPercent: response.usage.rolling.percent, resetsAt: response.usage.rolling.resetsAt, windowDurationMins: 1_440),
+            QuotaWindow(label: "Weekly", usedPercent: response.usage.weekly.percent, resetsAt: response.usage.weekly.resetsAt, windowDurationMins: 10_080),
+            QuotaWindow(label: "Monthly", usedPercent: response.usage.monthly.percent, resetsAt: response.usage.monthly.resetsAt, windowDurationMins: 43_200)
         ]
 
         return ProviderQuota(

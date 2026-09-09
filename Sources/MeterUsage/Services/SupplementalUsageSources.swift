@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 // MARK: - Antigravity
 
@@ -418,24 +419,32 @@ public struct GrokUsageSource: UsageSource {
     static func parse(summaries: [[String: Any]], now: Date) throws -> ProviderUsage {
         struct Record {
             let startedAt: Date
+            let endedAt: Date?
             let messages: Int
         }
 
         let records = summaries.compactMap { summary -> Record? in
-            guard let date = date(in: summary), let messages = messageCount(in: summary) else { return nil }
-            return Record(startedAt: date, messages: messages)
+            guard let startDate = date(in: summary, keys: ["created_at", "createdAt"]),
+                  let messages = messageCount(in: summary) else { return nil }
+            let endDate = date(in: summary, keys: ["last_active_at", "updated_at", "updatedAt"])
+            return Record(startedAt: startDate, endedAt: endDate, messages: messages)
         }
         guard !records.isEmpty else { throw SourceUnavailable.noData }
 
         let today = Calendar.current.startOfDay(for: now)
         let todayRecords = records.filter { $0.startedAt >= today }
         let newest = records.map(\.startedAt).max() ?? now
+        let telemetryItems = records.map {
+            TelemetrySessionItem(startedAt: $0.startedAt, endedAt: $0.endedAt, messageCount: $0.messages)
+        }
+        let telemetry = TelemetryCalculator.calculate(sessions: telemetryItems, now: now)
         return ProviderUsage(
             provider: .grok,
             sessionCount: records.count,
             messageCount: records.reduce(0) { $0 + $1.messages },
             todaySessionCount: todayRecords.count,
             todayMessageCount: todayRecords.reduce(0) { $0 + $1.messages },
+            telemetry: telemetry,
             capturedAt: newest
         )
     }
@@ -448,8 +457,7 @@ public struct GrokUsageSource: UsageSource {
         return nil
     }
 
-    private static func date(in summary: [String: Any]) -> Date? {
-        let keys = ["created_at", "createdAt", "last_active_at", "updated_at", "updatedAt"]
+    private static func date(in summary: [String: Any], keys: [String] = ["created_at", "createdAt", "last_active_at", "updated_at", "updatedAt"]) -> Date? {
         for key in keys {
             if let value = summary[key] as? String, let date = parseTimestamp(value) {
                 return date
@@ -479,9 +487,10 @@ public struct GrokUsageSource: UsageSource {
 
 // MARK: - OpenCode Go
 
-/// Reads OpenCode Go's aggregate session rows through its supported, read-only
-/// database command. The SQL selects only numeric usage fields and timestamps;
-/// prompts, tool arguments, paths, and message bodies are never queried.
+/// Reads OpenCode Go's aggregate session rows through its SQLite database
+/// or supported, read-only database command. The SQL selects only numeric usage
+/// fields and timestamps; prompts, tool arguments, paths, and message bodies
+/// are never queried.
 public struct OpenCodeGoUsageSource: UsageSource {
     public let provider: Provider = .openCodeGo
     private let executableURL: URL?
@@ -491,17 +500,22 @@ public struct OpenCodeGoUsageSource: UsageSource {
     }
 
     public func fetchUsage() async throws -> ProviderUsage {
-        let executable = try Self.resolveExecutable(explicit: executableURL)
-        let data: Data
-        do {
-            data = try Self.run(executable: executable)
-        } catch let error as SourceUnavailable {
-            throw error
-        } catch {
-            throw SourceUnavailable.failed(provider)
+        let records: [Record]
+        if let directRecords = Self.readFromDatabaseDirectly(), !directRecords.isEmpty {
+            records = directRecords
+        } else {
+            let executable = try Self.resolveExecutable(explicit: executableURL)
+            let data: Data
+            do {
+                data = try Self.run(executable: executable)
+            } catch let error as SourceUnavailable {
+                throw error
+            } catch {
+                throw SourceUnavailable.failed(provider)
+            }
+            records = try Self.parse(data: data)
         }
 
-        let records = try Self.parse(data: data)
         guard !records.isEmpty else {
             throw SourceUnavailable.dataNotFound("OpenCode Go usage")
         }
@@ -519,6 +533,15 @@ public struct OpenCodeGoUsageSource: UsageSource {
             )
         }
         let cost = records.reduce(0) { $0 + $1.cost }
+        let telemetryItems = records.map { r in
+            TelemetrySessionItem(
+                startedAt: r.createdAt,
+                endedAt: r.updatedAt,
+                tokens: r.input + r.output + r.reasoning + r.cacheRead + r.cacheWrite,
+                messageCount: r.messages
+            )
+        }
+        let telemetry = TelemetryCalculator.calculate(sessions: telemetryItems, now: now)
         return ProviderUsage(
             provider: .openCodeGo,
             sessionCount: records.count,
@@ -528,8 +551,64 @@ public struct OpenCodeGoUsageSource: UsageSource {
             todaySessionCount: todayRecords.count,
             todayMessageCount: todayRecords.reduce(0) { $0 + $1.messages },
             usageWindows: Self.windows(from: records, now: now),
+            telemetry: telemetry,
             capturedAt: records.map(\.updatedAt).max() ?? now
         )
+    }
+
+    /// Directly queries ~/.local/share/opencode/opencode.db via SQLite3 if available.
+    /// Runs in ~0.05s and avoids any CLI invocation or stdout pipe size truncations.
+    private static func readFromDatabaseDirectly() -> [Record]? {
+        let dbPath = HomeDirectory.real
+            .appendingPathComponent(".local", isDirectory: true)
+            .appendingPathComponent("share", isDirectory: true)
+            .appendingPathComponent("opencode", isDirectory: true)
+            .appendingPathComponent("opencode.db").path
+        guard FileManager.default.fileExists(atPath: dbPath) else { return nil }
+
+        var db: OpaquePointer?
+        guard sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_close_v2(db) }
+
+        let sql = """
+        SELECT tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write,
+               cost, time_created, time_updated,
+               (SELECT COUNT(*) FROM message WHERE message.session_id = session.id)
+        FROM session
+        WHERE json_extract(model, '$.providerID') = 'opencode-go';
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+
+        var records: [Record] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let input = Int(sqlite3_column_int64(stmt, 0))
+            let output = Int(sqlite3_column_int64(stmt, 1))
+            let reasoning = Int(sqlite3_column_int64(stmt, 2))
+            let cacheRead = Int(sqlite3_column_int64(stmt, 3))
+            let cacheWrite = Int(sqlite3_column_int64(stmt, 4))
+            let cost = sqlite3_column_double(stmt, 5)
+            let createdRaw = Double(sqlite3_column_int64(stmt, 6))
+            let updatedRaw = Double(sqlite3_column_int64(stmt, 7))
+            let messages = Int(sqlite3_column_int64(stmt, 8))
+
+            let createdAt = Date(timeIntervalSince1970: createdRaw > 100_000_000_000 ? createdRaw / 1000 : createdRaw)
+            let updatedAt = Date(timeIntervalSince1970: updatedRaw > 100_000_000_000 ? updatedRaw / 1000 : updatedRaw)
+
+            records.append(Record(
+                input: input,
+                output: output,
+                reasoning: reasoning,
+                cacheRead: cacheRead,
+                cacheWrite: cacheWrite,
+                cost: cost,
+                messages: messages,
+                createdAt: createdAt,
+                updatedAt: updatedAt
+            ))
+        }
+        return records.isEmpty ? nil : records
     }
 
     /// Rolling usage slices over the records a fetch already read.

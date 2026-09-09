@@ -154,7 +154,8 @@ public struct AntigravityQuotaSource: QuotaSource {
             QuotaWindow(
                 label: "\(shortGroup(row.group)) \(shortWindow(row.window))",
                 usedPercent: 100 - row.remainingPercent,
-                resetsAt: row.resetsAt
+                resetsAt: row.resetsAt,
+                windowDurationMins: durationMins(for: row.window)
             )
         }
 
@@ -165,7 +166,8 @@ public struct AntigravityQuotaSource: QuotaSource {
             let groupWindow = QuotaWindow(
                 label: groupWindowLabel(row.window),
                 usedPercent: 100 - row.remainingPercent,
-                resetsAt: row.resetsAt
+                resetsAt: row.resetsAt,
+                windowDurationMins: durationMins(for: row.window)
             )
             byGroup[row.group, default: []].append(groupWindow)
         }
@@ -179,6 +181,13 @@ public struct AntigravityQuotaSource: QuotaSource {
             groups: groups,
             capturedAt: now
         )
+    }
+
+    private static func durationMins(for window: String) -> Int? {
+        let lower = window.lowercased()
+        if lower.contains("week") { return 10_080 }
+        if lower.contains("five") || lower.contains("5") || lower.contains("hour") { return 300 }
+        return nil
     }
 
     /// "Weekly Limit Remaining" → "Weekly"; unknown labels keep their words

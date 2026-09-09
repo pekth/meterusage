@@ -54,6 +54,9 @@ enum PrefKey {
     static let updateLastCheck = "updateLastCheckDate"
     static let updateDismissedVersion = "updateDismissedVersion"
     static let updateAnnouncedVersion = "updateAnnouncedVersion"
+    static let showPacingBurnRate = "showPacingBurnRate"
+    static let showActivityTelemetry = "showActivityTelemetry"
+    static let showDailyActivityChart = "showDailyActivityChart"
 }
 
 /// Popover appearance. The menu-bar label always follows the system menu bar.
@@ -116,6 +119,9 @@ final class Preferences: ObservableObject {
     /// GET per day with no identifiers, and a user who wants zero outbound
     /// update traffic can switch it off in Settings.
     @Published private(set) var updateCheckEnabled: Bool = true
+    @Published private(set) var showPacingBurnRate: Bool = true
+    @Published private(set) var showActivityTelemetry: Bool = true
+    @Published private(set) var showDailyActivityChart: Bool = true
 
     private let defaults: UserDefaults
     private var observer: NSObjectProtocol?
@@ -156,7 +162,10 @@ final class Preferences: ObservableObject {
             // the usage, so the tray stays one small mark. A user who already
             // stored a value keeps theirs.
             PrefKey.menuBarCompact: true,
-            PrefKey.updateCheck: true
+            PrefKey.updateCheck: true,
+            PrefKey.showPacingBurnRate: true,
+            PrefKey.showActivityTelemetry: true,
+            PrefKey.showDailyActivityChart: true
         ])
         reload()
         observer = NotificationCenter.default.addObserver(
@@ -222,6 +231,15 @@ final class Preferences: ObservableObject {
 
         let updateCheck = defaults.bool(forKey: PrefKey.updateCheck)
         if updateCheck != updateCheckEnabled { updateCheckEnabled = updateCheck }
+
+        let pacing = defaults.bool(forKey: PrefKey.showPacingBurnRate)
+        if pacing != showPacingBurnRate { showPacingBurnRate = pacing }
+
+        let telemetry = defaults.bool(forKey: PrefKey.showActivityTelemetry)
+        if telemetry != showActivityTelemetry { showActivityTelemetry = telemetry }
+
+        let chart = defaults.bool(forKey: PrefKey.showDailyActivityChart)
+        if chart != showDailyActivityChart { showDailyActivityChart = chart }
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }
