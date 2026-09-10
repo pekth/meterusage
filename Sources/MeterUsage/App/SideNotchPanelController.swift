@@ -270,6 +270,12 @@ final class SideNotchPanelController: ObservableObject {
         panel.orderOut(nil)
     }
 
+    deinit {
+        if let mouseUpMonitor {
+            NSEvent.removeMonitor(mouseUpMonitor)
+        }
+    }
+
     /// Ends a drag on mouse-up: clears the flag (the view drops any stale
     /// hover with it) and settles the window, recomputing the card side from
     /// the dropped position. Cheap no-op for ordinary clicks.
