@@ -1,102 +1,71 @@
 # Demo mode
 
-Demo mode runs the real app against invented data.
+Demo mode runs the real app against synthetic, invented data.
 
-It exists so that screenshots — for the README, an issue, a blog post — and
-contributor testing never require a real account, a signed-in CLI, or exposing
-anyone's actual usage. A maintainer's real popover shows real spend, real
-session counts, and a real plan tier; none of that belongs in a public repo.
+---
 
-## Launch it
+### ⚡ TL;DR
 
-The app is a bundle, and `open` does **not** pass your shell environment to a
-bundled app, so `METERUSAGE_DEMO=1 open -a MeterUsage` silently launches the
-normal app. Use `--env`, which `open` forwards for you:
+* 🎭 **True-to-Life UI**: Runs the real views, formatting, and pacing calculations without touching real accounts, credentials, or network services.
+* 📸 **Safe for Screenshots**: Ideal for documentation and public sharing without leaking private spend or account tiers.
+* 🚀 **One-Command Launch**:
+  ```sh
+  METERUSAGE_DEMO=1 swift run meterusage
+  ```
+  *(A **Demo** badge in the header ensures synthetic numbers are never confused with real ones).*
+
+---
+
+## Why Demo Mode Exists
+
+Screenshots — for the README, an issue report, or a blog post — and contributor testing should never require a real account, a signed-in CLI, or exposing personal usage. A maintainer's real popover shows real spend, real session counts, and a real plan tier; none of that belongs in a public repository.
+
+## Launching Demo Mode
+
+The app is a bundle, and macOS `open` does **not** forward shell environment variables to bundled apps by default. Use `--env` to pass it:
 
 ```sh
 open -a MeterUsage --env METERUSAGE_DEMO=1
 ```
 
-Or run the binary directly, where the shell environment does apply:
+Or execute the binary directly from the terminal:
 
 ```sh
 METERUSAGE_DEMO=1 /Applications/MeterUsage.app/Contents/MacOS/MeterUsage
 ```
 
-From a checkout, no build product needed:
+From a local source checkout:
 
 ```sh
 METERUSAGE_DEMO=1 swift run meterusage
 ```
 
-Quit and relaunch without the variable to go back to your own data.
+Quit and relaunch normally without the variable to return to your real data.
 
-## What it is, and isn't
+## What It Is — and Isn't
 
-It is **not** a mock UI. The real views, the real coordinator, the real
-formatters, and the real colour thresholds all run exactly as they do in
-production. The only thing swapped is the set of data sources — real ones read
-your CLIs and transcripts, demo ones return fixed values from memory.
+It is **not** a mock UI. The production SwiftUI views, AppCoordinator, formatters, and pacing calculations run identically to normal execution. Only the data sources are swapped: real sources inspect local CLIs and session files, while demo sources return fixed, synthetic values from memory.
 
-That means a demo screenshot is a truthful picture of the app. It is just not a
-picture of anybody's account.
+## Synthetic Data Breakdown
 
-## Everything you see is fake
+All demo data is invented and deterministic:
 
-All demo data is synthetic and invented. The dashboard order is also exercised:
-service status is first, followed by quotas and provider usage.
+- **Service Health**: Reports operational components for Codex and Claude public status pages.
+- **Codex Quota**: Plus plan tier, 5-hour and weekly allowance windows, a GPT-5.3-Codex-Spark window, two expiring full-reset credits, and an approximate credit balance.
+- **Antigravity Quota**: Multi-group model families:
+  - *Gemini Models*: Weekly limit (89% used, 11% left) and 5-hour limit (9% used, 91% left).
+  - *Claude and GPT models*: Weekly limit (1% used, 99% left) and 5-hour limit (0% used, 100% left).
+- **OpenRouter**: Synthetic monthly dollar spending limit, account balance meter, and 30-day token telemetry.
+- **Grok**: Weekly allowance window with countdown and session activity history.
+- **OpenCode Go**: 26 sessions, 492 messages, token volume totals, and estimated cost.
+- **Claude**: Optional companion-file quota windows and tokens-per-day heatmap.
+- **26-Week Heatmaps**: 26-week activity matrices for Codex (sessions) and Claude (tokens) with interactive daily, weekly, and cumulative views.
 
-- **Service status** — one operational row for each provider with a usable
-  public status feed: Codex and Claude.
-- **Codex** — Plus plan, general 5-hour/weekly limits, a GPT-5.3-Codex-Spark
-  limit, two expiring full-reset credits, and a small balance shown as credits
-  with its configured 2,500-credits/$100 dollar equivalent.
-- **OpenRouter** — a synthetic monthly dollar spending limit and remaining
-  balance.
-- **Antigravity** — 18 sessions and 246 messages.
-- **Grok** — 12 sessions and 184 messages.
-- **OpenCode Go** — 26 sessions, 492 messages, measured token totals, and a
-  synthetic $16.33 estimate.
-- **Claude** — optional companion-file quota data and a tokens-per-day
-  heatmap; hidden by default in Settings.
-- **Heatmaps** — Codex (sessions per day) and Claude (tokens per day) each
-  draw a 26-week grid with about 20 weeks populated at varied intensity. Each
-  grid switches between daily, weekly, and cumulative views, and hovering a
-  cell previews the date and its totals.
+Percentages span calm green and amber warning bands so screenshots demonstrate color headroom scales clearly without alarmist red styling. Reset countdowns are calculated relative to launch time so screenshots remain natural.
 
-The percentages are picked to make the popover *legible* rather than dramatic:
-one window sits in the amber band and the rest are green, so a screenshot shows
-that the colour scale distinguishes healthy from tight. Nothing sits near 100%,
-which would read as an emergency and flatten the whole scale into one alarming
-tint.
+## Safety Guarantees
 
-Reset times are computed relative to the moment you launch, so a screenshot
-retaken next year still shows a sensible countdown. Session and daily figures
-come from a fixed seed, so a retake differs only where time has genuinely moved
-on.
-
-Costs are computed by the app's own pricing table from the demo token counts,
-so demo mode can never display a figure the real code wouldn't have produced.
-Some demo sessions deliberately run a model with no published per-token rate,
-which is what makes the `—` cost cell and the "the total understates real
-spend" footnote appear — two of the most easily misread parts of the UI, and
-better shown in the README than discovered later.
-
-## It cannot switch on by accident
-
-- The environment variable must be exactly `1`. `true`, `yes`, `0`, and an
-  empty value all mean off.
-- It is read once, at launch, in the composition root — so half the popover can
-  never be real while the other half is invented.
-- A **Demo** badge sits beside the title in the popover header the whole time
-  it is on. It is quiet enough not to spoil a screenshot and unmistakable on
-  inspection, so a demo shot can't be mistaken for real telemetry and nobody
-  files a bug about the numbers being wrong.
-
-## No network, no disk
-
-The demo sources touch nothing. No request is made, no file is read, no
-provider CLI is spawned. That is asserted in
-`Tests/MeterUsageTests/DemoSourcesTests.swift`, alongside checks that demo mode
-is off by default and that no demo project name contains a path separator or a
-username.
+- **Strict Activation**: The environment variable must be exactly `1`. Values like `true`, `yes`, or `0` remain off.
+- **Whole-App Integrity**: Evaluated once at composition root — the dashboard is never partially real and partially fake.
+- **Prominent Badge**: A **Demo** badge is displayed in the header to prevent any confusion with live telemetry.
+- **Zero Disk & Network Access**: Demo sources perform no network requests, touch no external disk files, and invoke no CLI commands.

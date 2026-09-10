@@ -1,5 +1,12 @@
 # Contributing to meterusage
 
+> ### ⚡ TL;DR
+> 1. Fork & clone the repo.
+> 2. Enable pre-commit hook: `git config core.hooksPath .githooks`
+> 3. Verify: `swift test` & `./Scripts/make-app.sh`
+> 4. Keep diffs focused, zero secrets or credentials, synthetic fixtures only.
+
+
 Fork the repository, make one focused change, run the checks below, and open a
 pull request.
 

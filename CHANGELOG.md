@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.15] - 2026-09-09
+
+### Added
+
+- **Antigravity demo quota & multi-group windows** — added demo data source matching `agy`'s dual model families (Gemini Models weekly/5h and Claude/GPT models weekly/5h).
+- **Grouped quota display in side notch HUD** — floating side notch detail cards now render subheaded groups cleanly when a provider reports multiple quota groups.
+- **Documentation overhaul with TL;DR sections** — added punchy TL;DR summaries, badges, and quick-start guides across `README.md`, `docs/PRIVACY.md`, `docs/DEMO.md`, and `docs/COMPANION.md`.
+
+### Fixed
+
+- **Side notch text scaling** — applied `.minimumScaleFactor(0.8)` to provider header titles and reset countdowns to prevent string truncation.
+
+
 ## [0.2.14] - 2026-09-09
 
 ### Added

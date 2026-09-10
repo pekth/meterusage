@@ -1,5 +1,9 @@
 # Feeding the Claude quota bars
 
+> ### ⚡ TL;DR
+> meterusage **never** calls Anthropic directly for quota. Claude quota cards light up only when an external companion writes a local JSON file (`~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). When that JSON contains a `limits[]` array, per-model windows (such as Fable) render automatically.
+
+
 meterusage never calls Anthropic for quota. The Claude quota card is driven
 entirely by a JSON file that some *other* tool on your machine writes:
 
