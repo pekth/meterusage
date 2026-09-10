@@ -116,7 +116,7 @@ final class QuotaArchiveTests: XCTestCase {
         ]
 
         let stale = SideNotchPanelView.entries(
-            menuBarProviders: [.codex],
+            providers: [.codex],
             quotas: [:],
             statuses: [:],
             archivedQuotas: archived
@@ -133,7 +133,7 @@ final class QuotaArchiveTests: XCTestCase {
             )),
         ]
         let fresh = SideNotchPanelView.entries(
-            menuBarProviders: [.codex],
+            providers: [.codex],
             quotas: live,
             statuses: [:],
             archivedQuotas: archived

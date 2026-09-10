@@ -104,7 +104,7 @@ struct SettingsView: View {
                         provider: .openRouter,
                         subtitle: "API usage and spending limit",
                         isOn: $showOpenRouter,
-                        menuBarIsOn: nil
+                        menuBarIsOn: $menuBarOpenRouter
                     )
                     Divider().overlay(MU.hairline)
                     ProviderRow(

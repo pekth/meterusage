@@ -304,6 +304,128 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertNotNil(entries[0].resetsAt)
     }
 
+    @MainActor
+    func testBeakGeometryAndBoundsCheck() throws {
+        let entry0 = SideNotchPanelView.Entry(
+            provider: .claude,
+            usedPercent: 20,
+            fraction: 0.2,
+            ringTint: .green,
+            markTint: .green,
+            resetsAt: nil,
+            isStale: false
+        )
+        let entry1 = SideNotchPanelView.Entry(
+            provider: .codex,
+            usedPercent: 40,
+            fraction: 0.4,
+            ringTint: .green,
+            markTint: .green,
+            resetsAt: nil,
+            isStale: false
+        )
+        let entry2 = SideNotchPanelView.Entry(
+            provider: .openRouter,
+            usedPercent: 32,
+            fraction: 0.32,
+            ringTint: .green,
+            markTint: .green,
+            resetsAt: nil,
+            isStale: false
+        )
+        let entries = [entry0, entry1, entry2]
+
+        // Index 0: 19 + 0 * 43 = 19
+        XCTAssertEqual(SideNotchPanelView.ringCenterY(for: .claude, in: entries), 19)
+        XCTAssertEqual(SideNotchPanelView.beakYOnCard(for: .claude, in: entries), 13)
+
+        // Index 2 (OpenRouter): 19 + 2 * 43 = 105
+        XCTAssertEqual(SideNotchPanelView.ringCenterY(for: .openRouter, in: entries), 105)
+        XCTAssertEqual(SideNotchPanelView.beakYOnCard(for: .openRouter, in: entries), 99)
+
+        // Unknown provider defaults to first index position (19, beak 13)
+        XCTAssertEqual(SideNotchPanelView.ringCenterY(for: .antigravity, in: entries), 19)
+
+        // Beak bounds checking: beak height is 12pt (beakY ... beakY + 12)
+        // If card height is shorter than beak bottom, isBeakWithinBounds must be false.
+        let beakY: CGFloat = 99
+        XCTAssertFalse(SideNotchPanelView.isBeakWithinBounds(beakY: beakY, cardHeight: 100))
+        XCTAssertFalse(SideNotchPanelView.isBeakWithinBounds(beakY: beakY, cardHeight: 110))
+        XCTAssertTrue(SideNotchPanelView.isBeakWithinBounds(beakY: beakY, cardHeight: 111))
+        XCTAssertTrue(SideNotchPanelView.isBeakWithinBounds(beakY: beakY, cardHeight: 200))
+
+        // Negative beakY must not be rendered
+        XCTAssertFalse(SideNotchPanelView.isBeakWithinBounds(beakY: -5, cardHeight: 200))
+    }
+
+    @MainActor
+    func testOpenRouterEffectiveWindowsAndEntry() throws {
+        // Case 1: OpenRouter with credits spend and total limit (pay-as-you-go configuration)
+        let creditsQuota = ProviderQuota(
+            provider: .openRouter,
+            windows: [],
+            credits: CreditBalance(
+                balance: 6.78,
+                hasCredits: true,
+                unlimited: false,
+                unit: .dollars,
+                usedDollars: 3.22,
+                limitDollars: 10.00
+            ),
+            capturedAt: Date()
+        )
+        let windows = SideNotchPanelView.effectiveWindows(for: .openRouter, quota: creditsQuota)
+        XCTAssertEqual(windows.count, 1)
+        XCTAssertEqual(windows[0].label, "Account balance")
+        XCTAssertEqual(windows[0].usedPercent, 32.2, accuracy: 0.01)
+        XCTAssertNil(windows[0].resetsAt)
+
+        // Entry generation for OpenRouter
+        let entries = SideNotchPanelView.entries(
+            providers: [.openRouter],
+            quotas: [.openRouter: .value(creditsQuota)],
+            statuses: [:]
+        )
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].provider, Provider.openRouter)
+        XCTAssertEqual(entries[0].usedPercent, 32.2, accuracy: 0.01)
+
+        // Case 2: OpenRouter with an explicit key limit window
+        let keyWindowQuota = ProviderQuota(
+            provider: .openRouter,
+            windows: [QuotaWindow(label: "Monthly", usedPercent: 15, resetsAt: Date().addingTimeInterval(86400))],
+            credits: CreditBalance(
+                balance: 50.0,
+                hasCredits: true,
+                unlimited: false,
+                unit: .dollars,
+                usedDollars: 5.0,
+                limitDollars: 100.0
+            ),
+            capturedAt: Date()
+        )
+        let keyWindows = SideNotchPanelView.effectiveWindows(for: .openRouter, quota: keyWindowQuota)
+        XCTAssertEqual(keyWindows.count, 1)
+        XCTAssertEqual(keyWindows[0].label, "Monthly")
+        XCTAssertEqual(keyWindows[0].usedPercent, 15)
+
+        // Case 3: Other providers (e.g. Claude) do not synthesize from credits
+        let claudeQuota = ProviderQuota(
+            provider: .claude,
+            windows: [],
+            credits: CreditBalance(
+                balance: 20.0,
+                hasCredits: true,
+                unlimited: false,
+                unit: .dollars,
+                usedDollars: 5.0,
+                limitDollars: 100.0
+            ),
+            capturedAt: Date()
+        )
+        XCTAssertTrue(SideNotchPanelView.effectiveWindows(for: .claude, quota: claudeQuota).isEmpty)
+    }
+
     // MARK: - Dragged position
 
     func testCornerFrameKeepsTopRightCorner() {

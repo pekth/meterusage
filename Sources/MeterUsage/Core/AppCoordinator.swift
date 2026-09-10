@@ -627,6 +627,15 @@ final class AppCoordinator: ObservableObject {
         visibleProviders.filter { preferences.showsInMenuBar($0) && $0 != .openRouter }
     }
 
+    /// Enabled providers the user also chose to show in the side notch panel,
+    /// in the stable display order. The tray and the notch are independent
+    /// surfaces (see `menuBarProviders`): the tray keeps OpenRouter out, while
+    /// the notch honors its toggle — a configured key limit yields a real
+    /// quota window for the ring to render.
+    var sideNotchProviders: [Provider] {
+        visibleProviders.filter { preferences.showsInMenuBar($0) }
+    }
+
     var visibleActivityProviders: [Provider] {
         let providers = Set(activitySources.map(\.provider))
         return visibleProviders.filter { providers.contains($0) }

@@ -300,13 +300,15 @@ enum Composition {
             return [
                 DemoAntigravityUsageSource(),
                 DemoOpenCodeGoUsageSource(),
-                DemoGrokUsageSource()
+                DemoGrokUsageSource(),
+                DemoOpenRouterUsageSource()
             ]
         }
         return [
             AntigravityUsageSource(),
             OpenCodeGoUsageSource(),
-            GrokUsageSource()
+            GrokUsageSource(),
+            OpenRouterUsageSource()
         ]
     }
 

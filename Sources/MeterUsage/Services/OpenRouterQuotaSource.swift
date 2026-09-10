@@ -203,7 +203,7 @@ public struct OpenRouterQuotaSource: QuotaSource {
     /// Environment first keeps shell/container setups working. The file
     /// fallback supports the local OpenRouter integrations already configured
     /// on this Mac without adding a second credential-entry UI.
-    private static func discoverAPIKey() -> String? {
+    static func discoverAPIKey() -> String? {
         if let environmentKey = normalized(ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"]) {
             return environmentKey
         }

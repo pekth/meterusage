@@ -48,16 +48,23 @@ enum Notch {
     }
 }
 
-// MARK: - Measured strip size
+// MARK: - Measured strip & card sizes
 //
 // The card-side math needs the strip's size, which only exists after layout.
 // This preference carries it up without affecting layout (a background reader
-// is zero-size). The card always starts at the top edge, so its height is
-// never needed.
+// is zero-size). The card min-height clamps to the strip height so docking
+// is always seamless without orphan beaks or exposed corners.
 
 private struct StripSizeKey: PreferenceKey {
     static var defaultValue: CGSize = .zero
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
+    }
+}
+
+private struct CardHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
 }
@@ -108,6 +115,8 @@ struct SideNotchPanelView: View {
     @State private var consumingResetID: String?
     @State private var resetStatusMessage: String?
     @State private var resetErrorMessage: String?
+    @State private var stripHeight: CGFloat = 0
+    @State private var cardHeight: CGFloat = 0
     /// Collapse hysteresis: a pointer exit schedules collapse, but a
     /// re-enter before the delay fires cancels it. 450ms — deliberately
     /// longer than a tooltip grace, so the fold never feels twitchy.
@@ -117,6 +126,12 @@ struct SideNotchPanelView: View {
     /// reset action / confirmation is active.
     private var isOpen: Bool {
         isPinned || isHoveringPanel || hoveredProvider != nil || confirmingResetID != nil || consumingResetID != nil
+    }
+
+    /// True when a detail card is actively showing beside the strip.
+    private var isCardShowing: Bool {
+        let activeHovered = hoveredProvider ?? ((confirmingResetID != nil || consumingResetID != nil) ? .codex : nil)
+        return !panel.isDragging && activeHovered != nil && entries.contains(where: { $0.provider == activeHovered })
     }
 
     var body: some View {
@@ -203,7 +218,13 @@ struct SideNotchPanelView: View {
             }
         }
         .fixedSize()
-        .onPreferenceChange(StripSizeKey.self, perform: onStripSizeChange)
+        .onPreferenceChange(StripSizeKey.self) { size in
+            stripHeight = size.height
+            onStripSizeChange(size)
+        }
+        .onPreferenceChange(CardHeightKey.self) { height in
+            cardHeight = height
+        }
         .onChange(of: panel.isDragging) { dragging in
             // A drop can strand a hover from before the drag (the mouse never
             // re-enters to refresh it): always reopen from a clean hover.
@@ -223,13 +244,18 @@ struct SideNotchPanelView: View {
         if !panel.isDragging,
            let hovered = activeHovered,
            entries.contains(where: { $0.provider == hovered }) {
+            let beakY = beakYOnCard(for: hovered)
+            let effectiveHeight = max(cardHeight, stripHeight)
+            let isBeakWithinBounds = Self.isBeakWithinBounds(beakY: beakY, cardHeight: effectiveHeight)
             detailCard(for: hovered)
                 .id(hovered)
                 .accessibilityElement(children: .contain)
                 .overlay(alignment: panel.cardOnRight ? .topLeading : .topTrailing) {
-                    ArrowBeakView()
-                        .scaleEffect(x: panel.cardOnRight ? -1 : 1, y: 1)
-                        .offset(x: panel.cardOnRight ? -3.5 : 3.5, y: beakYOnCard(for: hovered))
+                    if isBeakWithinBounds {
+                        ArrowBeakView()
+                            .scaleEffect(x: panel.cardOnRight ? -1 : 1, y: 1)
+                            .offset(x: panel.cardOnRight ? -3.5 : 3.5, y: beakY)
+                    }
                 }
                 .onHover { hovering in
                     if hovering { cancelFold() }
@@ -351,11 +377,12 @@ struct SideNotchPanelView: View {
             // Square on the card side for the flush dock, round on the
             // exposed side — mirrored when the card flips right, so the
             // outer silhouette stays round and the joint stays square.
+            // When no card is showing, all corners stay rounded.
             UnevenRoundedRectangle(
-                topLeadingRadius: panel.cardOnRight ? 20 : 0,
-                bottomLeadingRadius: panel.cardOnRight ? 20 : 0,
-                bottomTrailingRadius: panel.cardOnRight ? 0 : 20,
-                topTrailingRadius: panel.cardOnRight ? 0 : 20,
+                topLeadingRadius: isCardShowing ? (panel.cardOnRight ? 20 : 0) : 20,
+                bottomLeadingRadius: isCardShowing ? (panel.cardOnRight ? 20 : 0) : 20,
+                bottomTrailingRadius: isCardShowing ? (panel.cardOnRight ? 0 : 20) : 20,
+                topTrailingRadius: isCardShowing ? (panel.cardOnRight ? 0 : 20) : 20,
                 style: .continuous
             )
             .fill(Notch.body)
@@ -396,10 +423,11 @@ struct SideNotchPanelView: View {
                 StatusBadge(severity: status.severity)
             }
 
-            // Rate limit windows
-            if let quota, !quota.windows.isEmpty {
+            // Rate limit and usage windows (including OpenRouter's account balance / limit)
+            let windows = Self.effectiveWindows(for: provider, quota: quota)
+            if !windows.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(quota.windows.enumerated()), id: \.offset) { _, window in
+                    ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
                         let pace = showPacingBurnRate ? window.pace(now: coordinator.clock) : nil
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
@@ -414,6 +442,11 @@ struct SideNotchPanelView: View {
                                         .foregroundColor(Notch.subtext)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.85)
+                                } else if provider == .openRouter, let credits = quota?.credits {
+                                    Text("\(Fmt.usd(credits.balance)) available")
+                                        .font(.system(size: 11, weight: .regular))
+                                        .foregroundColor(Notch.subtext)
+                                        .lineLimit(1)
                                 }
                             }
 
@@ -446,25 +479,34 @@ struct SideNotchPanelView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
                             } else {
-                                HStack {
+                                HStack(spacing: 4) {
                                     Text("\(Fmt.percent(window.usedPercent)) Used")
-                                        .font(.system(size: 11, weight: .regular))
                                         .foregroundColor(Notch.text)
-                                    Spacer()
+                                    Text("·")
+                                        .foregroundColor(Notch.subtext)
+                                    if provider == .openRouter, let credits = quota?.credits, let used = credits.usedDollars {
+                                        if let limit = credits.limitDollars, limit > 0 {
+                                            Text("Spent \(Fmt.usd(used)) of \(Fmt.usd(limit))")
+                                                .foregroundColor(Notch.subtext)
+                                        } else {
+                                            Text("Spent \(Fmt.usd(used))")
+                                                .foregroundColor(Notch.subtext)
+                                        }
+                                    } else {
+                                        Text("\(Fmt.percent(max(100 - window.usedPercent, 0))) left")
+                                            .foregroundColor(Notch.subtext)
+                                    }
+                                    Spacer(minLength: 0)
                                 }
+                                .font(.system(size: 10.5, weight: .regular))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             }
                         }
                     }
                 }
             } else if let quota, let credits = quota.credits {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Account balance")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Notch.text)
-                    Text(credits.unit == .dollars ? Fmt.usd(credits.balance) : Fmt.credits(credits.balance))
-                        .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                        .foregroundColor(Notch.text)
-                }
+                fallbackCreditsSection(credits: credits, provider: provider)
             }
 
             // Usage limit resets (Codex)
@@ -516,6 +558,8 @@ struct SideNotchPanelView: View {
                 dailyActivityChart(history: tel.dailyHistory, provider: provider)
             }
 
+            Spacer(minLength: 0)
+
             // Timestamp: a remembered reading is dated by its own capture,
             // never by the last sweep — presenting it under "just now"
             // would be a lie.
@@ -531,6 +575,12 @@ struct SideNotchPanelView: View {
         }
         .padding(14)
         .frame(width: SideNotchPanelLayout.cardWidth)
+        .frame(minHeight: stripHeight > 0 ? stripHeight : nil, alignment: .top)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: CardHeightKey.self, value: proxy.size.height)
+            }
+        )
         .background(
             // Square on the strip side: the card docks flush against the
             // strip with no transparent gap, so no desktop hairline can show
@@ -546,6 +596,28 @@ struct SideNotchPanelView: View {
             )
             .fill(Notch.card)
         )
+    }
+
+    @ViewBuilder
+    private func fallbackCreditsSection(credits: CreditBalance, provider: Provider) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(provider == .openRouter ? "Account balance" : "Credits")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Notch.text)
+                    .lineLimit(1)
+                Spacer()
+                Text(credits.unit == .dollars ? Fmt.usd(credits.balance) : Fmt.credits(credits.balance))
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundColor(Notch.subtext)
+                    .lineLimit(1)
+            }
+            if let used = credits.usedDollars {
+                Text("Spent \(Fmt.usd(used))")
+                    .font(.system(size: 10.5, weight: .regular))
+                    .foregroundColor(Notch.subtext)
+            }
+        }
     }
 
     private func telemetry(for provider: Provider) -> ProviderTelemetry? {
@@ -648,7 +720,7 @@ struct SideNotchPanelView: View {
 
     // MARK: - Geometry helpers
 
-    private func ringCenterY(for provider: Provider) -> CGFloat {
+    static func ringCenterY(for provider: Provider, in entries: [Entry]) -> CGFloat {
         guard let index = entries.firstIndex(where: { $0.provider == provider }) else {
             return 19
         }
@@ -657,13 +729,28 @@ struct SideNotchPanelView: View {
 
     /// Beak height on the card. The card always starts at the top edge, so
     /// this is just the ring's center less half the beak.
+    static func beakYOnCard(for provider: Provider, in entries: [Entry]) -> CGFloat {
+        ringCenterY(for: provider, in: entries) - 6
+    }
+
+    static func isBeakWithinBounds(beakY: CGFloat, cardHeight: CGFloat) -> Bool {
+        beakY >= 0 && cardHeight >= (beakY + 12)
+    }
+
+    private func ringCenterY(for provider: Provider) -> CGFloat {
+        Self.ringCenterY(for: provider, in: entries)
+    }
+
     private func beakYOnCard(for provider: Provider) -> CGFloat {
-        ringCenterY(for: provider) - 6
+        Self.beakYOnCard(for: provider, in: entries)
     }
 
     private func windowDisplayTitle(for window: QuotaWindow, provider: Provider) -> String {
         if provider == .codex && (window.label == "5-hour" || window.label.lowercased().contains("session")) {
             return "Current session"
+        }
+        if provider == .openRouter && (window.label == "Credits" || window.label == "Spending limit") {
+            return "Account balance"
         }
         return window.label
     }
@@ -937,11 +1024,20 @@ struct SideNotchPanelView: View {
         statuses: [Provider: Loaded<ServiceStatus>],
         archivedQuotas: [Provider: ProviderQuota] = [:]
     ) -> [Entry] {
-        menuBarProviders.compactMap { provider in
+        entries(providers: menuBarProviders, quotas: quotas, statuses: statuses, archivedQuotas: archivedQuotas)
+    }
+
+    static func entries(
+        providers: [Provider],
+        quotas: [Provider: Loaded<ProviderQuota>],
+        statuses: [Provider: Loaded<ServiceStatus>],
+        archivedQuotas: [Provider: ProviderQuota] = [:]
+    ) -> [Entry] {
+        providers.compactMap { provider in
             let live = quotas[provider]?.value
             let quota = live ?? archivedQuotas[provider]
-            guard let windows = quota?.windows,
-                  let window = provider.headlineWindow(from: windows)
+            let windows = effectiveWindows(for: provider, quota: quota)
+            guard let window = provider.headlineWindow(from: windows)
             else { return nil }
             let markTint: Color
             if let status = statuses[provider]?.value {
@@ -963,11 +1059,45 @@ struct SideNotchPanelView: View {
 
     private var entries: [Entry] {
         Self.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            providers: coordinator.sideNotchProviders,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses,
             archivedQuotas: coordinator.archivedQuotas
         )
+    }
+
+    /// OpenRouter is pay-as-you-go: without a key limit its quota reports no
+    /// window, so the ring falls back to a credits-spend meter when purchased
+    /// credits and spend are known — the same ratio the dashboard's CreditsRow
+    /// renders. A provider with a real limit window keeps using it.
+    static func creditWindow(for quota: ProviderQuota?, provider: Provider) -> QuotaWindow? {
+        guard provider == .openRouter,
+              let credits = quota?.credits,
+              credits.unit == .dollars,
+              let used = credits.usedDollars,
+              let limit = credits.limitDollars, limit > 0
+        else { return nil }
+        return QuotaWindow(
+            label: "Account balance",
+            usedPercent: min((used / limit) * 100, 100),
+            resetsAt: nil
+        )
+    }
+
+    /// Effective rate limit and usage windows for a provider. If the quota
+    /// already specifies windows (e.g. Codex, Claude, Grok, OpenCode, or
+    /// OpenRouter with an explicit key limit), those are returned. For
+    /// OpenRouter without a key limit, this synthesizes a window from account
+    /// credit spend so the detail card renders the exact same usage bar.
+    static func effectiveWindows(for provider: Provider, quota: ProviderQuota?) -> [QuotaWindow] {
+        guard let quota else { return [] }
+        if !quota.windows.isEmpty {
+            return quota.windows
+        }
+        if let creditWindow = creditWindow(for: quota, provider: provider) {
+            return [creditWindow]
+        }
+        return []
     }
 
     private func accessibilityRingText(for entry: Entry) -> String {

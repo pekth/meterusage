@@ -48,6 +48,22 @@ final class MenuBarTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testOpenRouterShowsInSideNotchWhenSelected() async throws {
+        // The tray and the side notch are independent surfaces: OpenRouter
+        // stays out of the menu bar (pay-as-you-go, no quota) but a configured
+        // key limit yields a window the notch ring can render, so the notch
+        // honors the stored toggle for it.
+        let coordinator = try await Self.coordinator(
+            quotaWindows: [(Provider.codex, "Weekly", 82, nil)]
+        )
+
+        XCTAssertTrue(
+            coordinator.sideNotchProviders.contains(.openRouter),
+            "OpenRouter must appear in the side notch when its toggle is on"
+        )
+    }
+
     // MARK: - Tooltip
 
     @MainActor

@@ -354,6 +354,60 @@ struct DemoOpenCodeGoUsageSource: UsageSource {
     }
 }
 
+/// Synthetic OpenRouter activity with token history, giving OpenRouter the
+/// same 30-day activity histogram and telemetry as the other providers.
+struct DemoOpenRouterUsageSource: UsageSource {
+    let provider: Provider = .openRouter
+
+    func fetchUsage() async throws -> ProviderUsage {
+        let now = Date().addingTimeInterval(-45)
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        let history = (0..<30).map { i -> DailyVolumePoint in
+            let day = calendar.date(byAdding: .day, value: -(29 - i), to: today) ?? today
+            let tokens = (i % 5 == 0) ? 0 : (25_000_000 + (i * 17_000_000) % 180_000_000)
+            return DailyVolumePoint(day: day, tokens: tokens, sessionCount: max(1, tokens / 15_000_000))
+        }
+        let tel = ProviderTelemetry(
+            lifetimeTokens: 2_450_000_000,
+            peakDailyTokens: 202_000_000,
+            longestChatSeconds: 8 * 3600 + 15 * 60,
+            currentStreakDays: 4,
+            longestStreakDays: 19,
+            todayTokens: 42_000_000,
+            last30DaysTokens: 890_000_000,
+            dailyHistory: history
+        )
+        return ProviderUsage(
+            provider: .openRouter,
+            sessionCount: 180,
+            messageCount: 3_100,
+            tokens: TokenTotals(input: 1_820_000_000, output: 480_000_000, reasoning: 150_000_000),
+            estimatedCostUSD: 3.22,
+            todaySessionCount: 6,
+            todayMessageCount: 112,
+            usageWindows: [
+                UsageWindow(
+                    label: "last 24h",
+                    sessionCount: 6,
+                    messageCount: 112,
+                    tokens: TokenTotals(input: 32_000_000, output: 10_000_000),
+                    estimatedCostUSD: 0.15
+                ),
+                UsageWindow(
+                    label: "last 30d",
+                    sessionCount: 180,
+                    messageCount: 3_100,
+                    tokens: TokenTotals(input: 720_000_000, output: 170_000_000),
+                    estimatedCostUSD: 3.22
+                )
+            ],
+            telemetry: tel,
+            capturedAt: now
+        )
+    }
+}
+
 // MARK: - Local activity
 
 /// Synthetic local activity at an indie-developer scale.
