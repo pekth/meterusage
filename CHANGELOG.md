@@ -15,6 +15,7 @@ follows [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - **Side notch text scaling** — applied `.minimumScaleFactor(0.8)` to provider header titles and reset countdowns to prevent string truncation.
+- **Menu bar label & event monitor lifecycle fixes** — broke retain cycle in `MenuBarLabel` width callback and ensured global mouse-up event monitor is cleaned up on deallocation.
 
 
 ## [0.2.14] - 2026-09-09
