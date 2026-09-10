@@ -138,6 +138,12 @@ connect and no key-entry screen. OpenRouter uses an existing
   Rings sweep to new readings on springs with a short per-cell stagger, and
   Reduce Motion removes the animation rather than shortening it.
   Off by default; the **Side notch panel** switch in Settings turns it on.
+
+  <p align="center">
+    <img src="docs/images/sidenotch.png" alt="The meterusage side notch panel showing OpenRouter token telemetry, spend, and streak" width="280">
+    &nbsp;&nbsp;
+    <img src="docs/images/sidenotch-codex.png" alt="The meterusage side notch panel showing Codex rate limits, reset credits, and usage" width="280">
+  </p>
 - **Notification Center widgets** — one widget per provider plus an
   automatic "worst provider" widget. Each shows its provider's headline
   window — the same subject as the tray, never the busiest window.
