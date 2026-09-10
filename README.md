@@ -47,9 +47,9 @@ connect and no key-entry screen. OpenRouter uses an existing
   notch panel carries the usage instead), and **Compact menu bar** in Settings
   brings the full per-provider clusters back. A first-run welcome page in the
   popover explains where usage lives.
-- **Per-provider tray selection** — the "Menu bar" section of Settings picks
-  which providers show as clusters in the tray, independent of which appear in
-  the popover. OpenRouter is always excluded (pay-as-you-go, no quota window).
+- **Per-provider tray & side notch selection** — the "Menu bar" section of Settings picks
+  which providers show in the tray and the floating side notch panel, independent of which appear in
+  the popover. OpenRouter is excluded from the system tray (pay-as-you-go, no quota window), but can be enabled in the side notch panel to display an account balance progress ring, credit usage bar, and 30-day token telemetry.
 - **Accounts in Settings** — the Accounts section names whose readings these
   are: each provider's reported plan beside the tool holding the credential
   ("Pro · via Codex CLI"). The app signs in nowhere, so there is no account
@@ -61,8 +61,8 @@ connect and no key-entry screen. OpenRouter uses an existing
   show their approximate dollar equivalent at 2,500 credits = $100. The compact
   system-tray figure shows consumed usage; the Codex popover shows remaining
   headroom.
-- **Live OpenRouter usage** — authenticated dollar spend, remaining account
-  balance, and the optional daily/weekly/monthly key spending limit.
+- **Live OpenRouter usage & token telemetry** — authenticated dollar spend, remaining account
+  balance, and the optional daily/weekly/monthly key spending limit. When an OpenRouter Management Key is present (`OPENROUTER_MANAGEMENT_KEY` or `~/.cli-proxy-api/openrouter-management-key`), meterusage queries `/api/v1/activity` to surface a 30-day token volume histogram (input, output, reasoning), rolling usage windows, and streak metrics.
 - **Live Grok quota** — the current allowance window (weekly on the X Premium
   tier, monthly on others) and the share already used, read from the same
   billing service the Grok CLI uses. The OIDC token is re-read from
@@ -123,9 +123,11 @@ connect and no key-entry screen. OpenRouter uses an existing
   bar, and detail caption uniformly displays percentage used (`% Used`). Hovering
   any provider expands a dedicated detail card aligned beside that provider
   with an arrow beak, showing its rate limit windows, progress bars, reset
-  countdowns, token usage summaries, and service status. The card docks left
-  or right automatically depending on room, top-aligned with the strip. The
-  strip is a fixed
+  countdowns, token usage summaries, and service status. For pay-as-you-go
+  services like OpenRouter, the card displays an account balance meter and spend
+  summary (`Spent $X of $Y`). The card docks left or right automatically depending
+  on room and clamps its minimum height to the strip so no background seams or
+  orphaned arrows appear. The strip is a fixed
   black hardware-like object in every appearance — dark ring discs, vivid
   state bands, white figures.
   At rest the strip folds to a
@@ -161,6 +163,7 @@ does **not** read any Claude credentials.
 |---|---|---|
 | Codex quota | Spawns `codex app-server --stdio` and calls `account/rateLimits/read` over JSON-RPC with the experimental rate-limit detail capability enabled. This includes general/model-specific windows and earned reset-credit expiry details. The subprocess authenticates itself. | Yes, by the CLI |
 | OpenRouter quota | Calls the documented `/api/v1/key` and `/api/v1/credits` endpoints with an existing `OPENROUTER_API_KEY` or supported local key file. Only aggregate usage, account balance, limit, and reset cadence are retained. | Yes |
+| OpenRouter activity | Calls `https://openrouter.ai/api/v1/activity` with an OpenRouter Management Key (`OPENROUTER_MANAGEMENT_KEY`, `~/.cli-proxy-api/openrouter-management-key`, `~/.openrouter/management-key`, or `~/.config/openrouter/management-key`). Aggregates daily token totals (input, output, reasoning) over the last 30 days and computes rolling usage windows and streaks. | Yes |
 | Grok quota | Calls the billing endpoint the Grok CLI itself uses (`cli-chat-proxy.grok.com/v1/billing`), sending only the OIDC bearer token re-read from `~/.grok/auth.json` on each refresh. Only the allowance percent, period type, and reset time are retained; no prompts or model requests are sent. | Yes |
 | Codex activity | Counts sessions per day from `~/.codex/sessions/**/*.jsonl`, reading only the start timestamp on each rollout's first event (the file's modification date as a fallback). Session payloads are never opened. | No |
 | Claude activity | Streams `~/.claude/projects/**/*.jsonl` and sums usage fields. | No |
@@ -214,8 +217,8 @@ is enforced by tests and hooks rather than promised in prose.
 - Xcode command-line tools (`xcode-select --install`)
 - Optional: [`codex`](https://github.com/openai/codex) CLI, signed in, for live
   Codex quota
-- Optional: `OPENROUTER_API_KEY` or a local OpenRouter key file, for live
-  OpenRouter usage
+- Optional: `OPENROUTER_API_KEY` or a local OpenRouter key file for live
+  OpenRouter usage; `OPENROUTER_MANAGEMENT_KEY` or `~/.cli-proxy-api/openrouter-management-key` for OpenRouter 30-day token activity
 - Optional: [`opencode`](https://opencode.ai/), for OpenCode Go local usage
 - Optional: Grok CLI (signed in), for Grok session history and the live
   allowance window
