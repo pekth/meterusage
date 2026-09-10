@@ -3,11 +3,7 @@ import Foundation
 // MARK: - Machine-readable limits report
 //
 // One stable, credential-free serialization of exactly what the popover
-// shows. Two consumers share it:
-//
-//   * the one-shot CLI (`meterusage json`) — agents and scripts read limits;
-//   * the widget snapshot file — the menu-bar app writes it after every
-//     refresh so the WidgetKit extension never needs to spawn a provider CLI.
+// shows, consumed by the one-shot CLI (`meterusage json`) for agents and scripts.
 //
 // PRIVACY CONTRACT (same as UsageModels, enforced here): the DTOs carry only
 // display names, percentages, reset timestamps, and plan labels. No tokens,
@@ -179,50 +175,3 @@ extension LimitsReport {
     }
 }
 
-// MARK: - Snapshot store
-//
-// The file hand-off between the running app and the WidgetKit extension,
-// which runs out-of-process and shares nothing with us.
-
-enum SnapshotStore {
-
-    /// The app group both sides agree on. The sandboxed widget may read only
-    /// its group container, so the snapshot lives there rather than in
-    /// Application Support. The unsandboxed app writes through the plain
-    /// filesystem; the sandbox maps the same path for the widget.
-    static let groupIdentifier = "group.dev.meterusage.app"
-
-    /// Written after every refresh sweep. Best-effort in both directions:
-    /// a failed write leaves the previous snapshot in place, and a failed
-    /// delete is harmless because readers treat any unreadable file as
-    /// "no data".
-    static func write(_ report: LimitsReport) {
-        let url = fileURL
-        try? FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if let data = try? report.jsonData() {
-            try? data.write(to: url, options: .atomic)
-        }
-    }
-
-    static func read() -> LimitsReport? {
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-        return LimitsReport.decode(data)
-    }
-
-    static var fileURL: URL {
-        let directory: URL
-        // The container API answers inside a sandbox (the widget's case);
-        // the computed fallback covers the unsandboxed app, which has no
-        // entitlement to consult. Both land on the same absolute path.
-        if let container = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: groupIdentifier) {
-            directory = container
-        } else {
-            directory = HomeDirectory.real
-                .appendingPathComponent("Library/Group Containers", isDirectory: true)
-                .appendingPathComponent(groupIdentifier, isDirectory: true)
-        }
-        return directory.appendingPathComponent("widget-snapshot.json")
-    }
-}

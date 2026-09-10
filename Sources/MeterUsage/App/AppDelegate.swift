@@ -1,7 +1,6 @@
 import AppKit
 import Combine
 import SwiftUI
-import WidgetKit
 
 /// Owns the status item, the popover, and the object graph.
 ///
@@ -46,13 +45,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         self.preferences = preferences
         self.coordinator = coordinator
-        // Each sweep's report lands in the widget snapshot file, and placed
-        // widgets re-read the moment it lands rather than at their next
-        // scheduled timeline slot.
-        coordinator.didPublishSnapshot = { report in
-            SnapshotStore.write(report)
-            WidgetCenter.shared.reloadAllTimelines()
-        }
         coordinator.quotaAlertService = QuotaAlertService(preferences: preferences)
         if !Composition.isDemoMode {
             // Demo builds never check for updates: an update banner would

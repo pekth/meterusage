@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.16] - 2026-09-09
+
+### Removed
+
+- **WidgetKit extension & legacy snapshot writes** — removed `MeterUsageWidget`, `MeterUsageWidget.xcodeproj`, and background `widget-snapshot.json` group-container writes to streamline the app footprint, reduce disk I/O, and eliminate `AppIntents` system-daemon dependencies.
+
 ## [0.2.15] - 2026-09-09
 
 ### Added

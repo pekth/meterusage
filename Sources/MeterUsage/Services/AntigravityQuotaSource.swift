@@ -132,7 +132,7 @@ public struct AntigravityQuotaSource: QuotaSource {
     /// Parses `/usage` output into grouped quota windows.
     ///
     /// The flat `windows` list carries one entry per row so the tray and
-    /// widgets show every window; the popover gets the same windows grouped
+    /// side notch show every window; the popover gets the same windows grouped
     /// by model family, mirroring how Codex's model-specific windows are
     /// surfaced. Rows that do not parse are skipped rather than failing the
     /// whole report.

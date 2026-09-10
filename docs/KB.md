@@ -10,8 +10,8 @@ Last verified: 2026-08-25
 
 ## Product and source facts
 
-- meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, widgets, and a scriptable JSON CLI.
-- The app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target, a widget target, and a test target. `Package.swift` is the source for this package structure.
+- meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
+- The app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure.
 - Provider data sources are implemented under `Sources/MeterUsage/Services/`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
 - `CHANGELOG.md` records version 0.2.6 as the latest repository release entry, with Codex display and widget changes dated 2026-08-25. This is repository release-note state, not proof of a published release.

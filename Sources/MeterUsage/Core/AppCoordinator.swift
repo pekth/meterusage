@@ -87,10 +87,7 @@ final class AppCoordinator: ObservableObject {
     /// banner would spoil marketing screenshots) and tests. Its published
     /// state is forwarded to `objectWillChange` so the popover re-renders
     /// without observing the checker directly.
-    /// Called after each sweep with the freshly built limits report. The app
-    /// wires this to the widget snapshot write plus a WidgetKit reload so
-    /// placed widgets re-read immediately; tests leave it nil, keeping I/O
-    /// and WidgetKit out of xctest.
+    /// Optional callback invoked after each sweep with the freshly built limits report.
     var didPublishSnapshot: ((LimitsReport) -> Void)?
     var updateChecker: UpdateChecker? {
         didSet {
@@ -391,10 +388,7 @@ final class AppCoordinator: ObservableObject {
         // not individual sources were skipped for backoff — a skipped source
         // simply keeps its previous reading.
         quotaAlertService?.process(quotas: quotas)
-        // Build the machine-readable report and hand it to the composition
-        // root, which decides what publishing means (the app writes the
-        // widget snapshot and nudges WidgetKit). Nil in tests, so nothing
-        // here performs I/O or reaches WidgetKit.
+        // Build the machine-readable report and notify any snapshot listener.
         didPublishSnapshot?(
             LimitsReporter.build(quotas: quotas, order: visibleQuotaProviders, now: clock))
         saveArchive()
