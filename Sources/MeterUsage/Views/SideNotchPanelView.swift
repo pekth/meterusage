@@ -406,12 +406,14 @@ struct SideNotchPanelView: View {
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Notch.text)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 Spacer(minLength: 6)
                 if let countdown = headerResetCountdown(for: provider) {
                     Text("Resets in \(countdown)")
                         .font(.system(size: 11, weight: .regular))
                         .foregroundColor(Notch.subtext)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
             }
 
@@ -424,89 +426,33 @@ struct SideNotchPanelView: View {
             }
 
             // Rate limit and usage windows (including OpenRouter's account balance / limit)
-            let windows = Self.effectiveWindows(for: provider, quota: quota)
-            if !windows.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
-                        let pace = showPacingBurnRate ? window.pace(now: coordinator.clock) : nil
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(windowDisplayTitle(for: window, provider: provider))
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(Notch.text)
-                                    .lineLimit(1)
-                                Spacer()
-                                if let resetsAt = window.resetsAt {
-                                    Text("Resets \(Fmt.absoluteMoment(resetsAt, now: coordinator.clock))")
-                                        .font(.system(size: 11, weight: .regular))
-                                        .foregroundColor(Notch.subtext)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.85)
-                                } else if provider == .openRouter, let credits = quota?.credits {
-                                    Text("\(Fmt.usd(credits.balance)) available")
-                                        .font(.system(size: 11, weight: .regular))
-                                        .foregroundColor(Notch.subtext)
-                                        .lineLimit(1)
-                                }
+            let groups = quota?.groups ?? []
+            if groups.count > 1 {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(groups, id: \.id) { group in
+                        VStack(alignment: .leading, spacing: 5) {
+                            if !group.title.isEmpty {
+                                Text(group.title)
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(Notch.subtext)
                             }
-
-                            // Fixed-width track so layout never collapses or jumps
-                            ZStack(alignment: .leading) {
-                                Capsule(style: .continuous)
-                                    .fill(Notch.track)
-                                    .frame(width: 222, height: 4)
-                                Capsule(style: .continuous)
-                                    .fill(Notch.color(usedPercent: window.usedPercent))
-                                    .frame(width: max(222 * window.fraction.clamped(to: 0...1), window.fraction > 0 ? 3 : 0), height: 4)
-                            }
-
-                            if let pace {
-                                HStack(spacing: 4) {
-                                    Text("\(Fmt.percent(window.usedPercent)) Used")
-                                        .foregroundColor(Notch.text)
-                                    Text("·")
-                                        .foregroundColor(Notch.subtext)
-                                    Text("\(Fmt.percent(pace.remainingPercent)) left")
-                                        .foregroundColor(Notch.subtext)
-                                    Text("·")
-                                        .foregroundColor(Notch.subtext)
-                                    Text(pace.statusText(usedPercent: window.usedPercent))
-                                        .foregroundColor(pace.status.isDeficit ? Notch.deficit : (pace.status.isSurplus ? Notch.surplus : Notch.subtext))
-                                        .fontWeight(pace.status.isDeficit ? .semibold : .regular)
-                                    Spacer(minLength: 0)
-                                }
-                                .font(.system(size: 10.5, weight: .regular))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                            } else {
-                                HStack(spacing: 4) {
-                                    Text("\(Fmt.percent(window.usedPercent)) Used")
-                                        .foregroundColor(Notch.text)
-                                    Text("·")
-                                        .foregroundColor(Notch.subtext)
-                                    if provider == .openRouter, let credits = quota?.credits, let used = credits.usedDollars {
-                                        if let limit = credits.limitDollars, limit > 0 {
-                                            Text("Spent \(Fmt.usd(used)) of \(Fmt.usd(limit))")
-                                                .foregroundColor(Notch.subtext)
-                                        } else {
-                                            Text("Spent \(Fmt.usd(used))")
-                                                .foregroundColor(Notch.subtext)
-                                        }
-                                    } else {
-                                        Text("\(Fmt.percent(max(100 - window.usedPercent, 0))) left")
-                                            .foregroundColor(Notch.subtext)
-                                    }
-                                    Spacer(minLength: 0)
-                                }
-                                .font(.system(size: 10.5, weight: .regular))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.8)
+                            ForEach(Array(group.windows.enumerated()), id: \.offset) { _, window in
+                                windowRow(window: window, quota: quota, provider: provider)
                             }
                         }
                     }
                 }
-            } else if let quota, let credits = quota.credits {
-                fallbackCreditsSection(credits: credits, provider: provider)
+            } else {
+                let windows = Self.effectiveWindows(for: provider, quota: quota)
+                if !windows.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
+                            windowRow(window: window, quota: quota, provider: provider)
+                        }
+                    }
+                } else if let quota, let credits = quota.credits {
+                    fallbackCreditsSection(credits: credits, provider: provider)
+                }
             }
 
             // Usage limit resets (Codex)
@@ -596,6 +542,85 @@ struct SideNotchPanelView: View {
             )
             .fill(Notch.card)
         )
+    }
+
+    @ViewBuilder
+    private func windowRow(window: QuotaWindow, quota: ProviderQuota?, provider: Provider) -> some View {
+        let pace = showPacingBurnRate ? window.pace(now: coordinator.clock) : nil
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(windowDisplayTitle(for: window, provider: provider))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Notch.text)
+                    .lineLimit(1)
+                Spacer()
+                if let resetsAt = window.resetsAt {
+                    Text("Resets \(Fmt.absoluteMoment(resetsAt, now: coordinator.clock))")
+                        .font(.system(size: 10.5, weight: .regular))
+                        .foregroundColor(Notch.subtext)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                } else if provider == .openRouter, let credits = quota?.credits {
+                    Text("\(Fmt.usd(credits.balance)) available")
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(Notch.subtext)
+                        .lineLimit(1)
+                }
+            }
+
+            // Fixed-width track so layout never collapses or jumps
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(Notch.track)
+                    .frame(width: 222, height: 4)
+                Capsule(style: .continuous)
+                    .fill(Notch.color(usedPercent: window.usedPercent))
+                    .frame(width: max(222 * window.fraction.clamped(to: 0...1), window.fraction > 0 ? 3 : 0), height: 4)
+            }
+
+            if let pace {
+                HStack(spacing: 4) {
+                    Text("\(Fmt.percent(window.usedPercent)) Used")
+                        .foregroundColor(Notch.text)
+                    Text("·")
+                        .foregroundColor(Notch.subtext)
+                    Text("\(Fmt.percent(pace.remainingPercent)) left")
+                        .foregroundColor(Notch.subtext)
+                    Text("·")
+                        .foregroundColor(Notch.subtext)
+                    Text(pace.statusText(usedPercent: window.usedPercent))
+                        .foregroundColor(pace.status.isDeficit ? Notch.deficit : (pace.status.isSurplus ? Notch.surplus : Notch.subtext))
+                        .fontWeight(pace.status.isDeficit ? .semibold : .regular)
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 10.5, weight: .regular))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            } else {
+                HStack(spacing: 4) {
+                    Text("\(Fmt.percent(window.usedPercent)) Used")
+                        .foregroundColor(Notch.text)
+                    Text("·")
+                        .foregroundColor(Notch.subtext)
+                    if provider == .openRouter, let credits = quota?.credits, let used = credits.usedDollars {
+                        if let limit = credits.limitDollars, limit > 0 {
+                            Text("Spent \(Fmt.usd(used)) of \(Fmt.usd(limit))")
+                                .foregroundColor(Notch.subtext)
+                        } else {
+                            Text("Spent \(Fmt.usd(used))")
+                                .foregroundColor(Notch.subtext)
+                        }
+                    } else {
+                        Text("\(Fmt.percent(max(100 - window.usedPercent, 0))) left")
+                            .foregroundColor(Notch.subtext)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 10.5, weight: .regular))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            }
+        }
     }
 
     @ViewBuilder

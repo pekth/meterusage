@@ -265,7 +265,7 @@ enum Composition {
 
     static func quotaSources() -> [QuotaSource] {
         if isDemoMode {
-            return [DemoClaudeQuotaSource(), DemoCodexQuotaSource(), DemoOpenRouterQuotaSource(), DemoOpenCodeGoQuotaSource(), DemoGrokQuotaSource()]
+            return [DemoClaudeQuotaSource(), DemoCodexQuotaSource(), DemoOpenRouterQuotaSource(), DemoOpenCodeGoQuotaSource(), DemoGrokQuotaSource(), DemoAntigravityQuotaSource()]
         }
         return [
             // Live Codex limits, read over the CLI's local RPC.

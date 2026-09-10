@@ -204,6 +204,64 @@ struct DemoGrokQuotaSource: QuotaSource {
     }
 }
 
+/// Synthetic Antigravity allowance, matching agy's model families (Gemini Models
+/// and Claude and GPT models) across weekly and 5-hour windows.
+struct DemoAntigravityQuotaSource: QuotaSource {
+    let provider: Provider = .antigravity
+
+    func fetchQuota() async throws -> ProviderQuota {
+        let now = Date()
+        let geminiWeeklyResets = now.addingTimeInterval(22 * 3600 + 24 * 60)
+        let gemini5hResets = now.addingTimeInterval(4 * 3600 + 26 * 60)
+        let claudeWeeklyResets = now.addingTimeInterval(22 * 3600 + 19 * 60)
+        let claude5hResets = now.addingTimeInterval(4 * 3600 + 59 * 60)
+
+        let geminiWeekly = QuotaWindow(
+            label: "Weekly limit",
+            usedPercent: 89, // 11% left
+            resetsAt: geminiWeeklyResets,
+            windowDurationMins: 10_080
+        )
+        let gemini5h = QuotaWindow(
+            label: "5-hour limit",
+            usedPercent: 9, // 91% left
+            resetsAt: gemini5hResets,
+            windowDurationMins: 300
+        )
+        let claudeWeekly = QuotaWindow(
+            label: "Weekly limit",
+            usedPercent: 1, // 99% left
+            resetsAt: claudeWeeklyResets,
+            windowDurationMins: 10_080
+        )
+        let claude5h = QuotaWindow(
+            label: "5-hour limit",
+            usedPercent: 0, // 100% left
+            resetsAt: claude5hResets,
+            windowDurationMins: 300
+        )
+
+        let groups = [
+            QuotaGroup(id: "gemini models", title: "Gemini Models", windows: [geminiWeekly, gemini5h]),
+            QuotaGroup(id: "claude and gpt models", title: "Claude and GPT models", windows: [claudeWeekly, claude5h])
+        ]
+
+        let windows = [
+            QuotaWindow(label: "Gemini Weekly", usedPercent: 89, resetsAt: geminiWeeklyResets, windowDurationMins: 10_080),
+            QuotaWindow(label: "Gemini 5-hour", usedPercent: 9, resetsAt: gemini5hResets, windowDurationMins: 300),
+            QuotaWindow(label: "Claude/GPT Weekly", usedPercent: 1, resetsAt: claudeWeeklyResets, windowDurationMins: 10_080),
+            QuotaWindow(label: "Claude/GPT 5-hour", usedPercent: 0, resetsAt: claude5hResets, windowDurationMins: 300)
+        ]
+
+        return ProviderQuota(
+            provider: .antigravity,
+            windows: windows,
+            groups: groups,
+            capturedAt: now
+        )
+    }
+}
+
 // MARK: - Plan
 
 /// Synthetic subscription tier. `.max5x` rather than `.max20x` so the badge

@@ -109,6 +109,30 @@ final class DemoSourcesTests: XCTestCase {
         XCTAssertEqual(quota.resetCredits.count, 2)
     }
 
+    func testAntigravityDemoQuotaMatchesAgyModelGroups() async throws {
+        let quota = try await DemoAntigravityQuotaSource().fetchQuota()
+        XCTAssertEqual(quota.provider, .antigravity)
+        XCTAssertEqual(quota.groups.map(\.title), ["Gemini Models", "Claude and GPT models"])
+        XCTAssertEqual(quota.windows.count, 4)
+
+        let geminiWeekly = try XCTUnwrap(quota.windows.first { $0.label == "Gemini Weekly" })
+        XCTAssertEqual(geminiWeekly.usedPercent, 89, accuracy: 0.001)
+
+        let geminiGroup = try XCTUnwrap(quota.groups.first { $0.id == "gemini models" })
+        XCTAssertEqual(geminiGroup.windows.count, 2)
+        XCTAssertEqual(geminiGroup.windows[0].label, "Weekly limit")
+        XCTAssertEqual(geminiGroup.windows[0].usedPercent, 89, accuracy: 0.001)
+        XCTAssertEqual(geminiGroup.windows[1].label, "5-hour limit")
+        XCTAssertEqual(geminiGroup.windows[1].usedPercent, 9, accuracy: 0.001)
+
+        let claudeGroup = try XCTUnwrap(quota.groups.first { $0.id == "claude and gpt models" })
+        XCTAssertEqual(claudeGroup.windows.count, 2)
+        XCTAssertEqual(claudeGroup.windows[0].label, "Weekly limit")
+        XCTAssertEqual(claudeGroup.windows[0].usedPercent, 1, accuracy: 0.001)
+        XCTAssertEqual(claudeGroup.windows[1].label, "5-hour limit")
+        XCTAssertEqual(claudeGroup.windows[1].usedPercent, 0, accuracy: 0.001)
+    }
+
     /// The colour scale is only legible in a screenshot if more than one band
     /// is represented. Asserted against the app's own thresholds rather than
     /// against the literal numbers, so a retune of either stays honest.
