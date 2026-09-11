@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **OpenRouter hover card mixed two budgets** — a key spending limit and the
+  account credit balance are separate ledgers. A key-limit row now reports only
+  its own headroom; the account balance appears only on the synthesized
+  account-balance window.
+
 ## [0.2.16] - 2026-09-09
 
 ### Removed

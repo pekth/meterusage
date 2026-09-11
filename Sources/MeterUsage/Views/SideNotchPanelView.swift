@@ -547,6 +547,7 @@ struct SideNotchPanelView: View {
     @ViewBuilder
     private func windowRow(window: QuotaWindow, quota: ProviderQuota?, provider: Provider) -> some View {
         let pace = showPacingBurnRate ? window.pace(now: coordinator.clock) : nil
+        let figure = Self.windowFigure(window: window, quota: quota, provider: provider)
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(windowDisplayTitle(for: window, provider: provider))
@@ -560,7 +561,7 @@ struct SideNotchPanelView: View {
                         .foregroundColor(Notch.subtext)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                } else if provider == .openRouter, let credits = quota?.credits {
+                } else if case .spent = figure, let credits = quota?.credits {
                     Text("\(Fmt.usd(credits.balance)) available")
                         .font(.system(size: 11, weight: .regular))
                         .foregroundColor(Notch.subtext)
@@ -602,16 +603,16 @@ struct SideNotchPanelView: View {
                         .foregroundColor(Notch.text)
                     Text("·")
                         .foregroundColor(Notch.subtext)
-                    if provider == .openRouter, let credits = quota?.credits, let used = credits.usedDollars {
-                        if let limit = credits.limitDollars, limit > 0 {
+                    if case let .spent(used, limit) = figure {
+                        if let limit, limit > 0 {
                             Text("Spent \(Fmt.usd(used)) of \(Fmt.usd(limit))")
                                 .foregroundColor(Notch.subtext)
                         } else {
                             Text("Spent \(Fmt.usd(used))")
                                 .foregroundColor(Notch.subtext)
                         }
-                    } else {
-                        Text("\(Fmt.percent(max(100 - window.usedPercent, 0))) left")
+                    } else if case let .remaining(percent) = figure {
+                        Text("\(Fmt.percent(percent)) left")
                             .foregroundColor(Notch.subtext)
                     }
                     Spacer(minLength: 0)
@@ -774,7 +775,11 @@ struct SideNotchPanelView: View {
         if provider == .codex && (window.label == "5-hour" || window.label.lowercased().contains("session")) {
             return "Current session"
         }
-        if provider == .openRouter && (window.label == "Credits" || window.label == "Spending limit") {
+        // A key spending limit stays a spending limit: only the legacy
+        // "Credits" label (the synthesized account window is now emitted as
+        // "Account balance") is an account balance. Retitling a key window
+        // would pair an account-balance heading with key-limit figures.
+        if provider == .openRouter && window.label == "Credits" {
             return "Account balance"
         }
         return window.label
@@ -1043,6 +1048,15 @@ struct SideNotchPanelView: View {
         var id: Provider { provider }
     }
 
+    /// The secondary figure a window row shows beside its used percent. The
+    /// credit-spend case is reserved for OpenRouter's synthesized account
+    /// balance window; a key-limit window is a different budget scope and must
+    /// not quote the account figures even when a credits reading is present.
+    enum WindowFigure: Equatable {
+        case spent(used: Double, limit: Double?)
+        case remaining(percent: Double)
+    }
+
     static func entries(
         menuBarProviders: [Provider],
         quotas: [Provider: Loaded<ProviderQuota>],
@@ -1123,6 +1137,21 @@ struct SideNotchPanelView: View {
             return [creditWindow]
         }
         return []
+    }
+
+    /// Picks the secondary figure a window row shows. Account credits are only
+    /// consulted for the synthesized "Account balance" window, which exists
+    /// exactly when OpenRouter reports no key-limit window of its own. Every
+    /// other window reports its own headroom, so a key limit and an account
+    /// credit balance never appear as one mixed reading.
+    static func windowFigure(window: QuotaWindow, quota: ProviderQuota?, provider: Provider) -> WindowFigure {
+        let isAccountBalanceWindow = provider == .openRouter
+            && window.label == "Account balance"
+            && quota?.windows.isEmpty == true
+        if isAccountBalanceWindow, let used = quota?.credits?.usedDollars {
+            return .spent(used: used, limit: quota?.credits?.limitDollars)
+        }
+        return .remaining(percent: max(100 - window.usedPercent, 0))
     }
 
     private func accessibilityRingText(for entry: Entry) -> String {
