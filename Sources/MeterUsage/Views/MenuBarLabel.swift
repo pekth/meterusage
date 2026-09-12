@@ -35,8 +35,8 @@ struct MenuBarLabel: View {
     /// slot pads short figures like "9%" away from the gauge.
     var onWidthChange: (CGFloat) -> Void = { _ in }
 
-    private var ambientDeficitETA: String? {
-        clusters.first(where: { $0.etaText != nil })?.etaText
+    private var ambientDeficitCluster: Cluster? {
+        clusters.first(where: { $0.etaText != nil && $0.isDeficit })
     }
 
     var body: some View {
@@ -52,19 +52,9 @@ struct MenuBarLabel: View {
             }
 
             if coordinator.preferences.menuBarCompactEnabled {
-                CompactTrayGlyph()
+                compactContent
             } else {
                 trayClusters
-            }
-
-            if let eta = ambientDeficitETA {
-                Text(eta)
-                    .font(.system(size: 9.5, weight: .bold).monospacedDigit())
-                    .foregroundColor(MU.warn)
-                    .padding(.horizontal, 3)
-                    .padding(.vertical, 1)
-                    .background(MU.warn.opacity(0.16))
-                    .cornerRadius(3)
             }
         }
         .padding(.horizontal, 5)
@@ -84,6 +74,30 @@ struct MenuBarLabel: View {
         .animation(.easeOut(duration: 0.3), value: fraction)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(coordinator.preferences.menuBarCompactEnabled ? "MeterUsage" : accessibilityText)
+    }
+
+    @ViewBuilder
+    private var compactContent: some View {
+        if let deficit = ambientDeficitCluster, let eta = deficit.etaText {
+            HStack(spacing: 3) {
+                ProviderMark(provider: deficit.provider, tint: deficit.markTint)
+                    .frame(width: 13, height: 13)
+                if let percent = deficit.percent {
+                    Text(percent)
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .foregroundColor(deficit.numberTint)
+                }
+                Text(eta)
+                    .font(.system(size: 9.5, weight: .bold).monospacedDigit())
+                    .foregroundColor(MU.warn)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(MU.warn.opacity(0.16))
+                    .cornerRadius(3)
+            }
+        } else {
+            CompactTrayGlyph()
+        }
     }
 
     /// The per-provider `[mark] percent` clusters, unchanged from the original
