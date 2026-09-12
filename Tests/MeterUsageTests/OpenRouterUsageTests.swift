@@ -81,6 +81,43 @@ final class OpenRouterUsageTests: XCTestCase {
         XCTAssertEqual(activeDays.count, 2)
     }
 
+    func testParseBucketsDaysInUTCByDefault() throws {
+        // OpenRouter's activity endpoint reports UTC calendar days. The default
+        // parse must bucket them in UTC; using the machine's local calendar
+        // shifted each day for timezones behind UTC and made the "today" row
+        // read zero. `now` is midday so a local-calendar default diverges.
+        let json = """
+        {
+          "data": [
+            {
+              "date": "2026-09-09",
+              "prompt_tokens": 20000,
+              "completion_tokens": 4000,
+              "reasoning_tokens": 1000,
+              "requests": 20,
+              "usage": 0.160
+            }
+          ]
+        }
+        """
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        let testNow = try XCTUnwrap(dateFormatter.date(from: "2026-09-09"))
+            .addingTimeInterval(12 * 3600)
+
+        let usage = try OpenRouterUsageSource.parse(data: Data(json.utf8), now: testNow)
+
+        XCTAssertEqual(usage.todaySessionCount, 20)
+        let tel = try XCTUnwrap(usage.telemetry)
+        XCTAssertEqual(tel.todayTokens, 25000)
+        XCTAssertEqual(
+            tel.dailyHistory.last?.day,
+            OpenRouterUsageSource.utcCalendar.startOfDay(for: testNow)
+        )
+    }
+
     func testParseEmptyDataProducesValidEmptyHistory() throws {
         let json = "{\"data\":[]}"
         let usage = try OpenRouterUsageSource.parse(data: Data(json.utf8), now: Date())

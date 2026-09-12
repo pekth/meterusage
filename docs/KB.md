@@ -31,6 +31,8 @@ Last verified: 2026-08-25
 - [`README.md`](../README.md): product behavior, setup, provider boundaries, and public claims.
 - [`docs/PRIVACY.md`](PRIVACY.md): data-handling boundaries and enforcement claims.
 - [`docs/DEMO.md`](DEMO.md): synthetic demo mode.
+- [`docs/mockups/README.md`](mockups/README.md): Wave 1–3 concept mockups; provider marks stay.
+- [`docs/plans/feature-and-windows-pipeline.md`](plans/feature-and-windows-pipeline.md): macOS feature waves + Windows track.
 - [`Package.swift`](../Package.swift): package targets and platform requirement.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md): contribution and validation commands.
 - [`CHANGELOG.md`](../CHANGELOG.md): repository release-note history.

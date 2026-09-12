@@ -32,12 +32,18 @@ enum QuotaAlertThreshold: Int, CaseIterable {
 enum QuotaAlertEvent: Equatable {
     /// A window crossed `threshold` upward this refresh.
     case threshold(provider: Provider, windowLabel: String, usedPercent: Double, threshold: QuotaAlertThreshold)
+    /// Burning fast and projected to run out in < 30 minutes before reset.
+    case paceCliff(provider: Provider, windowLabel: String, etaMinutes: Int)
+    /// Soft warning when burning fast past 50% window consumption.
+    case paceSoftWarning(provider: Provider, windowLabel: String, usedPercent: Double)
     /// A reset credit will expire within `ExpiringCredit.window`.
     case expiringCredit(provider: Provider, creditID: String, creditTitle: String)
 
     var provider: Provider {
         switch self {
         case .threshold(let provider, _, _, _): return provider
+        case .paceCliff(let provider, _, _): return provider
+        case .paceSoftWarning(let provider, _, _): return provider
         case .expiringCredit(let provider, _, _): return provider
         }
     }
@@ -56,6 +62,8 @@ struct QuotaAlertEvaluator {
     private var highWater: [String: Double] = [:]
     /// Reset credits already flagged as expiring, so one credit warns once.
     private var flaggedCredits: Set<String> = []
+    private var flaggedPaceCliffs: Set<String> = []
+    private var flaggedSoftWarnings: Set<String> = []
 
     /// Compares this refresh's quotas against prior state and returns the new
     /// events to deliver. Must be called with every enabled provider's latest
@@ -76,6 +84,8 @@ struct QuotaAlertEvaluator {
                 // climb past a threshold alerts again.
                 if window.usedPercent < previous - 0.001 {
                     highWater[key] = 0
+                    flaggedPaceCliffs.remove(key)
+                    flaggedSoftWarnings.remove(key)
                 }
 
                 let rearmedPrevious = highWater[key] ?? 0
@@ -90,6 +100,32 @@ struct QuotaAlertEvaluator {
                     ))
                 }
                 highWater[key] = max(rearmedPrevious, window.usedPercent)
+
+                // Pace-based checks
+                if let pace = window.pace(now: now) {
+                    if pace.status.isDeficit,
+                       window.usedPercent >= 50,
+                       !flaggedSoftWarnings.contains(key) {
+                        flaggedSoftWarnings.insert(key)
+                        events.append(.paceSoftWarning(
+                            provider: provider,
+                            windowLabel: window.label,
+                            usedPercent: window.usedPercent
+                        ))
+                    }
+
+                    if pace.status.isDeficit,
+                       let eta = pace.etaInterval(resetsAt: window.resetsAt, now: now),
+                       eta < 1800,
+                       !flaggedPaceCliffs.contains(key) {
+                        flaggedPaceCliffs.insert(key)
+                        events.append(.paceCliff(
+                            provider: provider,
+                            windowLabel: window.label,
+                            etaMinutes: max(1, Int(eta / 60))
+                        ))
+                    }
+                }
             }
 
             for credit in quota.resetCredits {
@@ -148,7 +184,7 @@ final class QuotaAlertService {
             guard settings.authorizationStatus == .authorized
                 || settings.authorizationStatus == .provisional else { return }
             for event in events {
-                let request = Self.request(for: event)
+                let request = Self.request(for: event, quotas: quotas)
                 try? await center.add(request)
             }
         }
@@ -188,13 +224,34 @@ final class QuotaAlertService {
 
     /// Builds the delivered notification. Bodies carry percentages and labels
     /// only — never account detail, paths, or raw provider payloads.
-    private static func request(for event: QuotaAlertEvent) -> UNNotificationRequest {
+    private static func computeFailoverNudge(for excluded: Provider, quotas: [Provider: Loaded<ProviderQuota>]) -> String? {
+        var options: [String] = []
+        for (p, state) in quotas {
+            guard p != excluded, let q = state.value, let h = p.headlineWindow(from: q.windows) else { continue }
+            if h.usedPercent < 50 {
+                options.append("\(p.displayName) \(Int(h.usedPercent))%")
+            }
+        }
+        guard !options.isEmpty else { return nil }
+        return " Switch suggestion: " + options.joined(separator: " · ")
+    }
+
+    private static func request(for event: QuotaAlertEvent, quotas: [Provider: Loaded<ProviderQuota>] = [:]) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
+        let failover = computeFailoverNudge(for: event.provider, quotas: quotas) ?? ""
         switch event {
         case .threshold(let provider, let windowLabel, let usedPercent, let threshold):
             content.title = threshold.title
-            content.body = "\(provider.displayName) \(windowLabel) window is at \(Fmt.percent(usedPercent)) used."
+            content.body = "\(provider.displayName) \(windowLabel) window is at \(Fmt.percent(usedPercent)) used.\(failover)"
             content.sound = threshold == .critical ? .default : nil
+        case .paceCliff(let provider, let windowLabel, let etaMinutes):
+            content.title = "\(provider.displayName) burning fast"
+            content.body = "\(windowLabel) window projected to empty in ~\(etaMinutes)m before reset.\(failover)"
+            content.sound = .default
+        case .paceSoftWarning(let provider, let windowLabel, let usedPercent):
+            content.title = "\(provider.displayName) pace warning"
+            content.body = "\(windowLabel) window at \(Fmt.percent(usedPercent)) used and burning faster than pace.\(failover)"
+            content.sound = nil
         case .expiringCredit(let provider, _, let creditTitle):
             content.title = "Reset credit expiring"
             content.body = "A \(provider.displayName) reset credit (\(creditTitle)) expires within 24 hours."

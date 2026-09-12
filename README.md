@@ -21,11 +21,12 @@
 
 **meterusage** brings all your AI coding allowances, token burn rates, and rate-limit reset timers together into a clean macOS menu bar item and an interactive floating side-notch HUD.
 
-* **Supported Providers**: OpenAI Codex, Google Antigravity, Claude Code, OpenRouter, Grok, and OpenCode Go.
+* **Broad Provider Coverage**: OpenAI Codex, Google Antigravity, Claude Code, OpenRouter, Grok, OpenCode Go, Cursor, GitHub Copilot CLI, and Google Gemini CLI.
+* **Ambient Time-to-Empty**: Live depletion velocity against reset deadlines (`~47m left at current pace` / `Paced to last until reset`) directly in the menu bar and side notch.
+* **Burn Attribution & Context Waste**: Real-time token breakdown by project, model, and turns for the active window, plus cache-hit efficiency % and long-chat flags.
+* **Durable Daily History**: Local summary store surviving CLI transcript purges and session cleanup.
 * **100% Private & Zero Setup**: No accounts to connect, no passwords entered. Reads already-authenticated local CLI sessions and local SQLite/JSON logs on your machine.
-* **Smart Pacing & Resets**: Live burn-rate indicators (*well paced*, *on pace*, *burning fast*) and exact countdowns to quota rollovers.
-* **Rich Telemetry & Heatmaps**: 26-week GitHub-style activity heatmaps, 7-day sparklines, and token telemetry histograms.
-* **Floating Side Notch**: Dockable, collapsible hardware-style HUD with hover detail cards that flip automatically to stay on screen.
+* **Agent Budget API**: Machine-readable JSON CLI (`meterusage json`) exporting burn rates, pacing, and time-to-empty for autonomous AI agents.
 
 ```bash
 git clone https://github.com/pekth/meterusage.git && cd meterusage && ./Scripts/make-app.sh && open dist/
@@ -36,23 +37,25 @@ git clone https://github.com/pekth/meterusage.git && cd meterusage && ./Scripts/
 
 ## 📸 Showcase
 
-### Menu Bar
-Compact system tray glyph or full per-provider clusters `[mark] %` with service status and headroom color coding:
+### Ambient Time-To-Empty & Side Notch HUD
+A dockable, collapsible HUD pinned to the edge of your screen. Hovering any provider ring expands a dedicated detail card with rate limits, ambient time-to-empty, pacing diagnostics, and token telemetry:
 
 <p align="center">
-  <img src="docs/images/menubar.png" alt="The meterusage menu-bar indicator showing provider clusters and usage" height="26">
-</p>
-
-### Floating Side Notch Panel
-A dockable, collapsible HUD pinned to the edge of your screen. Hovering any provider ring expands a dedicated detail card with rate limits, pacing, token telemetry, and activity history:
-
-<p align="center">
-  <img src="docs/images/sidenotch.png" alt="OpenRouter token telemetry, spend, and streak" width="360">
+  <img src="docs/images/sidenotch-v2-live.png" alt="Live MeterUsage Side Notch with Ambient Time-to-Empty and Limit Breakdown" width="320">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/images/sidenotch-codex.png" alt="Codex rate limits, reset credits, and usage" width="360">
+  <img src="docs/images/sidenotch-codex.png" alt="Codex rate limits, reset credits, and usage" width="340">
 </p>
 
-### Popover Dashboard
+### Burn Attribution & Context Efficiency
+Hovering the active window reveals token consumption attributed by workspace and model, alongside cache hit rates and chat length diagnostics:
+
+<p align="center">
+  <img src="docs/mockups/02-burn-attribution.png" alt="Burn attribution and context waste hints" width="340">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/mockups/03-pace-alerts.png" alt="Pace alerts and cross-provider failover recommendations" width="340">
+</p>
+
+### Menu Bar & Popover Dashboard
 Click the menu bar mark anytime to inspect full rate-limit details, multi-window countdowns, and 26-week activity heatmaps:
 
 <p align="center">
@@ -63,7 +66,7 @@ Click the menu bar mark anytime to inspect full rate-limit details, multi-window
   <img src="docs/images/popover-3.png" alt="OpenRouter quota, Claude quota, Claude heatmap, and Antigravity" width="270">
 </p>
 
-<sub>Screenshots show the real app in demo mode (`METERUSAGE_DEMO=1`) — all numbers and names are synthetic.</sub>
+<sub>Screenshots show the app in demo mode (`METERUSAGE_DEMO=1`) — all numbers and names are synthetic.</sub>
 
 ---
 
@@ -77,21 +80,26 @@ Click the menu bar mark anytime to inspect full rate-limit details, multi-window
 | **OpenRouter** | ✅ | ✅ | ✅ | — | Public account API & `/api/v1/activity` telemetry |
 | **Grok** | ✅ | ✅ | ✅ | — | CLI auth bearer token & session summaries |
 | **OpenCode Go** | ✅ | ✅ | ✅ | — | Local `opencode db` read-only queries |
+| **Cursor** | ✅ | ✅ | ✅ | — | Local sqlite state & token usage cache |
+| **Copilot CLI** | ✅ | ✅ | ✅ | — | Local GitHub CLI auth token & token telemetry |
+| **Gemini CLI** | ✅ | ✅ | ✅ | — | Local Gemini CLI session state |
 
-<small>*Claude publishes no public quota API; meterusage reads an on-disk JSON snapshot if a local companion writes one (see [docs/COMPANION.md](docs/COMPANION.md)).</small>
+<small>*Claude publishes no public quota API; meterusage reads an on-disk JSON snapshot if a local companion writes one (see [docs/COMPANION.md](docs/COMPANION.md) and [`Scripts/claude-companion.sh`](Scripts/claude-companion.sh)).</small>
 
 ---
 
 ## 🚀 Key Features
 
-* **Menu-Bar Provider Clusters** — Display each enabled provider as a `[mark] %` cluster. The mark is color-coded by real-time service health, and the percentage is tinted by remaining quota headroom. Cold starts retain the last known reading so you never see an empty bar.
-* **Floating Side Notch HUD** — Fixed-black, hardware-like collapsible strip. Hovering a ring expands a docked detail card with smooth spring animations. Features auto-flip positioning (switches left/right depending on screen position) and right-click controls (*Keep open*, *Refresh now*, *Hide*).
-* **Burn-Rate & Pacing Analysis** — Computes linear quota burn against time remaining in 5-hour and weekly windows, tagging usage as *well paced*, *on pace*, or *burning fast*.
+* **Ambient Time-to-Empty** — Dynamic ETA calculations (`~47m left at current pace` / `Paced to last until reset`) directly in the menu bar and side notch, warning you of rapid burn cliffs before limits are reached.
+* **Window Burn Attribution** — Explains *"Where did my tokens go?"* by decomposing the active window's token consumption by project, model, and message turns.
+* **Context Waste & Cache Hints** — Diagnostic metadata highlighting cache hit rate %, average tokens per turn, and long-chat flags ($\ge 10$ turns or $\ge 100\text{k}$ tokens) to curb silent context waste.
+* **Durable Daily History Store** — Preserves daily token tallies, estimated spend, and peak window utilization in a durable local database (`~/Library/Application Support/MeterUsage/durable-daily-history.json`) that survives CLI transcript pruning.
+* **Unified AI Coding Strip** — High-level summary card in the popover showing all AI coding today (tokens, weekly volume, and estimated USD spend) across all active providers.
+* **Floating Side Notch HUD** — Fixed-black, hardware-like collapsible strip. Hovering a ring expands a docked detail card with smooth spring animations. Features auto-flip positioning (switches left/right depending on screen position).
+* **Cross-Provider Headroom Failover** — Instant suggestions when a provider is burning fast or near exhaustion, identifying which alternative model has headroom available.
+* **Agent Budget API** — Run `meterusage json` to export machine-readable quota telemetry, burn velocity, pacing status, and seconds-to-empty for autonomous AI agents.
 * **26-Week Activity Heatmaps** — GitHub-style activity matrix inside Codex and Claude cards with Day, Week, or Cumulative views, accompanied by 7-day sparklines.
-* **Token Telemetry & 30-Day Histograms** — Multi-column token breakdowns (lifetime, 30-day, peak, today) and activity histograms.
-* **In-App Reset Credit Actions** — View earned reset credits and countdowns to expiry. Consume Codex reset credits directly within the popover or side notch card with a single click.
-* **Opt-In Threshold Alerts** — Native macOS notifications when any window crosses 80% or 95% used, or when an earned reset credit is within 24 hours of expiry.
-* **Scriptable JSON CLI** — Run `meterusage json` in terminal or CI scripts to inspect current quotas programmatically without launching the GUI.
+* **Opt-In Pacing Alerts** — Native macOS notifications when an active window crosses critical burn velocity or drops below 30 minutes to empty.
 
 ---
 
@@ -99,7 +107,7 @@ Click the menu bar mark anytime to inspect full rate-limit details, multi-window
 
 meterusage is built from the ground up to respect developer privacy:
 * **No Network Man-in-the-Middle**: Reuses the authenticated CLI sessions already on your Mac.
-* **No Prompts or Code Read**: Reads only numeric session metadata, token tallies, and timestamps. Never opens prompt contents, tool payloads, or file diffs.
+* **No Prompts or Code Read**: Reads only numeric session metadata, token tallies, and timestamps. Project identifiers are strictly directory basenames. Never opens prompt contents, tool payloads, or file diffs.
 * **No Telemetry / Analytics**: Zero outgoing telemetry calls.
 * **Sandboxed & Inspectable**: Full privacy architecture documented in [docs/PRIVACY.md](docs/PRIVACY.md).
 
@@ -110,7 +118,7 @@ meterusage is built from the ground up to respect developer privacy:
 ### Requirements
 * macOS 13 Ventura or later
 * Xcode Command Line Tools (`xcode-select --install`)
-* Any of your installed CLI tools (`codex`, `agy`, `opencode`, `grok`, or Claude Code)
+* Any of your installed CLI tools (`codex`, `agy`, `opencode`, `grok`, `cursor`, `copilot`, `gemini`, or Claude Code)
 
 ### Build & Run
 ```sh
@@ -122,15 +130,20 @@ cd meterusage
 # Run unit tests
 swift test
 
-# Launch in safe Demo Mode (synthetic data for screenshots)
-METERUSAGE_DEMO=1 swift run meterusage
+# Launch in safe Demo Mode (synthetic data for showcase and testing)
+METERUSAGE_DEMO=1 open dist/MeterUsage.app --args --demo
 ```
 
-> **Note**: No Apple Developer paid account required — the app is ad-hoc signed. macOS may prompt you to allow the first run in **System Settings → Privacy & Security**.
+### Agent Budget CLI
+To consume quota telemetry programmatically in scripts or agents:
+```sh
+meterusage json
+```
+Outputs structured JSON including `remaining_percent`, `resets_at`, `pacing`, `burn_rate`, and `eta_seconds`.
 
 ---
 
 ## 📄 License & Disclaimer
 
 * **License**: [MIT](LICENSE)
-* **Disclaimer**: Independent open-source project. Not affiliated with or endorsed by OpenAI, Anthropic, Google, xAI, or OpenRouter.
+* **Disclaimer**: Independent open-source project. Not affiliated with or endorsed by OpenAI, Anthropic, Google, xAI, Microsoft, or OpenRouter.

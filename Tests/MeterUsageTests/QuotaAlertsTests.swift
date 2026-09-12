@@ -199,4 +199,21 @@ final class QuotaAlertsTests: XCTestCase {
             capturedAt: Date()
         )
     }
+
+    @MainActor
+    func testPaceCliffAndSoftWarningEvents() {
+        var evaluator = QuotaAlertEvaluator()
+        let now = Date()
+        let resetsAt = now.addingTimeInterval(3600) // 1 hour left in a 5-hour window
+        let window = QuotaWindow(label: "5-hour", usedPercent: 92, resetsAt: resetsAt)
+        let q = ProviderQuota(provider: .codex, windows: [window], capturedAt: now)
+
+        let events = evaluator.events(for: [.codex: .value(q)], now: now)
+        XCTAssertTrue(events.contains {
+            if case .paceCliff(let p, let lbl, let mins) = $0 {
+                return p == .codex && lbl == "5-hour" && mins > 0
+            }
+            return false
+        })
+    }
 }

@@ -254,7 +254,7 @@ enum Composition {
     /// show real numbers and half show invented ones, which is worse than
     /// either. Default is off: a user who never sets `METERUSAGE_DEMO=1`
     /// cannot reach demo mode by any route. See `DemoMode` and docs/DEMO.md.
-    static let isDemoMode = DemoMode.isEnabled()
+    static let isDemoMode = DemoMode.isEnabled() || CommandLine.arguments.contains("--demo")
 
     static func quotaSources() -> [QuotaSource] {
         if isDemoMode {
@@ -278,7 +278,13 @@ enum Composition {
             // Claude publishes no local quota endpoint. This reads a file only
             // if one happens to exist, and reports `.noData` otherwise — the
             // normal case, and deliberately not an error.
-            OptionalQuotaFileSource()
+            OptionalQuotaFileSource(),
+            // Cursor local configuration and usage
+            CursorQuotaSource(),
+            // GitHub Copilot CLI local state
+            CopilotQuotaSource(),
+            // Google Gemini CLI quota and accounts
+            GeminiQuotaSource()
         ]
     }
 

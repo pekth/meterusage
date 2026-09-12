@@ -214,4 +214,9 @@ public enum AppInfo {
     }()
 
     public static let name = "MeterUsage"
+
+    public static var isPreview: Bool {
+        Bundle.main.bundleIdentifier?.contains("preview") == true ||
+        ProcessInfo.processInfo.arguments.contains("--preview")
+    }
 }

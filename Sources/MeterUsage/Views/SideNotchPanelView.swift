@@ -37,6 +37,8 @@ enum Notch {
     static let subtext = Color(white: 1, opacity: 0.55)
     static let deficit = Color(red: 1.0, green: 0.584, blue: 0.0) // #FF9500 amber
     static let surplus = Color(red: 0.204, green: 0.78, blue: 0.349) // #34C759 calm green
+    static let warn = Color(red: 1.0, green: 0.584, blue: 0.0)
+    static let good = Color(red: 0.204, green: 0.78, blue: 0.349)
 
     static func color(usedPercent: Double) -> Color {
         switch NotchBand.band(usedPercent: usedPercent) {
@@ -326,6 +328,12 @@ struct SideNotchPanelView: View {
                         Text(Fmt.percent(entry.usedPercent))
                             .font(.system(size: 9, weight: .semibold).monospacedDigit())
                             .foregroundColor(Notch.text)
+                        if let eta = entry.etaText {
+                            Text(eta)
+                                .font(.system(size: 7.5, weight: .bold).monospacedDigit())
+                                .foregroundColor(entry.isDeficit ? Notch.deficit : Notch.subtext)
+                                .lineLimit(1)
+                        }
                     }
                     .contentShape(Rectangle())
                     // VoiceOver reaches this panel without the window ever
@@ -425,6 +433,38 @@ struct SideNotchPanelView: View {
                 StatusBadge(severity: status.severity)
             }
 
+            // Ambient Time-To-Empty banner
+            if let headline = provider.headlineWindow(from: Self.effectiveWindows(for: provider, quota: quota)),
+               let pace = headline.pace(now: coordinator.clock),
+               let etaText = pace.etaText(resetsAt: headline.resetsAt, now: coordinator.clock) {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(etaText)
+                            .font(.system(size: 13, weight: .bold).monospacedDigit())
+                            .foregroundColor(pace.status.isDeficit ? Notch.deficit : Notch.surplus)
+                        Text(pace.projectedExhaustion != nil ? "Empties before reset at current pace" : "Paced to last until reset")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Notch.subtext)
+                    }
+                    Spacer()
+                    if let resetsAt = headline.resetsAt {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("Reset")
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .foregroundColor(Notch.subtext)
+                            Text(Fmt.timeUntil(resetsAt, now: coordinator.clock) ?? "now")
+                                .font(.system(size: 11, weight: .bold).monospacedDigit())
+                                .foregroundColor(Notch.text)
+                        }
+                    }
+                }
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill((pace.status.isDeficit ? Notch.deficit : Notch.surplus).opacity(0.12))
+                )
+            }
+
             // Rate limit and usage windows (including OpenRouter's account balance / limit)
             let groups = quota?.groups ?? []
             if groups.count > 1 {
@@ -504,6 +544,76 @@ struct SideNotchPanelView: View {
                 dailyActivityChart(history: tel.dailyHistory, provider: provider)
             }
 
+            // Burn breakdown and context waste hints
+            if let act = coordinator.activities[provider]?.value,
+               let headline = provider.headlineWindow(from: Self.effectiveWindows(for: provider, quota: quota)),
+               let breakdown = act.burnBreakdown(for: headline, now: coordinator.clock),
+               !breakdown.contributors.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Active window burn")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Notch.text)
+                        Spacer()
+                        Text(Fmt.compactCount(breakdown.totalTokens) + " tokens")
+                            .font(.system(size: 10, weight: .medium).monospacedDigit())
+                            .foregroundColor(Notch.subtext)
+                    }
+
+                    ForEach(breakdown.contributors) { item in
+                        HStack(spacing: 6) {
+                            Text(item.projectName)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Notch.text)
+                                .lineLimit(1)
+                            Text("· " + Fmt.shortModel(item.model))
+                                .font(.system(size: 10, weight: .regular))
+                                .foregroundColor(Notch.subtext)
+                                .lineLimit(1)
+                            Spacer()
+                            Text("\(Int(item.shareOfWindow))%")
+                                .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+                                .foregroundColor(Notch.text)
+                        }
+                    }
+
+                    // Numeric metadata waste hints
+                    HStack(spacing: 8) {
+                        if let hitRate = breakdown.cacheHitRate {
+                            HStack(spacing: 3) {
+                                Text("Cache:")
+                                    .font(.system(size: 9.5, weight: .regular))
+                                    .foregroundColor(Notch.subtext)
+                                Text(String(format: "%.0f%%", hitRate))
+                                    .font(.system(size: 9.5, weight: .semibold).monospacedDigit())
+                                    .foregroundColor(hitRate >= 50 ? Notch.surplus : Notch.deficit)
+                            }
+                        }
+                        if let avgTurns = breakdown.avgTokensPerTurn {
+                            HStack(spacing: 3) {
+                                Text("Avg/turn:")
+                                    .font(.system(size: 9.5, weight: .regular))
+                                    .foregroundColor(Notch.subtext)
+                                Text(Fmt.compactCount(avgTurns))
+                                    .font(.system(size: 9.5, weight: .semibold).monospacedDigit())
+                                    .foregroundColor(Notch.text)
+                            }
+                        }
+                        if breakdown.longChatCount > 0 {
+                            Text("\(breakdown.longChatCount) long chats")
+                                .font(.system(size: 9.5, weight: .semibold))
+                                .foregroundColor(Notch.deficit)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                )
+            }
+
             Spacer(minLength: 0)
 
             // Timestamp: a remembered reading is dated by its own capture,
@@ -576,7 +686,7 @@ struct SideNotchPanelView: View {
                     .frame(width: 222, height: 4)
                 Capsule(style: .continuous)
                     .fill(Notch.color(usedPercent: window.usedPercent))
-                    .frame(width: max(222 * window.fraction.clamped(to: 0...1), window.fraction > 0 ? 3 : 0), height: 4)
+                    .frame(width: max(222 * window.fraction.muClamped(to: 0...1), window.fraction > 0 ? 3 : 0), height: 4)
             }
 
             if let pace {
@@ -1044,8 +1154,32 @@ struct SideNotchPanelView: View {
         /// True when the ring shows the archived last-good reading because
         /// the live fetch has nothing. Rendered dimmed, never as live.
         let isStale: Bool
+        let etaText: String?
+        let isDeficit: Bool
 
         var id: Provider { provider }
+
+        init(
+            provider: Provider,
+            usedPercent: Double,
+            fraction: Double,
+            ringTint: Color,
+            markTint: Color,
+            resetsAt: Date?,
+            isStale: Bool,
+            etaText: String? = nil,
+            isDeficit: Bool = false
+        ) {
+            self.provider = provider
+            self.usedPercent = usedPercent
+            self.fraction = fraction
+            self.ringTint = ringTint
+            self.markTint = markTint
+            self.resetsAt = resetsAt
+            self.isStale = isStale
+            self.etaText = etaText
+            self.isDeficit = isDeficit
+        }
     }
 
     /// The secondary figure a window row shows beside its used percent. The
@@ -1061,16 +1195,18 @@ struct SideNotchPanelView: View {
         menuBarProviders: [Provider],
         quotas: [Provider: Loaded<ProviderQuota>],
         statuses: [Provider: Loaded<ServiceStatus>],
-        archivedQuotas: [Provider: ProviderQuota] = [:]
+        archivedQuotas: [Provider: ProviderQuota] = [:],
+        now: Date = Date()
     ) -> [Entry] {
-        entries(providers: menuBarProviders, quotas: quotas, statuses: statuses, archivedQuotas: archivedQuotas)
+        SideNotchPanelView.entries(providers: menuBarProviders, quotas: quotas, statuses: statuses, archivedQuotas: archivedQuotas, now: now)
     }
 
     static func entries(
         providers: [Provider],
         quotas: [Provider: Loaded<ProviderQuota>],
         statuses: [Provider: Loaded<ServiceStatus>],
-        archivedQuotas: [Provider: ProviderQuota] = [:]
+        archivedQuotas: [Provider: ProviderQuota] = [:],
+        now: Date = Date()
     ) -> [Entry] {
         providers.compactMap { provider in
             let live = quotas[provider]?.value
@@ -1084,6 +1220,11 @@ struct SideNotchPanelView: View {
             } else {
                 markTint = Notch.color(usedPercent: window.usedPercent)
             }
+            let pace = window.pace(now: now)
+            let showAmbient = window.shouldShowAmbientETA(now: now)
+            let eta = showAmbient ? window.paceETA(now: now, short: true) : nil
+            let isDeficit = pace?.status.isDeficit ?? false
+
             return Entry(
                 provider: provider,
                 usedPercent: window.usedPercent,
@@ -1091,17 +1232,20 @@ struct SideNotchPanelView: View {
                 ringTint: Notch.color(usedPercent: window.usedPercent),
                 markTint: markTint,
                 resetsAt: window.resetsAt,
-                isStale: live == nil
+                isStale: live == nil,
+                etaText: eta,
+                isDeficit: isDeficit
             )
         }
     }
 
     private var entries: [Entry] {
-        Self.entries(
+        SideNotchPanelView.entries(
             providers: coordinator.sideNotchProviders,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses,
-            archivedQuotas: coordinator.archivedQuotas
+            archivedQuotas: coordinator.archivedQuotas,
+            now: coordinator.clock
         )
     }
 
@@ -1241,7 +1385,7 @@ private struct QuotaRing: View {
             Circle()
                 .stroke(Notch.track, lineWidth: 2.5)
             Circle()
-                .trim(from: 0, to: fraction.clamped(to: 0...1))
+                .trim(from: 0, to: fraction.muClamped(to: 0...1))
                 .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             ProviderMark(provider: provider, tint: markTint)

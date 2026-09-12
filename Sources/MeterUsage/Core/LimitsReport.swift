@@ -59,27 +59,57 @@ struct ProviderReport: Equatable, Sendable, Codable {
 struct WindowReport: Equatable, Sendable, Codable {
     var label: String
     var usedPercent: Double
+    var remainingPercent: Double?
     /// ISO 8601 when the provider reports a reset; omitted otherwise.
     var resetsAt: Date?
+    var etaSeconds: Double?
+    var etaText: String?
+    var pacing: String?
+    var burnRate: Double?
 
-    init(label: String, usedPercent: Double, resetsAt: Date?) {
+    init(
+        label: String,
+        usedPercent: Double,
+        resetsAt: Date?,
+        remainingPercent: Double? = nil,
+        etaSeconds: Double? = nil,
+        etaText: String? = nil,
+        pacing: String? = nil,
+        burnRate: Double? = nil
+    ) {
         self.label = label
         self.usedPercent = usedPercent
         self.resetsAt = resetsAt
+        self.remainingPercent = remainingPercent ?? max(0, 100.0 - usedPercent)
+        self.etaSeconds = etaSeconds
+        self.etaText = etaText
+        self.pacing = pacing
+        self.burnRate = burnRate
     }
 
     static func from(_ window: QuotaWindow, now: Date) -> WindowReport {
-        WindowReport(
+        let pace = window.pace(now: now)
+        return WindowReport(
             label: window.label,
             usedPercent: window.usedPercent,
-            resetsAt: window.resetsAt
+            resetsAt: window.resetsAt,
+            remainingPercent: max(0, 100.0 - window.usedPercent),
+            etaSeconds: pace?.etaInterval(resetsAt: window.resetsAt, now: now),
+            etaText: pace?.etaText(resetsAt: window.resetsAt, now: now),
+            pacing: pace?.statusText(usedPercent: window.usedPercent),
+            burnRate: pace?.burnRate
         )
     }
 
     enum CodingKeys: String, CodingKey {
         case label
         case usedPercent = "used_percent"
+        case remainingPercent = "remaining_percent"
         case resetsAt = "resets_at"
+        case etaSeconds = "eta_seconds"
+        case etaText = "eta_text"
+        case pacing
+        case burnRate = "burn_rate"
     }
 }
 

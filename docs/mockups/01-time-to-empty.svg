@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="560" viewBox="0 0 980 560">
+  <defs>
+    <linearGradient id="menubar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a3a40"/>
+      <stop offset="100%" stop-color="#2c2c32"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="980" height="560" rx="16" fill="#1a1a1e"/>
+  <rect x="0" y="0" width="980" height="36" rx="16" fill="url(#menubar)"/>
+  <rect x="0" y="20" width="980" height="16" fill="url(#menubar)"/>
+  <text x="24" y="23" fill="#9a9aa2" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11">meterusage mock · ambient time-to-empty</text>
+
+  <!-- menu bar clusters -->
+  <g font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="600">
+    <rect x="668" y="10" width="8" height="8" rx="1.5" fill="#7c98ff"/>
+    <text x="682" y="19" fill="#ff4500">92%</text>
+    <rect x="714" y="7" width="58" height="16" rx="4" fill="rgba(255,69,0,0.18)"/>
+    <text x="722" y="19" fill="#ff4500" font-size="11" font-weight="700">47m left</text>
+
+    <rect x="786" y="10" width="8" height="8" rx="1.5" fill="#a684ff"/>
+    <text x="800" y="19" fill="#29e07a">18%</text>
+
+    <rect x="840" y="10" width="8" height="8" rx="1.5" fill="#d97757"/>
+    <text x="854" y="19" fill="#f5e300">61%</text>
+    <rect x="886" y="7" width="52" height="16" rx="4" fill="rgba(245,227,0,0.14)"/>
+    <text x="893" y="19" fill="#f5e300" font-size="11" font-weight="700">3h 12m</text>
+  </g>
+
+  <!-- detail card -->
+  <g filter="url(#shadow)">
+    <rect x="280" y="78" width="340" height="390" rx="14" fill="#0a0a0a" stroke="#1c1c1c"/>
+  </g>
+  <circle cx="304" cy="104" r="4" fill="#7c98ff"/>
+  <text x="316" y="109" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600">Codex</text>
+  <rect x="508" y="92" width="92" height="20" rx="10" fill="rgba(255,69,0,0.16)"/>
+  <text x="520" y="106" fill="#ff4500" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="10" font-weight="700">burning fast</text>
+
+  <rect x="298" y="128" width="304" height="72" rx="10" fill="#121214" stroke="#222"/>
+  <text x="314" y="162" fill="#ff4500" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="28" font-weight="700">47m left</text>
+  <text x="314" y="182" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11">at current 5h pace</text>
+  <text x="500" y="156" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" text-anchor="end">resets in 2h 04m</text>
+  <text x="500" y="176" fill="#ff9500" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" text-anchor="end">empty before reset</text>
+
+  <!-- bars -->
+  <text x="314" y="236" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" font-weight="500">5 hour</text>
+  <text x="586" y="236" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" text-anchor="end">92%</text>
+  <rect x="314" y="244" width="272" height="5" rx="3" fill="#3a3a3a"/>
+  <rect x="314" y="244" width="250" height="5" rx="3" fill="#ff4500"/>
+
+  <line x1="314" y1="270" x2="586" y2="270" stroke="rgba(255,255,255,0.10)"/>
+  <text x="314" y="294" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" font-weight="500">Weekly</text>
+  <text x="586" y="294" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" text-anchor="end">54%</text>
+  <rect x="314" y="302" width="272" height="5" rx="3" fill="#3a3a3a"/>
+  <rect x="314" y="302" width="147" height="5" rx="3" fill="#f5e300"/>
+
+  <text x="314" y="350" fill="#8a8a96" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11">Menu bar shows ETA only when a window is</text>
+  <text x="314" y="366" fill="#8a8a96" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11">burning fast or under 2h remaining.</text>
+
+  <rect x="314" y="392" width="272" height="52" rx="9" fill="rgba(124,152,255,0.08)" stroke="rgba(124,152,255,0.22)"/>
+  <text x="328" y="414" fill="#c8d2ff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" font-weight="600">Why this helps</text>
+  <text x="328" y="432" fill="#c8d2ff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11">Plan work in hours left, not just % used.</text>
+
+  <!-- side notch strip -->
+  <g filter="url(#shadow)">
+    <rect x="660" y="120" width="72" height="280" rx="18" fill="#000" stroke="#1a1a1a"/>
+  </g>
+
+  <!-- ring 1 -->
+  <circle cx="696" cy="168" r="22" fill="#29292e"/>
+  <path d="M696 146 A22 22 0 1 1 680.4 184" fill="none" stroke="#ff4500" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="696" cy="168" r="15" fill="#000" stroke="#29292e" stroke-width="3"/>
+  <text x="696" y="202" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="9" text-anchor="middle">92%</text>
+  <text x="696" y="214" fill="#ff4500" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">47m</text>
+
+  <!-- ring 2 -->
+  <circle cx="696" cy="252" r="22" fill="#29292e"/>
+  <path d="M696 230 A22 22 0 0 1 709 238" fill="none" stroke="#29e07a" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="696" cy="252" r="15" fill="#000" stroke="#29292e" stroke-width="3"/>
+  <text x="696" y="286" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="9" text-anchor="middle">18%</text>
+
+  <!-- ring 3 -->
+  <circle cx="696" cy="336" r="22" fill="#29292e"/>
+  <path d="M696 314 A22 22 0 1 1 685 351" fill="none" stroke="#f5e300" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="696" cy="336" r="15" fill="#000" stroke="#29292e" stroke-width="3"/>
+  <text x="696" y="370" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="9" text-anchor="middle">61%</text>
+  <text x="696" y="382" fill="#f5e300" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="9" font-weight="700" text-anchor="middle">3h</text>
+
+  <text x="40" y="520" fill="#7a7a86" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12">01 · Ambient time-to-empty — surprise cutoff pain</text>
+</svg>

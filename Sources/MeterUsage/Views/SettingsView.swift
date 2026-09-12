@@ -21,12 +21,18 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showGrok) private var showGrok: Bool = false
     @AppStorage(PrefKey.showOpenCodeGo) private var showOpenCodeGo: Bool = true
     @AppStorage(PrefKey.showOpenRouter) private var showOpenRouter: Bool = true
+    @AppStorage(PrefKey.showCursor) private var showCursor: Bool = true
+    @AppStorage(PrefKey.showCopilot) private var showCopilot: Bool = true
+    @AppStorage(PrefKey.showGemini) private var showGemini: Bool = true
     @AppStorage(PrefKey.menuBarClaude) private var menuBarClaude: Bool = true
     @AppStorage(PrefKey.menuBarCodex) private var menuBarCodex: Bool = true
     @AppStorage(PrefKey.menuBarAntigravity) private var menuBarAntigravity: Bool = true
     @AppStorage(PrefKey.menuBarGrok) private var menuBarGrok: Bool = true
     @AppStorage(PrefKey.menuBarOpenCodeGo) private var menuBarOpenCodeGo: Bool = true
     @AppStorage(PrefKey.menuBarOpenRouter) private var menuBarOpenRouter: Bool = true
+    @AppStorage(PrefKey.menuBarCursor) private var menuBarCursor: Bool = true
+    @AppStorage(PrefKey.menuBarCopilot) private var menuBarCopilot: Bool = true
+    @AppStorage(PrefKey.menuBarGemini) private var menuBarGemini: Bool = true
     @AppStorage(PrefKey.theme) private var theme: String = AppTheme.system.rawValue
     @AppStorage(PrefKey.launchAtLogin) private var launchAtLogin: Bool = false
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
@@ -112,6 +118,27 @@ struct SettingsView: View {
                         subtitle: "Optional Claude Code activity",
                         isOn: $showClaude,
                         menuBarIsOn: $menuBarClaude
+                    )
+                    Divider().overlay(MU.hairline)
+                    ProviderRow(
+                        provider: .cursor,
+                        subtitle: "Cursor editor local usage & requests",
+                        isOn: $showCursor,
+                        menuBarIsOn: $menuBarCursor
+                    )
+                    Divider().overlay(MU.hairline)
+                    ProviderRow(
+                        provider: .copilot,
+                        subtitle: "GitHub Copilot CLI token usage",
+                        isOn: $showCopilot,
+                        menuBarIsOn: $menuBarCopilot
+                    )
+                    Divider().overlay(MU.hairline)
+                    ProviderRow(
+                        provider: .gemini,
+                        subtitle: "Google Gemini CLI local usage",
+                        isOn: $showGemini,
+                        menuBarIsOn: $menuBarGemini
                     )
                 }
             }

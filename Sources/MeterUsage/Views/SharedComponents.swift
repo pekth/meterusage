@@ -59,62 +59,53 @@ enum MU {
     static let textSecondary = dynamicColor(light: rgb(104, 104, 116), dark: rgb(140, 140, 140))
     static let textTertiary = dynamicColor(light: rgb(146, 146, 158), dark: rgb(102, 102, 110))
 
-    // Semantic ------------------------------------------------------------
+    // Headroom / status scale ---------------------------------------------
+    //
+    // Semantics:
+    // - good: ample remaining headroom / normal operation
+    // - warn: window crossing 80% / degraded performance
+    // - alert: window crossing 95% / major outage
+    // - neutral: unavailable / no data / disabled
 
-    /// Plenty of headroom.
-    static let calm = dynamicColor(light: rgb(28, 150, 108), dark: rgb(41, 224, 122))
-    /// Pacing deficit (amber / orange).
-    static let deficit = dynamicColor(light: rgb(220, 110, 0), dark: rgb(255, 149, 0))
-    /// Pacing surplus (calm green).
-    static let surplus = dynamicColor(light: rgb(28, 150, 108), dark: rgb(52, 199, 89))
-    /// Getting close.
-    static let warn = dynamicColor(light: rgb(190, 130, 20), dark: rgb(245, 227, 0))
-    /// Nearly exhausted.
-    static let alert = dynamicColor(light: rgb(198, 60, 55), dark: rgb(255, 69, 0))
-    /// Informational, never alarming — used for "nothing here yet" states.
-    static let neutral = dynamicColor(light: rgb(120, 120, 132), dark: rgb(150, 150, 162))
+    static let good = dynamicColor(light: rgb(46, 125, 50), dark: rgb(52, 199, 89))
+    static let warn = dynamicColor(light: rgb(194, 110, 0), dark: rgb(255, 159, 10))
+    static let alert = dynamicColor(light: rgb(198, 40, 40), dark: rgb(255, 69, 58))
+    static let neutral = dynamicColor(light: rgb(146, 146, 158), dark: rgb(120, 120, 128))
+    static let deficit = warn
+    static let surplus = good
 
-    static let accent = dynamicColor(light: rgb(64, 96, 220), dark: rgb(124, 152, 255))
-    static let antigravity = dynamicColor(light: rgb(122, 76, 194), dark: rgb(181, 132, 255))
-    static let grok = dynamicColor(light: rgb(196, 94, 30), dark: rgb(255, 145, 78))
-    static let openCodeGo = dynamicColor(light: rgb(20, 126, 150), dark: rgb(69, 199, 219))
-    static let openRouter = dynamicColor(light: rgb(104, 72, 190), dark: rgb(166, 132, 255))
+    // Provider accents ----------------------------------------------------
 
-    // Metrics -------------------------------------------------------------
+    static let accent = dynamicColor(light: rgb(0, 102, 204), dark: rgb(10, 132, 255))
+    static let calm = dynamicColor(light: rgb(194, 94, 0), dark: rgb(217, 119, 6))
+    static let grok = dynamicColor(light: rgb(30, 30, 34), dark: rgb(235, 235, 240))
+    static let openCodeGo = dynamicColor(light: rgb(15, 118, 110), dark: rgb(45, 212, 191))
+    static let openRouter = dynamicColor(light: rgb(109, 40, 217), dark: rgb(167, 139, 250))
+    static let antigravity = dynamicColor(light: rgb(37, 99, 235), dark: rgb(96, 165, 250))
+
+    // Dimensions ----------------------------------------------------------
 
     static let popoverWidth: CGFloat = 340
-    /// Keeps the default dashboard tight. Optional provider and activity cards
-    /// can make the content taller; `PopoverRoot`'s scroll view handles those
-    /// cases instead of reserving a large empty footer on the common layout.
     static let popoverHeight: CGFloat = 600
     static let cardRadius: CGFloat = 10
     static let gutter: CGFloat = 14
-
-    /// Fixed widths for the two numeric columns in the per-model breakdown, so
-    /// the header labels and every row share one grid and the digits don't
-    /// shuffle sideways between refreshes.
-    static let tokenColumn: CGFloat = 52
-    static let costColumn: CGFloat = 54
+    static let meterHeight: CGFloat = 6
+    static let iconSize: CGFloat = 13
 }
 
-/// Maps consumption to a headroom colour.
-///
-/// The bands follow the percentage the user sees: under half used is calm,
-/// half to four-fifths used is getting tight, and the final fifth is critical.
-/// Codex quota cards display remaining percentage while the system-tray figure
-/// and other providers display consumed percentage; all pass consumed usage
-/// here so severity remains consistent.
-func headroomColor(usedPercent: Double) -> Color {
+/// Headroom tint for a consumed percentage (0...100).
+func headroomColor(_ usedPercent: Double) -> Color {
     switch usedPercent {
-    case ..<50:  return MU.calm
-    case ..<80:  return MU.warn
-    default:     return MU.alert
+    case ..<80: return MU.good
+    case ..<95: return MU.warn
+    default:    return MU.alert
     }
 }
 
+/// Status tint for a service health severity.
 func severityColor(_ severity: Severity) -> Color {
     switch severity {
-    case .operational:   return MU.calm
+    case .operational:   return MU.good
     case .degraded:      return MU.warn
     case .partialOutage: return MU.warn
     case .majorOutage:   return MU.alert
@@ -133,6 +124,9 @@ func providerColor(_ provider: Provider) -> Color {
     case .openCodeGo: return MU.openCodeGo
     case .openRouter: return MU.openRouter
     case .claude:     return MU.calm
+    case .cursor:     return Color(red: 0.1, green: 0.7, blue: 0.9)
+    case .copilot:    return Color(red: 0.4, green: 0.6, blue: 1.0)
+    case .gemini:     return Color(red: 0.3, green: 0.5, blue: 0.95)
     }
 }
 
@@ -212,7 +206,7 @@ struct MeterBar: View {
                     .fill(tint)
                     // A hairline minimum keeps a 0.4% window from rendering as
                     // an empty track, which reads as "no data" instead of "new".
-                    .frame(width: max(fraction.clamped(to: 0...1) * geo.size.width, fraction > 0 ? 3 : 0))
+                    .frame(width: max(fraction.muClamped(to: 0...1) * geo.size.width, fraction > 0 ? 3 : 0))
             }
         }
         .frame(height: height)
@@ -458,7 +452,7 @@ enum Fmt {
     }()
 
     static func percent(_ value: Double) -> String {
-        String(format: "%.0f%%", value.clamped(to: 0...100))
+        String(format: "%.0f%%", value.muClamped(to: 0...100))
     }
 
     /// Codex popover cards show remaining headroom; the menu-bar slot uses
@@ -481,6 +475,14 @@ enum Fmt {
         if days > 0 { return hours > 0 ? "\(days)d \(hours)h" : "\(days)d" }
         if hours > 0 { return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h" }
         return "\(max(minutes, 1))m"
+    }
+
+    static func remainingTime(_ date: Date, now: Date = Date()) -> String {
+        timeUntil(date, now: now) ?? "now"
+    }
+
+    static func eta(seconds: TimeInterval, short: Bool = false) -> String {
+        QuotaPace.formatEta(seconds: seconds, short: short)
     }
 
     /// Backward duration for "checked 4m ago" style captions.
