@@ -66,6 +66,9 @@ printf 'APPL????' > "${APP_DIR}/Contents/PkgInfo"
 
 # App icon
 cp "${ICON_SRC}" "${APP_DIR}/Contents/Resources/AppIcon.icns"
+if [ -f "${ROOT_DIR}/Resources/AppIcon.png" ]; then
+    cp "${ROOT_DIR}/Resources/AppIcon.png" "${APP_DIR}/Contents/Resources/AppIcon.png"
+fi
 
 echo "==> Ad-hoc signing"
 # `-s -` is the ad-hoc identity: no certificate, no team, nothing machine

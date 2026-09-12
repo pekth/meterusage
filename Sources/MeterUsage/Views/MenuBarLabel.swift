@@ -54,7 +54,10 @@ struct MenuBarLabel: View {
             if coordinator.preferences.menuBarCompactEnabled {
                 compactContent
             } else {
-                trayClusters
+                HStack(spacing: 4) {
+                    CompactTrayGlyph()
+                    trayClusters
+                }
             }
         }
         .padding(.horizontal, 5)
@@ -78,25 +81,26 @@ struct MenuBarLabel: View {
 
     @ViewBuilder
     private var compactContent: some View {
-        if let deficit = ambientDeficitCluster, let eta = deficit.etaText {
-            HStack(spacing: 3) {
-                ProviderMark(provider: deficit.provider, tint: deficit.markTint)
-                    .frame(width: 13, height: 13)
-                if let percent = deficit.percent {
-                    Text(percent)
-                        .font(.system(size: 11, weight: .medium).monospacedDigit())
-                        .foregroundColor(deficit.numberTint)
-                }
-                Text(eta)
-                    .font(.system(size: 9.5, weight: .bold).monospacedDigit())
-                    .foregroundColor(MU.warn)
-                    .padding(.horizontal, 3)
-                    .padding(.vertical, 1)
-                    .background(MU.warn.opacity(0.16))
-                    .cornerRadius(3)
-            }
-        } else {
+        HStack(spacing: 3) {
             CompactTrayGlyph()
+            if let deficit = ambientDeficitCluster, let eta = deficit.etaText {
+                HStack(spacing: 2) {
+                    ProviderMark(provider: deficit.provider, tint: deficit.markTint)
+                        .frame(width: 12, height: 12)
+                    if let percent = deficit.percent {
+                        Text(percent)
+                            .font(.system(size: 10, weight: .medium).monospacedDigit())
+                            .foregroundColor(deficit.numberTint)
+                    }
+                    Text(eta)
+                        .font(.system(size: 9.5, weight: .bold).monospacedDigit())
+                        .foregroundColor(MU.warn)
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(MU.warn.opacity(0.16))
+                        .cornerRadius(3)
+                }
+            }
         }
     }
 
@@ -242,10 +246,26 @@ struct MenuBarLabel: View {
 struct CompactTrayGlyph: View {
 
     var body: some View {
-        Image(systemName: "gauge.with.needle")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundColor(.primary)
-            .frame(width: 16, height: 16)
+        if let icon = Self.appIcon() {
+            Image(nsImage: icon)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 16, height: 16)
+        } else {
+            CodexMark()
+                .frame(width: 14, height: 14)
+                .foregroundColor(.primary)
+        }
+    }
+
+    private static func appIcon() -> NSImage? {
+        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "png")
+            ?? Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+           let img = NSImage(contentsOf: url) {
+            img.isTemplate = false
+            return img
+        }
+        return nil
     }
 }
 
