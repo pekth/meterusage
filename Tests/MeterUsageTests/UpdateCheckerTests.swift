@@ -111,8 +111,9 @@ final class UpdateCheckerTests: XCTestCase {
 
     // MARK: Dismissal
 
+    @MainActor
     func testDismissedVersionStaysHiddenButAvailableKeepsValue() {
-        let defaults = UserDefaults(suiteName: "UpdateCheckerTests")!\
+        let defaults = UserDefaults(suiteName: "UpdateCheckerTests")!
         defaults.removePersistentDomain(forName: "UpdateCheckerTests")
         let checker = UpdateChecker(defaults: defaults)
 
@@ -135,6 +136,7 @@ final class UpdateCheckerTests: XCTestCase {
 
     // MARK: Daily interval
 
+    @MainActor
     func testCheckIsSkippedInsideInterval() {
         let defaults = UserDefaults(suiteName: "UpdateCheckerTests")!
         defaults.removePersistentDomain(forName: "UpdateCheckerTests")
