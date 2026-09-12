@@ -14,7 +14,7 @@ final class SupplementalUsageSourceTests: XCTestCase {
     func testProviderOrderIsCodexFirst() {
         XCTAssertEqual(
             Provider.allCases,
-            [.codex, .antigravity, .grok, .openCodeGo, .openRouter, .claude]
+            [.codex, .antigravity, .grok, .openCodeGo, .openRouter, .claude, .cursor, .copilot, .gemini]
         )
     }
 

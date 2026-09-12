@@ -107,4 +107,26 @@ final class LimitsReportTests: XCTestCase {
         XCTAssertEqual(decoded?.providers.first?.windows.first?.label, "Weekly")
         XCTAssertNil(decoded?.providers.first?.windows.first?.resetsAt)
     }
+
+    func testAgentBudgetFieldsIncludedInReport() throws {
+        let resets = Date(timeIntervalSince1970: 1_785_585_600)
+        let quota = ProviderQuota(
+            provider: .codex,
+            windows: [QuotaWindow(label: "Weekly", usedPercent: 40, resetsAt: resets)],
+            planType: "plus",
+            capturedAt: Date(timeIntervalSince1970: 1_785_000_000)
+        )
+        let report = LimitsReporter.build(
+            quotas: [.codex: .value(quota)],
+            order: [.codex],
+            now: Date(timeIntervalSince1970: 1_785_200_000)
+        )
+        guard let win = report.providers.first?.windows.first else {
+            return XCTFail("expected window")
+        }
+        XCTAssertEqual(win.remainingPercent, 60)
+        let data = try report.jsonData()
+        let json = String(data: data, encoding: .utf8) ?? ""
+        XCTAssertTrue(json.contains("remaining_percent"))
+    }
 }

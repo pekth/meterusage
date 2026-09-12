@@ -117,7 +117,7 @@ struct QuotaSection: View {
             if let quota = state.value, let peak = quota.windows.map(\.usedPercent).max() {
                 Text(showsRemaining ? Fmt.remainingPercent(peak) : Fmt.percent(peak))
                     .font(.muNumber)
-                    .foregroundColor(headroomColor(usedPercent: peak))
+                    .foregroundColor(headroomColor(peak))
             }
         }
     }
@@ -349,7 +349,7 @@ private struct WindowRow: View {
 
     private var isCodex: Bool { provider == .codex }
 
-    private var tint: Color { headroomColor(usedPercent: window.usedPercent) }
+    private var tint: Color { headroomColor(window.usedPercent) }
 
     private var windowTitle: String {
         isCodex ? "\(window.label) usage limit" : window.label
@@ -386,6 +386,13 @@ private struct WindowRow: View {
                             .foregroundColor(pace.status.isDeficit ? MU.deficit : (pace.status.isSurplus ? MU.surplus : MU.textTertiary))
                             .fontWeight(pace.status.isDeficit ? .semibold : .regular)
                             .lineLimit(1)
+
+                        if let eta = pace.etaText(resetsAt: window.resetsAt, now: now) {
+                            Text("· \(eta)")
+                                .font(.muCaption)
+                                .foregroundColor(pace.status.isDeficit ? MU.deficit : MU.textTertiary)
+                                .lineLimit(1)
+                        }
                     }
                 }
                 .layoutPriority(1)
@@ -544,14 +551,14 @@ private struct CreditsRow: View {
 
     private var balanceColor: Color {
         if let usedPercent {
-            return headroomColor(usedPercent: usedPercent)
+            return headroomColor(usedPercent)
         }
         return providerColor(provider)
     }
 
     private var tint: Color {
         guard let usedPercent else { return MU.calm }
-        return headroomColor(usedPercent: usedPercent)
+        return headroomColor(usedPercent)
     }
 
     private var usedPercent: Double? {

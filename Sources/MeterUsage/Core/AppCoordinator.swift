@@ -487,10 +487,36 @@ final class AppCoordinator: ObservableObject {
     private func load(activity source: LocalActivitySource) async {
         let result: Loaded<LocalActivity>
         do {
-            let activity = try await source.scan()
-            // A successful scan of an empty machine is `noData`, not a value —
-            // otherwise the view shows a confident "0 tokens" for someone whose
-            // transcripts simply live elsewhere.
+            var activity = try await source.scan()
+            if !isDemoMode {
+                let peak = quotas[source.provider]?.value?.windows.map(\.usedPercent).max()
+                DurableHistoryStore.shared.record(provider: source.provider, daily: activity.daily, peakUsedPercent: peak)
+                let durableDaily = DurableHistoryStore.shared.records(for: source.provider)
+                if !durableDaily.isEmpty {
+                    var byDay: [String: DailyActivity] = [:]
+                    let dayFormatter = DateFormatter()
+                    dayFormatter.dateFormat = "yyyy-MM-dd"
+                    dayFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+                    for d in durableDaily {
+                        byDay[dayFormatter.string(from: d.day)] = d
+                    }
+                    for d in activity.daily {
+                        let iso = dayFormatter.string(from: d.day)
+                        if let existing = byDay[iso], existing.tokens.total > d.tokens.total {
+                            // keep existing with larger tokens
+                        } else {
+                            byDay[iso] = d
+                        }
+                    }
+                    let mergedDaily = byDay.values.sorted(by: { $0.day < $1.day })
+                    activity = LocalActivity(
+                        provider: activity.provider,
+                        sessions: activity.sessions,
+                        daily: mergedDaily,
+                        scannedAt: activity.scannedAt
+                    )
+                }
+            }
             result = activity.sessions.isEmpty && activity.daily.isEmpty
                 ? .missing(.noData)
                 : .value(activity)

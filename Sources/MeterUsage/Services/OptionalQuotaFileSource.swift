@@ -110,7 +110,12 @@ public struct OptionalQuotaFileSource: QuotaSource {
             self.candidatePaths = candidatePaths
         } else {
             let claudeDir = HomeDirectory.real.appendingPathComponent(".claude", isDirectory: true)
+            let appSupportDir = HomeDirectory.real
+                .appendingPathComponent("Library", isDirectory: true)
+                .appendingPathComponent("Application Support", isDirectory: true)
+                .appendingPathComponent("MeterUsage", isDirectory: true)
             self.candidatePaths = [
+                appSupportDir.appendingPathComponent("claude-usage.json"),
                 claudeDir.appendingPathComponent("claudewatch-usage.json"),
                 claudeDir.appendingPathComponent("meterusage-usage.json"),
             ]
@@ -262,12 +267,20 @@ public struct OptionalQuotaFileSource: QuotaSource {
             )
         }
 
+        var capturedAt = Date()
+        if let ts = payload.updated_at {
+            capturedAt = Date(timeIntervalSince1970: ts)
+        } else if let attrs = try? fileManager.attributesOfItem(atPath: path.path),
+                  let modDate = attrs[.modificationDate] as? Date {
+            capturedAt = modDate
+        }
+
         return ProviderQuota(
             provider: .claude,
             windows: windows,
             credits: credits,
             planType: nil,
-            capturedAt: Date()
+            capturedAt: capturedAt
         )
     }
 
@@ -361,6 +374,7 @@ public struct OptionalQuotaFileSource: QuotaSource {
         let weekly: [WeeklyWindow]?
         let limits: [SkippableLimitEntry]?
         let extra_usage: ExtraUsage?
+        let updated_at: Double?
         /// Every `seven_day_<model>` key found in the payload, keyed by the
         /// model name (e.g. "opus", "sonnet"). Built generically in
         /// `init(from:)` below by scanning for the naming pattern rather
@@ -374,7 +388,7 @@ public struct OptionalQuotaFileSource: QuotaSource {
         let perModelSevenDay: [String: Window]
 
         private enum CodingKeys: String, CodingKey {
-            case five_hour, seven_day, weekly, limits, extra_usage
+            case five_hour, seven_day, weekly, limits, extra_usage, updated_at
         }
 
         /// Opens the same JSON object a second time under keys typed as
@@ -394,6 +408,7 @@ public struct OptionalQuotaFileSource: QuotaSource {
             weekly = try container.decodeIfPresent([WeeklyWindow].self, forKey: .weekly)
             limits = try container.decodeIfPresent([SkippableLimitEntry].self, forKey: .limits)
             extra_usage = try container.decodeIfPresent(ExtraUsage.self, forKey: .extra_usage)
+            updated_at = try container.decodeIfPresent(Double.self, forKey: .updated_at)
 
             let dynamic = try decoder.container(keyedBy: DynamicKey.self)
             var extras: [String: Window] = [:]

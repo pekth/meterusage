@@ -24,12 +24,18 @@ enum PrefKey {
     static let showGrok = "showProviderGrok"
     static let showOpenCodeGo = "showProviderOpenCodeGo"
     static let showOpenRouter = "showProviderOpenRouter"
+    static let showCursor = "showProviderCursor"
+    static let showCopilot = "showProviderCopilot"
+    static let showGemini = "showProviderGemini"
     static let menuBarClaude = "menuBarProviderClaude"
     static let menuBarCodex = "menuBarProviderCodex"
     static let menuBarAntigravity = "menuBarProviderAntigravity"
     static let menuBarGrok = "menuBarProviderGrok"
     static let menuBarOpenCodeGo = "menuBarProviderOpenCodeGo"
     static let menuBarOpenRouter = "menuBarProviderOpenRouter"
+    static let menuBarCursor = "menuBarProviderCursor"
+    static let menuBarCopilot = "menuBarProviderCopilot"
+    static let menuBarGemini = "menuBarProviderGemini"
     static let theme = "appearanceTheme"
     static let launchAtLogin = "launchAtLogin"
     static let showHeatmap = "showHeatmap"
@@ -144,6 +150,9 @@ final class Preferences: ObservableObject {
             PrefKey.showGrok: false,
             PrefKey.showOpenCodeGo: true,
             PrefKey.showOpenRouter: true,
+            PrefKey.showCursor: false,
+            PrefKey.showCopilot: false,
+            PrefKey.showGemini: false,
             // Every provider shows in the menu bar until the user trims the set
             // down to the ones they glance at.
             PrefKey.menuBarClaude: true,
@@ -152,6 +161,9 @@ final class Preferences: ObservableObject {
             PrefKey.menuBarGrok: true,
             PrefKey.menuBarOpenCodeGo: true,
             PrefKey.menuBarOpenRouter: true,
+            PrefKey.menuBarCursor: true,
+            PrefKey.menuBarCopilot: true,
+            PrefKey.menuBarGemini: true,
             PrefKey.theme: AppTheme.system.rawValue,
             PrefKey.launchAtLogin: false,
             PrefKey.showHeatmap: true,
@@ -197,6 +209,9 @@ final class Preferences: ObservableObject {
         if defaults.bool(forKey: PrefKey.showOpenCodeGo) { providers.insert(.openCodeGo) }
         if defaults.bool(forKey: PrefKey.showOpenRouter) { providers.insert(.openRouter) }
         if defaults.bool(forKey: PrefKey.showClaude) { providers.insert(.claude) }
+        if defaults.bool(forKey: PrefKey.showCursor) { providers.insert(.cursor) }
+        if defaults.bool(forKey: PrefKey.showCopilot) { providers.insert(.copilot) }
+        if defaults.bool(forKey: PrefKey.showGemini) { providers.insert(.gemini) }
         if providers != enabledProviders { enabledProviders = providers }
 
         var menuBar = Set<Provider>()
@@ -206,6 +221,9 @@ final class Preferences: ObservableObject {
         if defaults.bool(forKey: PrefKey.menuBarOpenCodeGo) { menuBar.insert(.openCodeGo) }
         if defaults.bool(forKey: PrefKey.menuBarOpenRouter) { menuBar.insert(.openRouter) }
         if defaults.bool(forKey: PrefKey.menuBarClaude) { menuBar.insert(.claude) }
+        if defaults.bool(forKey: PrefKey.menuBarCursor) { menuBar.insert(.cursor) }
+        if defaults.bool(forKey: PrefKey.menuBarCopilot) { menuBar.insert(.copilot) }
+        if defaults.bool(forKey: PrefKey.menuBarGemini) { menuBar.insert(.gemini) }
         if menuBar != menuBarProviders { menuBarProviders = menuBar }
 
         let newTheme = AppTheme(rawValue: defaults.string(forKey: PrefKey.theme) ?? "") ?? .system

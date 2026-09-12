@@ -35,16 +35,36 @@ struct MenuBarLabel: View {
     /// slot pads short figures like "9%" away from the gauge.
     var onWidthChange: (CGFloat) -> Void = { _ in }
 
+    private var ambientDeficitETA: String? {
+        clusters.first(where: { $0.etaText != nil })?.etaText
+    }
+
     var body: some View {
-        Group {
+        HStack(spacing: 3) {
+            if AppInfo.isPreview {
+                Text("v2")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(Color.purple)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            }
+
             if coordinator.preferences.menuBarCompactEnabled {
-                // The tray and the side notch panel are independent surfaces.
-                // Compact mode carries no usage numbers at all: whoever turns
-                // it on reads usage from the notch panel (or the popover) and
-                // the tray stays a single access point.
                 CompactTrayGlyph()
             } else {
                 trayClusters
+            }
+
+            if let eta = ambientDeficitETA {
+                Text(eta)
+                    .font(.system(size: 9.5, weight: .bold).monospacedDigit())
+                    .foregroundColor(MU.warn)
+                    .padding(.horizontal, 3)
+                    .padding(.vertical, 1)
+                    .background(MU.warn.opacity(0.16))
+                    .cornerRadius(3)
             }
         }
         .padding(.horizontal, 5)
@@ -69,7 +89,7 @@ struct MenuBarLabel: View {
     /// The per-provider `[mark] percent` clusters, unchanged from the original
     /// tray layout.
     private var trayClusters: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             if clusters.isEmpty {
                 Text("—")
                     .font(.system(size: 11, weight: .medium).monospacedDigit())
@@ -84,6 +104,17 @@ struct MenuBarLabel: View {
                                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                                 .foregroundColor(cluster.numberTint)
                         }
+                        if let eta = cluster.etaText {
+                            Text(eta)
+                                .font(.system(size: 9.5, weight: .semibold).monospacedDigit())
+                                .foregroundColor(cluster.isDeficit ? MU.warn : MU.textSecondary)
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
+                                .background(
+                                    Capsule()
+                                        .fill((cluster.isDeficit ? MU.warn : MU.neutral).opacity(0.16))
+                                )
+                        }
                     }
                     // A remembered reading never passes for a live number.
                     .opacity(cluster.isStale ? 0.55 : 1.0)
@@ -97,6 +128,8 @@ struct MenuBarLabel: View {
     private struct Cluster {
         let provider: Provider
         let percent: String?
+        let etaText: String?
+        let isDeficit: Bool
         let usedFraction: Double
         let markTint: Color
         let numberTint: Color
@@ -114,18 +147,25 @@ struct MenuBarLabel: View {
             if let status {
                 markTint = Self.statusTint(status.severity)
             } else if let window {
-                markTint = headroomColor(usedPercent: window.usedPercent)
+                markTint = headroomColor(window.usedPercent)
             } else {
                 markTint = MU.neutral
             }
 
             if let window {
+                let pace = window.pace(now: coordinator.clock)
+                let showAmbient = window.shouldShowAmbientETA(now: coordinator.clock)
+                let eta = showAmbient ? window.paceETA(now: coordinator.clock, short: true) : nil
+                let isDeficit = pace?.status.isDeficit ?? false
+
                 return Cluster(
                     provider: provider,
                     percent: Fmt.percent(window.usedPercent),
+                    etaText: eta,
+                    isDeficit: isDeficit,
                     usedFraction: window.fraction,
                     markTint: markTint,
-                    numberTint: headroomColor(usedPercent: window.usedPercent),
+                    numberTint: headroomColor(window.usedPercent),
                     isStale: isStale
                 )
             }
@@ -135,6 +175,8 @@ struct MenuBarLabel: View {
                 return Cluster(
                     provider: provider,
                     percent: nil,
+                    etaText: nil,
+                    isDeficit: false,
                     usedFraction: 0,
                     markTint: markTint,
                     numberTint: markTint,
@@ -178,35 +220,53 @@ struct MenuBarLabel: View {
 // MARK: - Compact tray glyph
 
 /// The one small mark the tray shows in compact mode, reused by the popover's
-/// welcome page so the onboarding text points at the real thing.
+/// headline so both entry points look like the same product.
 ///
-/// The same fill-gauge geometry the app icon is drawn from (see
-/// `Scripts/make-icon.swift`: 9×13 outline, 1pt stroke, fill rising from the
-/// bottom). The fill is deliberately fixed — the compact tray carries no
-/// usage numbers, so there is nothing here to tint by headroom or status.
+/// Uses the app icon as a template NSImage so it automatically tints with the
+/// menu bar (dark in light mode, light in dark mode), matching every native
+/// macOS accessory.
 struct CompactTrayGlyph: View {
 
-    /// Same reading as the app icon, so the two read as one object.
-    private static let fillFraction: CGFloat = 0.72
-
     var body: some View {
-        ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                .strokeBorder(MU.text, lineWidth: 1)
-            GeometryReader { geo in
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(MU.text)
-                    .frame(height: geo.size.height * Self.fillFraction)
-            }
-            .padding(2)
+        if let icon = Self.trayImage() {
+            Image(nsImage: icon)
+                .renderingMode(.template)
+                .foregroundColor(.primary)
+                .frame(width: 18, height: 18)
+        } else {
+            // Bare binary fallback: draw a simple meter mark if the icon
+            // asset isn't bundled (e.g. `swift run`).
+            CodexMark()
+                .frame(width: 14, height: 14)
+                .foregroundColor(.primary)
         }
-        .frame(width: 9, height: 13)
+    }
+
+    private static func trayImage() -> NSImage? {
+        // AppIcon is bundled as an icns. We render it into a small template
+        // bitmap so AppKit treats it as an icon mask rather than full colour.
+        guard let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+              let raw = NSImage(contentsOf: url) else { return nil }
+        let size = NSSize(width: 16, height: 16)
+        let template = NSImage(size: size)
+        template.lockFocus()
+        raw.draw(in: NSRect(origin: .zero, size: size),
+                 from: NSRect(origin: .zero, size: raw.size),
+                 operation: .sourceOver,
+                 fraction: 1.0)
+        template.unlockFocus()
+        template.isTemplate = true
+        return template
     }
 }
 
-/// The compact provider glyph shown in the status item.
+// MARK: - Provider mark
+
+/// The provider's real glyph, drawn from its bundled asset where one exists or
+/// fallen back to an SF Symbol.
 ///
-/// Codex uses the real logo bundled at `Resources/codex-logo.png`, rendered as
+/// Bundled marks are `codex-logo.png`, `grok-logo.png`, `opencode-logo.png`,
+/// and `antigravity-logo.png` under `Resources/`. Each is loaded once as
 /// a template image so it tints like any other glyph. When the asset is missing
 /// (e.g. a bare debug binary with no bundle), it falls back to the drawn
 /// `CodexMark` shape. The other providers have no vector mark in this app, so
@@ -223,7 +283,7 @@ struct ProviderMark: View {
             case .claude:
                 ClaudeMascotShape()
                     .fill(tint, style: FillStyle(eoFill: true))
-            case .openRouter:
+            case .openRouter, .cursor, .copilot, .gemini:
                 Image(systemName: Self.symbol(for: provider))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(tint)
@@ -264,7 +324,7 @@ struct ProviderMark: View {
         case .grok:       return "grok-logo"
         case .openCodeGo: return "opencode-logo"
         case .antigravity:return "antigravity-logo"
-        case .openRouter, .claude: return ""
+        case .openRouter, .claude, .cursor, .copilot, .gemini: return ""
         }
     }
 
@@ -279,6 +339,9 @@ struct ProviderMark: View {
         case .openCodeGo: return "arrow.up.left.and.arrow.down.right"
         case .openRouter: return "arrow.triangle.branch"
         case .claude:     return "sparkles"
+        case .cursor:     return "cursorarrow.rays"
+        case .copilot:    return "terminal"
+        case .gemini:     return "diamond"
         }
     }
 }

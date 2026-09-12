@@ -50,6 +50,16 @@ struct PopoverRoot: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(MU.text)
 
+            if AppInfo.isPreview {
+                Text("v2 PREVIEW")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.purple)
+                    .clipShape(Capsule())
+            }
+
             // Every number below is synthetic when this shows. Quiet enough not
             // to spoil a marketing screenshot, unmistakable on inspection — so
             // a demo shot can never be read as real telemetry, and nobody files
@@ -184,6 +194,12 @@ struct PopoverRoot: View {
                 now: coordinator.clock
             )
 
+            if AppInfo.isPreview {
+                previewImprovementsCard
+            }
+
+            unifiedActivityStrip
+
             SectionHeader("Quotas")
             if coordinator.visibleQuotaProviders.isEmpty {
                 Card {
@@ -226,6 +242,251 @@ struct PopoverRoot: View {
         case .codex:  return coordinator.activities[.codex]?.value?.daily ?? []
         case .claude: return coordinator.activities[.claude]?.value?.daily ?? []
         default:      return []
+        }
+    }
+
+    @State private var showImprovementsList = false
+
+    private var allRecentSessions: [SessionSummary] {
+        var result: [SessionSummary] = []
+        for provider in Provider.allCases {
+            if let act = coordinator.activities[provider]?.value {
+                result.append(contentsOf: act.sessions)
+            }
+        }
+        return result.sorted { $0.startedAt > $1.startedAt }
+    }
+
+    private var previewImprovementsCard: some View {
+        Card(padding: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showImprovementsList.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.purple)
+                            .font(.system(size: 11, weight: .bold))
+                        Text("v2 Pipeline: Top 10 Improvements Active")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(MU.text)
+                        Spacer()
+                        Text(showImprovementsList ? "Hide" : "Compare")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.purple)
+                        Image(systemName: showImprovementsList ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 9))
+                            .foregroundColor(MU.textTertiary)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                if showImprovementsList {
+                    VStack(alignment: .leading, spacing: 6) {
+                        featureRow(num: "1", title: "Ambient Time-To-Empty", desc: "Menu bar [v2] badge & card ETA (~XXm left) when burning fast")
+                        featureRow(num: "2", title: "Window Burn Attribution", desc: "Tokens attributed by project & model in card below")
+                        featureRow(num: "3", title: "Context Waste Hints", desc: "Real-time cache-hit %, avg tokens/turn & long-chat flags")
+                        featureRow(num: "4", title: "Durable History Store", desc: "Daily history survives CLI purges in Application Support")
+                        featureRow(num: "5", title: "Unified AI Coding Strip", desc: "Aggregated tokens and cost across all tools today")
+                        featureRow(num: "6", title: "Claude Quota Companion", desc: "Maintains JSON snapshots preserving limits[]")
+                        featureRow(num: "7", title: "Cursor, Copilot & Gemini", desc: "Local sources ready in Settings > Providers")
+                        featureRow(num: "8", title: "Smart Pace Alerts", desc: "Pace cliff (<30m) and 50% soft warnings")
+                        featureRow(num: "9", title: "Headroom Failover", desc: "Smart nudge to alternate providers on quota pressure")
+                        featureRow(num: "10", title: "Agent Budget API", desc: "Run 'meterusage json' for machine-readable pacing & ETAs")
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    private func featureRow(num: String, title: String, desc: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Text(num)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(.purple)
+                .frame(width: 14, height: 14)
+                .background(Color.purple.opacity(0.14))
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundColor(MU.text)
+                Text(desc)
+                    .font(.system(size: 9.5))
+                    .foregroundColor(MU.textSecondary)
+            }
+        }
+    }
+
+    private var unifiedActivityStrip: some View {
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: coordinator.clock)
+        let weekStart = calendar.date(byAdding: .day, value: -7, to: todayStart) ?? todayStart
+
+        var todayTokens = 0
+        var weekTokens = 0
+        var todayCost: Double = 0.0
+
+        for provider in Provider.allCases {
+            if let act = coordinator.activities[provider]?.value {
+                let todaySessions = act.sessions.filter { $0.startedAt >= todayStart }
+                let weekSessions = act.sessions.filter { $0.startedAt >= weekStart }
+                todayTokens += todaySessions.reduce(0) { $0 + $1.tokens.total }
+                weekTokens += weekSessions.reduce(0) { $0 + $1.tokens.total }
+                todayCost += todaySessions.reduce(0.0) { $0 + $1.estimatedCostUSD }
+            }
+        }
+
+        let burningFast = coordinator.visibleQuotaProviders.compactMap { p -> (Provider, QuotaWindow, QuotaPace)? in
+            guard let q = coordinator.displayQuota(for: p)?.quota,
+                  let h = p.headlineWindow(from: q.windows),
+                  let pace = h.pace(now: coordinator.clock),
+                  pace.status.isDeficit || h.usedPercent >= 80 else { return nil }
+            return (p, h, pace)
+        }
+
+        let headroomAlternatives = coordinator.visibleQuotaProviders.filter { p in
+            guard let q = coordinator.displayQuota(for: p)?.quota,
+                  let h = p.headlineWindow(from: q.windows) else { return false }
+            return h.usedPercent < 50
+        }
+
+        return VStack(alignment: .leading, spacing: 6) {
+            Card(padding: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .center) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(MU.accent)
+                        Text("ALL AI CODING TODAY")
+                            .font(.muSectionTitle)
+                            .tracking(0.8)
+                            .foregroundColor(MU.textTertiary)
+                        Spacer()
+                        if todayCost > 0 {
+                            Text(Fmt.usd(todayCost))
+                                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                                .foregroundColor(MU.textSecondary)
+                        }
+                    }
+
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(todayTokens > 0 ? Fmt.tokenCountString(todayTokens) : "0")
+                                .font(.system(size: 15, weight: .bold).monospacedDigit())
+                                .foregroundColor(MU.text)
+                            Text("tokens today")
+                                .font(.muCaption)
+                                .foregroundColor(MU.textSecondary)
+                        }
+
+                        if weekTokens > todayTokens {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(Fmt.tokenCountString(weekTokens))
+                                    .font(.system(size: 15, weight: .bold).monospacedDigit())
+                                    .foregroundColor(MU.text)
+                                Text("last 7 days")
+                                    .font(.muCaption)
+                                    .foregroundColor(MU.textSecondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        HStack(spacing: 3) {
+                            ForEach(coordinator.menuBarProviders, id: \.self) { p in
+                                ProviderMark(provider: p, tint: providerColor(p))
+                                    .frame(width: 11, height: 11)
+                            }
+                        }
+                    }
+
+                    if let burning = burningFast.first, !headroomAlternatives.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.swap")
+                                .font(.system(size: 9.5))
+                                .foregroundColor(MU.warn)
+                            Text("\(burning.0.displayName) burning fast. Switch to \(headroomAlternatives.map(\.displayName).joined(separator: ", ")) for headroom.")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(MU.warn)
+                                .lineLimit(1)
+                        }
+                        .padding(.top, 2)
+                    }
+
+                    let burnBreakdown = BurnAttributionCalculator.calculate(sessions: allRecentSessions, window: nil, now: coordinator.clock)
+                    if let breakdown = burnBreakdown, !breakdown.contributors.isEmpty {
+                        Divider().overlay(MU.hairline)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Image(systemName: "flame.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(MU.accent)
+                                Text("BURN ATTRIBUTION & CONTEXT EFFICIENCY")
+                                    .font(.system(size: 9.5, weight: .bold))
+                                    .tracking(0.6)
+                                    .foregroundColor(MU.textTertiary)
+                                Spacer()
+                            }
+
+                            ForEach(Array(breakdown.contributors.prefix(3).enumerated()), id: \.element.projectName) { _, c in
+                                HStack(spacing: 4) {
+                                    Text(c.projectName.isEmpty ? "default" : c.projectName)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(MU.text)
+                                        .lineLimit(1)
+                                    Text("· \(c.model)")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(MU.textSecondary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text("\(Fmt.tokenCountString(c.totalTokens)) (\(Int(round(c.shareOfWindow * 100)))%)")
+                                        .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+                                        .foregroundColor(MU.text)
+                                }
+                            }
+
+                            HStack(spacing: 12) {
+                                if let hit = breakdown.cacheHitRate {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "bolt.badge.checkmark.fill")
+                                            .font(.system(size: 9))
+                                            .foregroundColor(hit >= 50 ? MU.calm : MU.warn)
+                                        Text("Cache \(Int(round(hit)))%")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(MU.textSecondary)
+                                    }
+                                }
+                                if let avg = breakdown.avgTokensPerTurn {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "arrow.triangle.2.circlepath")
+                                            .font(.system(size: 9))
+                                            .foregroundColor(MU.textTertiary)
+                                        Text("~\(Fmt.tokenCountString(avg))/turn")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(MU.textSecondary)
+                                    }
+                                }
+                                if breakdown.longChatCount > 0 {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "exclamationmark.bubble")
+                                            .font(.system(size: 9))
+                                            .foregroundColor(MU.warn)
+                                        Text("\(breakdown.longChatCount) long chat\(breakdown.longChatCount > 1 ? "s" : "")")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundColor(MU.warn)
+                                    }
+                                }
+                            }
+                            .padding(.top, 2)
+                        }
+                    }
+                }
+            }
         }
     }
 }

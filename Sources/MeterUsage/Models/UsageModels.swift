@@ -72,6 +72,59 @@ public struct QuotaPace: Equatable, Sendable {
         }
         return status.text
     }
+
+    /// Effective time interval until exhaustion or reset (in seconds).
+    public func etaInterval(resetsAt: Date?, now: Date = Date()) -> TimeInterval? {
+        if let projectedExhaustion, projectedExhaustion > now {
+            return projectedExhaustion.timeIntervalSince(now)
+        }
+        if let resetsAt, resetsAt > now, (burnRate <= 1.0 || status == .onPace || status.isSurplus) {
+            return resetsAt.timeIntervalSince(now)
+        }
+        return nil
+    }
+
+    /// Whether this window should show an ambient ETA chip/subtitle.
+    public func shouldShowAmbientETA(resetsAt: Date?, now: Date = Date()) -> Bool {
+        if status.isDeficit { return true }
+        if let eta = etaInterval(resetsAt: resetsAt, now: now), eta < 2 * 3600 {
+            return true
+        }
+        return false
+    }
+
+    /// User-facing formatted ETA (e.g. "47m left" or "3h 12m left").
+    public func etaText(resetsAt: Date?, now: Date = Date(), short: Bool = false) -> String? {
+        guard let seconds = etaInterval(resetsAt: resetsAt, now: now) else { return nil }
+        return Self.formatEta(seconds: seconds, short: short)
+    }
+
+    public static func formatEta(seconds: TimeInterval, short: Bool = false) -> String {
+        let total = max(0, Int(seconds))
+        if total < 60 {
+            return short ? "< 1m" : "< 1m left"
+        }
+        let minutes = total / 60
+        if minutes < 60 {
+            return short ? "\(minutes)m" : "\(minutes)m left"
+        }
+        let hours = minutes / 60
+        let remMinutes = minutes % 60
+        if hours < 24 {
+            if short {
+                return remMinutes == 0 ? "\(hours)h" : "\(hours)h \(remMinutes)m"
+            } else {
+                return remMinutes == 0 ? "\(hours)h left" : "\(hours)h \(remMinutes)m left"
+            }
+        }
+        let days = hours / 24
+        let remHours = hours % 24
+        if short {
+            return remHours == 0 ? "\(days)d" : "\(days)d \(remHours)h"
+        } else {
+            return remHours == 0 ? "\(days)d left" : "\(days)d \(remHours)h left"
+        }
+    }
 }
 
 /// A single rate-limit window reported by a provider.
@@ -88,7 +141,7 @@ public struct QuotaWindow: Equatable, Sendable {
 
     public init(label: String, usedPercent: Double, resetsAt: Date? = nil, windowDurationMins: Int? = nil) {
         self.label = label
-        self.usedPercent = usedPercent.clamped(to: 0...100)
+        self.usedPercent = usedPercent.muClamped(to: 0...100)
         self.resetsAt = resetsAt
         self.windowDurationMins = windowDurationMins
     }
@@ -165,6 +218,16 @@ public struct QuotaWindow: Equatable, Sendable {
             projectedExhaustion: projectedExhaustion,
             status: status
         )
+    }
+
+    public func paceETA(now: Date = Date(), short: Bool = false) -> String? {
+        guard let p = pace(now: now) else { return nil }
+        return p.etaText(resetsAt: resetsAt, now: now, short: short)
+    }
+
+    public func shouldShowAmbientETA(now: Date = Date()) -> Bool {
+        guard let p = pace(now: now) else { return false }
+        return p.shouldShowAmbientETA(resetsAt: resetsAt, now: now)
     }
 
     /// Fraction 0...1, convenient for progress bars.
@@ -302,6 +365,9 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     case openCodeGo
     case openRouter
     case claude
+    case cursor
+    case copilot
+    case gemini
 
     public var displayName: String {
         switch self {
@@ -311,6 +377,9 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
         case .openCodeGo: return "OpenCode Go"
         case .openRouter: return "OpenRouter"
         case .claude: return "Claude"
+        case .cursor: return "Cursor"
+        case .copilot: return "Copilot CLI"
+        case .gemini: return "Gemini CLI"
         }
     }
 
@@ -362,6 +431,9 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
             return windows.max(by: { $0.usedPercent < $1.usedPercent })
         case .antigravity:
             return windows.max(by: { $0.usedPercent < $1.usedPercent })
+        case .cursor, .copilot, .gemini:
+            if windows.count == 1 { return windows[0] }
+            return windows.first(where: { $0.isSessionWindow }) ?? windows.max(by: { $0.usedPercent < $1.usedPercent })
         }
     }
 
@@ -375,6 +447,9 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
         case .grok: return "Grok CLI"
         case .openCodeGo: return "OpenCode"
         case .openRouter: return "API key"
+        case .cursor: return "Cursor"
+        case .copilot: return "Copilot CLI"
+        case .gemini: return "Gemini CLI"
         }
     }
 
@@ -387,9 +462,69 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
             return URL(string: "https://status.openai.com/")
         case .claude:
             return URL(string: "https://status.claude.com/")
-        case .antigravity, .grok, .openCodeGo, .openRouter:
+        case .cursor:
+            return URL(string: "https://status.cursor.com/")
+        case .copilot:
+            return URL(string: "https://www.githubstatus.com/")
+        case .antigravity, .grok, .openCodeGo, .openRouter, .gemini:
             return nil
         }
+    }
+}
+
+/// Top contributor to current window burn.
+public struct BurnContributor: Equatable, Sendable, Identifiable {
+    public var id: String { projectName + "-" + model }
+    public let projectName: String
+    public let model: String
+    public let turns: Int
+    public let tokens: TokenTotals
+    public let totalTokens: Int
+    public let shareOfWindow: Double
+    public let isLongChat: Bool
+
+    public init(
+        projectName: String,
+        model: String,
+        turns: Int,
+        tokens: TokenTotals,
+        totalTokens: Int,
+        shareOfWindow: Double,
+        isLongChat: Bool
+    ) {
+        self.projectName = projectName
+        self.model = model
+        self.turns = turns
+        self.tokens = tokens
+        self.totalTokens = totalTokens
+        self.shareOfWindow = shareOfWindow
+        self.isLongChat = isLongChat
+    }
+}
+
+/// Window burn breakdown and context waste hints.
+public struct WindowBurnBreakdown: Equatable, Sendable {
+    public let windowLabel: String
+    public let contributors: [BurnContributor]
+    public let totalTokens: Int
+    public let cacheHitRate: Double?
+    public let avgTokensPerTurn: Int?
+    public let longChatCount: Int
+
+    public init(
+        windowLabel: String,
+        contributors: [BurnContributor],
+        totalTokens: Int,
+        cacheHitRate: Double?,
+        avgTokensPerTurn: Int?,
+        longChatCount: Int
+    ) {
+        self.windowLabel = windowLabel
+        self.contributors = contributors
+        self.totalTokens = totalTokens
+        self.cacheHitRate = cacheHitRate
+        self.avgTokensPerTurn = avgTokensPerTurn
+        self.longChatCount = longChatCount
     }
 }
 
@@ -565,6 +700,10 @@ public struct LocalActivity: Equatable, Sendable {
             return TelemetryCalculator.calculate(sessions: items, daily: daily, now: scannedAt)
         }
         return nil
+    }
+
+    public func burnBreakdown(for window: QuotaWindow?, now: Date = Date()) -> WindowBurnBreakdown? {
+        BurnAttributionCalculator.calculate(sessions: sessions, window: window, now: now)
     }
 
     public static func empty(_ provider: Provider) -> LocalActivity {
@@ -796,7 +935,7 @@ public enum SourceUnavailable: Error, Equatable, Sendable {
 // MARK: - Utilities
 
 extension Comparable {
-    func clamped(to range: ClosedRange<Self>) -> Self {
+    func muClamped(to range: ClosedRange<Self>) -> Self {
         min(max(self, range.lowerBound), range.upperBound)
     }
 }
