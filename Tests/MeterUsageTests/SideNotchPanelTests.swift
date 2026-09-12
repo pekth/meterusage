@@ -426,6 +426,53 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertTrue(SideNotchPanelView.effectiveWindows(for: .claude, quota: claudeQuota).isEmpty)
     }
 
+    @MainActor
+    func testOpenRouterWindowFigureKeepsKeyLimitAndAccountCreditsSeparate() throws {
+        // A key spending limit and purchased account credits are two different
+        // ledgers. A key-limit row must report the key window's own headroom,
+        // never the account balance, even though the quota carries both.
+        let keyQuota = ProviderQuota(
+            provider: .openRouter,
+            windows: [QuotaWindow(label: "Monthly", usedPercent: 25.5)],
+            credits: CreditBalance(
+                balance: 8.0,
+                hasCredits: true,
+                unlimited: false,
+                unit: .dollars,
+                usedDollars: 2.0,
+                limitDollars: 10.0
+            ),
+            capturedAt: Date()
+        )
+        let keyWindow = try XCTUnwrap(keyQuota.windows.first)
+        XCTAssertEqual(
+            SideNotchPanelView.windowFigure(window: keyWindow, quota: keyQuota, provider: .openRouter),
+            .remaining(percent: 74.5)
+        )
+
+        // Only the synthesized account-balance window may quote account credits.
+        let creditsQuota = ProviderQuota(
+            provider: .openRouter,
+            windows: [],
+            credits: CreditBalance(
+                balance: 8.0,
+                hasCredits: true,
+                unlimited: false,
+                unit: .dollars,
+                usedDollars: 2.0,
+                limitDollars: 10.0
+            ),
+            capturedAt: Date()
+        )
+        let accountWindow = try XCTUnwrap(
+            SideNotchPanelView.effectiveWindows(for: .openRouter, quota: creditsQuota).first
+        )
+        XCTAssertEqual(
+            SideNotchPanelView.windowFigure(window: accountWindow, quota: creditsQuota, provider: .openRouter),
+            .spent(used: 2.0, limit: 10.0)
+        )
+    }
+
     // MARK: - Dragged position
 
     func testCornerFrameKeepsTopRightCorner() {
