@@ -83,7 +83,7 @@ final class UpdateCheckerTests: XCTestCase {
 
     func testDigestVerificationAcceptsMatchingSha256() {
         let data = Data("meterusage".utf8)
-        let digest = "8ea7b7eef200ff3e4ecab9f9064c243bcbe3d151c70e7e1c8d0e74f1797c0f1b"
+        let digest = "5c2677e0932dd2952b0b2db211c33b3054c855cce7f28b355d1413a89cdf7b6e"
         XCTAssertNoThrow(try UpdateChecker.verifyDigest(data, expected: "sha256:\(digest)"))
         // Case-insensitive hex matching:
         XCTAssertNoThrow(try UpdateChecker.verifyDigest(data, expected: "sha256:\(digest.uppercased())"))
