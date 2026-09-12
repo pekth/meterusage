@@ -52,15 +52,6 @@ A dockable, collapsible HUD pinned to the edge of your screen. Hovering any prov
   <img src="docs/images/sidenotch-opencode-go.png" alt="OpenCode Go rolling, weekly, and monthly quotas" width="320">
 </p>
 
-### Burn Attribution & Context Efficiency
-Hovering the active window reveals token consumption attributed by workspace and model, alongside cache hit rates and chat length diagnostics:
-
-<p align="center">
-  <img src="docs/mockups/02-burn-attribution.png" alt="Burn attribution and context waste hints" width="340">
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/mockups/03-pace-alerts.png" alt="Pace alerts and cross-provider failover recommendations" width="340">
-</p>
-
 ### Menu Bar & Popover Dashboard
 Click the menu bar mark anytime to inspect full rate-limit details, multi-window countdowns, and 26-week activity heatmaps:
 
