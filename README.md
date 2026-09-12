@@ -41,9 +41,15 @@ git clone https://github.com/pekth/meterusage.git && cd meterusage && ./Scripts/
 A dockable, collapsible HUD pinned to the edge of your screen. Hovering any provider ring expands a dedicated detail card with rate limits, ambient time-to-empty, pacing diagnostics, and token telemetry:
 
 <p align="center">
-  <img src="docs/images/sidenotch-v2-live.png" alt="Live MeterUsage Side Notch with Ambient Time-to-Empty and Limit Breakdown" width="320">
-  &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="docs/images/sidenotch-codex.png" alt="Codex rate limits, reset credits, and usage" width="340">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/images/sidenotch-v2-live.png" alt="Antigravity limits, pacing, and token telemetry" width="320">
+</p>
+
+<p align="center">
+  <img src="docs/images/sidenotch-grok.png" alt="Grok weekly quota, sessions, and message volume" width="320">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/images/sidenotch-opencode-go.png" alt="OpenCode Go rolling, weekly, and monthly quotas" width="320">
 </p>
 
 ### Burn Attribution & Context Efficiency
@@ -59,7 +65,7 @@ Hovering the active window reveals token consumption attributed by workspace and
 Click the menu bar mark anytime to inspect full rate-limit details, multi-window countdowns, and 26-week activity heatmaps:
 
 <p align="center">
-  <img src="docs/images/popover.png" alt="Service status, quotas, and Codex reset credits" width="270">
+  <img src="docs/images/popover.png" alt="Service status, pipeline, AI coding today, and Codex quotas" width="270">
   &nbsp;
   <img src="docs/images/popover-2.png" alt="Codex heatmap, Grok quota, and OpenCode Go quota" width="270">
   &nbsp;
@@ -67,6 +73,15 @@ Click the menu bar mark anytime to inspect full rate-limit details, multi-window
 </p>
 
 <sub>Screenshots show the app in demo mode (`METERUSAGE_DEMO=1`) — all numbers and names are synthetic.</sub>
+
+### Settings: Accounts & Providers
+Toggle providers on or off, choose refresh cadence, and switch themes:
+
+<p align="center">
+  <img src="docs/images/settings-accounts.png" alt="Settings accounts list with provider connections and appearance theme" width="270">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/images/settings-providers.png" alt="Settings providers list with refresh interval and side notch toggles" width="270">
+</p>
 
 ---
 
