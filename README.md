@@ -119,6 +119,28 @@ meterusage is built from the ground up to respect developer privacy:
 
 ---
 
+## 📦 Download & Installation
+
+### Option 1: Direct Download (Pre-built Release)
+1. Download **MeterUsage-0.2.18.zip** from [Latest Releases](https://github.com/pekth/meterusage/releases/latest).
+2. Unzip and drag `MeterUsage.app` to your `/Applications/` folder.
+3. Since open-source builds are ad-hoc signed, strip macOS browser quarantine on first launch:
+   ```bash
+   xattr -cr /Applications/MeterUsage.app
+   ```
+   *(Or right-click `MeterUsage.app` in Finder and choose **Open**).*
+
+### Option 2: Build From Source
+```bash
+git clone https://github.com/pekth/meterusage.git
+cd meterusage
+./Scripts/make-app.sh
+cp -R dist/MeterUsage.app /Applications/
+open /Applications/MeterUsage.app
+```
+
+---
+
 ## 🛠️ Requirements & Building
 
 ### Requirements

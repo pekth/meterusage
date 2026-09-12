@@ -351,6 +351,9 @@ final class AppCoordinator: ObservableObject {
     }
 
     private func performRefresh(forceAll: Bool) async {
+        if preferences.updateCheckEnabled {
+            updateChecker?.checkIfDue()
+        }
         // Sources are independent and mostly I/O-bound, so they run together and
         // the sweep costs as long as the slowest one, not their sum.
         let now = Date()

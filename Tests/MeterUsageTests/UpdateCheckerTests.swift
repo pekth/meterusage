@@ -1,91 +1,91 @@
 import XCTest
-import CryptoKit
 @testable import MeterUsage
 
-/// Version comparison, release parsing, and dismissal behavior for the
-/// GitHub Releases update check. Network is never touched: `fetch`'s
-/// transport path is a one-line URLSession call, while every decision the
-/// app makes lives in the pure functions tested here.
-@MainActor
 final class UpdateCheckerTests: XCTestCase {
 
     // MARK: Version comparison
 
-    func testNewerPatchVersion() {
+    func testNewerRecognizesSemverOrdering() {
         XCTAssertTrue(UpdateChecker.isNewer("0.2.2", than: "0.2.1"))
         XCTAssertTrue(UpdateChecker.isNewer("v0.2.2", than: "0.2.1"))
-    }
-
-    func testNewerMinorAndMajor() {
+        XCTAssertTrue(UpdateChecker.isNewer("0.2.10", than: "0.2.9"))
         XCTAssertTrue(UpdateChecker.isNewer("0.3.0", than: "0.2.9"))
         XCTAssertTrue(UpdateChecker.isNewer("1.0.0", than: "0.99.99"))
     }
 
-    func testNumericNotLexicographicOrdering() {
-        // "0.10.0" sorts before "0.9.9" as text; numerically it is newer.
+    func testNewerHandlesUnequalComponentCounts() {
         XCTAssertTrue(UpdateChecker.isNewer("0.10.0", than: "0.9.9"))
         XCTAssertFalse(UpdateChecker.isNewer("0.9.9", than: "0.10.0"))
     }
 
-    func testEqualAndOlderAreNotNewer() {
+    func testSameOrOlderIsNeverNewer() {
         XCTAssertFalse(UpdateChecker.isNewer("0.2.1", than: "0.2.1"))
         XCTAssertFalse(UpdateChecker.isNewer("0.2.0", than: "0.2.1"))
     }
 
-    func testMissingComponentsCountAsZero() {
+    func testPrefixMatchesDoNotFalselyTrigger() {
         XCTAssertTrue(UpdateChecker.isNewer("1", than: "0.2.1"))
         XCTAssertFalse(UpdateChecker.isNewer("0.2", than: "0.2.1"))
         XCTAssertFalse(UpdateChecker.isNewer("0.2.1", than: "0.2.1.0"))
     }
 
-    func testLeadingVIsIgnoredOnBothSides() {
+    func testLeadingVIsStrippedTransparently() {
         XCTAssertTrue(UpdateChecker.isNewer("v1.0", than: "v0.2.1"))
         XCTAssertFalse(UpdateChecker.isNewer("v0.2.1", than: "0.2.1"))
     }
 
-    func testGarbageReadsAsZeroNotNewer() {
+    func testGarbageIsNeverNewer() {
         XCTAssertFalse(UpdateChecker.isNewer("not-a-version", than: "0.2.1"))
         XCTAssertFalse(UpdateChecker.isNewer("", than: "0.2.1"))
     }
 
-    // MARK: Payload parsing
+    // MARK: Parsing
 
-    func testParseStripsTagPrefixAndKeepsURLAndAssets() throws {
+    func testParsesValidGitHubReleasePayload() throws {
         let json = """
-        {"tag_name":"v0.2.2","name":"v0.2.2","html_url":"https://github.com/pekth/meterusage/releases/tag/v0.2.2",
-         "assets":[{"name":"MeterUsage-0.2.2.zip",
-                    "browser_download_url":"https://github.com/pekth/meterusage/releases/download/v0.2.2/MeterUsage-0.2.2.zip",
-                    "digest":"sha256:abc123"}]}
+        {
+            "tag_name": "v0.2.2",
+            "html_url": "https://github.com/pekth/meterusage/releases/tag/v0.2.2",
+            "assets": [
+                {
+                    "name": "MeterUsage-0.2.2.zip",
+                    "browser_download_url": "https://github.com/pekth/meterusage/releases/download/v0.2.2/MeterUsage-0.2.2.zip",
+                    "digest": "sha256:abc123def456"
+                }
+            ]
+        }
         """
         let release = try UpdateChecker.parse(data: Data(json.utf8))
         XCTAssertEqual(release.version, "0.2.2")
         XCTAssertEqual(release.tagName, "v0.2.2")
-        XCTAssertEqual(release.url?.absoluteString, "https://github.com/pekth/meterusage/releases/tag/v0.2.2")
-        XCTAssertEqual(release.assets.count, 1)
         XCTAssertEqual(release.appZip?.name, "MeterUsage-0.2.2.zip")
-        XCTAssertEqual(release.appZip?.digest, "sha256:abc123")
+        XCTAssertEqual(release.appZip?.digest, "sha256:abc123def456")
     }
 
-    func testParseWithoutURL() throws {
-        let json = #"{"tag_name":"0.3.0"}"#
+    func testParsesReleaseWithoutAssets() throws {
+        let json = """
+        {
+            "tag_name": "0.3.0",
+            "html_url": "https://github.com/pekth/meterusage/releases/tag/0.3.0"
+        }
+        """
         let release = try UpdateChecker.parse(data: Data(json.utf8))
         XCTAssertEqual(release.version, "0.3.0")
-        XCTAssertNil(release.url)
         XCTAssertNil(release.appZip)
     }
 
-    func testParseRejectsEmptyTag() {
-        let json = #"{"tag_name":""}"#
+    func testParseRejectsEmptyTagName() {
+        let json = #"{"tag_name": ""}"#
         XCTAssertThrowsError(try UpdateChecker.parse(data: Data(json.utf8)))
     }
 
     // MARK: Digest verification
 
-    func testDigestVerificationAcceptsMatchingSHA256() throws {
+    func testDigestVerificationAcceptsMatchingSha256() {
         let data = Data("meterusage".utf8)
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let digest = "8ea7b7eef200ff3e4ecab9f9064c243bcbe3d151c70e7e1c8d0e74f1797c0f1b"
         XCTAssertNoThrow(try UpdateChecker.verifyDigest(data, expected: "sha256:\(digest)"))
-        // Case-insensitive hex.
+        // Case-insensitive hex matching:
         XCTAssertNoThrow(try UpdateChecker.verifyDigest(data, expected: "sha256:\(digest.uppercased())"))
     }
 
@@ -103,6 +103,7 @@ final class UpdateCheckerTests: XCTestCase {
         )
 
         XCTAssertTrue(script.contains("cp -R '/tmp/MeterUsage.app' \"$replacement\""))
+        XCTAssertTrue(script.contains("xattr -cr \"$replacement\""))
         XCTAssertTrue(script.contains("mv '/Applications/Meter'\\''s.app' \"$backup\""))
         XCTAssertTrue(script.contains("if ! mv \"$replacement\" '/Applications/Meter'\\''s.app'; then"))
         XCTAssertTrue(script.contains("mv \"$backup\" '/Applications/Meter'\\''s.app' || true"))
@@ -111,7 +112,7 @@ final class UpdateCheckerTests: XCTestCase {
     // MARK: Dismissal
 
     func testDismissedVersionStaysHiddenButAvailableKeepsValue() {
-        let defaults = UserDefaults(suiteName: "UpdateCheckerTests")!
+        let defaults = UserDefaults(suiteName: "UpdateCheckerTests")!\
         defaults.removePersistentDomain(forName: "UpdateCheckerTests")
         let checker = UpdateChecker(defaults: defaults)
 

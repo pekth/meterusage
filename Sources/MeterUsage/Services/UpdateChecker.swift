@@ -184,7 +184,13 @@ final class UpdateChecker: ObservableObject {
         let zipURL = stage.appendingPathComponent(zip.name)
         try data.write(to: zipURL, options: .atomic)
         try await Self.unzip(zipURL, into: stage)
-        return stage.appendingPathComponent("MeterUsage.app")
+        let stagedApp = stage.appendingPathComponent("MeterUsage.app")
+        let xattrProcess = Process()
+        xattrProcess.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+        xattrProcess.arguments = ["-cr", stagedApp.path]
+        try? xattrProcess.run()
+        xattrProcess.waitUntilExit()
+        return stagedApp
     }
 
     /// Swaps the staged bundle in over the running one and relaunches.
@@ -228,12 +234,15 @@ final class UpdateChecker: ObservableObject {
         rm -rf "$replacement"
         cp -R \(stagedPath) "$replacement"
         test -d "$replacement"
+        xattr -cr "$replacement" 2>/dev/null || true
+        codesign --force --deep -s - "$replacement" 2>/dev/null || true
         mv \(currentPath) "$backup"
         if ! mv "$replacement" \(currentPath); then
             mv "$backup" \(currentPath) || true
             exit 1
         fi
         rm -rf "$backup"
+        xattr -cr \(currentPath) 2>/dev/null || true
         open \(currentPath)
         """
     }
