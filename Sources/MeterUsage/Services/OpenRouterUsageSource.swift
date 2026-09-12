@@ -65,7 +65,22 @@ public struct OpenRouterUsageSource: UsageSource {
         }
     }
 
-    static func parse(data: Data, now: Date, calendar: Calendar = Calendar.current) throws -> ProviderUsage {
+    /// OpenRouter's activity endpoint reports UTC calendar days, and the app's
+    /// other session sources bucket telemetry by UTC day. Normalizing those
+    /// dates with the user's local calendar shifts every day by one for
+    /// timezones behind UTC, which zeroed the "today" reading and misaligned
+    /// the histogram, so this source buckets in UTC end to end.
+    static let utcCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar
+    }()
+
+    static func parse(
+        data: Data,
+        now: Date,
+        calendar: Calendar = OpenRouterUsageSource.utcCalendar
+    ) throws -> ProviderUsage {
         let response: ActivityResponse
         do {
             response = try JSONDecoder().decode(ActivityResponse.self, from: data)

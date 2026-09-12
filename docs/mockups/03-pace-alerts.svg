@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="560" viewBox="0 0 980 560">
+  <defs>
+    <linearGradient id="menubar" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3a3a40"/>
+      <stop offset="100%" stop-color="#2c2c32"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <rect width="980" height="560" rx="16" fill="#1a1a1e"/>
+  <rect x="0" y="0" width="980" height="36" rx="16" fill="url(#menubar)"/>
+  <rect x="0" y="20" width="980" height="16" fill="url(#menubar)"/>
+  <text x="24" y="23" fill="#9a9aa2" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11">meterusage mock · smarter pace alerts</text>
+
+  <g font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="600">
+    <rect x="700" y="10" width="8" height="8" rx="1.5" fill="#7c98ff"/>
+    <text x="714" y="19" fill="#ff4500">88%</text>
+    <rect x="746" y="7" width="58" height="16" rx="4" fill="rgba(255,69,0,0.18)"/>
+    <text x="754" y="19" fill="#ff4500" font-size="11" font-weight="700">28m left</text>
+
+    <rect x="818" y="10" width="8" height="8" rx="1.5" fill="#a684ff"/>
+    <text x="832" y="19" fill="#29e07a">22%</text>
+
+    <rect x="874" y="10" width="8" height="8" rx="1.5" fill="#b584ff"/>
+    <text x="888" y="19" fill="#29e07a">11%</text>
+  </g>
+
+  <!-- notification toast -->
+  <g filter="url(#shadow)">
+    <rect x="560" y="58" width="380" height="230" rx="14" fill="#1c1c1e" stroke="#3a3a40" fill-opacity="0.98"/>
+  </g>
+  <rect x="576" y="74" width="16" height="16" rx="4" fill="#000"/>
+  <text x="580" y="86" fill="#7c98ff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="10" font-weight="800">M</text>
+  <text x="600" y="86" fill="#b0b0b8" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11">meterusage</text>
+  <text x="916" y="86" fill="#777" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" text-anchor="end">now</text>
+
+  <text x="576" y="118" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="15" font-weight="700">Codex emptying in ~28 minutes</text>
+  <text x="576" y="144" fill="#c4c4cc" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12">Burning fast on the 5-hour window. Weekly still</text>
+  <text x="576" y="162" fill="#c4c4cc" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12">has headroom.</text>
+
+  <rect x="576" y="178" width="348" height="36" rx="9" fill="rgba(124,152,255,0.08)" stroke="rgba(124,152,255,0.22)"/>
+  <text x="590" y="200" fill="#c8d2ff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11">Switch suggestion: OpenRouter 22% · Antigravity 11%</text>
+
+  <rect x="576" y="230" width="130" height="28" rx="7" fill="#7c98ff"/>
+  <text x="641" y="248" fill="#0b1020" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" text-anchor="middle">Open Codex card</text>
+  <rect x="716" y="230" width="110" height="28" rx="7" fill="#2c2c30" stroke="#444"/>
+  <text x="771" y="248" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="11" font-weight="600" text-anchor="middle">Snooze window</text>
+
+  <!-- alert ladder card -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="90" width="420" height="280" rx="14" fill="#0a0a0a" stroke="#1c1c1c"/>
+  </g>
+  <text x="60" y="122" fill="#66666e" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="10" font-weight="700" letter-spacing="1.2">ALERT LADDER (PROPOSED)</text>
+
+  <text x="60" y="162" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600">Pace cliff</text>
+  <text x="430" y="162" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end">ETA &lt; 30m while burning fast</text>
+  <line x1="60" y1="178" x2="440" y2="178" stroke="rgba(255,255,255,0.10)"/>
+
+  <text x="60" y="208" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600">Weekly forecast</text>
+  <text x="430" y="208" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end">exhaust before Friday</text>
+  <line x1="60" y1="224" x2="440" y2="224" stroke="rgba(255,255,255,0.10)"/>
+
+  <text x="60" y="254" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600">Threshold</text>
+  <text x="430" y="254" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end">existing 80% / 95% kept</text>
+  <line x1="60" y1="270" x2="440" y2="270" stroke="rgba(255,255,255,0.10)"/>
+
+  <text x="60" y="300" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600">Cadence</text>
+  <text x="430" y="300" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end">once per window · edge-triggered</text>
+  <line x1="60" y1="316" x2="440" y2="316" stroke="rgba(255,255,255,0.10)"/>
+
+  <text x="60" y="346" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="13" font-weight="600">Failover nudge</text>
+  <text x="430" y="346" fill="rgba(255,255,255,0.55)" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" text-anchor="end">list unused providers</text>
+
+  <text x="40" y="520" fill="#7a7a86" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12">03 · Smarter pace alerts — warn before the cliff, suggest a switch</text>
+</svg>

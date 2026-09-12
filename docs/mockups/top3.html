@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>meterusage — top 3 concept mockups</title>
+<style>
+  :root {
+    --body: #000;
+    --card: #0a0a0a;
+    --disc: #29292e;
+    --track: #3a3a3a;
+    --text: #fff;
+    --sub: rgba(255,255,255,0.55);
+    --tertiary: #66666e;
+    --hairline: rgba(255,255,255,0.10);
+    --calm: #29e07a;
+    --surplus: #34c759;
+    --warn: #f5e300;
+    --deficit: #ff9500;
+    --alert: #ff4500;
+    --accent: #7c98ff;
+    --or: #a684ff;
+    --codex: #7c98ff;
+    --claude: #d97757;
+    --grok: #ff914e;
+    --agy: #b584ff;
+    --page: #111114;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    background: var(--page);
+    color: var(--text);
+    padding: 36px 28px 64px;
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: #c8c8d0;
+    margin: 0 0 6px;
+  }
+  .intro {
+    color: #8a8a96;
+    font-size: 12px;
+    margin: 0 0 28px;
+    max-width: 720px;
+  }
+  .scene {
+    margin-bottom: 48px;
+  }
+  .scene-label {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #111;
+    background: var(--accent);
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+  .scene-title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .scene-note {
+    font-size: 11px;
+    color: #8a8a96;
+  }
+  .stage {
+    background: #1a1a1e;
+    border: 1px solid #2a2a30;
+    border-radius: 16px;
+    padding: 28px 24px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .desktop-bar {
+    height: 28px;
+    background: linear-gradient(180deg, #3a3a40, #2c2c32);
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 14px;
+    gap: 10px;
+    margin: -28px -24px 22px;
+    border-bottom: 1px solid #222;
+  }
+  .mb-cluster {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .mb-mark {
+    width: 11px;
+    height: 11px;
+    border-radius: 2px;
+  }
+  .mb-eta {
+    font-weight: 700;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .layout {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    justify-content: flex-end;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid #1c1c1c;
+    border-radius: 14px;
+    padding: 14px 14px 12px;
+    width: 320px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+  }
+  .card.wide { width: 360px; }
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .provider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .pdot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .pill {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+  }
+  .pill.burn { background: rgba(255,69,0,0.16); color: var(--alert); }
+  .pill.pace { background: rgba(52,199,89,0.14); color: var(--surplus); }
+  .pill.warn { background: rgba(255,149,0,0.16); color: var(--deficit); }
+  .eta-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #121214;
+    border: 1px solid #222;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .eta-big {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+  .eta-sub { font-size: 11px; color: var(--sub); margin-top: 2px; }
+  .eta-right { text-align: right; }
+  .meta { font-size: 11px; color: var(--sub); }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .row:first-of-type { border-top: none; }
+  .bar-wrap { flex: 1; min-width: 0; }
+  .bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+  .bar-label .name { color: var(--text); font-weight: 500; }
+  .bar-label .pct { color: var(--sub); font-variant-numeric: tabular-nums; }
+  .track {
+    height: 5px;
+    background: var(--track);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .fill { height: 100%; border-radius: 999px; }
+  .strip {
+    background: #000;
+    border: 1px solid #1a1a1a;
+    border-radius: 18px;
+    padding: 10px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 64px;
+    align-items: center;
+    box-shadow: 0 14px 30px rgba(0,0,0,0.5);
+  }
+  .ring {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: conic-gradient(var(--ring-color) calc(var(--used) * 1%), var(--disc) 0);
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+  .ring::after {
+    content: "";
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #000;
+    border: 3px solid var(--disc);
+  }
+  .ring-label {
+    font-size: 9px;
+    color: var(--sub);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    margin-top: -2px;
+  }
+  .ring-eta {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--alert);
+    margin-top: 1px;
+  }
+  .section-title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tertiary);
+    margin: 12px 0 6px;
+  }
+  .burn-list { display: flex; flex-direction: column; gap: 6px; }
+  .burn-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 10px;
+    background: #121214;
+    border-radius: 9px;
+    padding: 8px 10px;
+  }
+  .burn-name { font-size: 12px; font-weight: 600; }
+  .burn-meta { font-size: 10px; color: var(--sub); grid-column: 1 / -1; }
+  .burn-share {
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .mini-bar {
+    grid-column: 1 / -1;
+    height: 3px;
+    background: var(--track);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .toast {
+    position: absolute;
+    top: 48px;
+    right: 24px;
+    width: 320px;
+    background: rgba(28,28,30,0.96);
+    border: 1px solid #3a3a40;
+    border-radius: 14px;
+    padding: 12px 14px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+    backdrop-filter: blur(12px);
+  }
+  .toast-app {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #b0b0b8;
+    margin-bottom: 6px;
+  }
+  .toast-app img, .toast-icon {
+    width: 16px; height: 16px; border-radius: 4px; background: #000;
+    display: grid; place-items: center; font-size: 10px; font-weight: 800;
+  }
+  .toast-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+  .toast-body { font-size: 12px; color: #c4c4cc; line-height: 1.4; }
+  .toast-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn {
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 7px;
+    padding: 5px 10px;
+    border: 1px solid #444;
+    background: #2c2c30;
+    color: #fff;
+  }
+  .btn.primary { background: var(--accent); border-color: transparent; color: #0b1020; }
+  .hint {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #8a8a96;
+  }
+  .failover {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: rgba(124,152,255,0.08);
+    border: 1px solid rgba(124,152,255,0.22);
+    font-size: 11px;
+    color: #c8d2ff;
+  }
+  .caption {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #7a7a86;
+  }
+</style>
+</head>
+<body>
+
+<h1>meterusage concept mockups</h1>
+<p class="intro">Top 3 improvements from the pain-point review. Synthetic numbers. Hardware-black notch palette matched to the shipping app.</p>
+
+<!-- ========== 1. TIME TO EMPTY ========== -->
+<section class="scene" id="mock-eta">
+  <div class="scene-label">
+    <span class="badge">01</span>
+    <span class="scene-title">Ambient time-to-empty</span>
+    <span class="scene-note">menu bar ETA + notch ring subtitle</span>
+  </div>
+  <div class="stage">
+    <div class="desktop-bar">
+      <div class="mb-cluster">
+        <span class="mb-mark" style="background:var(--codex)"></span>
+        <span style="color:var(--alert)">92%</span>
+        <span class="mb-eta" style="background:rgba(255,69,0,0.18);color:var(--alert)">47m left</span>
+      </div>
+      <div class="mb-cluster">
+        <span class="mb-mark" style="background:var(--or)"></span>
+        <span style="color:var(--calm)">18%</span>
+      </div>
+      <div class="mb-cluster">
+        <span class="mb-mark" style="background:var(--claude)"></span>
+        <span style="color:var(--warn)">61%</span>
+        <span class="mb-eta" style="background:rgba(245,227,0,0.14);color:var(--warn)">3h 12m</span>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="card">
+        <div class="card-head">
+          <div class="provider"><span class="pdot" style="background:var(--codex)"></span>Codex</div>
+          <span class="pill burn">burning fast</span>
+        </div>
+
+        <div class="eta-banner">
+          <div>
+            <div class="eta-big" style="color:var(--alert)">47m left</div>
+            <div class="eta-sub">at current 5h pace</div>
+          </div>
+          <div class="eta-right">
+            <div class="meta">resets in 2h 04m</div>
+            <div class="meta" style="margin-top:3px;color:var(--deficit)">empty before reset</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="bar-wrap">
+            <div class="bar-label"><span class="name">5 hour</span><span class="pct">92%</span></div>
+            <div class="track"><div class="fill" style="width:92%;background:var(--alert)"></div></div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="bar-wrap">
+            <div class="bar-label"><span class="name">Weekly</span><span class="pct">54%</span></div>
+            <div class="track"><div class="fill" style="width:54%;background:var(--warn)"></div></div>
+          </div>
+        </div>
+        <div class="hint">Menu bar shows ETA only when a window is burning fast or under 2h remaining.</div>
+      </div>
+
+      <div class="strip">
+        <div>
+          <div class="ring" style="--used:92;--ring-color:var(--alert)"></div>
+          <div class="ring-label">92%</div>
+          <div class="ring-eta">47m</div>
+        </div>
+        <div>
+          <div class="ring" style="--used:18;--ring-color:var(--calm)"></div>
+          <div class="ring-label">18%</div>
+        </div>
+        <div>
+          <div class="ring" style="--used:61;--ring-color:var(--warn)"></div>
+          <div class="ring-label">61%</div>
+          <div class="ring-eta" style="color:var(--warn)">3h</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="caption">Pain solved: surprise cutoffs. % used stays, but work planning uses hours left.</p>
+</section>
+
+<!-- ========== 2. BURN ATTRIBUTION ========== -->
+<section class="scene" id="mock-burn">
+  <div class="scene-label">
+    <span class="badge">02</span>
+    <span class="scene-title">What burned this window</span>
+    <span class="scene-note">project / model / waste from local logs</span>
+  </div>
+  <div class="stage">
+    <div class="layout" style="justify-content:center">
+      <div class="card wide">
+        <div class="card-head">
+          <div class="provider"><span class="pdot" style="background:var(--claude)"></span>Claude Code</div>
+          <span class="pill warn">on pace</span>
+        </div>
+
+        <div class="row" style="border:none;padding-top:0">
+          <div class="bar-wrap">
+            <div class="bar-label"><span class="name">5 hour</span><span class="pct">61% · 3h 12m left</span></div>
+            <div class="track"><div class="fill" style="width:61%;background:var(--warn)"></div></div>
+          </div>
+        </div>
+
+        <div class="section-title">This window · top burn</div>
+        <div class="burn-list">
+          <div class="burn-item">
+            <div class="burn-name">meterusage</div>
+            <div class="burn-share" style="color:var(--deficit)">41%</div>
+            <div class="mini-bar"><div class="fill" style="width:41%;background:var(--deficit)"></div></div>
+            <div class="burn-meta">Sonnet · 12 turns · 184k tokens · long thread</div>
+          </div>
+          <div class="burn-item">
+            <div class="burn-name">tilorah-hq</div>
+            <div class="burn-share" style="color:var(--warn)">27%</div>
+            <div class="mini-bar"><div class="fill" style="width:27%;background:var(--warn)"></div></div>
+            <div class="burn-meta">Opus · 6 turns · 121k tokens</div>
+          </div>
+          <div class="burn-item">
+            <div class="burn-name">quietcut</div>
+            <div class="burn-share" style="color:var(--calm)">14%</div>
+            <div class="mini-bar"><div class="fill" style="width:14%;background:var(--calm)"></div></div>
+            <div class="burn-meta">Sonnet · 4 turns · 63k tokens</div>
+          </div>
+        </div>
+
+        <div class="section-title">Waste hints</div>
+        <div class="row">
+          <span class="meta" style="color:var(--text)">Cache hit rate</span>
+          <span style="color:var(--deficit);font-weight:700;font-size:12px">38% · low</span>
+        </div>
+        <div class="row">
+          <span class="meta" style="color:var(--text)">Avg tokens / turn</span>
+          <span style="color:var(--warn);font-weight:700;font-size:12px">31.2k</span>
+        </div>
+        <div class="row">
+          <span class="meta" style="color:var(--text)">Context reload flag</span>
+          <span style="color:var(--alert);font-weight:700;font-size:12px">2 long chats</span>
+        </div>
+        <div class="hint">Reads numeric session metadata only — no prompts or diffs.</div>
+      </div>
+    </div>
+  </div>
+  <p class="caption">Pain solved: “where did the tokens go?” Attribution for the active window, not just lifetime totals.</p>
+</section>
+
+<!-- ========== 3. SMARTER PACE ALERTS ========== -->
+<section class="scene" id="mock-alert">
+  <div class="scene-label">
+    <span class="badge">03</span>
+    <span class="scene-title">Smarter pace alerts</span>
+    <span class="scene-note">ETA + failover, not only 80/95%</span>
+  </div>
+  <div class="stage" style="min-height:280px">
+    <div class="desktop-bar">
+      <div class="mb-cluster">
+        <span class="mb-mark" style="background:var(--codex)"></span>
+        <span style="color:var(--alert)">88%</span>
+        <span class="mb-eta" style="background:rgba(255,69,0,0.18);color:var(--alert)">28m left</span>
+      </div>
+      <div class="mb-cluster">
+        <span class="mb-mark" style="background:var(--or)"></span>
+        <span style="color:var(--calm)">22%</span>
+      </div>
+      <div class="mb-cluster">
+        <span class="mb-mark" style="background:var(--agy)"></span>
+        <span style="color:var(--calm)">11%</span>
+      </div>
+    </div>
+
+    <div class="toast">
+      <div class="toast-app">
+        <div class="toast-icon">M</div>
+        <span>meterusage</span>
+        <span style="margin-left:auto;opacity:0.6">now</span>
+      </div>
+      <div class="toast-title">Codex emptying in ~28 minutes</div>
+      <div class="toast-body">
+        Burning fast on the 5-hour window. Weekly still has headroom.
+        OpenRouter and Antigravity are under 25% used.
+      </div>
+      <div class="failover">Switch suggestion: OpenRouter 22% · Antigravity 11%</div>
+      <div class="toast-actions">
+        <button class="btn primary">Open Codex card</button>
+        <button class="btn">Snooze window</button>
+      </div>
+    </div>
+
+    <div style="margin-top:150px;max-width:420px">
+      <div class="card" style="width:100%">
+        <div class="section-title" style="margin-top:0">Alert ladder (proposed)</div>
+        <div class="row"><span class="meta" style="color:var(--text)">Pace cliff</span><span class="meta">ETA &lt; 30m while burning fast</span></div>
+        <div class="row"><span class="meta" style="color:var(--text)">Weekly forecast</span><span class="meta">on track to exhaust before Friday</span></div>
+        <div class="row"><span class="meta" style="color:var(--text)">Threshold</span><span class="meta">existing 80% / 95% kept</span></div>
+        <div class="row"><span class="meta" style="color:var(--text)">Cadence</span><span class="meta">once per window · edge-triggered</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="caption">Pain solved: late 95% alerts. Warn when the remaining time is the problem, and point at unused providers.</p>
+</section>
+
+</body>
+</html>
