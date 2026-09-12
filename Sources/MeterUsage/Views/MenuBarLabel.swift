@@ -35,10 +35,6 @@ struct MenuBarLabel: View {
     /// slot pads short figures like "9%" away from the gauge.
     var onWidthChange: (CGFloat) -> Void = { _ in }
 
-    private var ambientDeficitCluster: Cluster? {
-        clusters.first(where: { $0.etaText != nil && $0.isDeficit })
-    }
-
     var body: some View {
         HStack(spacing: 3) {
             if AppInfo.isPreview {
@@ -52,12 +48,9 @@ struct MenuBarLabel: View {
             }
 
             if coordinator.preferences.menuBarCompactEnabled {
-                compactContent
+                CompactTrayGlyph()
             } else {
-                HStack(spacing: 4) {
-                    CompactTrayGlyph()
-                    trayClusters
-                }
+                trayClusters
             }
         }
         .padding(.horizontal, 5)
@@ -77,31 +70,6 @@ struct MenuBarLabel: View {
         .animation(.easeOut(duration: 0.3), value: fraction)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(coordinator.preferences.menuBarCompactEnabled ? "MeterUsage" : accessibilityText)
-    }
-
-    @ViewBuilder
-    private var compactContent: some View {
-        HStack(spacing: 3) {
-            CompactTrayGlyph()
-            if let deficit = ambientDeficitCluster, let eta = deficit.etaText {
-                HStack(spacing: 2) {
-                    ProviderMark(provider: deficit.provider, tint: deficit.markTint)
-                        .frame(width: 12, height: 12)
-                    if let percent = deficit.percent {
-                        Text(percent)
-                            .font(.system(size: 10, weight: .medium).monospacedDigit())
-                            .foregroundColor(deficit.numberTint)
-                    }
-                    Text(eta)
-                        .font(.system(size: 9.5, weight: .bold).monospacedDigit())
-                        .foregroundColor(MU.warn)
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(MU.warn.opacity(0.16))
-                        .cornerRadius(3)
-                }
-            }
-        }
     }
 
     /// The per-provider `[mark] percent` clusters, unchanged from the original
@@ -245,27 +213,21 @@ struct MenuBarLabel: View {
 /// macOS accessory.
 struct CompactTrayGlyph: View {
 
-    var body: some View {
-        if let icon = Self.appIcon() {
-            Image(nsImage: icon)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 16, height: 16)
-        } else {
-            CodexMark()
-                .frame(width: 14, height: 14)
-                .foregroundColor(.primary)
-        }
-    }
+    /// Same reading as the app icon, so the two read as one object.
+    private static let fillFraction: CGFloat = 0.72
 
-    private static func appIcon() -> NSImage? {
-        if let url = Bundle.main.url(forResource: "AppIcon", withExtension: "png")
-            ?? Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-           let img = NSImage(contentsOf: url) {
-            img.isTemplate = false
-            return img
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                .strokeBorder(MU.text, lineWidth: 1)
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(MU.text)
+                    .frame(height: geo.size.height * Self.fillFraction)
+            }
+            .padding(2)
         }
-        return nil
+        .frame(width: 9, height: 13)
     }
 }
 
