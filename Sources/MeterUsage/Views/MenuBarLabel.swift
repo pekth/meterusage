@@ -228,35 +228,10 @@ struct MenuBarLabel: View {
 struct CompactTrayGlyph: View {
 
     var body: some View {
-        if let icon = Self.trayImage() {
-            Image(nsImage: icon)
-                .renderingMode(.template)
-                .foregroundColor(.primary)
-                .frame(width: 18, height: 18)
-        } else {
-            // Bare binary fallback: draw a simple meter mark if the icon
-            // asset isn't bundled (e.g. `swift run`).
-            CodexMark()
-                .frame(width: 14, height: 14)
-                .foregroundColor(.primary)
-        }
-    }
-
-    private static func trayImage() -> NSImage? {
-        // AppIcon is bundled as an icns. We render it into a small template
-        // bitmap so AppKit treats it as an icon mask rather than full colour.
-        guard let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-              let raw = NSImage(contentsOf: url) else { return nil }
-        let size = NSSize(width: 16, height: 16)
-        let template = NSImage(size: size)
-        template.lockFocus()
-        raw.draw(in: NSRect(origin: .zero, size: size),
-                 from: NSRect(origin: .zero, size: raw.size),
-                 operation: .sourceOver,
-                 fraction: 1.0)
-        template.unlockFocus()
-        template.isTemplate = true
-        return template
+        Image(systemName: "gauge.with.needle")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(.primary)
+            .frame(width: 16, height: 16)
     }
 }
 
