@@ -119,46 +119,32 @@ final class SideNotchPanelTests: XCTestCase {
 
     func testShareCropIsolatesCardLeftOfStrip() {
         let rect = SideNotchPanelLayout.shareCardRect(
-            contentSize: CGSize(width: 300, height: 600),
-            stripWidth: 50, cardHeight: 600, cardOnRight: false
+            contentSize: CGSize(width: 311, height: 723),
+            cardOnRight: false
         )
-        XCTAssertEqual(rect, CGRect(x: 0, y: 0, width: 250, height: 600))
+        XCTAssertEqual(rect, CGRect(x: 0, y: 0, width: 250, height: 723))
     }
 
     func testShareCropIsolatesCardRightOfStrip() {
         let rect = SideNotchPanelLayout.shareCardRect(
-            contentSize: CGSize(width: 300, height: 600),
-            stripWidth: 50, cardHeight: 600, cardOnRight: true
+            contentSize: CGSize(width: 311, height: 723),
+            cardOnRight: true
         )
-        XCTAssertEqual(rect, CGRect(x: 50, y: 0, width: 250, height: 600))
+        XCTAssertEqual(rect, CGRect(x: 61, y: 0, width: 250, height: 723))
     }
 
-    func testShareCropTopAlignsShortCard() {
-        // The HStack is top-aligned: a card shorter than the content keeps
-        // the content top, never the bottom.
+    func testShareCropClampsNarrowContent() {
         let rect = SideNotchPanelLayout.shareCardRect(
-            contentSize: CGSize(width: 300, height: 620),
-            stripWidth: 50, cardHeight: 400, cardOnRight: false
+            contentSize: CGSize(width: 200, height: 400),
+            cardOnRight: false
         )
-        XCTAssertEqual(rect, CGRect(x: 0, y: 220, width: 250, height: 400))
+        XCTAssertEqual(rect, CGRect(x: 0, y: 0, width: 200, height: 400))
     }
 
-    func testShareCropFallsBackToCardWidthWithoutStrip() {
-        let rect = SideNotchPanelLayout.shareCardRect(
-            contentSize: CGSize(width: 300, height: 600),
-            stripWidth: 0, cardHeight: 600, cardOnRight: false
-        )
-        XCTAssertEqual(rect, CGRect(x: 50, y: 0, width: 250, height: 600))
-    }
-
-    func testShareCropReturnsNilWithoutCard() {
-        XCTAssertNil(SideNotchPanelLayout.shareCardRect(
-            contentSize: CGSize(width: 300, height: 600),
-            stripWidth: 50, cardHeight: 0, cardOnRight: false
-        ))
+    func testShareCropReturnsNilWithoutContent() {
         XCTAssertNil(SideNotchPanelLayout.shareCardRect(
             contentSize: .zero,
-            stripWidth: 50, cardHeight: 400, cardOnRight: false
+            cardOnRight: false
         ))
     }
 

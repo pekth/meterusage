@@ -120,31 +120,22 @@ enum SideNotchPanelLayout {
         return NSRect(x: x, y: y, width: w, height: h)
     }
 
-    /// Detail-card rect inside the panel content, in content coordinates
-    /// (AppKit origin, y up), for card-only share snapshots. `nil` when no
-    /// card can be isolated — folded strip, unknown sizes — and the caller
-    /// captures the whole content as before. The HStack is top-aligned, so
-    /// the card's top meets the content top; every edge clamps into the
-    /// content, so the result never addresses pixels outside the capture.
+    /// Detail-card column inside the panel content, in content coordinates
+    /// (AppKit origin, y up), for card-only share snapshots. `nil` when the
+    /// content is empty and the caller captures it whole as before. The card
+    /// frame is a fixed 250pt wide: card-left fills x 0..<250, card-right the
+    /// last 250pt — full content height either way, since a mounted card is
+    /// always exactly as tall as the content. Deliberately independent of
+    /// the strip-size report, which has proven unreliable at capture time.
     static func shareCardRect(
         contentSize: CGSize,
-        stripWidth: CGFloat,
-        cardHeight: CGFloat,
         cardOnRight: Bool
     ) -> CGRect? {
-        guard contentSize.width > 0, contentSize.height > 0, cardHeight > 0 else { return nil }
-        let width: CGFloat
-        let x: CGFloat
-        if stripWidth > 0, contentSize.width > stripWidth {
-            width = contentSize.width - stripWidth
-            x = cardOnRight ? stripWidth : 0
-        } else {
-            width = min(cardWidth, contentSize.width)
-            x = cardOnRight ? 0 : max(contentSize.width - width, 0)
-        }
+        guard contentSize.width > 0, contentSize.height > 0 else { return nil }
+        let width = min(cardWidth, contentSize.width)
         guard width > 0 else { return nil }
-        let height = min(cardHeight, contentSize.height)
-        let rect = CGRect(x: x, y: contentSize.height - height, width: width, height: height).integral
+        let x = cardOnRight ? max(contentSize.width - width, 0) : 0
+        let rect = CGRect(x: x, y: 0, width: width, height: contentSize.height).integral
         return rect.isEmpty ? nil : rect
     }
 }
@@ -169,10 +160,6 @@ final class SideNotchPanelController: ObservableObject {
     /// content, but the persisted corner and the side math track the strip —
     /// the part that must never move under the cursor.
     private var stripSize: CGSize = .zero
-    /// Detail-card height last reported by the view, for card-only share
-    /// snapshots. Zero when no card has ever been measured; the snapshot
-    /// then captures the whole content as before.
-    private var cardHeight: CGFloat = 0
     /// Last size a placement actually applied, quantized to whole points.
     /// Countdown ticks and percent text constantly re-measure a point or two
     /// off; re-placing for those rebuilds tracking areas under the cursor for
@@ -323,11 +310,6 @@ final class SideNotchPanelController: ObservableObject {
         panel.orderOut(nil)
     }
 
-    /// Records the mounted detail card's height for share snapshots.
-    func noteCardHeight(_ height: CGFloat) {
-        cardHeight = height
-    }
-
     /// Captures the selected provider's detail card — never the ring strip —
     /// at a minimum of 2x so text stays sharp even on a non-Retina display,
     /// then presents macOS share services anchored to the Share button that
@@ -341,12 +323,10 @@ final class SideNotchPanelController: ObservableObject {
         let bounds = content.bounds.integral
         guard bounds.width > 0, bounds.height > 0 else { return }
         // Card-only: the strip beside it is chrome, not the reading being
-        // shared. Unmeasurable card (never reported) keeps the old whole
-        // content capture rather than a wrong crop.
+        // shared. Only the content size and the card side feed the crop —
+        // both verified live — never the strip-size report.
         let captureRect = SideNotchPanelLayout.shareCardRect(
             contentSize: bounds.size,
-            stripWidth: stripSize.width,
-            cardHeight: cardHeight,
             cardOnRight: cardOnRight
         ) ?? bounds
 

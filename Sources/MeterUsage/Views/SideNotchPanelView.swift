@@ -283,9 +283,6 @@ struct SideNotchPanelView: View {
         .onPreferenceChange(CardHeightKey.self) { height in
             cardHeight = height
         }
-        // The controller crops share snapshots to the card; it needs the same
-        // measurement. Plain stored property there — no re-render loop.
-        .onChange(of: cardHeight) { panel.noteCardHeight($0) }
         .onChange(of: panel.isDragging) { dragging in
             // A drop can strand a hover from before the drag (the mouse never
             // re-enters to refresh it): always reopen from a clean hover.
