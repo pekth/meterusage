@@ -162,6 +162,9 @@ final class SideNotchPanelController: ObservableObject {
     /// Global mouse-up monitor ending drags. Stored for life; the controller
     /// lives as long as the app.
     private var mouseUpMonitor: Any?
+    /// Retains the sharing picker while its sheet is on screen; dropping the
+    /// reference would dismiss it mid-interaction.
+    private var sharingPicker: NSSharingServicePicker?
 
     init(coordinator: AppCoordinator) {
         let panel = NSPanel(
@@ -268,6 +271,46 @@ final class SideNotchPanelController: ObservableObject {
 
     func hide() {
         panel.orderOut(nil)
+    }
+
+    /// Captures the panel as it currently appears — the ring strip plus any
+    /// docked detail card — at a minimum of 2x so text stays sharp even on a
+    /// non-Retina display, then presents macOS share services anchored to the
+    /// panel. Called from the detail card's share button, so a card is
+    /// expected to be showing; a folded or empty panel simply does nothing.
+    func shareSnapshot() {
+        guard let content = panel.contentView else { return }
+        content.layoutSubtreeIfNeeded()
+        let bounds = content.bounds.integral
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        let scale = AppDelegate.captureScale(backingScaleFactor: panel.backingScaleFactor)
+        guard let representation = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(ceil(bounds.width * scale)),
+            pixelsHigh: Int(ceil(bounds.height * scale)),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bitmapFormat: .alphaFirst,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return }
+
+        representation.size = bounds.size
+        content.cacheDisplay(in: bounds, to: representation)
+
+        let image = NSImage(size: bounds.size)
+        image.addRepresentation(representation)
+
+        // The panel is non-activating by design, but the share sheet needs an
+        // active app to track menu interaction, so activate for its lifetime.
+        NSApp.activate(ignoringOtherApps: true)
+        let picker = NSSharingServicePicker(items: [image])
+        picker.show(relativeTo: bounds, of: content, preferredEdge: .minY)
+        sharingPicker = picker
     }
 
     deinit {

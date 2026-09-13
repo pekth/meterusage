@@ -21,15 +21,32 @@ final class CodexLocalSourceTests: XCTestCase {
     }
 
     /// Writes a Codex-shaped rollout file whose first line carries the given
-    /// session start timestamp, the field the source actually reads.
-    private func writeRollout(_ root: URL, name: String, timestamp: String) throws {
+    /// session start timestamp and working directory, optionally ending with
+    /// a cumulative `token_count` event.
+    @discardableResult
+    private func writeRollout(
+        _ root: URL,
+        name: String,
+        timestamp: String,
+        cwd: String? = nil,
+        tokens: (input: Int, cached: Int, output: Int, reasoning: Int)? = nil
+    ) throws -> URL {
         let dir = root
             .appendingPathComponent("2026", isDirectory: true)
             .appendingPathComponent("08", isDirectory: true)
             .appendingPathComponent("11", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let line = #"{"timestamp":"\#(timestamp)","type":"session_meta"}"#
-        try Data((line + "\n").utf8).write(to: dir.appendingPathComponent(name + ".jsonl"))
+        var payload = ""
+        if let cwd {
+            payload = #","payload":{"cwd":"\#(cwd)"}"#
+        }
+        var lines = #"{"timestamp":"\#(timestamp)","type":"session_meta"\#(payload)}"#
+        if let tokens {
+            lines += "\n" + #"{"timestamp":"\#(timestamp)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":\#(tokens.input),"cached_input_tokens":\#(tokens.cached),"output_tokens":\#(tokens.output),"reasoning_output_tokens":\#(tokens.reasoning),"total_tokens":\#(tokens.input + tokens.output)}}}}"#
+        }
+        let url = dir.appendingPathComponent(name + ".jsonl")
+        try Data((lines + "\n").utf8).write(to: url)
+        return url
     }
 
     func testScanCountsSessionsPerDay() async throws {
@@ -42,16 +59,94 @@ final class CodexLocalSourceTests: XCTestCase {
         let activity = try await CodexLocalSource(root: root).scan()
 
         XCTAssertEqual(activity.provider, .codex)
-        XCTAssertEqual(activity.sessions.isEmpty, true, "session payloads are never read")
+        XCTAssertEqual(activity.sessions.count, 3)
         XCTAssertEqual(activity.daily.count, 2)
 
         let day11 = try XCTUnwrap(activity.daily.first { $0.day == Self.day(2026, 8, 11) })
         XCTAssertEqual(day11.sessionCount, 2)
-        XCTAssertEqual(day11.tokens.total, 0, "Codex sessions carry no token ledger")
+        XCTAssertEqual(day11.tokens.total, 0, "rollouts without a token ledger contribute no tokens")
         XCTAssertEqual(day11.estimatedCostUSD, 0)
 
         let day10 = try XCTUnwrap(activity.daily.first { $0.day == Self.day(2026, 8, 10) })
         XCTAssertEqual(day10.sessionCount, 1)
+    }
+
+    /// The last `token_count` event in a rollout carries the session's
+    /// cumulative ledger, and its tokens land on the session's UTC day so the
+    /// unified "AI coding today" strip can sum them.
+    func testScanParsesCumulativeTokensFromLastTokenCountEvent() async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        // cached sits inside input, reasoning inside output: the totals must
+        // still sum to Codex's own total_tokens (1_000_000 + 2_000).
+        try writeRollout(
+            root,
+            name: "rollout-2026-08-11T12-00-00-a",
+            timestamp: "2026-08-11T12:00:00.000Z",
+            cwd: "/testuser/example/meterusage",
+            tokens: (input: 1_000_000, cached: 900_000, output: 2_000, reasoning: 500)
+        )
+        try writeRollout(
+            root,
+            name: "rollout-2026-08-10T09-00-00-b",
+            timestamp: "2026-08-10T09:00:00.000Z",
+            tokens: (input: 10, cached: 0, output: 5, reasoning: 0)
+        )
+
+        let activity = try await CodexLocalSource(root: root).scan()
+
+        let session = try XCTUnwrap(activity.sessions.first { $0.startedAt == Self.day(2026, 8, 11).addingTimeInterval(12 * 3600) })
+        XCTAssertEqual(session.projectName, "meterusage")
+        XCTAssertEqual(session.tokens.input, 100_000)
+        XCTAssertEqual(session.tokens.cacheRead, 900_000)
+        XCTAssertEqual(session.tokens.output, 1_500)
+        XCTAssertEqual(session.tokens.reasoning, 500)
+        XCTAssertEqual(session.tokens.total, 1_002_000)
+
+        let day11 = try XCTUnwrap(activity.daily.first { $0.day == Self.day(2026, 8, 11) })
+        XCTAssertEqual(day11.tokens.total, 1_002_000)
+        XCTAssertEqual(day11.sessionCount, 1)
+
+        let day10 = try XCTUnwrap(activity.daily.first { $0.day == Self.day(2026, 8, 10) })
+        XCTAssertEqual(day10.tokens.total, 15)
+    }
+
+    /// The final events after the last `token_count` can be large (tool
+    /// output), so the backward search must keep reading earlier chunks until
+    /// it finds the ledger instead of stopping at the first megabyte.
+    func testTokenSearchReadsBackwardPastLargeTrailingEvents() async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = try writeRollout(
+            root,
+            name: "rollout-2026-08-11T12-00-00-a",
+            timestamp: "2026-08-11T12:00:00.000Z",
+            tokens: (input: 500, cached: 100, output: 50, reasoning: 10)
+        )
+        // A multi-megabyte tool-output event after the token_count event.
+        var data = try Data(contentsOf: url)
+        data.append(Data(String(repeating: "x", count: 3 << 20).utf8))
+        data.append(Data("\n".utf8))
+        try data.write(to: url)
+
+        let totals = try XCTUnwrap(CodexLocalSource.lastTokenUsage(for: url))
+        XCTAssertEqual(totals.total, 550)
+
+        let activity = try await CodexLocalSource(root: root).scan()
+        XCTAssertEqual(try XCTUnwrap(activity.sessions.first).tokens.total, 550)
+    }
+
+    /// A token_count event with an empty ledger (info present but zeroed) is
+    /// not a reading; the session reports no tokens rather than zero-as-data.
+    func testZeroedTokenCountIsIgnored() {
+        let line = Data(#"{"timestamp":"2026-08-11T12:00:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":0,"cached_input_tokens":0,"output_tokens":0,"reasoning_output_tokens":0,"total_tokens":0}}}}"#.utf8)
+        XCTAssertNil(CodexLocalSource.parseTokenCountLine(line))
+    }
+
+    func testParseTokenCountLineRejectsOtherEvents() {
+        let line = Data(#"{"timestamp":"2026-08-11T12:00:00.000Z","type":"event_msg","payload":{"type":"agent_message"}}"#.utf8)
+        XCTAssertNil(CodexLocalSource.parseTokenCountLine(line))
+        XCTAssertNil(CodexLocalSource.parseTokenCountLine(Data("not json\n".utf8)))
     }
 
     func testScanEmptyTreeThrowsNoData() async throws {
@@ -94,9 +189,9 @@ final class CodexLocalSourceTests: XCTestCase {
 
     // MARK: - Heatmap intensity
 
-    /// Codex has no tokens anywhere; the heatmap must shade by sessions so a
-    /// session-only source renders, rather than the token metric flattening
-    /// every cell to empty.
+    /// The heatmap shades by sessions so a session-only metric renders even
+    /// when every token figure is zero — the generic model property this
+    /// asserts, independent of what any one source reports today.
     func testHeatmapShadesBySessionsWhenTokensAbsent() {
         let now = Date()
         var calendar = Calendar(identifier: .gregorian)

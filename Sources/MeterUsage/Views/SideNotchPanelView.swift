@@ -423,6 +423,16 @@ struct SideNotchPanelView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
+                Button {
+                    panel.shareSnapshot()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(Notch.subtext)
+                }
+                .buttonStyle(.plain)
+                .help("Share screenshot")
+                .accessibilityLabel("Share screenshot")
             }
 
             // Service status badge for anything but operational. Unknown gets

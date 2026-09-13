@@ -184,6 +184,10 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
 
     @objc private func refreshNow() { coordinator?.refresh() }
 
+    nonisolated static func captureScale(backingScaleFactor: CGFloat) -> CGFloat {
+        max(2, backingScaleFactor)
+    }
+
     @objc private func quit() { NSApp.terminate(nil) }
 
     // MARK: Side notch panel
@@ -212,7 +216,10 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
         popover.behavior = .transient
         popover.animates = true
         let hostingController = NSHostingController(
-            rootView: PopoverRoot(coordinator: coordinator, preferences: preferences)
+            rootView: PopoverRoot(
+                coordinator: coordinator,
+                preferences: preferences
+            )
         )
         // Let SwiftUI's measured content height drive the popover size instead
         // of the fixed `contentSize` above, so the popover shrinks to its
