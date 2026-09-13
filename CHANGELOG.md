@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.21] - 2026-09-14
+
+### Fixed
+
+- **Share menu survives panel folding** — the picker anchors to the content
+  view (which outlives the hover card) with the click-time button rect, so
+  folding mid-share no longer dismisses it. The hold-open flag this replaces,
+  with its stuck-forever failure mode, is removed.
+- **Share crop no longer depends on strip measurement** — the card column is
+  a fixed 250pt, so the capture rect derives from content size and card side
+  only.
+
 ## [0.2.20] - 2026-09-14
 
 ### Fixed
