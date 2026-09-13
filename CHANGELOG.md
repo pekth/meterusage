@@ -40,6 +40,15 @@ follows [Semantic Versioning](https://semver.org/).
   alternatives and the nudge wraps instead of truncating.
 - **Settings Accounts listed disabled providers** — only enabled providers are
   shown, since a hidden provider is not read at all.
+- **Share menu detached from its button** — the picker anchored to the whole
+  panel rect. The Share button is now a real `NSButton` handing itself to the
+  picker at click time, so the menu hugs the button.
+- **Share menu dismissed mid-reach** — sliding the pointer toward the menu
+  folded the hover card after 450ms, unmounting the button underneath it.
+  The panel now stays open while the share menu tracks and releases when
+  menu tracking ends.
+- **Share snapshot included the ring strip** — captures crop to the fixed
+  250pt detail-card column, strip excluded.
 
 ## [0.2.18] - 2026-09-12
 
