@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.19] - 2026-09-13
+
+### Fixed
+
+- **ALL AI totals missed non-session providers** — the today strip only summed
+  Codex and Claude sessions, so a day worked in OpenCode Go read as 0 tokens
+  today. OpenCode Go, Antigravity, and OpenRouter now report today/week token
+  totals and the strip sums them.
+- **Burn attribution showed stale sessions** — attribution covered only the
+  last 8 Codex/Claude sessions of any age. It now covers every token-bearing
+  provider over the same 7-day scope as the totals, and an empty week hides
+  the section instead of presenting old burn as today's.
+- **Burn shares rendered as 9,998%** — the percent-scale share was multiplied
+  by 100 a second time. Shares render once, with sub-1% contributors shown as
+  `<1%` instead of `0%`.
+- **"Last 7 days" counted 8 days** — the `>=` range on a −7d start spanned
+  today plus 7 prior days. All calendar-day windows now use −6d.
+- **Failover nudge recommended the burning provider** — "Codex burning fast.
+  Switch to Codex" can no longer happen; burning providers are excluded from
+  alternatives and the nudge wraps instead of truncating.
+- **Settings Accounts listed disabled providers** — only enabled providers are
+  shown, since a hidden provider is not read at all.
+
 ## [0.2.18] - 2026-09-12
 
 ### Added
