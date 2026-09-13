@@ -68,6 +68,9 @@ final class OpenRouterUsageTests: XCTestCase {
         // Today stats (2026-09-09)
         XCTAssertEqual(usage.todaySessionCount, 20)
         XCTAssertEqual(usage.todayMessageCount, 20)
+        XCTAssertEqual(usage.todayTokens, TokenTotals(input: 20000, output: 4000, reasoning: 1000))
+        XCTAssertEqual(usage.weekTokens, TokenTotals(input: 35000, output: 7500, reasoning: 1500))
+        XCTAssertEqual(try XCTUnwrap(usage.todayCostUSD), 0.160, accuracy: 0.001)
 
         // Telemetry
         let tel = try XCTUnwrap(usage.telemetry)

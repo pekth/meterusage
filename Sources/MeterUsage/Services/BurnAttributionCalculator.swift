@@ -1,18 +1,62 @@
 import Foundation
 
 public enum BurnAttributionCalculator {
+    /// Sessions feeding burn attribution: real per-session histories plus one
+    /// synthetic aggregate per token-bearing usage provider (OpenCode Go,
+    /// Antigravity, OpenRouter), which expose totals but no per-session list.
+    /// An aggregate carries the provider's week tokens under the provider's
+    /// display name with an empty model and `isAggregate`, so it joins token
+    /// totals without ever posing as one long chat.
+    static func attributionSessions(
+        activities: [Provider: Loaded<LocalActivity>],
+        usages: [Provider: Loaded<ProviderUsage>],
+        now: Date = Date()
+    ) -> [SessionSummary] {
+        var result: [SessionSummary] = []
+        for provider in Provider.allCases {
+            if let act = activities[provider]?.value {
+                result.append(contentsOf: act.sessions)
+            }
+        }
+        for provider in Provider.allCases {
+            guard let usage = usages[provider]?.value,
+                  let week = usage.weekTokens, week.total > 0 else { continue }
+            result.append(
+                SessionSummary(
+                    id: "aggregate-\(provider.rawValue)",
+                    projectName: provider.displayName,
+                    model: "",
+                    tokens: week,
+                    estimatedCostUSD: 0,
+                    startedAt: now,
+                    messageCount: 0,
+                    isAggregate: true
+                )
+            )
+        }
+        return result.sorted { $0.startedAt > $1.startedAt }
+    }
+
     public static func calculate(
         sessions: [SessionSummary],
         window: QuotaWindow?,
+        since: Date? = nil,
+        fallbackToRecent: Bool = true,
         now: Date = Date()
     ) -> WindowBurnBreakdown? {
         guard !sessions.isEmpty else { return nil }
 
-        // Filter sessions within window's timeframe
+        // Filter sessions within the scope: an explicit `since` date (the
+        // 7-day strip), else the quota window's timeframe.
         let relevantSessions: [SessionSummary]
-        if let window, let resetsAt = window.resetsAt, let durationMins = window.effectiveDurationMins, durationMins > 0 {
+        if let since {
+            let filtered = sessions.filter { $0.startedAt >= since && $0.startedAt <= now }
+            if filtered.isEmpty, !fallbackToRecent { return nil }
+            relevantSessions = filtered.isEmpty ? Array(sessions.suffix(8)) : filtered
+        } else if let window, let resetsAt = window.resetsAt, let durationMins = window.effectiveDurationMins, durationMins > 0 {
             let windowStart = resetsAt.addingTimeInterval(-Double(durationMins) * 60.0)
             let filtered = sessions.filter { $0.startedAt >= windowStart && $0.startedAt <= now }
+            if filtered.isEmpty, !fallbackToRecent { return nil }
             relevantSessions = filtered.isEmpty ? Array(sessions.suffix(8)) : filtered
         } else {
             relevantSessions = Array(sessions.suffix(8))
@@ -21,7 +65,7 @@ public enum BurnAttributionCalculator {
         guard !relevantSessions.isEmpty else { return nil }
 
         // Aggregate by project + model
-        var grouped: [String: (project: String, model: String, turns: Int, tokens: TokenTotals)] = [:]
+        var grouped: [String: (project: String, model: String, turns: Int, tokens: TokenTotals, hasRealSession: Bool)] = [:]
         var totalWindowTokens = 0
         var totalTurns = 0
         var totalInput = 0
@@ -34,7 +78,9 @@ public enum BurnAttributionCalculator {
             let tokens = session.tokens
             let turns = max(1, session.messageCount)
             let isLong = turns >= 10 || tokens.total >= 100_000
-            if isLong { longChats += 1 }
+            // Aggregates carry a whole provider's week: real burn, but never
+            // "one long chat".
+            if isLong, !session.isAggregate { longChats += 1 }
 
             totalWindowTokens += tokens.total
             totalTurns += turns
@@ -47,14 +93,16 @@ public enum BurnAttributionCalculator {
                     project: existing.project,
                     model: existing.model,
                     turns: existing.turns + turns,
-                    tokens: existing.tokens + tokens
+                    tokens: existing.tokens + tokens,
+                    hasRealSession: existing.hasRealSession || !session.isAggregate
                 )
             } else {
                 grouped[key] = (
                     project: session.projectName,
                     model: session.model,
                     turns: turns,
-                    tokens: tokens
+                    tokens: tokens,
+                    hasRealSession: !session.isAggregate
                 )
             }
         }
@@ -65,7 +113,7 @@ public enum BurnAttributionCalculator {
                 let turns = item.turns
                 let itemTotal = item.tokens.total
                 let share = (Double(itemTotal) / Double(totalTokensSafe)) * 100.0
-                let isLong = turns >= 10 || itemTotal >= 100_000
+                let isLong = (turns >= 10 || itemTotal >= 100_000) && item.hasRealSession
                 return BurnContributor(
                     projectName: item.project,
                     model: item.model,

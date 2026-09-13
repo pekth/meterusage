@@ -154,11 +154,19 @@ public struct OpenRouterUsageSource: UsageSource {
         let totalCost = dayMap.values.reduce(0.0) { $0 + $1.usageDollars }
 
         let startOfToday = calendar.startOfDay(for: now)
+        let weekStart = calendar.date(byAdding: .day, value: -6, to: startOfToday) ?? startOfToday
         let todayStats = dayMap[startOfToday]
         let todayRequests = todayStats?.requests ?? 0
         let todayTokens = todayStats.map {
             TokenTotals(input: $0.promptTokens, output: $0.completionTokens, reasoning: $0.reasoningTokens)
         } ?? TokenTotals()
+        let todayCost = todayStats?.usageDollars ?? 0
+        let weekTokens = dayMap
+            .filter { $0.key >= weekStart }
+            .values
+            .reduce(TokenTotals()) {
+                $0 + TokenTotals(input: $1.promptTokens, output: $1.completionTokens, reasoning: $1.reasoningTokens)
+            }
 
         let windows = [
             UsageWindow(
@@ -185,6 +193,9 @@ public struct OpenRouterUsageSource: UsageSource {
             estimatedCostUSD: totalCost > 0 ? totalCost : nil,
             todaySessionCount: todayRequests,
             todayMessageCount: todayRequests,
+            todayTokens: todayTokens.total > 0 ? todayTokens : nil,
+            weekTokens: weekTokens.total > 0 ? weekTokens : nil,
+            todayCostUSD: todayCost > 0 ? todayCost : nil,
             usageWindows: windows,
             telemetry: telemetry,
             capturedAt: now

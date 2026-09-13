@@ -581,7 +581,7 @@ struct SideNotchPanelView: View {
                                 .foregroundColor(Notch.subtext)
                                 .lineLimit(1)
                             Spacer()
-                            Text("\(Int(item.shareOfWindow))%")
+                            Text(Fmt.share(item.shareOfWindow))
                                 .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
                                 .foregroundColor(Notch.text)
                         }

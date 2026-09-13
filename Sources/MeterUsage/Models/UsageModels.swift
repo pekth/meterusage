@@ -480,6 +480,9 @@ public struct BurnContributor: Equatable, Sendable, Identifiable {
     public let turns: Int
     public let tokens: TokenTotals
     public let totalTokens: Int
+    /// Share of the breakdown window, 0...100 (percent, not fraction).
+    /// Produced by `BurnAttributionCalculator`; render with `Fmt.share(_:)`,
+    /// never by multiplying by 100 again.
     public let shareOfWindow: Double
     public let isLongChat: Bool
 
@@ -577,6 +580,11 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public let estimatedCostUSD: Double
     public let startedAt: Date
     public let messageCount: Int
+    /// True for synthetic per-provider aggregates built for burn attribution
+    /// (see `BurnAttributionCalculator.attributionSessions`): one entry
+    /// carrying a whole provider's week tokens, not one chat. Aggregates join
+    /// token and cost totals but never count as long chats.
+    public let isAggregate: Bool
 
     public init(
         id: String,
@@ -585,7 +593,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
         tokens: TokenTotals,
         estimatedCostUSD: Double,
         startedAt: Date,
-        messageCount: Int
+        messageCount: Int,
+        isAggregate: Bool = false
     ) {
         self.id = id
         self.projectName = projectName
@@ -594,6 +603,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
         self.estimatedCostUSD = estimatedCostUSD
         self.startedAt = startedAt
         self.messageCount = messageCount
+        self.isAggregate = isAggregate
     }
 }
 
@@ -780,6 +790,17 @@ public struct ProviderUsage: Equatable, Sendable {
     public let estimatedCostUSD: Double?
     public let todaySessionCount: Int
     public let todayMessageCount: Int
+    /// Calendar-day token totals (local day, except UTC-day for UTC-bucketed
+    /// sources like OpenRouter) for the "today" / "last 7 days" strip. Nil
+    /// when the source measures no token totals (Grok, count-only fallbacks),
+    /// so an unknown day never reads as a measured zero. Sessions count on
+    /// the day of their last activity — a session started days ago but worked
+    /// on today counts toward today, matching the rolling-window convention.
+    public let todayTokens: TokenTotals?
+    public let weekTokens: TokenTotals?
+    /// Cost incurred today, where the source prices it (OpenCode Go,
+    /// OpenRouter). Nil otherwise.
+    public let todayCostUSD: Double?
     /// Rolling windows (e.g. "last 24h", "last 7d", "last 30d") computed from
     /// the source's own records. Nil when the source has no timestamps.
     public let usageWindows: [UsageWindow]?
@@ -794,6 +815,9 @@ public struct ProviderUsage: Equatable, Sendable {
         estimatedCostUSD: Double? = nil,
         todaySessionCount: Int = 0,
         todayMessageCount: Int = 0,
+        todayTokens: TokenTotals? = nil,
+        weekTokens: TokenTotals? = nil,
+        todayCostUSD: Double? = nil,
         usageWindows: [UsageWindow]? = nil,
         telemetry: ProviderTelemetry? = nil,
         capturedAt: Date
@@ -805,6 +829,9 @@ public struct ProviderUsage: Equatable, Sendable {
         self.estimatedCostUSD = estimatedCostUSD
         self.todaySessionCount = max(todaySessionCount, 0)
         self.todayMessageCount = max(todayMessageCount, 0)
+        self.todayTokens = todayTokens
+        self.weekTokens = weekTokens
+        self.todayCostUSD = todayCostUSD
         self.usageWindows = usageWindows
         self.telemetry = telemetry
         self.capturedAt = capturedAt

@@ -81,6 +81,118 @@ final class NewPipelineTests: XCTestCase {
         XCTAssertEqual(loadedAfterPurge.first?.tokens.input, 1000) // yesterday preserved
     }
 
+    func testBurnShareIsPercentNotFraction() {
+        let now = Date()
+        let sessions = [
+            SessionSummary(
+                id: "big",
+                projectName: "intent-trade",
+                model: "codex",
+                tokens: TokenTotals(input: 193_600_000, output: 0),
+                estimatedCostUSD: 0,
+                startedAt: now.addingTimeInterval(-3600),
+                messageCount: 12
+            ),
+            SessionSummary(
+                id: "small",
+                projectName: "review",
+                model: "codex",
+                tokens: TokenTotals(input: 31_000, output: 0),
+                estimatedCostUSD: 0,
+                startedAt: now.addingTimeInterval(-1800),
+                messageCount: 3
+            )
+        ]
+        let breakdown = BurnAttributionCalculator.calculate(sessions: sessions, window: nil, now: now)
+        XCTAssertNotNil(breakdown)
+        guard let b = breakdown else { return }
+        // Regression: shareOfWindow is 0...100. Rendering must not multiply
+        // by 100 again (193.6m at ~100% rendered as 9,998%).
+        for c in b.contributors {
+            XCTAssertGreaterThanOrEqual(c.shareOfWindow, 0)
+            XCTAssertLessThanOrEqual(c.shareOfWindow, 100)
+        }
+        XCTAssertEqual(Fmt.share(b.contributors.first?.shareOfWindow ?? -1), "100%")
+        XCTAssertEqual(Fmt.share(0.016), "<1%")
+        XCTAssertEqual(Fmt.share(0), "0%")
+        XCTAssertEqual(Fmt.share(150), "100%")
+    }
+
+    func testBurnAttributionSinceScopeHidesStaleBurnWithoutFallback() {
+        let now = Date()
+        let old = SessionSummary(
+            id: "old",
+            projectName: "intent-trade",
+            model: "codex",
+            tokens: TokenTotals(input: 193_600_000, output: 0),
+            estimatedCostUSD: 0,
+            startedAt: now.addingTimeInterval(-10 * 86_400),
+            messageCount: 12
+        )
+        let weekStart = now.addingTimeInterval(-6 * 86_400)
+
+        // Scoped to the week with no fallback: stale sessions hide the section.
+        XCTAssertNil(
+            BurnAttributionCalculator.calculate(
+                sessions: [old], window: nil, since: weekStart, fallbackToRecent: false, now: now
+            )
+        )
+        // Default behavior keeps the recent-burn fallback for quota windows.
+        XCTAssertNotNil(
+            BurnAttributionCalculator.calculate(sessions: [old], window: nil, now: now)
+        )
+    }
+
+    func testAttributionSessionsAddsProviderAggregates() {
+        let now = Date()
+        let activities: [Provider: Loaded<LocalActivity>] = [
+            .codex: .value(LocalActivity(
+                provider: .codex,
+                sessions: [SessionSummary(
+                    id: "s1", projectName: "meterusage", model: "codex",
+                    tokens: TokenTotals(input: 1_000, output: 0),
+                    estimatedCostUSD: 0,
+                    startedAt: now.addingTimeInterval(-3_600), messageCount: 3
+                )],
+                daily: [], scannedAt: now
+            ))
+        ]
+        let usages: [Provider: Loaded<ProviderUsage>] = [
+            .openCodeGo: .value(ProviderUsage(
+                provider: .openCodeGo, sessionCount: 5, messageCount: 50,
+                todaySessionCount: 1, todayMessageCount: 9,
+                todayTokens: TokenTotals(input: 38_000_000, output: 0),
+                weekTokens: TokenTotals(input: 249_000_000, output: 0),
+                capturedAt: now
+            )),
+            // Count-only providers contribute no aggregate.
+            .grok: .value(ProviderUsage(
+                provider: .grok, sessionCount: 4, messageCount: 40,
+                todaySessionCount: 1, todayMessageCount: 8, capturedAt: now
+            ))
+        ]
+
+        let sessions = BurnAttributionCalculator.attributionSessions(activities: activities, usages: usages, now: now)
+        XCTAssertEqual(sessions.count, 2)
+        let aggregate = try? XCTUnwrap(sessions.first { $0.isAggregate })
+        XCTAssertEqual(aggregate?.projectName, "OpenCode Go")
+        XCTAssertEqual(aggregate?.model, "")
+        XCTAssertEqual(aggregate?.tokens.total, 249_000_000)
+
+        // A whole provider's week is real burn but never one long chat.
+        let breakdown = try? XCTUnwrap(BurnAttributionCalculator.calculate(
+            sessions: [SessionSummary(
+                id: "aggregate-openCodeGo", projectName: "OpenCode Go", model: "",
+                tokens: TokenTotals(input: 38_000_000, output: 0),
+                estimatedCostUSD: 0, startedAt: now, messageCount: 0, isAggregate: true
+            )],
+            window: nil, since: now.addingTimeInterval(-6 * 86_400),
+            fallbackToRecent: false, now: now
+        ))
+        XCTAssertEqual(breakdown?.longChatCount, 0)
+        XCTAssertEqual(breakdown?.contributors.first?.isLongChat, false)
+    }
+
     func testQuotaPaceAmbientETA() {
         let now = Date()
         let resetsAt = now.addingTimeInterval(3600) // 1h remaining

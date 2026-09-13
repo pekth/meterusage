@@ -314,6 +314,8 @@ struct DemoAntigravityUsageSource: UsageSource {
             ),
             todaySessionCount: 2,
             todayMessageCount: 31,
+            todayTokens: TokenTotals(input: 520_000, output: 48_000, reasoning: 11_000, cacheRead: 1_500_000),
+            weekTokens: TokenTotals(input: 2_900_000, output: 270_000, reasoning: 64_000, cacheRead: 8_600_000),
             capturedAt: Date().addingTimeInterval(-75)
         )
     }
@@ -370,6 +372,9 @@ struct DemoOpenCodeGoUsageSource: UsageSource {
             estimatedCostUSD: 16.33,
             todaySessionCount: 3,
             todayMessageCount: 71,
+            todayTokens: TokenTotals(input: 260_000, output: 74_000, reasoning: 18_000, cacheRead: 1_420_000),
+            weekTokens: TokenTotals(input: 980_000, output: 240_000, reasoning: 74_000, cacheRead: 6_100_000),
+            todayCostUSD: 2.10,
             usageWindows: [
                 UsageWindow(
                     label: "last 24h",
@@ -444,6 +449,9 @@ struct DemoOpenRouterUsageSource: UsageSource {
             estimatedCostUSD: 3.22,
             todaySessionCount: 6,
             todayMessageCount: 112,
+            todayTokens: TokenTotals(input: 32_000_000, output: 10_000_000),
+            weekTokens: TokenTotals(input: 210_000_000, output: 52_000_000, reasoning: 18_000_000),
+            todayCostUSD: 0.15,
             usageWindows: [
                 UsageWindow(
                     label: "last 24h",

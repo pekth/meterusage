@@ -247,16 +247,6 @@ struct PopoverRoot: View {
 
     @State private var showImprovementsList = false
 
-    private var allRecentSessions: [SessionSummary] {
-        var result: [SessionSummary] = []
-        for provider in Provider.allCases {
-            if let act = coordinator.activities[provider]?.value {
-                result.append(contentsOf: act.sessions)
-            }
-        }
-        return result.sorted { $0.startedAt > $1.startedAt }
-    }
-
     private var previewImprovementsCard: some View {
         Card(padding: 10) {
             VStack(alignment: .leading, spacing: 8) {
@@ -324,20 +314,52 @@ struct PopoverRoot: View {
     private var unifiedActivityStrip: some View {
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: coordinator.clock)
-        let weekStart = calendar.date(byAdding: .day, value: -7, to: todayStart) ?? todayStart
+        // Today plus the 6 prior days: 7 calendar days for the "last 7 days"
+        // label. `>=` on a -7d start would silently count 8 days.
+        let weekStart = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
 
         var todayTokens = 0
         var weekTokens = 0
         var todayCost: Double = 0.0
 
+        // Day buckets are the source of truth for "today" vs "last 7 days":
+        // a session started yesterday that ran past midnight must count toward
+        // today. Fall back to session start dates only when a provider has no
+        // daily history yet. Token-bearing usage sources (OpenCode Go,
+        // Antigravity, OpenRouter) contribute their own day totals — without
+        // them the strip only ever saw Codex and Claude.
+        //
+        // Two day conventions meet here: activity totals bucket by session
+        // start day, usage day-totals by last activity (a session worked on
+        // today counts toward today, matching the rolling windows). Both are
+        // approximations of "work done today" from stores that never record
+        // per-day ledgers; the difference only shows at day boundaries.
         for provider in Provider.allCases {
-            if let act = coordinator.activities[provider]?.value {
+            guard let act = coordinator.activities[provider]?.value else { continue }
+            if !act.daily.isEmpty {
+                for day in act.daily {
+                    let dayStart = calendar.startOfDay(for: day.day)
+                    if calendar.isDate(dayStart, inSameDayAs: todayStart) {
+                        todayTokens += day.tokens.total
+                        todayCost += day.estimatedCostUSD
+                    }
+                    if dayStart >= weekStart {
+                        weekTokens += day.tokens.total
+                    }
+                }
+            } else {
                 let todaySessions = act.sessions.filter { $0.startedAt >= todayStart }
                 let weekSessions = act.sessions.filter { $0.startedAt >= weekStart }
                 todayTokens += todaySessions.reduce(0) { $0 + $1.tokens.total }
                 weekTokens += weekSessions.reduce(0) { $0 + $1.tokens.total }
                 todayCost += todaySessions.reduce(0.0) { $0 + $1.estimatedCostUSD }
             }
+        }
+        for provider in Provider.allCases {
+            guard let usage = coordinator.usages[provider]?.value else { continue }
+            if let t = usage.todayTokens { todayTokens += t.total }
+            if let w = usage.weekTokens { weekTokens += w.total }
+            if let c = usage.todayCostUSD { todayCost += c }
         }
 
         let burningFast = coordinator.visibleQuotaProviders.compactMap { p -> (Provider, QuotaWindow, QuotaPace)? in
@@ -348,15 +370,19 @@ struct PopoverRoot: View {
             return (p, h, pace)
         }
 
+        let burningProviders = Set(burningFast.map(\.0))
         let headroomAlternatives = coordinator.visibleQuotaProviders.filter { p in
+            // Never suggest switching to a provider that is itself burning —
+            // "Codex burning fast. Switch to Codex" is the exact failure.
+            guard !burningProviders.contains(p) else { return false }
             guard let q = coordinator.displayQuota(for: p)?.quota,
                   let h = p.headlineWindow(from: q.windows) else { return false }
             return h.usedPercent < 50
         }
 
         return VStack(alignment: .leading, spacing: 6) {
-            Card(padding: 10) {
-                VStack(alignment: .leading, spacing: 6) {
+            Card(padding: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .center) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
                             .font(.system(size: 11, weight: .semibold))
@@ -373,12 +399,12 @@ struct PopoverRoot: View {
                         }
                     }
 
-                    HStack(spacing: 16) {
+                    HStack(alignment: .firstTextBaseline, spacing: 16) {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(todayTokens > 0 ? Fmt.tokenCountString(todayTokens) : "0")
-                                .font(.system(size: 15, weight: .bold).monospacedDigit())
-                                .foregroundColor(MU.text)
-                            Text("tokens today")
+                                .font(.system(size: 19, weight: .semibold).monospacedDigit())
+                                .foregroundColor(todayTokens > 0 ? MU.text : MU.textTertiary)
+                            Text(todayTokens > 0 ? "tokens today" : "no sessions today")
                                 .font(.muCaption)
                                 .foregroundColor(MU.textSecondary)
                         }
@@ -386,7 +412,7 @@ struct PopoverRoot: View {
                         if weekTokens > todayTokens {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(Fmt.tokenCountString(weekTokens))
-                                    .font(.system(size: 15, weight: .bold).monospacedDigit())
+                                    .font(.system(size: 19, weight: .semibold).monospacedDigit())
                                     .foregroundColor(MU.text)
                                 Text("last 7 days")
                                     .font(.muCaption)
@@ -400,53 +426,95 @@ struct PopoverRoot: View {
                             ForEach(coordinator.menuBarProviders, id: \.self) { p in
                                 ProviderMark(provider: p, tint: providerColor(p))
                                     .frame(width: 11, height: 11)
+                                    .help(p.displayName)
                             }
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("Includes: \(coordinator.menuBarProviders.map(\.displayName).joined(separator: ", "))")
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(Fmt.tokenCountString(todayTokens)) tokens today, \(Fmt.tokenCountString(weekTokens)) last 7 days")
 
                     if let burning = burningFast.first, !headroomAlternatives.isEmpty {
-                        HStack(spacing: 4) {
+                        HStack(alignment: .top, spacing: 4) {
                             Image(systemName: "arrow.triangle.swap")
                                 .font(.system(size: 9.5))
                                 .foregroundColor(MU.warn)
+                                .padding(.top, 1)
                             Text("\(burning.0.displayName) burning fast. Switch to \(headroomAlternatives.map(\.displayName).joined(separator: ", ")) for headroom.")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(MU.warn)
-                                .lineLimit(1)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.top, 2)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("\(burning.0.displayName) burning fast. Headroom in \(headroomAlternatives.map(\.displayName).joined(separator: ", ")).")
                     }
 
-                    let burnBreakdown = BurnAttributionCalculator.calculate(sessions: allRecentSessions, window: nil, now: coordinator.clock)
+                    // Attribution covers every token-bearing provider over the
+                    // same 7-day scope as the totals above — not just the
+                    // last 8 Codex/Claude sessions. No fallback to stale
+                    // sessions: an empty week hides the section instead of
+                    // presenting old burn as today's.
+                    let attributionSessions = BurnAttributionCalculator.attributionSessions(
+                        activities: coordinator.activities,
+                        usages: coordinator.usages,
+                        now: coordinator.clock
+                    )
+                    let burnBreakdown = BurnAttributionCalculator.calculate(
+                        sessions: attributionSessions,
+                        window: nil,
+                        since: weekStart,
+                        fallbackToRecent: false,
+                        now: coordinator.clock
+                    )
                     if let breakdown = burnBreakdown, !breakdown.contributors.isEmpty {
-                        Divider().overlay(MU.hairline)
+                        Divider().overlay(MU.hairline).padding(.vertical, 2)
 
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Image(systemName: "flame.fill")
                                     .font(.system(size: 10))
-                                    .foregroundColor(MU.accent)
+                                    .foregroundColor(MU.warn)
                                 Text("BURN ATTRIBUTION & CONTEXT EFFICIENCY")
                                     .font(.system(size: 9.5, weight: .bold))
                                     .tracking(0.6)
                                     .foregroundColor(MU.textTertiary)
                                 Spacer()
+                                Text("last 7d")
+                                    .font(.muCaption)
+                                    .foregroundColor(MU.textTertiary)
                             }
 
-                            ForEach(Array(breakdown.contributors.prefix(3).enumerated()), id: \.element.projectName) { _, c in
-                                HStack(spacing: 4) {
-                                    Text(c.projectName.isEmpty ? "default" : c.projectName)
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(MU.text)
-                                        .lineLimit(1)
-                                    Text("· \(c.model)")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(MU.textSecondary)
-                                        .lineLimit(1)
-                                    Spacer()
-                                    Text("\(Fmt.tokenCountString(c.totalTokens)) (\(Int(round(c.shareOfWindow * 100)))%)")
-                                        .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
-                                        .foregroundColor(MU.text)
+                            VStack(alignment: .leading, spacing: 7) {
+                                ForEach(breakdown.contributors.prefix(3), id: \.id) { c in
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                            Text(c.projectName.isEmpty ? "default" : c.projectName)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundColor(MU.text)
+                                                .lineLimit(1)
+                                                .truncationMode(.tail)
+                                            // Aggregates carry a provider's whole week under
+                                            // the provider name with no model — no separator.
+                                            if !c.model.isEmpty {
+                                                Text("· \(Fmt.shortModel(c.model))")
+                                                    .font(.system(size: 10))
+                                                    .foregroundColor(MU.textSecondary)
+                                                    .lineLimit(1)
+                                                    .truncationMode(.tail)
+                                            }
+                                            Spacer(minLength: 6)
+                                            Text("\(Fmt.tokenCountString(c.totalTokens)) (\(Fmt.share(c.shareOfWindow)))")
+                                                .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
+                                                .foregroundColor(MU.text)
+                                        }
+                                        MeterBar(fraction: (c.shareOfWindow / 100).muClamped(to: 0...1), tint: MU.neutral, height: 4)
+                                    }
+                                    .help("\(c.projectName.isEmpty ? "default" : c.projectName)\(c.model.isEmpty ? "" : " · \(Fmt.shortModel(c.model))") — \(Fmt.tokenCountString(c.totalTokens)) (\(Fmt.share(c.shareOfWindow)))")
+                                    .accessibilityElement(children: .combine)
+                                    .accessibilityLabel("\(c.projectName.isEmpty ? "default" : c.projectName)\(c.model.isEmpty ? "" : ", \(Fmt.shortModel(c.model))"), \(Fmt.tokenCountString(c.totalTokens)), \(Fmt.share(c.shareOfWindow)) of last 7 days burn")
                                 }
                             }
 
@@ -455,11 +523,12 @@ struct PopoverRoot: View {
                                     HStack(spacing: 3) {
                                         Image(systemName: "bolt.badge.checkmark.fill")
                                             .font(.system(size: 9))
-                                            .foregroundColor(hit >= 50 ? MU.calm : MU.warn)
+                                            .foregroundColor(hit >= 80 ? MU.good : (hit >= 50 ? MU.calm : MU.warn))
                                         Text("Cache \(Int(round(hit)))%")
                                             .font(.system(size: 10, weight: .medium))
                                             .foregroundColor(MU.textSecondary)
                                     }
+                                    .help("Share of recent tokens served from cache")
                                 }
                                 if let avg = breakdown.avgTokensPerTurn {
                                     HStack(spacing: 3) {
@@ -470,6 +539,7 @@ struct PopoverRoot: View {
                                             .font(.system(size: 10, weight: .medium))
                                             .foregroundColor(MU.textSecondary)
                                     }
+                                    .help("Average tokens per turn across recent sessions")
                                 }
                                 if breakdown.longChatCount > 0 {
                                     HStack(spacing: 3) {
@@ -480,6 +550,7 @@ struct PopoverRoot: View {
                                             .font(.system(size: 10, weight: .medium))
                                             .foregroundColor(MU.warn)
                                     }
+                                    .help("Sessions with 10+ turns or 100k+ tokens")
                                 }
                             }
                             .padding(.top, 2)

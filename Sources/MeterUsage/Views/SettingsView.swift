@@ -50,7 +50,6 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-
             Group {
                 SectionHeader("Refresh")
                 Card(padding: 10) {
@@ -80,7 +79,7 @@ struct SettingsView: View {
                 Card(padding: 10) {
                     ProviderRow(
                         provider: .codex,
-                        subtitle: "Primary quota and usage",
+                        subtitle: "Quota and local sessions",
                         isOn: $showCodex,
                         menuBarIsOn: $menuBarCodex
                     )
@@ -101,42 +100,42 @@ struct SettingsView: View {
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .openCodeGo,
-                        subtitle: "OpenCode Go token usage",
+                        subtitle: "Token usage by window",
                         isOn: $showOpenCodeGo,
                         menuBarIsOn: $menuBarOpenCodeGo
                     )
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .openRouter,
-                        subtitle: "API usage and spending limit",
+                        subtitle: "Spend and credit balance",
                         isOn: $showOpenRouter,
                         menuBarIsOn: $menuBarOpenRouter
                     )
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .claude,
-                        subtitle: "Optional Claude Code activity",
+                        subtitle: "Quota and local activity",
                         isOn: $showClaude,
                         menuBarIsOn: $menuBarClaude
                     )
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .cursor,
-                        subtitle: "Cursor editor local usage & requests",
+                        subtitle: "Local usage and requests",
                         isOn: $showCursor,
                         menuBarIsOn: $menuBarCursor
                     )
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .copilot,
-                        subtitle: "GitHub Copilot CLI token usage",
+                        subtitle: "CLI token usage",
                         isOn: $showCopilot,
                         menuBarIsOn: $menuBarCopilot
                     )
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .gemini,
-                        subtitle: "Google Gemini CLI local usage",
+                        subtitle: "CLI local usage",
                         isOn: $showGemini,
                         menuBarIsOn: $menuBarGemini
                     )
@@ -151,15 +150,25 @@ struct SettingsView: View {
                     // already holds, so each row names the owning tool and the
                     // plan it reports. No address, no account id — a plan tier
                     // is context for the percentages, never an identity.
-                    ForEach(Array(Provider.allCases.enumerated()), id: \.element) { index, provider in
-                        if index > 0 {
-                            Divider().overlay(MU.hairline)
+                    //
+                    // Only enabled providers are listed: a hidden provider is
+                    // not read at all, so showing its row would present a
+                    // credential that is currently doing nothing.
+                    if visibleAccounts.isEmpty {
+                        Text("All providers are hidden. Turn one on in Providers above.")
+                            .font(.muBody)
+                            .foregroundColor(MU.textSecondary)
+                    } else {
+                        ForEach(Array(visibleAccounts.enumerated()), id: \.element) { index, provider in
+                            if index > 0 {
+                                Divider().overlay(MU.hairline)
+                            }
+                            AccountRow(
+                                provider: provider,
+                                account: coordinator.account(for: provider),
+                                enabled: true
+                            )
                         }
-                        AccountRow(
-                            provider: provider,
-                            account: coordinator.account(for: provider),
-                            enabled: coordinator.preferences.isEnabled(provider)
-                        )
                     }
                     Divider().overlay(MU.hairline)
                     Text("Switching a provider off above stops reading its credential entirely. It does not sign you out of that tool.")
@@ -323,6 +332,10 @@ struct SettingsView: View {
         }
     }
 
+    private var visibleAccounts: [Provider] {
+        Provider.allCases.filter { coordinator.preferences.isEnabled($0) }
+    }
+
     private static func intervalLabel(_ seconds: Double) -> String {
         seconds < 60 ? "\(Int(seconds))s" : "\(Int(seconds / 60))m"
     }
@@ -471,20 +484,20 @@ private struct ProviderRow: View {
             Spacer(minLength: 6)
             if let menuBarIsOn {
                 HStack(spacing: 4) {
-                    Text("Side notch")
+                    Text("Notch")
                         .font(.muCaption)
                         .foregroundColor(MU.textTertiary)
                     Button {
                         menuBarIsOn.wrappedValue.toggle()
                     } label: {
-                        Image(systemName: "circle")
+                        Image(systemName: menuBarIsOn.wrappedValue ? "menubar.rectangle.fill" : "menubar.rectangle")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(
                                 menuBarIsOn.wrappedValue
                                     ? MU.calm
                                     : (hoveringTray ? MU.textSecondary : MU.textTertiary.opacity(0.6))
                             )
-                            .frame(width: 18, height: 16)
+                            .frame(width: 22, height: 20)
                             .background(
                                 RoundedRectangle(cornerRadius: 4, style: .continuous)
                                     .fill(hoveringTray ? MU.well : Color.clear)
@@ -494,6 +507,9 @@ private struct ProviderRow: View {
                     .help(menuBarIsOn.wrappedValue
                           ? "Hide \(provider.displayName) from the side notch and menu bar"
                           : "Show \(provider.displayName) in the side notch and menu bar")
+                    .accessibilityLabel(menuBarIsOn.wrappedValue
+                        ? "Hide \(provider.displayName) from side notch"
+                        : "Show \(provider.displayName) in side notch")
                     .onHover { hoveringTray = $0 }
                 }
             }

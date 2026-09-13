@@ -129,14 +129,38 @@ final class AntigravityConversationsTests: XCTestCase {
         XCTAssertEqual(windows[2].sessionCount, 2)
     }
 
-    func testAggregationWithoutAnyTokenLeavesTokensNil() throws {
+    func testAggregationAttributesDayTokensByLastActivity() throws {
         let now = fixtureNow()
+        let today = Calendar.current.startOfDay(for: now)
+        let tenDaysAgo = today.addingTimeInterval(-10 * 86_400 + 3_600)
+
+        let recent = AntigravityConversations.Database(
+            genMetadataBlobs: [usageBlob(input: 1_000, output: 500)],
+            stepBlobs: [stepBlob(source: 4, seconds: UInt64(now.addingTimeInterval(-3_600).timeIntervalSince1970))]
+        )
+        let old = AntigravityConversations.Database(
+            genMetadataBlobs: [usageBlob(input: 2_000, output: 1_000)],
+            stepBlobs: [stepBlob(source: 4, seconds: UInt64(tenDaysAgo.timeIntervalSince1970))]
+        )
+
+        let usage = try AntigravityConversations.parse(databases: [recent, old], now: now)
+
+        XCTAssertEqual(usage.tokens, TokenTotals(input: 3_000, output: 1_500))
+        // Only the conversation touched today counts toward today; the
+        // 10-day-old one falls outside the 7-day window too.
+        XCTAssertEqual(usage.todayTokens, TokenTotals(input: 1_000, output: 500))
+        XCTAssertEqual(usage.weekTokens, TokenTotals(input: 1_000, output: 500))
+    }
+
+    func testAggregationWithoutAnyTokenLeavesTokensNil() throws {        let now = fixtureNow()
         let database = AntigravityConversations.Database(
             stepBlobs: [stepBlob(source: 4, seconds: UInt64(now.addingTimeInterval(-60).timeIntervalSince1970))]
         )
         let usage = try AntigravityConversations.parse(databases: [database], now: now)
         XCTAssertEqual(usage.sessionCount, 1)
         XCTAssertNil(usage.tokens)
+        XCTAssertNil(usage.todayTokens)
+        XCTAssertNil(usage.weekTokens)
     }
 
     func testAggregationThrowsWhenNothingDecodes() {

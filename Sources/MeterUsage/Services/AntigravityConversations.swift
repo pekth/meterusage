@@ -73,6 +73,7 @@ enum AntigravityConversations {
     /// nonzero usage blob, so an empty store never reads as measured zero.
     static func parse(databases: [Database], now: Date) throws -> ProviderUsage {
         let today = Calendar.current.startOfDay(for: now)
+        let weekStart = today.addingTimeInterval(-6 * 86_400)
         var sessions: [SessionAggregate] = []
 
         for database in databases {
@@ -103,6 +104,15 @@ enum AntigravityConversations {
 
         let todayTurns = sessions.flatMap(\.userTurns).filter { $0 >= today }
         let tokens = sessions.reduce(TokenTotals()) { $0 + $1.tokens }
+        // Day tokens follow the rolling windows below (last activity), not
+        // the first-turn convention of the session counts: a conversation
+        // worked on today counts toward today even when it started days ago.
+        let todayTokens = sessions
+            .filter { ($0.lastActivity ?? .distantPast) >= today }
+            .reduce(TokenTotals()) { $0 + $1.tokens }
+        let weekTokens = sessions
+            .filter { ($0.lastActivity ?? .distantPast) >= weekStart }
+            .reduce(TokenTotals()) { $0 + $1.tokens }
         let telemetryItems = sessions.compactMap { s -> TelemetrySessionItem? in
             guard let started = s.userTurns.first ?? s.lastActivity else { return nil }
             return TelemetrySessionItem(
@@ -122,6 +132,8 @@ enum AntigravityConversations {
                 session.userTurns.first.map { $0 >= today } == true
             }.count,
             todayMessageCount: todayTurns.count,
+            todayTokens: todayTokens.total > 0 ? todayTokens : nil,
+            weekTokens: weekTokens.total > 0 ? weekTokens : nil,
             usageWindows: windows(from: sessions, now: now),
             telemetry: telemetry,
             capturedAt: sessions.compactMap(\.lastActivity).max() ?? now

@@ -522,7 +522,25 @@ public struct OpenCodeGoUsageSource: UsageSource {
 
         let now = Date()
         let today = Calendar.current.startOfDay(for: now)
+        let weekStart = today.addingTimeInterval(-6 * 86_400)
         let todayRecords = records.filter { $0.createdAt >= today }
+        // Day tokens follow the rolling windows below (`updatedAt`, matching
+        // `opencode stats`): a session started days ago but worked on today
+        // counts toward today.
+        func dayTotals(_ record: Record) -> TokenTotals {
+            TokenTotals(
+                input: record.input,
+                output: record.output,
+                reasoning: record.reasoning,
+                cacheRead: record.cacheRead,
+                cacheWrite: record.cacheWrite
+            )
+        }
+        let todayTouched = records.filter { $0.updatedAt >= today }
+        let weekTouched = records.filter { $0.updatedAt >= weekStart }
+        let todayTokens = todayTouched.reduce(TokenTotals()) { $0 + dayTotals($1) }
+        let weekTokens = weekTouched.reduce(TokenTotals()) { $0 + dayTotals($1) }
+        let todayCost = todayTouched.reduce(0) { $0 + $1.cost }
         let tokens = records.reduce(TokenTotals()) { total, record in
             total + TokenTotals(
                 input: record.input,
@@ -550,6 +568,9 @@ public struct OpenCodeGoUsageSource: UsageSource {
             estimatedCostUSD: cost,
             todaySessionCount: todayRecords.count,
             todayMessageCount: todayRecords.reduce(0) { $0 + $1.messages },
+            todayTokens: todayTokens.total > 0 ? todayTokens : nil,
+            weekTokens: weekTokens.total > 0 ? weekTokens : nil,
+            todayCostUSD: todayCost > 0 ? todayCost : nil,
             usageWindows: Self.windows(from: records, now: now),
             telemetry: telemetry,
             capturedAt: records.map(\.updatedAt).max() ?? now

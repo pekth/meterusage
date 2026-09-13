@@ -455,6 +455,16 @@ enum Fmt {
         String(format: "%.0f%%", value.muClamped(to: 0...100))
     }
 
+    /// Burn-attribution share, where the input is already 0...100 (see
+    /// `BurnContributor.shareOfWindow`). Rounds to whole percent but keeps a
+    /// sub-1% contributor honest as "<1%" instead of a "0%" that reads as none.
+    static func share(_ percentValue: Double) -> String {
+        let clamped = percentValue.muClamped(to: 0...100)
+        if clamped <= 0 { return "0%" }
+        if clamped < 1 { return "<1%" }
+        return String(format: "%.0f%%", clamped)
+    }
+
     /// Codex popover cards show remaining headroom; the menu-bar slot uses
     /// `percent(_:)` directly to retain its compact consumed-usage figure.
     static func remainingPercent(_ usedPercent: Double) -> String {

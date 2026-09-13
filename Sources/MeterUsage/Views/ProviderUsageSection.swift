@@ -3,8 +3,9 @@ import SwiftUI
 /// Compact usage rows for providers whose native history is not a quota window.
 ///
 /// The row uses a provider accent for identity and a written metric label for
-/// meaning. Antigravity/Grok stay count-based because their local stores do not
-/// expose billable token totals; OpenCode Go shows the measured totals it has.
+/// meaning. Grok stays count-based because its local store does not expose
+/// billable token totals; Antigravity and OpenCode Go show the measured totals
+/// they have.
 struct ProviderUsageSection: View {
     let usages: [Provider: Loaded<ProviderUsage>]
     let providers: [Provider]
