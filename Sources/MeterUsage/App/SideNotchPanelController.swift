@@ -119,6 +119,34 @@ enum SideNotchPanelLayout {
         y = min(max(y, screenFrame.minY), max(screenFrame.maxY - h, screenFrame.minY))
         return NSRect(x: x, y: y, width: w, height: h)
     }
+
+    /// Detail-card rect inside the panel content, in content coordinates
+    /// (AppKit origin, y up), for card-only share snapshots. `nil` when no
+    /// card can be isolated — folded strip, unknown sizes — and the caller
+    /// captures the whole content as before. The HStack is top-aligned, so
+    /// the card's top meets the content top; every edge clamps into the
+    /// content, so the result never addresses pixels outside the capture.
+    static func shareCardRect(
+        contentSize: CGSize,
+        stripWidth: CGFloat,
+        cardHeight: CGFloat,
+        cardOnRight: Bool
+    ) -> CGRect? {
+        guard contentSize.width > 0, contentSize.height > 0, cardHeight > 0 else { return nil }
+        let width: CGFloat
+        let x: CGFloat
+        if stripWidth > 0, contentSize.width > stripWidth {
+            width = contentSize.width - stripWidth
+            x = cardOnRight ? stripWidth : 0
+        } else {
+            width = min(cardWidth, contentSize.width)
+            x = cardOnRight ? 0 : max(contentSize.width - width, 0)
+        }
+        guard width > 0 else { return nil }
+        let height = min(cardHeight, contentSize.height)
+        let rect = CGRect(x: x, y: contentSize.height - height, width: width, height: height).integral
+        return rect.isEmpty ? nil : rect
+    }
 }
 
 @MainActor
@@ -141,6 +169,10 @@ final class SideNotchPanelController: ObservableObject {
     /// content, but the persisted corner and the side math track the strip —
     /// the part that must never move under the cursor.
     private var stripSize: CGSize = .zero
+    /// Detail-card height last reported by the view, for card-only share
+    /// snapshots. Zero when no card has ever been measured; the snapshot
+    /// then captures the whole content as before.
+    private var cardHeight: CGFloat = 0
     /// Last size a placement actually applied, quantized to whole points.
     /// Countdown ticks and percent text constantly re-measure a point or two
     /// off; re-placing for those rebuilds tracking areas under the cursor for
@@ -165,6 +197,12 @@ final class SideNotchPanelController: ObservableObject {
     /// Retains the sharing picker while its sheet is on screen; dropping the
     /// reference would dismiss it mid-interaction.
     private var sharingPicker: NSSharingServicePicker?
+    /// True from the share menu opening until its tracking ends. The panel is
+    /// hover-driven: sliding the pointer off the panel toward the menu would
+    /// otherwise fold the card after 450ms, unmounting the Share button and
+    /// dismissing the menu mid-selection. While set, the view stays open and
+    /// the fold is suppressed — same contract as the reset-action guards.
+    @Published var isSharing = false
 
     init(coordinator: AppCoordinator) {
         let panel = NSPanel(
@@ -263,6 +301,18 @@ final class SideNotchPanelController: ObservableObject {
                 self.place(panel: self.panel, on: NSScreen.main)
             }
             .store(in: &cancellables)
+
+        // The share menu is a separate menu window: entering it means leaving
+        // the panel, which must not fold the card underneath it. Tracking is
+        // app-modal while any menu is up, so by the time this fires for
+        // another menu (e.g. the context menu), sharing is already over and
+        // clearing the flag is a no-op.
+        NotificationCenter.default
+            .publisher(for: NSMenu.didEndTrackingNotification)
+            .sink { [weak self] _ in
+                self?.isSharing = false
+            }
+            .store(in: &cancellables)
     }
 
     func show() {
@@ -273,22 +323,38 @@ final class SideNotchPanelController: ObservableObject {
         panel.orderOut(nil)
     }
 
-    /// Captures the panel as it currently appears — the ring strip plus any
-    /// docked detail card — at a minimum of 2x so text stays sharp even on a
-    /// non-Retina display, then presents macOS share services anchored to the
-    /// panel. Called from the detail card's share button, so a card is
+    /// Records the mounted detail card's height for share snapshots.
+    func noteCardHeight(_ height: CGFloat) {
+        cardHeight = height
+    }
+
+    /// Captures the selected provider's detail card — never the ring strip —
+    /// at a minimum of 2x so text stays sharp even on a non-Retina display,
+    /// then presents macOS share services anchored to the Share button that
+    /// invoked it. Called from the detail card's share button, so a card is
     /// expected to be showing; a folded or empty panel simply does nothing.
-    func shareSnapshot() {
+    /// A missing or detached anchor falls back to the whole content rect,
+    /// which places the menu less precisely.
+    func shareSnapshot(anchoredAt anchor: NSView? = nil) {
         guard let content = panel.contentView else { return }
         content.layoutSubtreeIfNeeded()
         let bounds = content.bounds.integral
         guard bounds.width > 0, bounds.height > 0 else { return }
+        // Card-only: the strip beside it is chrome, not the reading being
+        // shared. Unmeasurable card (never reported) keeps the old whole
+        // content capture rather than a wrong crop.
+        let captureRect = SideNotchPanelLayout.shareCardRect(
+            contentSize: bounds.size,
+            stripWidth: stripSize.width,
+            cardHeight: cardHeight,
+            cardOnRight: cardOnRight
+        ) ?? bounds
 
         let scale = AppDelegate.captureScale(backingScaleFactor: panel.backingScaleFactor)
         guard let representation = NSBitmapImageRep(
             bitmapDataPlanes: nil,
-            pixelsWide: Int(ceil(bounds.width * scale)),
-            pixelsHigh: Int(ceil(bounds.height * scale)),
+            pixelsWide: Int(ceil(captureRect.width * scale)),
+            pixelsHigh: Int(ceil(captureRect.height * scale)),
             bitsPerSample: 8,
             samplesPerPixel: 4,
             hasAlpha: true,
@@ -299,17 +365,24 @@ final class SideNotchPanelController: ObservableObject {
             bitsPerPixel: 0
         ) else { return }
 
-        representation.size = bounds.size
-        content.cacheDisplay(in: bounds, to: representation)
+        representation.size = captureRect.size
+        content.cacheDisplay(in: captureRect, to: representation)
 
-        let image = NSImage(size: bounds.size)
+        let image = NSImage(size: captureRect.size)
         image.addRepresentation(representation)
 
         // The panel is non-activating by design, but the share sheet needs an
         // active app to track menu interaction, so activate for its lifetime.
+        // The menu hugs the Share button's own bounds: anchoring to the whole
+        // content rect lets AppKit park the menu far from the card.
         NSApp.activate(ignoringOtherApps: true)
         let picker = NSSharingServicePicker(items: [image])
-        picker.show(relativeTo: bounds, of: content, preferredEdge: .minY)
+        isSharing = true
+        if let anchor, anchor.window != nil, !anchor.bounds.isEmpty {
+            picker.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
+        } else {
+            picker.show(relativeTo: bounds, of: content, preferredEdge: .minY)
+        }
         sharingPicker = picker
     }
 

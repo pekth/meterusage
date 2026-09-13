@@ -115,6 +115,53 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertLessThanOrEqual(frame.maxY, screen.maxY)
     }
 
+    // MARK: - Share crop
+
+    func testShareCropIsolatesCardLeftOfStrip() {
+        let rect = SideNotchPanelLayout.shareCardRect(
+            contentSize: CGSize(width: 300, height: 600),
+            stripWidth: 50, cardHeight: 600, cardOnRight: false
+        )
+        XCTAssertEqual(rect, CGRect(x: 0, y: 0, width: 250, height: 600))
+    }
+
+    func testShareCropIsolatesCardRightOfStrip() {
+        let rect = SideNotchPanelLayout.shareCardRect(
+            contentSize: CGSize(width: 300, height: 600),
+            stripWidth: 50, cardHeight: 600, cardOnRight: true
+        )
+        XCTAssertEqual(rect, CGRect(x: 50, y: 0, width: 250, height: 600))
+    }
+
+    func testShareCropTopAlignsShortCard() {
+        // The HStack is top-aligned: a card shorter than the content keeps
+        // the content top, never the bottom.
+        let rect = SideNotchPanelLayout.shareCardRect(
+            contentSize: CGSize(width: 300, height: 620),
+            stripWidth: 50, cardHeight: 400, cardOnRight: false
+        )
+        XCTAssertEqual(rect, CGRect(x: 0, y: 220, width: 250, height: 400))
+    }
+
+    func testShareCropFallsBackToCardWidthWithoutStrip() {
+        let rect = SideNotchPanelLayout.shareCardRect(
+            contentSize: CGSize(width: 300, height: 600),
+            stripWidth: 0, cardHeight: 600, cardOnRight: false
+        )
+        XCTAssertEqual(rect, CGRect(x: 50, y: 0, width: 250, height: 600))
+    }
+
+    func testShareCropReturnsNilWithoutCard() {
+        XCTAssertNil(SideNotchPanelLayout.shareCardRect(
+            contentSize: CGSize(width: 300, height: 600),
+            stripWidth: 50, cardHeight: 0, cardOnRight: false
+        ))
+        XCTAssertNil(SideNotchPanelLayout.shareCardRect(
+            contentSize: .zero,
+            stripWidth: 50, cardHeight: 400, cardOnRight: false
+        ))
+    }
+
     // MARK: - Token formatting
 
     func testTokenCountStringFormatting() {

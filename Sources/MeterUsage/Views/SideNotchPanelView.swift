@@ -71,6 +71,62 @@ private struct CardHeightKey: PreferenceKey {
     }
 }
 
+/// The detail card's Share button as a real `NSButton`.
+///
+/// A clicked button is definitionally in a window, so the click handler can
+/// hand the button itself to `NSSharingServicePicker.show(relativeTo:of:)` —
+/// no cached view, no screen-coordinate conversion, no stale-reference race.
+/// (The previous attempt cached the backing view of a SwiftUI Button in
+/// `@State`; the card rebuilds on every hover and countdown tick, so the
+/// cached view was usually detached at click time and the menu fell back to
+/// whole-panel anchoring — the detached menu this replaces.)
+///
+/// Styled to match the surrounding SwiftUI header: borderless 10pt medium
+/// symbol in notch subtext.
+private struct ShareButton: NSViewRepresentable {
+    var onShare: (NSView) -> Void
+
+    final class Coordinator: NSObject {
+        var onShare: (NSView) -> Void
+
+        init(onShare: @escaping (NSView) -> Void) {
+            self.onShare = onShare
+        }
+
+        @objc func clicked(_ sender: NSButton) {
+            onShare(sender)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onShare: onShare)
+    }
+
+    func makeNSView(context: Context) -> NSButton {
+        let symbol = NSImage(
+            systemSymbolName: "square.and.arrow.up",
+            accessibilityDescription: "Share screenshot"
+        )?.withSymbolConfiguration(
+            NSImage.SymbolConfiguration(pointSize: 10, weight: .medium)
+        ) ?? NSImage()
+        let button = NSButton(
+            image: symbol,
+            target: context.coordinator,
+            action: #selector(Coordinator.clicked(_:))
+        )
+        button.isBordered = false
+        button.contentTintColor = NSColor(white: 1.0, alpha: 0.55)
+        button.toolTip = "Share screenshot"
+        button.setAccessibilityLabel("Share screenshot")
+        return button
+    }
+
+    func updateNSView(_ nsView: NSButton, context: Context) {
+        context.coordinator.onShare = onShare
+        nsView.target = context.coordinator
+    }
+}
+
 // MARK: - Side notch panel view
 //
 // The content of the floating right-edge strip: one progress ring per menu-bar
@@ -124,10 +180,10 @@ struct SideNotchPanelView: View {
     /// longer than a tooltip grace, so the fold never feels twitchy.
     @State private var collapseTask: Task<Void, Never>?
 
-    /// Unfolded while pinned, while the pointer is on the panel, or while a
-    /// reset action / confirmation is active.
+    /// Unfolded while pinned, while the pointer is on the panel, while a
+    /// share menu is up, or while a reset action / confirmation is active.
     private var isOpen: Bool {
-        isPinned || isHoveringPanel || hoveredProvider != nil || confirmingResetID != nil || consumingResetID != nil
+        isPinned || isHoveringPanel || panel.isSharing || hoveredProvider != nil || confirmingResetID != nil || consumingResetID != nil
     }
 
     /// True when a detail card is actively showing beside the strip.
@@ -189,12 +245,12 @@ struct SideNotchPanelView: View {
     }
 
     private func scheduleFold() {
-        guard confirmingResetID == nil && consumingResetID == nil else { return }
+        guard confirmingResetID == nil && consumingResetID == nil && !panel.isSharing else { return }
         collapseTask?.cancel()
         collapseTask = Task {
             try? await Task.sleep(nanoseconds: 450_000_000)
             guard !Task.isCancelled else { return }
-            guard confirmingResetID == nil && consumingResetID == nil else { return }
+            guard confirmingResetID == nil && consumingResetID == nil && !panel.isSharing else { return }
             hoveredProvider = nil
             isHoveringPanel = false
         }
@@ -227,6 +283,9 @@ struct SideNotchPanelView: View {
         .onPreferenceChange(CardHeightKey.self) { height in
             cardHeight = height
         }
+        // The controller crops share snapshots to the card; it needs the same
+        // measurement. Plain stored property there — no re-render loop.
+        .onChange(of: cardHeight) { panel.noteCardHeight($0) }
         .onChange(of: panel.isDragging) { dragging in
             // A drop can strand a hover from before the drag (the mouse never
             // re-enters to refresh it): always reopen from a clean hover.
@@ -423,14 +482,11 @@ struct SideNotchPanelView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
-                Button {
-                    panel.shareSnapshot()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Notch.subtext)
+                let panel = panel
+                ShareButton { [weak panel] view in
+                    panel?.shareSnapshot(anchoredAt: view)
                 }
-                .buttonStyle(.plain)
+                .frame(width: 18, height: 18)
                 .help("Share screenshot")
                 .accessibilityLabel("Share screenshot")
             }
