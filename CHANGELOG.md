@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.20] - 2026-09-14
+
+### Fixed
+
+- **Share menu detached from its button** — the picker anchored to the whole
+  panel rect. The Share button is now a real `NSButton` handing itself to the
+  picker at click time, so the menu hugs the button.
+- **Share menu dismissed mid-reach** — sliding the pointer toward the menu
+  folded the hover card after 450ms, unmounting the button underneath it.
+  The panel now stays open while the share menu tracks and releases when
+  menu tracking ends.
+- **Share snapshot included the ring strip** — captures crop to the fixed
+  250pt detail-card column, strip excluded.
+
 ## [0.2.19] - 2026-09-13
 
 ### Fixed
