@@ -106,6 +106,7 @@ Toggle providers on or off, choose refresh cadence, and switch themes:
 * **Agent Budget API** — Run `meterusage json` to export machine-readable quota telemetry, burn velocity, pacing status, and seconds-to-empty for autonomous AI agents.
 * **26-Week Activity Heatmaps** — GitHub-style activity matrix inside Codex and Claude cards with Day, Week, or Cumulative views, accompanied by 7-day sparklines.
 * **Opt-In Pacing Alerts** — Native macOS notifications when an active window crosses critical burn velocity or drops below 30 minutes to empty.
+* **Share screenshot**: Share a sharp 2x image of the visible dashboard through macOS share services, or save it for X and other apps.
 
 ---
 

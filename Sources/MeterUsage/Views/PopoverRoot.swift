@@ -11,6 +11,7 @@ struct PopoverRoot: View {
 
     @ObservedObject var coordinator: AppCoordinator
     @ObservedObject var preferences: Preferences
+    var onShareScreenshot: () -> Void = {}
 
     @State private var showingSettings = false
     /// First-run welcome. Absent means never dismissed, which is what shows
@@ -88,6 +89,11 @@ struct PopoverRoot: View {
                 coordinator.refresh()
             }
             .disabled(coordinator.isRefreshing)
+            .opacity(showingSettings ? 0 : 1)
+
+            IconButton(symbol: "square.and.arrow.up", help: "Share screenshot") {
+                onShareScreenshot()
+            }
             .opacity(showingSettings ? 0 : 1)
 
             IconButton(
@@ -707,6 +713,7 @@ private struct IconButton: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.12), value: hovering)
     }

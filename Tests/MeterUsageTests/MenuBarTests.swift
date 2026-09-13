@@ -3,6 +3,12 @@ import XCTest
 
 final class MenuBarTests: XCTestCase {
 
+    func testShareCaptureUsesAtLeastTwoTimesBackingScale() {
+        XCTAssertEqual(AppDelegate.captureScale(backingScaleFactor: 1), 2)
+        XCTAssertEqual(AppDelegate.captureScale(backingScaleFactor: 2), 2)
+        XCTAssertEqual(AppDelegate.captureScale(backingScaleFactor: 3), 3)
+    }
+
     // MARK: - Menu bar provider selection
 
     @MainActor

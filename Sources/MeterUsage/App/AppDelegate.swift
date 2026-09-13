@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var preferences: Preferences?
     private var coordinator: AppCoordinator?
     private var cancellables = Set<AnyCancellable>()
+    private var sharingPicker: NSSharingServicePicker?
     /// `main.swift`'s top-level code is not main-actor isolated, so the delegate
     /// must be constructible from there. Construction touches nothing isolated;
     /// every stored property is populated later in
@@ -171,6 +172,8 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
         let menu = NSMenu()
         menu.addItem(withTitle: "Refresh Now", action: #selector(refreshNow), keyEquivalent: "r")
             .target = self
+        menu.addItem(withTitle: "Share Screenshot…", action: #selector(shareCurrentView), keyEquivalent: "")
+            .target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit \(AppInfo.name)", action: #selector(quit), keyEquivalent: "q")
             .target = self
@@ -183,6 +186,55 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
     }
 
     @objc private func refreshNow() { coordinator?.refresh() }
+
+    @objc private func shareCurrentView() {
+        guard let popover else { return }
+        if popover.isShown {
+            sharePopoverSnapshot()
+        } else {
+            togglePopover()
+            DispatchQueue.main.async { [weak self] in
+                self?.sharePopoverSnapshot()
+            }
+        }
+    }
+
+    nonisolated static func captureScale(backingScaleFactor: CGFloat) -> CGFloat {
+        max(2, backingScaleFactor)
+    }
+
+    /// Shares the visible popover at a minimum of 2x so text stays sharp even
+    /// when the app is running on a non-Retina display.
+    private func sharePopoverSnapshot() {
+        guard let view = popover?.contentViewController?.view,
+              let window = view.window else { return }
+        view.layoutSubtreeIfNeeded()
+        let bounds = view.bounds.integral
+        guard bounds.width > 0, bounds.height > 0 else { return }
+
+        let scale = Self.captureScale(backingScaleFactor: window.backingScaleFactor)
+        guard let representation = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(ceil(bounds.width * scale)),
+            pixelsHigh: Int(ceil(bounds.height * scale)),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bitmapFormat: .alphaFirst,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return }
+
+        representation.size = bounds.size
+        view.cacheDisplay(in: bounds, to: representation)
+
+        let image = NSImage(size: bounds.size)
+        image.addRepresentation(representation)
+        sharingPicker = NSSharingServicePicker(items: [image])
+        sharingPicker?.show(relativeTo: bounds, of: view, preferredEdge: .minY)
+    }
 
     @objc private func quit() { NSApp.terminate(nil) }
 
@@ -212,7 +264,11 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
         popover.behavior = .transient
         popover.animates = true
         let hostingController = NSHostingController(
-            rootView: PopoverRoot(coordinator: coordinator, preferences: preferences)
+            rootView: PopoverRoot(
+                coordinator: coordinator,
+                preferences: preferences,
+                onShareScreenshot: { [weak self] in self?.shareCurrentView() }
+            )
         )
         // Let SwiftUI's measured content height drive the popover size instead
         // of the fixed `contentSize` above, so the popover shrinks to its
