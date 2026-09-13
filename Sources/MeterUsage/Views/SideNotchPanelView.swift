@@ -180,10 +180,10 @@ struct SideNotchPanelView: View {
     /// longer than a tooltip grace, so the fold never feels twitchy.
     @State private var collapseTask: Task<Void, Never>?
 
-    /// Unfolded while pinned, while the pointer is on the panel, while a
-    /// share menu is up, or while a reset action / confirmation is active.
+    /// Unfolded while pinned, while the pointer is on the panel, or while a
+    /// reset action / confirmation is active.
     private var isOpen: Bool {
-        isPinned || isHoveringPanel || panel.isSharing || hoveredProvider != nil || confirmingResetID != nil || consumingResetID != nil
+        isPinned || isHoveringPanel || hoveredProvider != nil || confirmingResetID != nil || consumingResetID != nil
     }
 
     /// True when a detail card is actively showing beside the strip.
@@ -245,12 +245,12 @@ struct SideNotchPanelView: View {
     }
 
     private func scheduleFold() {
-        guard confirmingResetID == nil && consumingResetID == nil && !panel.isSharing else { return }
+        guard confirmingResetID == nil && consumingResetID == nil else { return }
         collapseTask?.cancel()
         collapseTask = Task {
             try? await Task.sleep(nanoseconds: 450_000_000)
             guard !Task.isCancelled else { return }
-            guard confirmingResetID == nil && consumingResetID == nil && !panel.isSharing else { return }
+            guard confirmingResetID == nil && consumingResetID == nil else { return }
             hoveredProvider = nil
             isHoveringPanel = false
         }

@@ -184,12 +184,6 @@ final class SideNotchPanelController: ObservableObject {
     /// Retains the sharing picker while its sheet is on screen; dropping the
     /// reference would dismiss it mid-interaction.
     private var sharingPicker: NSSharingServicePicker?
-    /// True from the share menu opening until its tracking ends. The panel is
-    /// hover-driven: sliding the pointer off the panel toward the menu would
-    /// otherwise fold the card after 450ms, unmounting the Share button and
-    /// dismissing the menu mid-selection. While set, the view stays open and
-    /// the fold is suppressed — same contract as the reset-action guards.
-    @Published var isSharing = false
 
     init(coordinator: AppCoordinator) {
         let panel = NSPanel(
@@ -288,18 +282,6 @@ final class SideNotchPanelController: ObservableObject {
                 self.place(panel: self.panel, on: NSScreen.main)
             }
             .store(in: &cancellables)
-
-        // The share menu is a separate menu window: entering it means leaving
-        // the panel, which must not fold the card underneath it. Tracking is
-        // app-modal while any menu is up, so by the time this fires for
-        // another menu (e.g. the context menu), sharing is already over and
-        // clearing the flag is a no-op.
-        NotificationCenter.default
-            .publisher(for: NSMenu.didEndTrackingNotification)
-            .sink { [weak self] _ in
-                self?.isSharing = false
-            }
-            .store(in: &cancellables)
     }
 
     func show() {
@@ -357,9 +339,16 @@ final class SideNotchPanelController: ObservableObject {
         // content rect lets AppKit park the menu far from the card.
         NSApp.activate(ignoringOtherApps: true)
         let picker = NSSharingServicePicker(items: [image])
-        isSharing = true
-        if let anchor, anchor.window != nil, !anchor.bounds.isEmpty {
-            picker.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
+        // Anchor to the content view — which outlives the hover card — with
+        // the button rect converted into it at click time. Anchoring to the
+        // button itself couples the menu's lifetime to the card: folding
+        // (hover-out, countdown re-layout) unmounts the button and dismisses
+        // the menu mid-selection. Converted up through the shared window so
+        // flips and multi-display offsets stay correct.
+        if let anchor, let anchorWindow = anchor.window,
+           anchorWindow === content.window, !anchor.bounds.isEmpty {
+            let rect = content.convert(anchor.convert(anchor.bounds, to: nil), from: nil)
+            picker.show(relativeTo: rect, of: content, preferredEdge: .minY)
         } else {
             picker.show(relativeTo: bounds, of: content, preferredEdge: .minY)
         }
