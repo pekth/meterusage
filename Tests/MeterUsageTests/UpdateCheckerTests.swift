@@ -134,7 +134,7 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertEqual(checker.available?.version, "0.2.2")
     }
 
-    // MARK: Daily interval
+    // MARK: Hourly interval
 
     @MainActor
     func testCheckIsSkippedInsideInterval() {
@@ -151,6 +151,26 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertEqual(
             defaults.object(forKey: PrefKey.updateLastCheck) as? Date,
             now
+        )
+    }
+
+    @MainActor
+    func testCheckFiresAfterIntervalElapses() {
+        let defaults = UserDefaults(suiteName: "UpdateCheckerTests")!
+        defaults.removePersistentDomain(forName: "UpdateCheckerTests")
+        UpdateChecker(defaults: defaults).checkIfDue(now: Date())
+
+        // A fresh instance past the hourly interval must open the gate again:
+        // the persisted date advances (the check itself runs async and fails
+        // silently offline, which is fine — this asserts the gating, not the
+        // fetch). A separate instance avoids the first check's in-flight
+        // network task tripping the re-entrancy guard.
+        let later = Date().addingTimeInterval(UpdateChecker.checkInterval + 60)
+        UpdateChecker(defaults: defaults).checkIfDue(now: later)
+
+        XCTAssertEqual(
+            defaults.object(forKey: PrefKey.updateLastCheck) as? Date,
+            later
         )
     }
 }
