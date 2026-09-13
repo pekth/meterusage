@@ -7,8 +7,12 @@ import AppKit
 /// the user's click downloads, verifies, and installs it.
 ///
 /// The check is one unauthenticated GET against `api.github.com`, issued at
-/// most once every 24 hours and never more often than that no matter how many
-/// times the popover opens or the Mac wakes. A failed or rate-limited check is
+/// most once an hour and never more often than that no matter how many
+/// times the popover opens or the Mac wakes. Hourly keeps a fresh release
+/// at most ~60 minutes from discovery: fast enough to matter for a tool
+/// that ships daily, cheap enough (one small JSON GET) to never show up in
+/// battery or traffic, and far under GitHub's 60-requests-per-hour
+/// unauthenticated limit. A failed or rate-limited check is
 /// silent by design: an update notice is a courtesy, and a network error must
 /// never surface as an error state next to real usage data. No token is sent,
 /// no request body exists, and the only thing the request reveals is the
@@ -71,8 +75,9 @@ final class UpdateChecker: ObservableObject {
     private let defaults: UserDefaults
     private var checkTask: Task<Void, Never>?
 
-    /// One check per day. There is no release cadence that justifies more.
-    nonisolated static let checkInterval: TimeInterval = 24 * 60 * 60
+    /// One check per hour. Daily left a fresh release undiscovered for up to
+    /// a day; hourly bounds that lag at ~60 minutes for one small GET.
+    nonisolated static let checkInterval: TimeInterval = 60 * 60
 
     init(
         endpoint: URL = URL(string: "https://api.github.com/repos/pekth/meterusage/releases/latest")!,
@@ -86,7 +91,7 @@ final class UpdateChecker: ObservableObject {
 
     // MARK: Checking
 
-    /// Runs a check if the daily interval has elapsed. Cheap enough to call
+    /// Runs a check if the hourly interval has elapsed. Cheap enough to call
     /// from every refresh sweep; the guard makes it a no-op until due.
     func checkIfDue(now: Date = Date(), interval: TimeInterval = UpdateChecker.checkInterval) {
         guard checkTask == nil else { return }

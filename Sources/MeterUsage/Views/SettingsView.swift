@@ -298,7 +298,7 @@ struct SettingsView: View {
                     Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Check for updates",
-                        subtitle: "Check GitHub Releases once a day and show a banner when a newer version is out.",
+                        subtitle: "Check GitHub Releases every hour and show a banner when a newer version is out.",
                         isOn: $updateCheck
                     )
                 }
