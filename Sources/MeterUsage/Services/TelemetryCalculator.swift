@@ -119,9 +119,15 @@ public enum TelemetryCalculator {
         let last30DaysTokens: Int? = hasExplicitTokens ? last30Sum : nil
 
         let totalSessions: Int? = !sessions.isEmpty ? sessions.count : nil
-        let totalMessages: Int? = !sessions.isEmpty ? sessions.reduce(0) { $0 + $1.messageCount } : nil
+        // A source that does not measure message counts reports zeros, not
+        // data: an all-zero sum must read as absent (nil), never as a
+        // displayed "0 messages".
+        let messageSum = sessions.reduce(0) { $0 + $1.messageCount }
+        let totalMessages: Int? = !sessions.isEmpty && messageSum > 0 ? messageSum : nil
         let todaySessions: Int? = !sessions.isEmpty ? dayStats[startOfToday]?.sessions : nil
-        let todayMessages: Int? = !sessions.isEmpty ? sessions.filter { calendar.isDate($0.startedAt, inSameDayAs: startOfToday) }.reduce(0) { $0 + $1.messageCount } : nil
+        let todayMessages: Int? = !sessions.isEmpty && messageSum > 0
+            ? sessions.filter { calendar.isDate($0.startedAt, inSameDayAs: startOfToday) }.reduce(0) { $0 + $1.messageCount }
+            : nil
 
         return ProviderTelemetry(
             lifetimeTokens: lifetimeTokens,
