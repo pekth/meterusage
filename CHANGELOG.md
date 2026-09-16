@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.22] - 2026-09-16
+
+### Fixed
+
+- **Today total no longer reads 0 with activity present** — Codex and Claude
+  bucket daily activity by UTC midnight, but the strip compared those buckets
+  with the local calendar. West of UTC that shifted today's bucket onto
+  yesterday, so the strip showed 0 and "no sessions today" while "last 7
+  days" still showed the tokens. Daily buckets are now compared in UTC.
+
 ## [0.2.21] - 2026-09-14
 
 ### Fixed
