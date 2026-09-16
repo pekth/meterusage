@@ -1,6 +1,71 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Unified strip totals
+//
+// Pure aggregation behind the "ALL AI CODING TODAY" strip, extracted so the
+// day-boundary math is unit-testable without rendering the popover.
+// Day buckets in `LocalActivity.daily` are UTC-midnight days (Codex and
+// Claude group by UTC for determinism); usage day-totals are local-day
+// figures computed inside their own sources. Each side is compared in its
+// own day convention — see the branch comments.
+struct StripTotals {
+    let todayTokens: Int
+    let weekTokens: Int
+    let todayCost: Double
+
+    static func calculate(
+        activities: [LocalActivity],
+        usages: [ProviderUsage],
+        now: Date,
+        calendar: Calendar = .current
+    ) -> StripTotals {
+        let todayStart = calendar.startOfDay(for: now)
+        // Today plus the 6 prior days: 7 calendar days for the "last 7 days"
+        // label. `>=` on a -7d start would silently count 8 days.
+        let weekStart = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
+        // `daily` buckets are UTC-midnight days (Codex and Claude group by
+        // UTC for determinism), so they are compared in UTC: running them
+        // through the local calendar shifts every bucket before the local
+        // UTC offset onto the previous local day, zeroing "today" while the
+        // 7-day total still shows the tokens.
+        var utcCalendar = Calendar(identifier: .gregorian)
+        utcCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
+        let todayStartUTC = utcCalendar.startOfDay(for: now)
+        let weekStartUTC = utcCalendar.date(byAdding: .day, value: -6, to: todayStartUTC) ?? todayStartUTC
+
+        var todayTokens = 0
+        var weekTokens = 0
+        var todayCost: Double = 0.0
+
+        for act in activities {
+            if !act.daily.isEmpty {
+                for day in act.daily {
+                    if utcCalendar.isDate(day.day, inSameDayAs: todayStartUTC) {
+                        todayTokens += day.tokens.total
+                        todayCost += day.estimatedCostUSD
+                    }
+                    if day.day >= weekStartUTC {
+                        weekTokens += day.tokens.total
+                    }
+                }
+            } else {
+                let todaySessions = act.sessions.filter { $0.startedAt >= todayStart }
+                let weekSessions = act.sessions.filter { $0.startedAt >= weekStart }
+                todayTokens += todaySessions.reduce(0) { $0 + $1.tokens.total }
+                weekTokens += weekSessions.reduce(0) { $0 + $1.tokens.total }
+                todayCost += todaySessions.reduce(0.0) { $0 + $1.estimatedCostUSD }
+            }
+        }
+        for usage in usages {
+            if let t = usage.todayTokens { todayTokens += t.total }
+            if let w = usage.weekTokens { weekTokens += w.total }
+            if let c = usage.todayCostUSD { todayCost += c }
+        }
+        return StripTotals(todayTokens: todayTokens, weekTokens: weekTokens, todayCost: todayCost)
+    }
+}
+
 /// The whole popover: a fixed header, a scrolling body, and a settings pane that
 /// swaps in place of the body.
 ///
@@ -312,16 +377,6 @@ struct PopoverRoot: View {
     }
 
     private var unifiedActivityStrip: some View {
-        let calendar = Calendar.current
-        let todayStart = calendar.startOfDay(for: coordinator.clock)
-        // Today plus the 6 prior days: 7 calendar days for the "last 7 days"
-        // label. `>=` on a -7d start would silently count 8 days.
-        let weekStart = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
-
-        var todayTokens = 0
-        var weekTokens = 0
-        var todayCost: Double = 0.0
-
         // Day buckets are the source of truth for "today" vs "last 7 days":
         // a session started yesterday that ran past midnight must count toward
         // today. Fall back to session start dates only when a provider has no
@@ -334,33 +389,19 @@ struct PopoverRoot: View {
         // today counts toward today, matching the rolling windows). Both are
         // approximations of "work done today" from stores that never record
         // per-day ledgers; the difference only shows at day boundaries.
-        for provider in Provider.allCases {
-            guard let act = coordinator.activities[provider]?.value else { continue }
-            if !act.daily.isEmpty {
-                for day in act.daily {
-                    let dayStart = calendar.startOfDay(for: day.day)
-                    if calendar.isDate(dayStart, inSameDayAs: todayStart) {
-                        todayTokens += day.tokens.total
-                        todayCost += day.estimatedCostUSD
-                    }
-                    if dayStart >= weekStart {
-                        weekTokens += day.tokens.total
-                    }
-                }
-            } else {
-                let todaySessions = act.sessions.filter { $0.startedAt >= todayStart }
-                let weekSessions = act.sessions.filter { $0.startedAt >= weekStart }
-                todayTokens += todaySessions.reduce(0) { $0 + $1.tokens.total }
-                weekTokens += weekSessions.reduce(0) { $0 + $1.tokens.total }
-                todayCost += todaySessions.reduce(0.0) { $0 + $1.estimatedCostUSD }
-            }
-        }
-        for provider in Provider.allCases {
-            guard let usage = coordinator.usages[provider]?.value else { continue }
-            if let t = usage.todayTokens { todayTokens += t.total }
-            if let w = usage.weekTokens { weekTokens += w.total }
-            if let c = usage.todayCostUSD { todayCost += c }
-        }
+        let totals = StripTotals.calculate(
+            activities: Provider.allCases.compactMap { coordinator.activities[$0]?.value },
+            usages: Provider.allCases.compactMap { coordinator.usages[$0]?.value },
+            now: coordinator.clock
+        )
+        let todayTokens = totals.todayTokens
+        let weekTokens = totals.weekTokens
+        let todayCost = totals.todayCost
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: coordinator.clock)
+        // Today plus the 6 prior days: 7 calendar days for the "last 7 days"
+        // label. `>=` on a -7d start would silently count 8 days.
+        let weekStart = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
 
         let burningFast = coordinator.visibleQuotaProviders.compactMap { p -> (Provider, QuotaWindow, QuotaPace)? in
             guard let q = coordinator.displayQuota(for: p)?.quota,
