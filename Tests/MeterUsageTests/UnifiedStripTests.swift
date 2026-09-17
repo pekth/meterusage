@@ -1,14 +1,15 @@
 import XCTest
 @testable import MeterUsage
 
-/// Regression tests for the "ALL AI CODING TODAY" strip's day-boundary math.
+/// Contract for the "ALL AI CODING TODAY" strip.
 ///
-/// `LocalActivity.daily` buckets are UTC-midnight days (Codex and Claude
-/// group by UTC for determinism). The strip must compare those buckets in
-/// UTC: comparing them with the local calendar shifts every bucket that
-/// falls before the local UTC offset onto the previous local day, so a day
-/// with real activity renders as "0 / no sessions today" while "last 7
-/// days" still shows the tokens.
+/// `LocalActivity.daily` buckets are UTC-midnight days, so no UTC/local day
+/// comparison can define "today" correctly at all hours: a local compare
+/// misses the whole day west of UTC, and a UTC compare misses every evening
+/// after 20:00 EDT (00:00 UTC). The strip therefore derives TODAY from
+/// session start instants against local midnight, which is unambiguous in
+/// any time zone. The 7-day WEEK still sums the UTC day buckets, where an
+/// hour-scale boundary difference is immaterial.
 final class UnifiedStripTests: XCTestCase {
 
     private static var newYork: Calendar {
@@ -23,34 +24,45 @@ final class UnifiedStripTests: XCTestCase {
         return cal
     }
 
-    /// 2026-09-16 15:32 EDT == 19:32 UTC, mirroring the reported screenshot:
-    /// Codex sessions ran that afternoon, all inside UTC Sep 16.
-    private static var afternoonNow: Date {
-        utc.date(from: DateComponents(year: 2026, month: 9, day: 16, hour: 19, minute: 32))!
+    private static func utcInstant(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
+        utc.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
     }
 
     private static func utcDay(_ year: Int, _ month: Int, _ day: Int) -> Date {
         utc.date(from: DateComponents(year: year, month: month, day: day))!
     }
 
-    private func activity(days: [DailyActivity]) -> [LocalActivity] {
-        [LocalActivity(provider: .codex, sessions: [], daily: days, scannedAt: Self.afternoonNow)]
-    }
+    private static let sessionTokens = TokenTotals(input: 50_000, output: 1_000, reasoning: 500, cacheRead: 100_000)
 
-    /// A UTC Sep-16 bucket holding the day's Codex burn must count toward
-    /// "today" when the local clock is the afternoon of Sep 16.
-    func testUTCDayBucketCountsTowardLocalToday() {
+    /// A Codex-shaped afternoon: sessions started 15:17 EDT Sep 16 carrying
+    /// 151,500 tokens, plus the UTC Sep-16 day bucket holding the same burn.
+    /// The bucket alone must never zero out the day the sessions prove.
+    private func afternoonActivity() -> [LocalActivity] {
+        let session = SessionSummary(
+            id: "synthetic-session",
+            projectName: "synthetic",
+            model: "codex",
+            tokens: Self.sessionTokens,
+            estimatedCostUSD: 0,
+            startedAt: Self.utcInstant(2026, 9, 16, 19, 17),
+            messageCount: 12
+        )
         let bucket = DailyActivity(
             day: Self.utcDay(2026, 9, 16),
-            tokens: TokenTotals(input: 50_000, output: 1_000, reasoning: 500, cacheRead: 100_000),
+            tokens: Self.sessionTokens,
             estimatedCostUSD: 0,
-            sessionCount: 4
+            sessionCount: 1
         )
+        return [LocalActivity(provider: .codex, sessions: [session], daily: [bucket], scannedAt: Self.utcInstant(2026, 9, 16, 19, 32))]
+    }
 
+    /// Afternoon case from the original report: 15:32 EDT Sep 16. The old
+    /// local-day bucket compare read 0 here; the sessions prove 151,500.
+    func testAfternoonSessionsCountTowardToday() {
         let totals = StripTotals.calculate(
-            activities: activity(days: [bucket]),
+            activities: afternoonActivity(),
             usages: [],
-            now: Self.afternoonNow,
+            now: Self.utcInstant(2026, 9, 16, 19, 32),
             calendar: Self.newYork
         )
 
@@ -58,30 +70,54 @@ final class UnifiedStripTests: XCTestCase {
         XCTAssertEqual(totals.weekTokens, 151_500)
     }
 
-    /// A bucket 8 UTC days back is outside the 7-day window and must stay
-    /// out after the fix — the repair must not turn into "count everything".
-    func testStaleBucketStaysOutOfWeekWindow() {
-        let stale = DailyActivity(
+    /// Evening case that defeated the UTC-bucket comparison: 22:12 EDT Sep
+    /// 16 is already Sep 17 in UTC, so no UTC-day compare can match. The
+    /// sessions started that local evening and must still count.
+    func testEveningSessionsCountTowardToday() {
+        let totals = StripTotals.calculate(
+            activities: afternoonActivity(),
+            usages: [],
+            now: Self.utcInstant(2026, 9, 17, 2, 12),
+            calendar: Self.newYork
+        )
+
+        XCTAssertEqual(totals.todayTokens, 151_500)
+        XCTAssertEqual(totals.weekTokens, 151_500)
+    }
+
+    /// Sessions from 8 days ago stay out of both windows: the repair must
+    /// count today's sessions, not every session.
+    func testStaleSessionsStayOutOfBothWindows() {
+        let stale = SessionSummary(
+            id: "synthetic-stale",
+            projectName: "synthetic",
+            model: "codex",
+            tokens: TokenTotals(input: 10_000, output: 1_000),
+            estimatedCostUSD: 0,
+            startedAt: Self.utcInstant(2026, 9, 8, 19, 0),
+            messageCount: 5
+        )
+        let staleBucket = DailyActivity(
             day: Self.utcDay(2026, 9, 8),
             tokens: TokenTotals(input: 10_000, output: 1_000),
             estimatedCostUSD: 0,
             sessionCount: 1
         )
-        let fresh = DailyActivity(
-            day: Self.utcDay(2026, 9, 16),
-            tokens: TokenTotals(input: 5_000, output: 500),
-            estimatedCostUSD: 0,
-            sessionCount: 1
-        )
+        let activities = [LocalActivity(
+            provider: .codex,
+            sessions: [stale],
+            daily: [staleBucket],
+            scannedAt: Self.utcInstant(2026, 9, 16, 19, 32)
+        )]
 
         let totals = StripTotals.calculate(
-            activities: activity(days: [stale, fresh]),
+            activities: activities,
             usages: [],
-            now: Self.afternoonNow,
+            now: Self.utcInstant(2026, 9, 16, 19, 32),
             calendar: Self.newYork
         )
 
-        XCTAssertEqual(totals.todayTokens, 5_500)
-        XCTAssertEqual(totals.weekTokens, 5_500)
+        XCTAssertEqual(totals.todayTokens, 0)
+        XCTAssertEqual(totals.weekTokens, 0)
     }
 }

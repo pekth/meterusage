@@ -5,10 +5,16 @@ import AppKit
 //
 // Pure aggregation behind the "ALL AI CODING TODAY" strip, extracted so the
 // day-boundary math is unit-testable without rendering the popover.
-// Day buckets in `LocalActivity.daily` are UTC-midnight days (Codex and
-// Claude group by UTC for determinism); usage day-totals are local-day
-// figures computed inside their own sources. Each side is compared in its
-// own day convention — see the branch comments.
+//
+// TODAY is derived from session start instants against local midnight: day
+// buckets are UTC-midnight days (Codex and Claude group by UTC), so no
+// UTC/local bucket comparison can define "today" at all hours — a local
+// compare misses the whole day west of UTC, and a UTC compare misses every
+// evening past 20:00 EDT. Session instants are unambiguous in any zone, and
+// the "no sessions today" empty state is literally true by construction.
+// The 7-day WEEK still sums the UTC day buckets, where an hour-scale
+// boundary difference is immaterial. Usage day-totals keep the local-day
+// convention computed inside their own sources.
 struct StripTotals {
     let todayTokens: Int
     let weekTokens: Int
@@ -24,37 +30,27 @@ struct StripTotals {
         // Today plus the 6 prior days: 7 calendar days for the "last 7 days"
         // label. `>=` on a -7d start would silently count 8 days.
         let weekStart = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
-        // `daily` buckets are UTC-midnight days (Codex and Claude group by
-        // UTC for determinism), so they are compared in UTC: running them
-        // through the local calendar shifts every bucket before the local
-        // UTC offset onto the previous local day, zeroing "today" while the
-        // 7-day total still shows the tokens.
         var utcCalendar = Calendar(identifier: .gregorian)
         utcCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
-        let todayStartUTC = utcCalendar.startOfDay(for: now)
-        let weekStartUTC = utcCalendar.date(byAdding: .day, value: -6, to: todayStartUTC) ?? todayStartUTC
+        let weekStartUTC = utcCalendar.date(
+            byAdding: .day, value: -6,
+            to: utcCalendar.startOfDay(for: now)) ?? weekStart
 
         var todayTokens = 0
         var weekTokens = 0
         var todayCost: Double = 0.0
 
         for act in activities {
+            let todaySessions = act.sessions.filter { $0.startedAt >= todayStart }
+            todayTokens += todaySessions.reduce(0) { $0 + $1.tokens.total }
+            todayCost += todaySessions.reduce(0.0) { $0 + $1.estimatedCostUSD }
             if !act.daily.isEmpty {
-                for day in act.daily {
-                    if utcCalendar.isDate(day.day, inSameDayAs: todayStartUTC) {
-                        todayTokens += day.tokens.total
-                        todayCost += day.estimatedCostUSD
-                    }
-                    if day.day >= weekStartUTC {
-                        weekTokens += day.tokens.total
-                    }
+                for day in act.daily where day.day >= weekStartUTC {
+                    weekTokens += day.tokens.total
                 }
             } else {
-                let todaySessions = act.sessions.filter { $0.startedAt >= todayStart }
-                let weekSessions = act.sessions.filter { $0.startedAt >= weekStart }
-                todayTokens += todaySessions.reduce(0) { $0 + $1.tokens.total }
-                weekTokens += weekSessions.reduce(0) { $0 + $1.tokens.total }
-                todayCost += todaySessions.reduce(0.0) { $0 + $1.estimatedCostUSD }
+                weekTokens += act.sessions.filter { $0.startedAt >= weekStart }
+                    .reduce(0) { $0 + $1.tokens.total }
             }
         }
         for usage in usages {
@@ -384,8 +380,9 @@ struct PopoverRoot: View {
         // Antigravity, OpenRouter) contribute their own day totals — without
         // them the strip only ever saw Codex and Claude.
         //
-        // Two day conventions meet here: activity totals bucket by session
-        // start day, usage day-totals by last activity (a session worked on
+        // Two day conventions meet here: activity "today" counts sessions
+        // started today (local day, exact instants), while usage day-totals
+        // count by last activity (a session started days ago but worked on
         // today counts toward today, matching the rolling windows). Both are
         // approximations of "work done today" from stores that never record
         // per-day ledgers; the difference only shows at day boundaries.
