@@ -141,6 +141,57 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertEqual(total, total.rounded())
     }
 
+    func testNotchFrameHoldsAnchorForEveryCardHeight() {
+        // The panel grows away from the parked corner: for any card height the
+        // top edge and the strip's outer edge stay put. This is the invariant
+        // that six side-notch releases broke. Swept continuously, so a
+        // fractional height cannot slip back in unnoticed.
+        //
+        // Two anchor positions, each with room for the card on the open side:
+        // right-parked with the card to the left, left-parked with the card to
+        // the right. Clamping is the documented exception and is asserted
+        // separately below.
+        let screen = NSRect(x: 0, y: 0, width: 1728, height: 1117)
+        let parkedRight = CGPoint(x: 1700, y: 1092)
+        let parkedLeft = CGPoint(x: 300, y: 1092)
+        for height in stride(from: 180.0, through: 700.0, by: 0.5) {
+            let cardLeft = SideNotchPanelLayout.notchFrame(
+                stripTopRight: parkedRight,
+                totalSize: CGSize(width: 294, height: height),
+                stripWidth: 44,
+                cardOnRight: false,
+                screenFrame: screen
+            )
+            XCTAssertEqual(cardLeft.maxY, parkedRight.y, "top edge moved at height \(height)")
+            XCTAssertEqual(cardLeft.maxX, parkedRight.x, "strip right edge moved at height \(height)")
+
+            let cardRight = SideNotchPanelLayout.notchFrame(
+                stripTopRight: parkedLeft,
+                totalSize: CGSize(width: 294, height: height),
+                stripWidth: 44,
+                cardOnRight: true,
+                screenFrame: screen
+            )
+            XCTAssertEqual(cardRight.maxY, parkedLeft.y, "top edge moved at height \(height)")
+            XCTAssertEqual(cardRight.minX, parkedLeft.x - 44, "strip left edge moved at height \(height)")
+        }
+    }
+
+    func testNotchFrameClampsRatherThanLeaveTheScreen() {
+        // The one case that moves the anchor: a card with no room on its side
+        // shifts inward so the whole panel stays visible.
+        let screen = NSRect(x: 0, y: 0, width: 1728, height: 1117)
+        let frame = SideNotchPanelLayout.notchFrame(
+            stripTopRight: CGPoint(x: 1700, y: 1092),
+            totalSize: CGSize(width: 294, height: 400),
+            stripWidth: 44,
+            cardOnRight: true,
+            screenFrame: screen
+        )
+        XCTAssertLessThan(frame.minX, 1700 - 44)
+        XCTAssertEqual(frame.maxX, screen.maxX)
+    }
+
     func testStabilizedCardHeightNeverShrinksMidSweep() {
         // No measurement yet: no constraint, first card shows natural.
         XCTAssertNil(SideNotchPanelView.stabilizedCardMinHeight(stripHeight: 0, maxCardHeight: 0))

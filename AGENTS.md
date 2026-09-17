@@ -16,6 +16,9 @@ public repository.
   keys, real account data, raw transcripts, or personal absolute paths.
 - Read [`docs/PRIVACY.md`](docs/PRIVACY.md) before changing data sources,
   logging, or provider integrations.
+- For side notch layout or motion changes, capture the panel for two providers
+  whose cards differ in height, and confirm the top edge and the strip do not
+  move before release. See [`docs/adr/0004`](docs/adr/0004-side-notch-anchor-invariant.md).
 - Update `README.md` or the relevant file under `docs/` when behavior or setup
   changes.
 
