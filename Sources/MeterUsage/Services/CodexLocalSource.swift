@@ -42,7 +42,8 @@ public actor CodexLocalSource: LocalActivitySource {
 
         for url in Self.sessionFiles(in: root, fileManager: fileManager) {
             let start = Self.sessionStart(for: url, fileManager: fileManager)
-            guard let startedAt = start?.date ?? Self.modificationDate(for: url, fileManager: fileManager) else {
+            let modified = Self.modificationDate(for: url, fileManager: fileManager)
+            guard let startedAt = start?.date ?? modified else {
                 continue
             }
             let usage = Self.lastTokenUsage(for: url)
@@ -61,6 +62,7 @@ public actor CodexLocalSource: LocalActivitySource {
                     tokens: usage ?? TokenTotals(),
                     estimatedCostUSD: 0,
                     startedAt: startedAt,
+                    lastActivityAt: modified,
                     messageCount: 0
                 )
             )

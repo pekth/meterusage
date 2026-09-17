@@ -212,6 +212,13 @@ struct SideNotchPanelView: View {
                     .onChange(of: proxy.size.height) { _ in onSizeChange(proxy.size) }
             }
         )
+        // The panel is always on screen, so unlike the popover it never
+        // refreshes on open: unfolding is the moment the numbers are read.
+        // Refresh then (the same 20-second staleness guard the popover uses)
+        // instead of showing a reading up to a full sweep interval old.
+        .onChange(of: isOpen) { open in
+            if open { coordinator.refreshIfStale() }
+        }
         .background(
             HoverSensor { hovering in
                 if hovering {

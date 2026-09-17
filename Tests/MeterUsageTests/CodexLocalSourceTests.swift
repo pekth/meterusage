@@ -86,6 +86,9 @@ final class CodexLocalSourceTests: XCTestCase {
             cwd: "/testuser/example/meterusage",
             tokens: (input: 1_000_000, cached: 900_000, output: 2_000, reasoning: 500)
         )
+        let touched = Self.day(2026, 8, 12)
+        let firstRollout = root.appendingPathComponent("2026/08/11/rollout-2026-08-11T12-00-00-a.jsonl")
+        try FileManager.default.setAttributes([.modificationDate: touched], ofItemAtPath: firstRollout.path)
         try writeRollout(
             root,
             name: "rollout-2026-08-10T09-00-00-b",
@@ -102,6 +105,13 @@ final class CodexLocalSourceTests: XCTestCase {
         XCTAssertEqual(session.tokens.output, 1_500)
         XCTAssertEqual(session.tokens.reasoning, 500)
         XCTAssertEqual(session.tokens.total, 1_002_000)
+        XCTAssertEqual(
+            session.lastActivityAt?.timeIntervalSince1970 ?? 0,
+            touched.timeIntervalSince1970,
+            accuracy: 1,
+            "the store's last write is the session's last activity"
+        )
+        XCTAssertEqual(session.activeUntil, session.lastActivityAt)
 
         let day11 = try XCTUnwrap(activity.daily.first { $0.day == Self.day(2026, 8, 11) })
         XCTAssertEqual(day11.tokens.total, 1_002_000)

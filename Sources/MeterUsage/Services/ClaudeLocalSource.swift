@@ -145,6 +145,7 @@ public actor ClaudeLocalSource: LocalActivitySource {
                         tokens: parsed.tokens,
                         estimatedCostUSD: parsed.totalCostUSD,
                         startedAt: parsed.earliestTimestamp ?? .distantPast,
+                        lastActivityAt: Date(timeIntervalSince1970: stat.mtime),
                         messageCount: parsed.messageCount
                     )
                 )

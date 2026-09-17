@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Today total survives a session that runs past midnight.** Today counted
+  only sessions started today, so the card collapsed to 0 at local midnight
+  and stayed 0 until a brand-new session began. A session now counts toward
+  today when its activity window (start to its store's last write) overlaps
+  today, so a session in flight across midnight keeps the day non-zero. A
+  session that finished before midnight still belongs to yesterday.
+- **Side-notch card refreshes when you open it.** The panel is always on
+  screen, so unlike the popover it never refreshed on open. Unfolding it now
+  refreshes data older than 20 seconds instead of showing a reading up to a
+  full scheduled-sweep interval old.
+
 ## [0.2.23] - 2026-09-16
 
 ### Fixed

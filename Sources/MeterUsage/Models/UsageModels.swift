@@ -579,6 +579,12 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public let tokens: TokenTotals
     public let estimatedCostUSD: Double
     public let startedAt: Date
+    /// When the session last wrote activity (the store's modification time),
+    /// when the source can tell. `nil` means unknown: the session is then
+    /// treated as ending at `startedAt`, never shorter. Only the day-window
+    /// math reads this, so a long session that runs past midnight still counts
+    /// toward the new day instead of vanishing from it.
+    public let lastActivityAt: Date?
     public let messageCount: Int
     /// True for synthetic per-provider aggregates built for burn attribution
     /// (see `BurnAttributionCalculator.attributionSessions`): one entry
@@ -593,6 +599,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
         tokens: TokenTotals,
         estimatedCostUSD: Double,
         startedAt: Date,
+        lastActivityAt: Date? = nil,
         messageCount: Int,
         isAggregate: Bool = false
     ) {
@@ -602,8 +609,15 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
         self.tokens = tokens
         self.estimatedCostUSD = estimatedCostUSD
         self.startedAt = startedAt
+        self.lastActivityAt = lastActivityAt
         self.messageCount = messageCount
         self.isAggregate = isAggregate
+    }
+
+    /// The session's activity window closes at `lastActivityAt` when known,
+    /// otherwise at its start. Never before the start.
+    public var activeUntil: Date {
+        max(lastActivityAt ?? startedAt, startedAt)
     }
 }
 

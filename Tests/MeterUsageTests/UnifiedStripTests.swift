@@ -6,10 +6,12 @@ import XCTest
 /// `LocalActivity.daily` buckets are UTC-midnight days, so no UTC/local day
 /// comparison can define "today" correctly at all hours: a local compare
 /// misses the whole day west of UTC, and a UTC compare misses every evening
-/// after 20:00 EDT (00:00 UTC). The strip therefore derives TODAY from
-/// session start instants against local midnight, which is unambiguous in
-/// any time zone. The 7-day WEEK still sums the UTC day buckets, where an
-/// hour-scale boundary difference is immaterial.
+/// after 20:00 EDT (00:00 UTC). The strip therefore derives TODAY from session
+/// activity windows against local midnight: a session counts when its window
+/// (start → last activity) overlaps today, so a session in flight across
+/// midnight keeps the day non-zero instead of collapsing it. The 7-day WEEK
+/// still sums the UTC day buckets, where an hour-scale boundary difference is
+/// immaterial.
 final class UnifiedStripTests: XCTestCase {
 
     private static var newYork: Calendar {
@@ -194,10 +196,10 @@ final class UnifiedStripTests: XCTestCase {
         XCTAssertEqual(totals.weekTokens, 151_500)
     }
 
-    /// Pinned approximation: today means started-today. A session started at
-    /// 23:50 yesterday and worked past midnight belongs to yesterday, even
-    /// when read after midnight.
-    func testSessionStartedYesterdayStaysYesterday() {
+    /// Pinned edge: a session with no last-activity instant ends at its start,
+    /// so one from a previous local day is not dragged into today. Sources
+    /// that can tell (Codex, Claude) always set `lastActivityAt`.
+    func testSessionWithoutLastActivityEndsAtItsStart() {
         let session = SessionSummary(
             id: "synthetic-crossover",
             projectName: "synthetic",
@@ -218,6 +220,69 @@ final class UnifiedStripTests: XCTestCase {
             activities: activities,
             usages: [],
             now: Self.utcInstant(2026, 9, 16, 4, 10),
+            calendar: Self.newYork
+        )
+
+        XCTAssertEqual(totals.todayTokens, 0)
+        XCTAssertEqual(totals.weekTokens, 151_500)
+    }
+
+    /// The reported drop: a session started 23:50 EDT is still being written
+    /// at 00:10 EDT, so reading the strip at 00:45 EDT must not show 0. The
+    /// old start-instant comparison zeroed this; the activity window counts it.
+    func testSessionStartedYesterdayButActiveTodayCountsTowardToday() {
+        let session = SessionSummary(
+            id: "synthetic-in-flight",
+            projectName: "synthetic",
+            model: "codex",
+            tokens: Self.sessionTokens,
+            estimatedCostUSD: 0,
+            startedAt: Self.utcInstant(2026, 9, 17, 3, 50),
+            lastActivityAt: Self.utcInstant(2026, 9, 17, 4, 10),
+            messageCount: 8
+        )
+        let activities = [LocalActivity(
+            provider: .codex,
+            sessions: [session],
+            daily: [],
+            scannedAt: Self.utcInstant(2026, 9, 17, 4, 45)
+        )]
+
+        let totals = StripTotals.calculate(
+            activities: activities,
+            usages: [],
+            now: Self.utcInstant(2026, 9, 17, 4, 45),
+            calendar: Self.newYork
+        )
+
+        XCTAssertEqual(totals.todayTokens, 151_500)
+        XCTAssertEqual(totals.weekTokens, 151_500)
+    }
+
+    /// The overlap must not over-count the other way: a session that started
+    /// and finished before local midnight belongs to yesterday only.
+    func testSessionFinishedBeforeMidnightStaysOutOfToday() {
+        let session = SessionSummary(
+            id: "synthetic-closed",
+            projectName: "synthetic",
+            model: "codex",
+            tokens: Self.sessionTokens,
+            estimatedCostUSD: 0,
+            startedAt: Self.utcInstant(2026, 9, 17, 3, 50),
+            lastActivityAt: Self.utcInstant(2026, 9, 17, 3, 58),
+            messageCount: 8
+        )
+        let activities = [LocalActivity(
+            provider: .codex,
+            sessions: [session],
+            daily: [],
+            scannedAt: Self.utcInstant(2026, 9, 17, 4, 45)
+        )]
+
+        let totals = StripTotals.calculate(
+            activities: activities,
+            usages: [],
+            now: Self.utcInstant(2026, 9, 17, 4, 45),
             calendar: Self.newYork
         )
 

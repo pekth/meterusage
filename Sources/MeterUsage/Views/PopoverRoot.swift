@@ -6,15 +6,17 @@ import AppKit
 // Pure aggregation behind the "ALL AI CODING TODAY" strip, extracted so the
 // day-boundary math is unit-testable without rendering the popover.
 //
-// TODAY is derived from session start instants against local midnight: day
+// TODAY is derived from session activity windows against local midnight: day
 // buckets are UTC-midnight days (Codex and Claude group by UTC), so no
 // UTC/local bucket comparison can define "today" at all hours — a local
 // compare misses the whole day west of UTC, and a UTC compare misses every
-// evening past 20:00 EDT. Session instants are unambiguous in any zone, and
-// the "no sessions today" empty state is literally true by construction.
-// The 7-day WEEK still sums the UTC day buckets, where an hour-scale
-// boundary difference is immaterial. Usage day-totals keep the local-day
-// convention computed inside their own sources.
+// evening past 20:00 EDT. Session instants are unambiguous in any zone, and a
+// session counts toward today when its window overlaps today (started before
+// local midnight but still written after it counts), so a session in flight
+// across midnight never drops the day to zero. The 7-day WEEK still sums the
+// UTC day buckets, where an hour-scale boundary difference is immaterial.
+// Usage day-totals keep the local-day convention computed inside their own
+// sources.
 struct StripTotals {
     let todayTokens: Int
     let weekTokens: Int
@@ -27,6 +29,7 @@ struct StripTotals {
         calendar: Calendar = .current
     ) -> StripTotals {
         let todayStart = calendar.startOfDay(for: now)
+        let tomorrowStart = calendar.date(byAdding: .day, value: 1, to: todayStart) ?? now
         // Today plus the 6 prior days: 7 calendar days for the "last 7 days"
         // label. `>=` on a -7d start would silently count 8 days.
         let weekStart = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
@@ -41,7 +44,9 @@ struct StripTotals {
         var todayCost: Double = 0.0
 
         for act in activities {
-            let todaySessions = act.sessions.filter { $0.startedAt >= todayStart }
+            let todaySessions = act.sessions.filter {
+                $0.startedAt < tomorrowStart && $0.activeUntil >= todayStart
+            }
             todayTokens += todaySessions.reduce(0) { $0 + $1.tokens.total }
             todayCost += todaySessions.reduce(0.0) { $0 + $1.estimatedCostUSD }
             if !act.daily.isEmpty {
