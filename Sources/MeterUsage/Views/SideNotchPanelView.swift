@@ -320,6 +320,10 @@ struct SideNotchPanelView: View {
                         ArrowBeakView()
                             .scaleEffect(x: panel.cardOnRight ? -1 : 1, y: 1)
                             .offset(x: panel.cardOnRight ? -3.5 : 3.5, y: beakY)
+                            // Glide with the ring the pointer moved to instead
+                            // of snapping: the window height already glides,
+                            // so a jumping arrow would be the remaining flap.
+                            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: beakY)
                     }
                 }
                 .onHover { hovering in
