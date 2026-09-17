@@ -131,6 +131,15 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertEqual(frame, NSRect(x: 1432, y: 709, width: 292, height: 383))
     }
 
+    func testStabilizedCardHeightNeverShrinksMidSweep() {
+        // No measurement yet: no constraint, first card shows natural.
+        XCTAssertNil(SideNotchPanelView.stabilizedCardMinHeight(stripHeight: 0, maxCardHeight: 0))
+        // Strip alone still floors the card, as before.
+        XCTAssertEqual(SideNotchPanelView.stabilizedCardMinHeight(stripHeight: 241, maxCardHeight: 0), 241)
+        // A taller card seen earlier holds: short cards pad, window steady.
+        XCTAssertEqual(SideNotchPanelView.stabilizedCardMinHeight(stripHeight: 241, maxCardHeight: 555), 555)
+    }
+
     // MARK: - Share crop
 
     func testShareCropIsolatesCardLeftOfStrip() {

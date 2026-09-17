@@ -175,6 +175,12 @@ struct SideNotchPanelView: View {
     @State private var resetErrorMessage: String?
     @State private var stripHeight: CGFloat = 0
     @State private var cardHeight: CGFloat = 0
+    /// Tallest card measured this session. The card column never shrinks
+    /// below it, so sweeping hover across providers never resizes the
+    /// window: short cards show quiet empty space instead of everyone
+    /// flapping. Resets when the provider set changes; otherwise a removed
+    /// provider's ghost height would linger all session.
+    @State private var maxCardHeight: CGFloat = 0
     /// Collapse hysteresis: a pointer exit schedules collapse, but a
     /// re-enter before the delay fires cancels it. 450ms — deliberately
     /// longer than a tooltip grace, so the fold never feels twitchy.
@@ -289,6 +295,10 @@ struct SideNotchPanelView: View {
         }
         .onPreferenceChange(CardHeightKey.self) { height in
             cardHeight = height
+            if height > maxCardHeight { maxCardHeight = height }
+        }
+        .onChange(of: entries.map(\.provider)) { _ in
+            maxCardHeight = 0
         }
         .onChange(of: panel.isDragging) { dragging in
             // A drop can strand a hover from before the drag (the mouse never
@@ -701,7 +711,7 @@ struct SideNotchPanelView: View {
         }
         .padding(14)
         .frame(width: SideNotchPanelLayout.cardWidth)
-        .frame(minHeight: stripHeight > 0 ? stripHeight : nil, alignment: .top)
+        .frame(minHeight: Self.stabilizedCardMinHeight(stripHeight: stripHeight, maxCardHeight: maxCardHeight), alignment: .top)
         .background(
             GeometryReader { proxy in
                 Color.clear.preference(key: CardHeightKey.self, value: proxy.size.height)
@@ -1171,6 +1181,14 @@ struct SideNotchPanelView: View {
             return "Empties before reset at current pace"
         }
         return "Paced to last until reset"
+    }
+
+    /// Minimum card height that never resizes the window mid-sweep. The max
+    /// is self-consistent: the height report already includes this minimum,
+    /// so it ratchets once per taller card and then holds.
+    static func stabilizedCardMinHeight(stripHeight: CGFloat, maxCardHeight: CGFloat) -> CGFloat? {
+        let stable = max(stripHeight, maxCardHeight)
+        return stable > 0 ? stable : nil
     }
 
     private struct ProviderTokenUsage {
