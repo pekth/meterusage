@@ -115,6 +115,22 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertLessThanOrEqual(frame.maxY, screen.maxY)
     }
 
+    func testNotchFrameSnapsFractionalSizesToWholePoints() {
+        // Measured card heights land fractional (text baselines); framing the
+        // window raw sits it half a point off the pixel grid, nudging every
+        // pixel by one physical pixel on a 2x display each time such a card
+        // mounts. Seen live as a 1px shift hovering short cards.
+        let screen = NSRect(x: 0, y: 0, width: 1728, height: 1117)
+        let frame = SideNotchPanelLayout.notchFrame(
+            stripTopRight: CGPoint(x: 1724, y: 1092),
+            totalSize: CGSize(width: 292.5, height: 383.5),
+            stripWidth: 42.5,
+            cardOnRight: false,
+            screenFrame: screen
+        )
+        XCTAssertEqual(frame, NSRect(x: 1431, y: 708, width: 293, height: 384))
+    }
+
     // MARK: - Share crop
 
     func testShareCropIsolatesCardLeftOfStrip() {
