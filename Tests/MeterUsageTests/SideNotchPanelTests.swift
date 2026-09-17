@@ -130,7 +130,7 @@ final class SideNotchPanelTests: XCTestCase {
             from: old, to: NSRect(x: 390, y: 200, width: 290, height: 300)))
         // Drag or screen change shifts the top edge: snap.
         XCTAssertFalse(SideNotchPanelLayout.shouldAnimateResize(
-            from: old, to: NSRect(x: 100, y: 100, width: 290, height: 400)))
+            from: old, to: NSRect(x: 100, y: 100, width: 290, height: 300)))
     }
 
     // MARK: - Share crop
