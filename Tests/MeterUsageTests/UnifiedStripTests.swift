@@ -120,4 +120,108 @@ final class UnifiedStripTests: XCTestCase {
         XCTAssertEqual(totals.todayTokens, 0)
         XCTAssertEqual(totals.weekTokens, 0)
     }
+
+    // MARK: - Time-zone matrix
+
+    private static var sydney: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Australia/Sydney")!
+        return cal
+    }
+
+    /// East of UTC: 00:30 local Sep 17 in Sydney is still Sep 16 in UTC, so
+    /// the UTC bucket names the wrong day. Session instants count it anyway.
+    func testSydneyEarlyMorningSessionCountsTowardLocalToday() {
+        let session = SessionSummary(
+            id: "synthetic-sydney",
+            projectName: "synthetic",
+            model: "codex",
+            tokens: Self.sessionTokens,
+            estimatedCostUSD: 0,
+            startedAt: Self.utcInstant(2026, 9, 16, 14, 30),
+            messageCount: 8
+        )
+        let bucket = DailyActivity(
+            day: Self.utcDay(2026, 9, 16),
+            tokens: Self.sessionTokens,
+            estimatedCostUSD: 0,
+            sessionCount: 1
+        )
+        let activities = [LocalActivity(
+            provider: .codex,
+            sessions: [session],
+            daily: [bucket],
+            scannedAt: Self.utcInstant(2026, 9, 16, 15, 0)
+        )]
+
+        let totals = StripTotals.calculate(
+            activities: activities,
+            usages: [],
+            now: Self.utcInstant(2026, 9, 16, 15, 0),
+            calendar: Self.sydney
+        )
+
+        XCTAssertEqual(totals.todayTokens, 151_500)
+    }
+
+    /// On UTC itself the session instant and the bucket agree; both windows
+    /// count the session.
+    func testUTCMidnightHourSessionCountsTowardToday() {
+        let session = SessionSummary(
+            id: "synthetic-utc",
+            projectName: "synthetic",
+            model: "codex",
+            tokens: Self.sessionTokens,
+            estimatedCostUSD: 0,
+            startedAt: Self.utcInstant(2026, 9, 16, 0, 30),
+            messageCount: 8
+        )
+        let activities = [LocalActivity(
+            provider: .codex,
+            sessions: [session],
+            daily: [],
+            scannedAt: Self.utcInstant(2026, 9, 16, 23, 0)
+        )]
+
+        let totals = StripTotals.calculate(
+            activities: activities,
+            usages: [],
+            now: Self.utcInstant(2026, 9, 16, 23, 0),
+            calendar: Self.utc
+        )
+
+        XCTAssertEqual(totals.todayTokens, 151_500)
+        XCTAssertEqual(totals.weekTokens, 151_500)
+    }
+
+    /// Pinned approximation: today means started-today. A session started at
+    /// 23:50 yesterday and worked past midnight belongs to yesterday, even
+    /// when read after midnight.
+    func testSessionStartedYesterdayStaysYesterday() {
+        let session = SessionSummary(
+            id: "synthetic-crossover",
+            projectName: "synthetic",
+            model: "codex",
+            tokens: Self.sessionTokens,
+            estimatedCostUSD: 0,
+            startedAt: Self.utcInstant(2026, 9, 16, 3, 50),
+            messageCount: 8
+        )
+        let activities = [LocalActivity(
+            provider: .codex,
+            sessions: [session],
+            daily: [],
+            scannedAt: Self.utcInstant(2026, 9, 16, 4, 10)
+        )]
+
+        let totals = StripTotals.calculate(
+            activities: activities,
+            usages: [],
+            now: Self.utcInstant(2026, 9, 16, 4, 10),
+            calendar: Self.newYork
+        )
+
+        XCTAssertEqual(totals.todayTokens, 0)
+        XCTAssertEqual(totals.weekTokens, 151_500)
+    }
 }
