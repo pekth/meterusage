@@ -104,9 +104,10 @@ enum SideNotchPanelLayout {
     /// side, clamped so the whole panel stays inside `screenFrame`. The
     /// strip's top-right corner never moves: toggling or flipping the card
     /// grows the window away from the strip, so readings stay put under the
-    /// cursor. Sizes snap up to whole points: a fractional frame sits the
-    /// window half a point off the pixel grid, which nudges every pixel by
-    /// one physical pixel on a 2x display each time such a card mounts.
+    /// cursor. Sizes snap DOWN to whole points: ceiling leaves a transparent
+    /// hairline where the window exceeds its content, while flooring clips
+    /// at most a point of black padding. Either way the top edge lands on
+    /// the identical pixel row on every hover.
     static func notchFrame(
         stripTopRight: CGPoint,
         totalSize: CGSize,
@@ -114,7 +115,7 @@ enum SideNotchPanelLayout {
         cardOnRight: Bool,
         screenFrame: NSRect
     ) -> NSRect {
-        let w = totalSize.width.rounded(.up), h = totalSize.height.rounded(.up)
+        let w = totalSize.width.rounded(.down), h = totalSize.height.rounded(.down)
         var x = cardOnRight ? stripTopRight.x - stripWidth : stripTopRight.x - w
         var y = stripTopRight.y - h
         x = min(max(x, screenFrame.minX), max(screenFrame.maxX - w, screenFrame.minX))
@@ -377,7 +378,7 @@ final class SideNotchPanelController: ObservableObject {
     /// Screen changes place directly and bypass this; drags never place
     /// (re-framing mid-drag would fight the cursor).
     private func notePlacement(for size: CGSize) -> Bool {
-        let quantized = CGSize(width: size.width.rounded(), height: size.height.rounded())
+        let quantized = CGSize(width: size.width.rounded(.down), height: size.height.rounded(.down))
         guard quantized != lastPlacedSize else { return false }
         lastPlacedSize = quantized
         return true

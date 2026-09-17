@@ -116,10 +116,10 @@ final class SideNotchPanelTests: XCTestCase {
     }
 
     func testNotchFrameSnapsFractionalSizesToWholePoints() {
-        // Measured card heights land fractional (text baselines); framing the
-        // window raw sits it half a point off the pixel grid, nudging every
-        // pixel by one physical pixel on a 2x display each time such a card
-        // mounts. Seen live as a 1px shift hovering short cards.
+        // Measured card heights land fractional (text baselines). Snapping
+        // DOWN clips at most a point of black padding; snapping up would
+        // leave a transparent hairline where the window exceeds its content.
+        // Either way the top edge lands on the identical row every hover.
         let screen = NSRect(x: 0, y: 0, width: 1728, height: 1117)
         let frame = SideNotchPanelLayout.notchFrame(
             stripTopRight: CGPoint(x: 1724, y: 1092),
@@ -128,7 +128,7 @@ final class SideNotchPanelTests: XCTestCase {
             cardOnRight: false,
             screenFrame: screen
         )
-        XCTAssertEqual(frame, NSRect(x: 1431, y: 708, width: 293, height: 384))
+        XCTAssertEqual(frame, NSRect(x: 1432, y: 709, width: 292, height: 383))
     }
 
     // MARK: - Share crop
