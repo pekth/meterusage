@@ -115,20 +115,30 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertLessThanOrEqual(frame.maxY, screen.maxY)
     }
 
-    func testNotchFrameSnapsFractionalSizesToWholePoints() {
-        // Measured card heights land fractional (text baselines). Snapping
-        // DOWN clips at most a point of black padding; snapping up would
-        // leave a transparent hairline where the window exceeds its content.
-        // Either way the top edge lands on the identical row every hover.
+    func testNotchFrameUsesMeasuredSizeExactly() {
+        // The view now reports whole points (integral strip width, ceilinged
+        // card height), so the frame is used exactly as measured. No rounding
+        // here: rounding the frame without rounding the content desyncs the
+        // two and reintroduces a snap.
         let screen = NSRect(x: 0, y: 0, width: 1728, height: 1117)
         let frame = SideNotchPanelLayout.notchFrame(
             stripTopRight: CGPoint(x: 1724, y: 1092),
-            totalSize: CGSize(width: 292.5, height: 383.5),
-            stripWidth: 42.5,
+            totalSize: CGSize(width: 294, height: 384),
+            stripWidth: 44,
             cardOnRight: false,
             screenFrame: screen
         )
-        XCTAssertEqual(frame, NSRect(x: 1432, y: 709, width: 292, height: 383))
+        XCTAssertEqual(frame, NSRect(x: 1430, y: 708, width: 294, height: 384))
+        // Top edge is the parked corner, untouched by the size.
+        XCTAssertEqual(frame.maxY, 1092)
+    }
+
+    func testStripAndCardWidthsAreWholePoints() {
+        XCTAssertEqual(SideNotchPanelLayout.stripWidth, SideNotchPanelLayout.stripWidth.rounded())
+        XCTAssertEqual(SideNotchPanelLayout.cardWidth, SideNotchPanelLayout.cardWidth.rounded())
+        // Total panel width must be integral for a whole-point origin.
+        let total = SideNotchPanelLayout.stripWidth + SideNotchPanelLayout.cardWidth
+        XCTAssertEqual(total, total.rounded())
     }
 
     func testStabilizedCardHeightNeverShrinksMidSweep() {

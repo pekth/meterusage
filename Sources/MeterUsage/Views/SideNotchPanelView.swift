@@ -179,7 +179,8 @@ struct SideNotchPanelView: View {
     /// below it, so sweeping hover across providers never resizes the
     /// window: short cards show quiet empty space instead of everyone
     /// flapping. Resets when the provider set changes; otherwise a removed
-    /// provider's ghost height would linger all session.
+    /// provider's ghost height would linger all session. Stored rounded up
+    /// to whole points so the panel frame stays on the pixel grid.
     @State private var maxCardHeight: CGFloat = 0
     /// Collapse hysteresis: a pointer exit schedules collapse, but a
     /// re-enter before the delay fires cancels it. 450ms — deliberately
@@ -218,6 +219,15 @@ struct SideNotchPanelView: View {
                     .onChange(of: proxy.size.height) { _ in onSizeChange(proxy.size) }
             }
         )
+        // Pin the content to the top of the window. The window is sized from
+        // the measurement above, but AppKit rounds a fractional frame up to
+        // whole points, so the window can be up to a point taller than the
+        // content. Left alone, SwiftUI centers that leftover split above and
+        // below, and because only some cards have a fractional height (Grok,
+        // OpenRouter) those cards drew a pixel off from the integral ones.
+        // Top-anchoring keeps the visible top edge on one row and pushes any
+        // leftover below the card's own black edge, where it cannot be seen.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         // The panel is always on screen, so unlike the popover it never
         // refreshes on open: unfolding is the moment the numbers are read.
         // Refresh then (the same 20-second staleness guard the popover uses)
@@ -290,12 +300,14 @@ struct SideNotchPanelView: View {
         }
         .fixedSize()
         .onPreferenceChange(StripSizeKey.self) { size in
-            stripHeight = size.height
-            onStripSizeChange(size)
+            let height = size.height.rounded(.up)
+            stripHeight = height
+            onStripSizeChange(CGSize(width: SideNotchPanelLayout.stripWidth, height: height))
         }
         .onPreferenceChange(CardHeightKey.self) { height in
-            cardHeight = height
-            if height > maxCardHeight { maxCardHeight = height }
+            let whole = height.rounded(.up)
+            cardHeight = whole
+            if whole > maxCardHeight { maxCardHeight = whole }
         }
         .onChange(of: entries.map(\.provider)) { _ in
             maxCardHeight = 0
@@ -449,6 +461,15 @@ struct SideNotchPanelView: View {
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 6)
+        // Whole-point frames: the intrinsic width came out fractional (42.5pt
+        // from the 7.5pt ETA text) and the intrinsic height off the stacked
+        // 9pt/7.5pt lines, either of which puts the panel frame off the pixel
+        // grid so the window server snaps it a pixel off. A constant width
+        // and a ceilinged height keep every frame integral.
+        .frame(
+            width: SideNotchPanelLayout.stripWidth,
+            height: stripHeight > 0 ? stripHeight : nil
+        )
         .background(
             GeometryReader { proxy in
                 Color.clear.preference(key: StripSizeKey.self, value: proxy.size)

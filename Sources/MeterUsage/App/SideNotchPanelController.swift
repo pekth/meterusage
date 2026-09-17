@@ -39,6 +39,12 @@ enum SideNotchPanelLayout {
     /// a beat later — which is what used to shift the strip under the cursor.
     static let cardWidth: CGFloat = 250
 
+    /// Fixed strip width. The strip's intrinsic width came out fractional
+    /// (42.5pt, driven by the 7.5pt ETA text), which made the whole panel's
+    /// frame fractional and let the window server snap it a pixel off. A
+    /// constant keeps every frame on whole points.
+    static let stripWidth: CGFloat = 44
+
     static func frame(
         contentSize: CGSize,
         screenFrame: NSRect,
@@ -104,10 +110,9 @@ enum SideNotchPanelLayout {
     /// side, clamped so the whole panel stays inside `screenFrame`. The
     /// strip's top-right corner never moves: toggling or flipping the card
     /// grows the window away from the strip, so readings stay put under the
-    /// cursor. Sizes snap DOWN to whole points: ceiling leaves a transparent
-    /// hairline where the window exceeds its content, while flooring clips
-    /// at most a point of black padding. Either way the top edge lands on
-    /// the identical pixel row on every hover.
+    /// cursor. Sizes are used exactly as measured: the view reports whole
+    /// points (integral strip width, ceilinged card height), so the window
+    /// and its content agree and nothing recenters.
     static func notchFrame(
         stripTopRight: CGPoint,
         totalSize: CGSize,
@@ -115,7 +120,7 @@ enum SideNotchPanelLayout {
         cardOnRight: Bool,
         screenFrame: NSRect
     ) -> NSRect {
-        let w = totalSize.width.rounded(.down), h = totalSize.height.rounded(.down)
+        let w = totalSize.width, h = totalSize.height
         var x = cardOnRight ? stripTopRight.x - stripWidth : stripTopRight.x - w
         var y = stripTopRight.y - h
         x = min(max(x, screenFrame.minX), max(screenFrame.maxX - w, screenFrame.minX))
