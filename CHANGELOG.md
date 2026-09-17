@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.27] - 2026-09-17
+
+### Fixed
+
+- **Side notch stuttered when sweeping hover across providers.** The 0.2.26
+  glide animated AppKit frame resizes, and overlapping frame animations fight
+  each other, so rapid switches shuddered worse than the original snap. The
+  glide now lives in SwiftUI, which retargets interrupted animations cleanly:
+  the card container height interpolates on hover change and the controller
+  tracks each step instantly. Folds, flips, drags, and data ticks still snap.
+
 ## [0.2.26] - 2026-09-17
 
 ### Fixed
