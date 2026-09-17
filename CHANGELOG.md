@@ -18,6 +18,7 @@ follows [Semantic Versioning](https://semver.org/).
   screen, so unlike the popover it never refreshed on open. Unfolding it now
   refreshes data older than 20 seconds instead of showing a reading up to a
   full scheduled-sweep interval old.
+- **Burn attribution names OpenCode Go projects instead of the provider.** The top row read "OpenCode Go" with the provider's whole week. OpenCode Go sessions carry a working directory, so the source splits its week total by project and attribution shows one row per project. Providers that cannot split (Antigravity, OpenRouter) keep the single provider row.
 
 ## [0.2.23] - 2026-09-16
 

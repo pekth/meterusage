@@ -193,6 +193,43 @@ final class NewPipelineTests: XCTestCase {
         XCTAssertEqual(breakdown?.contributors.first?.isLongChat, false)
     }
 
+    /// When a usage provider splits its week by project, attribution shows
+    /// one row per project instead of a single provider row. The rows stay
+    /// synthetic aggregates, so project weeks never pose as one long chat.
+    func testAttributionSessionsPrefersProjectBreakdown() {
+        let now = Date()
+        let usages: [Provider: Loaded<ProviderUsage>] = [
+            .openCodeGo: .value(ProviderUsage(
+                provider: .openCodeGo, sessionCount: 5, messageCount: 50,
+                todaySessionCount: 1, todayMessageCount: 9,
+                todayTokens: TokenTotals(input: 38_000_000, output: 0),
+                weekTokens: TokenTotals(input: 249_000_000, output: 0),
+                projectBreakdown: [
+                    ProjectTokens(project: "meterusage", tokens: TokenTotals(input: 200_000_000, output: 0)),
+                    ProjectTokens(project: "tivox", tokens: TokenTotals(input: 49_000_000, output: 0))
+                ],
+                capturedAt: now
+            ))
+        ]
+
+        let sessions = BurnAttributionCalculator.attributionSessions(activities: [:], usages: usages, now: now)
+
+        XCTAssertEqual(sessions.count, 2)
+        XCTAssertNil(sessions.first { $0.projectName == "OpenCode Go" })
+        let meter = try? XCTUnwrap(sessions.first { $0.projectName == "meterusage" })
+        XCTAssertEqual(meter?.model, "")
+        XCTAssertEqual(meter?.tokens.total, 200_000_000)
+        XCTAssertEqual(meter?.isAggregate, true)
+
+        let breakdown = try? XCTUnwrap(BurnAttributionCalculator.calculate(
+            sessions: sessions,
+            window: nil, since: now.addingTimeInterval(-6 * 86_400),
+            fallbackToRecent: false, now: now
+        ))
+        XCTAssertEqual(breakdown?.longChatCount, 0)
+        XCTAssertEqual(breakdown?.contributors.map(\.projectName).sorted(), ["meterusage", "tivox"])
+    }
+
     func testQuotaPaceAmbientETA() {
         let now = Date()
         let resetsAt = now.addingTimeInterval(3600) // 1h remaining

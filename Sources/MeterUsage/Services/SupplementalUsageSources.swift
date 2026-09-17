@@ -541,6 +541,15 @@ public struct OpenCodeGoUsageSource: UsageSource {
         let todayTokens = todayTouched.reduce(TokenTotals()) { $0 + dayTotals($1) }
         let weekTokens = weekTouched.reduce(TokenTotals()) { $0 + dayTotals($1) }
         let todayCost = todayTouched.reduce(0) { $0 + $1.cost }
+        // Same week window as `weekTokens`, split by working directory so
+        // burn attribution shows project rows instead of one provider row.
+        var projectSums: [String: TokenTotals] = [:]
+        for record in weekTouched {
+            projectSums[record.project, default: TokenTotals()] = projectSums[record.project, default: TokenTotals()] + dayTotals(record)
+        }
+        let projectBreakdown = projectSums.compactMap { project, totals in
+            totals.total > 0 ? ProjectTokens(project: project, tokens: totals) : nil
+        }.sorted { $0.tokens.total > $1.tokens.total }
         let tokens = records.reduce(TokenTotals()) { total, record in
             total + TokenTotals(
                 input: record.input,
@@ -570,6 +579,7 @@ public struct OpenCodeGoUsageSource: UsageSource {
             todayMessageCount: todayRecords.reduce(0) { $0 + $1.messages },
             todayTokens: todayTokens.total > 0 ? todayTokens : nil,
             weekTokens: weekTokens.total > 0 ? weekTokens : nil,
+            projectBreakdown: projectBreakdown.isEmpty ? nil : projectBreakdown,
             todayCostUSD: todayCost > 0 ? todayCost : nil,
             usageWindows: Self.windows(from: records, now: now),
             telemetry: telemetry,
@@ -594,7 +604,8 @@ public struct OpenCodeGoUsageSource: UsageSource {
         let sql = """
         SELECT tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write,
                cost, time_created, time_updated,
-               (SELECT COUNT(*) FROM message WHERE message.session_id = session.id)
+               (SELECT COUNT(*) FROM message WHERE message.session_id = session.id),
+               directory
         FROM session
         WHERE json_extract(model, '$.providerID') = 'opencode-go';
         """
@@ -613,6 +624,12 @@ public struct OpenCodeGoUsageSource: UsageSource {
             let createdRaw = Double(sqlite3_column_int64(stmt, 6))
             let updatedRaw = Double(sqlite3_column_int64(stmt, 7))
             let messages = Int(sqlite3_column_int64(stmt, 8))
+            let directory: String
+            if let text = sqlite3_column_text(stmt, 9) {
+                directory = String(cString: text)
+            } else {
+                directory = ""
+            }
 
             let createdAt = Date(timeIntervalSince1970: createdRaw > 100_000_000_000 ? createdRaw / 1000 : createdRaw)
             let updatedAt = Date(timeIntervalSince1970: updatedRaw > 100_000_000_000 ? updatedRaw / 1000 : updatedRaw)
@@ -626,7 +643,8 @@ public struct OpenCodeGoUsageSource: UsageSource {
                 cost: cost,
                 messages: messages,
                 createdAt: createdAt,
-                updatedAt: updatedAt
+                updatedAt: updatedAt,
+                project: Privacy.projectName(fromPath: directory)
             ))
         }
         return records.isEmpty ? nil : records
@@ -671,6 +689,33 @@ public struct OpenCodeGoUsageSource: UsageSource {
         let messages: Int
         let createdAt: Date
         let updatedAt: Date
+        /// Working-directory basename, reduced at ingestion so full paths never
+        /// reach the model layer. Empty when the query predates the column.
+        let project: String
+
+        init(
+            input: Int,
+            output: Int,
+            reasoning: Int,
+            cacheRead: Int,
+            cacheWrite: Int,
+            cost: Double,
+            messages: Int,
+            createdAt: Date,
+            updatedAt: Date,
+            project: String = ""
+        ) {
+            self.input = input
+            self.output = output
+            self.reasoning = reasoning
+            self.cacheRead = cacheRead
+            self.cacheWrite = cacheWrite
+            self.cost = cost
+            self.messages = messages
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+            self.project = project
+        }
     }
 
     static func parse(data: Data) throws -> [Record] {
@@ -688,7 +733,8 @@ public struct OpenCodeGoUsageSource: UsageSource {
                 cost: double(row["cost"]),
                 messages: int(row["messages"]),
                 createdAt: created,
-                updatedAt: updated
+                updatedAt: updated,
+                project: Privacy.projectName(fromPath: row["directory"] as? String ?? "")
             )
         }
     }
@@ -702,7 +748,8 @@ public struct OpenCodeGoUsageSource: UsageSource {
            cost,
            (SELECT COUNT(*) FROM message WHERE message.session_id = session.id) AS messages,
            time_created AS created,
-           time_updated AS updated
+           time_updated AS updated,
+           directory AS directory
     FROM session
     WHERE json_extract(model, '$.providerID') = 'opencode-go'
     """
