@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.31] - 2026-09-17
+
+### Fixed
+
+- **Side notch resized on every provider switch.** Cards mount at their own
+  height, so sweeping hover flapped the window. The card column now holds the
+  tallest height measured this session: short cards show quiet empty space
+  and the window stays put. No animation involved.
+
 ## [0.2.30] - 2026-09-17
 
 ### Fixed
