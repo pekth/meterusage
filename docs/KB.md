@@ -1,11 +1,11 @@
 # Project knowledge
 
-Last verified: 2026-09-14
+Last verified: 2026-09-17
 
 ## Repository state
 
 - Default branch: `main`.
-- Verified source revision: `c2f1115`.
+- Verified source revision: `998d7dd`.
 - The clean checkout was verified before this documentation change. This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
@@ -14,7 +14,7 @@ Last verified: 2026-09-14
 - The app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure.
 - Provider data sources are implemented under `Sources/MeterUsage/Services/`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
-- `CHANGELOG.md` records version 0.2.24 as the latest repository release entry, with the activity-window today fix and per-project OpenCode Go attribution dated 2026-09-17. This is repository release-note state, not proof of a published release.
+- `CHANGELOG.md` records version 0.2.32 as the latest repository release entry, with the side notch top-edge fix dated 2026-09-17. This is repository release-note state, not proof of a published release.
 - `CONTRIBUTING.md` requires focused changes, synthetic fixtures, and `swift build`, `swift test`, and `Scripts/make-app.sh` before a code pull request.
 
 ## Verification gaps
