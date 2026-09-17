@@ -10,7 +10,7 @@ Burn attribution covers the last 7 calendar days across every token-bearing prov
 ## Rules
 
 - Scope is `since: weekStart` with no fallback: an empty week hides the section instead of presenting stale burn as today's.
-- Usage providers without per-session lists (OpenCode Go, Antigravity, OpenRouter) contribute one synthetic aggregate each (`SessionSummary.isAggregate`), carrying week tokens under the provider name with no model.
+- Usage providers without per-session lists contribute synthetic aggregates: one per project when the source can split its week by project (OpenCode Go reads each session's working directory), otherwise one per provider (Antigravity, OpenRouter), carrying week tokens with no model.
 - Aggregates join token totals but never count as long chats (`hasRealSession` gate).
 - Day totals: activity sources bucket by session start day; usage sources by last activity. Both approximate "work done today" from stores with no per-day ledger.
 

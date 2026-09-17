@@ -293,6 +293,45 @@ final class SupplementalUsageSourceTests: XCTestCase {
         XCTAssertEqual(records.reduce(0) { $0 + $1.cost }, 2.0, accuracy: 0.0001)
     }
 
+    /// The working directory rides along as a project basename only. Full
+    /// paths must never reach the model layer, and rows that predate the
+    /// column still parse.
+    func testOpenCodeGoParseReducesDirectoryToProject() throws {
+        let now = Date(timeIntervalSince1970: 1_780_000_000)
+        let rows: [[String: Any]] = [
+            [
+                "input": 120,
+                "output": 30,
+                "reasoning": 7,
+                "cache_read": 50,
+                "cache_write": 4,
+                "cost": 1.25,
+                "messages": 3,
+                "created": now.addingTimeInterval(-1_800).timeIntervalSince1970,
+                "updated": now.addingTimeInterval(-900).timeIntervalSince1970,
+                "directory": "/Users/testuser/example/meterusage"
+            ],
+            [
+                "input": 10,
+                "output": 5,
+                "reasoning": 2,
+                "cache_read": 0,
+                "cache_write": 1,
+                "cost": 0.75,
+                "messages": 2,
+                "created": now.addingTimeInterval(-100_000).timeIntervalSince1970,
+                "updated": now.addingTimeInterval(-99_000).timeIntervalSince1970
+            ]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: rows)
+
+        let records = try OpenCodeGoUsageSource.parse(data: data)
+
+        XCTAssertEqual(records.count, 2)
+        XCTAssertEqual(records[0].project, "meterusage")
+        XCTAssertEqual(records[1].project, "unknown")
+    }
+
     /// Records are bucketed into rolling windows by `createdAt`, with each
     /// window's own session/message/token/cost sums. A record aged past a
     /// boundary contributes only to the windows that still contain it.

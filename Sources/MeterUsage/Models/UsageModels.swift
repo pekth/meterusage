@@ -580,10 +580,11 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public let estimatedCostUSD: Double
     public let startedAt: Date
     public let messageCount: Int
-    /// True for synthetic per-provider aggregates built for burn attribution
+    /// True for synthetic aggregates built for burn attribution
     /// (see `BurnAttributionCalculator.attributionSessions`): one entry
-    /// carrying a whole provider's week tokens, not one chat. Aggregates join
-    /// token and cost totals but never count as long chats.
+    /// carrying a whole provider's week tokens, or one project's share of
+    /// that week, never one chat. Aggregates join token and cost totals but
+    /// never count as long chats.
     public let isAggregate: Bool
 
     public init(
@@ -777,6 +778,21 @@ public struct UsageWindow: Equatable, Sendable {
     }
 }
 
+/// One project's share of a usage provider's week tokens, for burn
+/// attribution. A source that can split its week total by project (OpenCode Go
+/// reads each session's working directory) reports one entry per project, so
+/// attribution shows project rows instead of a single provider aggregate.
+/// Week scope, same window as `weekTokens`.
+public struct ProjectTokens: Equatable, Sendable {
+    public let project: String
+    public let tokens: TokenTotals
+
+    public init(project: String, tokens: TokenTotals) {
+        self.project = project
+        self.tokens = tokens
+    }
+}
+
 /// Provider usage whose source does not necessarily expose token economics.
 ///
 /// Grok persists sessions/messages but not billable token counts, while
@@ -798,6 +814,11 @@ public struct ProviderUsage: Equatable, Sendable {
     /// on today counts toward today, matching the rolling-window convention.
     public let todayTokens: TokenTotals?
     public let weekTokens: TokenTotals?
+    /// Per-project split of `weekTokens`, when the source can measure it.
+    /// Burn attribution prefers one row per project over the single provider
+    /// aggregate. Nil or empty when the source cannot split (Antigravity,
+    /// OpenRouter) or when no project has week tokens.
+    public let projectBreakdown: [ProjectTokens]?
     /// Cost incurred today, where the source prices it (OpenCode Go,
     /// OpenRouter). Nil otherwise.
     public let todayCostUSD: Double?
@@ -817,6 +838,7 @@ public struct ProviderUsage: Equatable, Sendable {
         todayMessageCount: Int = 0,
         todayTokens: TokenTotals? = nil,
         weekTokens: TokenTotals? = nil,
+        projectBreakdown: [ProjectTokens]? = nil,
         todayCostUSD: Double? = nil,
         usageWindows: [UsageWindow]? = nil,
         telemetry: ProviderTelemetry? = nil,
@@ -831,6 +853,7 @@ public struct ProviderUsage: Equatable, Sendable {
         self.todayMessageCount = max(todayMessageCount, 0)
         self.todayTokens = todayTokens
         self.weekTokens = weekTokens
+        self.projectBreakdown = projectBreakdown
         self.todayCostUSD = todayCostUSD
         self.usageWindows = usageWindows
         self.telemetry = telemetry

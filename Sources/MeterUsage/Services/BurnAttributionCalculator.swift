@@ -2,11 +2,13 @@ import Foundation
 
 public enum BurnAttributionCalculator {
     /// Sessions feeding burn attribution: real per-session histories plus one
-    /// synthetic aggregate per token-bearing usage provider (OpenCode Go,
-    /// Antigravity, OpenRouter), which expose totals but no per-session list.
-    /// An aggregate carries the provider's week tokens under the provider's
-    /// display name with an empty model and `isAggregate`, so it joins token
-    /// totals without ever posing as one long chat.
+    /// synthetic aggregate per token-bearing usage provider that cannot split
+    /// its week total (Antigravity, OpenRouter), which expose totals but no
+    /// per-session list. A provider that reports a per-project breakdown
+    /// (OpenCode Go) contributes one synthetic row per project instead, so the
+    /// top rows name projects rather than the provider. Aggregates carry week
+    /// tokens with an empty model and `isAggregate`, so they join token totals
+    /// without ever posing as one long chat.
     static func attributionSessions(
         activities: [Provider: Loaded<LocalActivity>],
         usages: [Provider: Loaded<ProviderUsage>],
@@ -19,8 +21,25 @@ public enum BurnAttributionCalculator {
             }
         }
         for provider in Provider.allCases {
-            guard let usage = usages[provider]?.value,
-                  let week = usage.weekTokens, week.total > 0 else { continue }
+            guard let usage = usages[provider]?.value else { continue }
+            if let breakdown = usage.projectBreakdown, !breakdown.isEmpty {
+                for split in breakdown {
+                    result.append(
+                        SessionSummary(
+                            id: "aggregate-\(Privacy.opaqueID("\(provider.rawValue)/\(split.project)"))",
+                            projectName: split.project,
+                            model: "",
+                            tokens: split.tokens,
+                            estimatedCostUSD: 0,
+                            startedAt: now,
+                            messageCount: 0,
+                            isAggregate: true
+                        )
+                    )
+                }
+                continue
+            }
+            guard let week = usage.weekTokens, week.total > 0 else { continue }
             result.append(
                 SessionSummary(
                     id: "aggregate-\(provider.rawValue)",

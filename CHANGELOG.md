@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Burn attribution names OpenCode Go projects instead of the provider.** The top row read "OpenCode Go" with the provider's whole week. OpenCode Go sessions carry a working directory, so the source splits its week total by project and attribution shows one row per project. Providers that cannot split (Antigravity, OpenRouter) keep the single provider row.
+
 ## [0.2.23] - 2026-09-16
 
 ### Fixed
