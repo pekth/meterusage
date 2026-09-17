@@ -428,10 +428,6 @@ final class SideNotchPanelController: ObservableObject {
             screenFrame: screenFrame
         )
         isPlacing = true
-        // Never animated here: overlapping AppKit frame animations stutter
-        // when hover sweeps across rings. The height glide lives in the view
-        // (SwiftUI retargets interrupted animations cleanly); the controller
-        // tracks each interpolated size instantly.
         panel.setFrame(frame, display: true)
         panel.invalidateShadow()
         DispatchQueue.main.async { [weak self] in

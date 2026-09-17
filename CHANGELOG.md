@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.28] - 2026-09-17
+
+### Fixed
+
+- **Side notch motion reverted to instant placement.** The 0.2.26 AppKit frame
+  glide stuttered when hover swept across rings, and the 0.2.27 SwiftUI glide
+  was worse: the view animates its height, the controller reframes the window
+  from each animated intermediate size, and the reframe re-lays-out the view,
+  so the loop never settles. Both attempts are out. Placement snaps again
+  while the original card-height flap is diagnosed with frame logs instead of
+  another blind attempt.
+
 ## [0.2.27] - 2026-09-17
 
 ### Fixed

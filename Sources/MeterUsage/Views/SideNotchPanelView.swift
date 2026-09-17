@@ -282,12 +282,6 @@ struct SideNotchPanelView: View {
                 cardColumn
             }
         }
-        // Glide the card's bottom edge when hover switches providers: the
-        // container height interpolates, the size reports follow it, and the
-        // controller tracks each step instantly. SwiftUI retargets a swept
-        // hover cleanly, where overlapping AppKit frame animations stuttered.
-        // Data-driven size changes (ticks, refreshes) keep snapping.
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: hoveredProvider)
         .fixedSize()
         .onPreferenceChange(StripSizeKey.self) { size in
             stripHeight = size.height
@@ -326,10 +320,6 @@ struct SideNotchPanelView: View {
                         ArrowBeakView()
                             .scaleEffect(x: panel.cardOnRight ? -1 : 1, y: 1)
                             .offset(x: panel.cardOnRight ? -3.5 : 3.5, y: beakY)
-                            // Glide with the ring the pointer moved to instead
-                            // of snapping: the window height already glides,
-                            // so a jumping arrow would be the remaining flap.
-                            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: beakY)
                     }
                 }
                 .onHover { hovering in
