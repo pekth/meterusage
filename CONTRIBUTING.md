@@ -99,6 +99,12 @@ prove runtime UI behavior. Report untested paths explicitly. For release
 acceptance, check the popover, Settings, relaunch persistence, and offline or
 retry behavior only when the change can affect them.
 
+For a side notch layout or motion change, capture the panel for at least two
+providers whose cards differ in height, confirm the top edge and the strip do
+not move, and include the captures in the pull request. See
+[`docs/SIDE-NOTCH.md`](docs/SIDE-NOTCH.md) and
+[`docs/adr/0004`](docs/adr/0004-side-notch-anchor-invariant.md).
+
 See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
 
 ## Where to make changes
@@ -152,7 +158,8 @@ A pull request should include:
 - the files or provider paths affected;
 - the exact checks you ran, including `swift test`;
 - any privacy, network, or credential-handling impact; and
-- demo-mode screenshots when a UI change needs visual review.
+- demo-mode screenshots when a UI change needs visual review, plus captured
+  side notch frames when the change touches panel layout or motion.
 
 Keep screenshots in demo mode so they contain no real account data. Preserve
 the MIT license and do not claim affiliation with Anthropic or OpenAI.

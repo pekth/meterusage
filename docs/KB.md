@@ -16,6 +16,7 @@ Last verified: 2026-09-17
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
 - `CHANGELOG.md` records version 0.2.32 as the latest repository release entry, with the side notch top-edge fix dated 2026-09-17. This is repository release-note state, not proof of a published release.
 - `CONTRIBUTING.md` requires focused changes, synthetic fixtures, and `swift build`, `swift test`, and `Scripts/make-app.sh` before a code pull request.
+- The side notch panel is anchored by the strip's top-right corner and uses whole-point frames, so switching providers never moves the strip. `docs/SIDE-NOTCH.md` describes the states, geometry invariants, and required evidence. ADR 0004 records the decision.
 
 ## Verification gaps
 
@@ -31,6 +32,7 @@ Last verified: 2026-09-17
 - [`README.md`](../README.md): product behavior, setup, provider boundaries, and public claims.
 - [`docs/PRIVACY.md`](PRIVACY.md): data-handling boundaries and enforcement claims.
 - [`docs/DEMO.md`](DEMO.md): synthetic demo mode.
+- [`docs/SIDE-NOTCH.md`](SIDE-NOTCH.md): side notch states, anchor and geometry invariants, interaction, and verification.
 - [`docs/mockups/README.md`](mockups/README.md): Wave 1–3 concept mockups; provider marks stay.
 - [`docs/plans/feature-and-windows-pipeline.md`](plans/feature-and-windows-pipeline.md): macOS feature waves + Windows track.
 - [`Package.swift`](../Package.swift): package targets and platform requirement.

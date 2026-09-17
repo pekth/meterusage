@@ -47,6 +47,7 @@ reporter's machine. Prefer a measured frame over a plausible cause.
 
 ## References
 
+- [`docs/SIDE-NOTCH.md`](../SIDE-NOTCH.md): panel states, interaction, and verification steps.
 - `Sources/MeterUsage/App/SideNotchPanelController.swift` (`place`, `SideNotchPanelLayout.notchFrame`)
 - `Sources/MeterUsage/Views/SideNotchPanelView.swift` (top-anchored body, strip frame)
 - `Tests/MeterUsageTests/SideNotchPanelTests.swift`
