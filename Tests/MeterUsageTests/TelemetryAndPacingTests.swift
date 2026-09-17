@@ -72,6 +72,33 @@ final class TelemetryAndPacingTests: XCTestCase {
         XCTAssertEqual(pace.statusText(usedPercent: window.usedPercent), "exhausted early")
     }
 
+    func testQuotaPaceExhaustedYieldsResetCountdown() {
+        // An exhausted window has no projected exhaustion (nothing left to
+        // burn), but the notch banner, ring/menu-bar ETA chips, and JSON ETA
+        // all gate on a non-nil ETA. The honest figure is the reset countdown:
+        // "how long until you can go again". Regression for the Antigravity
+        // card, whose most-constrained window can sit at 100% while sibling
+        // windows still have headroom — the banner went silent exactly then.
+        let now = Date()
+        let resetsAt = now.addingTimeInterval(6_900) // 1h 55m, as reported
+        let window = QuotaWindow(
+            label: "5-hour limit",
+            usedPercent: 100.0,
+            resetsAt: resetsAt,
+            windowDurationMins: 300
+        )
+
+        let pace = window.pace(now: now)
+        XCTAssertNotNil(pace)
+        guard let pace else { return }
+
+        XCTAssertEqual(pace.statusText(usedPercent: window.usedPercent), "exhausted early")
+        XCTAssertEqual(pace.etaInterval(resetsAt: resetsAt, now: now) ?? 0, 6_900, accuracy: 5)
+        XCTAssertNotNil(pace.etaText(resetsAt: resetsAt, now: now))
+        XCTAssertTrue(window.shouldShowAmbientETA(now: now))
+        XCTAssertNotNil(window.paceETA(now: now, short: true))
+    }
+
     func testQuotaPaceOnPace() {
         // Window 50% elapsed, 51% used -> within 2% threshold
         let now = Date()

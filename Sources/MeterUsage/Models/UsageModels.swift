@@ -74,11 +74,19 @@ public struct QuotaPace: Equatable, Sendable {
     }
 
     /// Effective time interval until exhaustion or reset (in seconds).
+    ///
+    /// An exhausted window (`usedPercent >= 100`) has no projected exhaustion —
+    /// there is nothing left to burn — so the honest ETA is the reset countdown:
+    /// "how long until you can go again". Without this, surfaces that gate on
+    /// a non-nil ETA (the notch pacing banner, ring/menu-bar ETA chips) go
+    /// silent exactly when the limit is hit, e.g. Antigravity's most-constrained
+    /// window at 100% while sibling windows still have headroom.
     public func etaInterval(resetsAt: Date?, now: Date = Date()) -> TimeInterval? {
         if let projectedExhaustion, projectedExhaustion > now {
             return projectedExhaustion.timeIntervalSince(now)
         }
-        if let resetsAt, resetsAt > now, (burnRate <= 1.0 || status == .onPace || status.isSurplus) {
+        if let resetsAt, resetsAt > now,
+           (burnRate <= 1.0 || status == .onPace || status.isSurplus || usedPercent >= 100.0) {
             return resetsAt.timeIntervalSince(now)
         }
         return nil

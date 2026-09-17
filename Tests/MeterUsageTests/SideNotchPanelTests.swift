@@ -306,6 +306,75 @@ final class SideNotchPanelTests: XCTestCase {
     }
 
     @MainActor
+    func testExhaustedAntigravityHeadlineStillCarriesResetETA() async throws {
+        // Mirrors the reported AGY card: the Gemini 5-hour window sits at 100%
+        // while sibling windows still have headroom. The headline honestly
+        // stays the exhausted window, but its pacing ETA must be the reset
+        // countdown — never nil — so the detail-card banner renders the same
+        // pacing block every other provider shows.
+        let coordinator = try await Self.coordinator(quotas: [
+            (Provider.antigravity, [
+                ("Gemini Weekly", 24.0, 6 * 86_400),
+                ("Gemini 5-hour", 100.0, 6_900),
+                ("Claude/GPT Weekly", 0.0, 7 * 86_400),
+                ("Claude/GPT 5-hour", 0.0, 5 * 3_600),
+            ]),
+        ])
+
+        let entries = SideNotchPanelView.entries(
+            menuBarProviders: coordinator.menuBarProviders,
+            quotas: coordinator.quotas,
+            statuses: coordinator.statuses
+        )
+
+        XCTAssertEqual(entries.map(\.provider), [.antigravity])
+        XCTAssertEqual(entries[0].usedPercent, 100.0)
+        XCTAssertNotNil(entries[0].etaText)
+    }
+
+    func testBannerSubtitleNeverClaimsExhaustedHeadroomLasts() throws {
+        let now = Date()
+
+        let exhausted = QuotaWindow(
+            label: "Gemini 5-hour",
+            usedPercent: 100.0,
+            resetsAt: now.addingTimeInterval(6_900),
+            windowDurationMins: 300
+        )
+        let exhaustedPace = try XCTUnwrap(exhausted.pace(now: now))
+        XCTAssertNotNil(exhaustedPace.etaText(resetsAt: exhausted.resetsAt, now: now))
+        XCTAssertEqual(
+            SideNotchPanelView.bannerSubtitle(pace: exhaustedPace, usedPercent: 100.0),
+            "Exhausted early — waiting for reset"
+        )
+
+        let healthy = QuotaWindow(
+            label: "Weekly",
+            usedPercent: 5.0,
+            resetsAt: now.addingTimeInterval(3 * 86_400),
+            windowDurationMins: 10_080
+        )
+        let healthyPace = try XCTUnwrap(healthy.pace(now: now))
+        XCTAssertEqual(
+            SideNotchPanelView.bannerSubtitle(pace: healthyPace, usedPercent: 5.0),
+            "Paced to last until reset"
+        )
+
+        let burning = QuotaWindow(
+            label: "5-hour",
+            usedPercent: 90.0,
+            resetsAt: now.addingTimeInterval(3_600),
+            windowDurationMins: 300
+        )
+        let burningPace = try XCTUnwrap(burning.pace(now: now))
+        XCTAssertNotNil(burningPace.projectedExhaustion)
+        XCTAssertEqual(
+            SideNotchPanelView.bannerSubtitle(pace: burningPace, usedPercent: 90.0),
+            "Empties before reset at current pace"
+        )
+    }
+
+    @MainActor
     func testEntriesSkipProvidersWithoutQuotaData() async throws {
         // Grok is enabled but has no source, so it must not render an empty ring.
         let coordinator = try await Self.coordinator(quotas: [

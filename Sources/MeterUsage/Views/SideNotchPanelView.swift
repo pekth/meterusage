@@ -512,7 +512,7 @@ struct SideNotchPanelView: View {
                         Text(etaText)
                             .font(.system(size: 13, weight: .bold).monospacedDigit())
                             .foregroundColor(pace.status.isDeficit ? Notch.deficit : Notch.surplus)
-                        Text(pace.projectedExhaustion != nil ? "Empties before reset at current pace" : "Paced to last until reset")
+                        Text(Self.bannerSubtitle(pace: pace, usedPercent: headline.usedPercent))
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(Notch.subtext)
                     }
@@ -1158,6 +1158,19 @@ struct SideNotchPanelView: View {
 
         guard let first = windowsWithReset.first else { return nil }
         return Fmt.timeUntil(first.1, now: coordinator.clock)
+    }
+
+    /// Ambient banner subtitle for the headline window. An exhausted headline
+    /// must never read "Paced to last until reset" — the reset countdown above
+    /// it is time until relief, not headroom that lasts.
+    static func bannerSubtitle(pace: QuotaPace, usedPercent: Double) -> String {
+        if usedPercent >= 100 {
+            return "Exhausted early — waiting for reset"
+        }
+        if pace.projectedExhaustion != nil {
+            return "Empties before reset at current pace"
+        }
+        return "Paced to last until reset"
     }
 
     private struct ProviderTokenUsage {
