@@ -115,24 +115,6 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertLessThanOrEqual(frame.maxY, screen.maxY)
     }
 
-    func testResizeGlidesOnlyForCardBottomEdgeFlap() {
-        let old = NSRect(x: 100, y: 200, width: 290, height: 300)
-        // Same strip, shorter card (provider switch): glide.
-        XCTAssertTrue(SideNotchPanelLayout.shouldAnimateResize(
-            from: old, to: NSRect(x: 100, y: 320, width: 290, height: 180)))
-        // Identical frame: nothing to do.
-        XCTAssertFalse(SideNotchPanelLayout.shouldAnimateResize(from: old, to: old))
-        // Fold/unfold changes width: snap.
-        XCTAssertFalse(SideNotchPanelLayout.shouldAnimateResize(
-            from: old, to: NSRect(x: 100, y: 200, width: 40, height: 300)))
-        // Card side flip moves x: snap.
-        XCTAssertFalse(SideNotchPanelLayout.shouldAnimateResize(
-            from: old, to: NSRect(x: 390, y: 200, width: 290, height: 300)))
-        // Drag or screen change shifts the top edge: snap.
-        XCTAssertFalse(SideNotchPanelLayout.shouldAnimateResize(
-            from: old, to: NSRect(x: 100, y: 100, width: 290, height: 300)))
-    }
-
     // MARK: - Share crop
 
     func testShareCropIsolatesCardLeftOfStrip() {

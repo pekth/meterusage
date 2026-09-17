@@ -120,18 +120,6 @@ enum SideNotchPanelLayout {
         return NSRect(x: x, y: y, width: w, height: h)
     }
 
-    /// Whether a re-placement should glide instead of snap.
-    ///
-    /// True only when the strip stays exactly put (same x, width, and top
-    /// edge) and just the card's bottom edge moves — the flap when switching
-    /// hover between providers whose cards have different heights. Folds,
-    /// side flips, drags, and screen changes keep snapping: animating those
-    /// would smear intentional state changes.
-    static func shouldAnimateResize(from old: NSRect, to new: NSRect) -> Bool {
-        old.minX == new.minX && old.width == new.width && old.maxY == new.maxY
-            && old.height != new.height
-    }
-
     /// Detail-card column inside the panel content, in content coordinates
     /// (AppKit origin, y up), for card-only share snapshots. `nil` when the
     /// content is empty and the caller captures it whole as before. The card
@@ -440,11 +428,11 @@ final class SideNotchPanelController: ObservableObject {
             screenFrame: screenFrame
         )
         isPlacing = true
-        // Glide the card's bottom edge when only it moves (provider switch);
-        // everything else snaps so folds, flips, and drags stay exact.
-        let animate = hasPlaced && !isDragging
-            && SideNotchPanelLayout.shouldAnimateResize(from: panel.frame, to: frame)
-        panel.setFrame(frame, display: true, animate: animate)
+        // Never animated here: overlapping AppKit frame animations stutter
+        // when hover sweeps across rings. The height glide lives in the view
+        // (SwiftUI retargets interrupted animations cleanly); the controller
+        // tracks each interpolated size instantly.
+        panel.setFrame(frame, display: true)
         panel.invalidateShadow()
         DispatchQueue.main.async { [weak self] in
             self?.isPlacing = false
