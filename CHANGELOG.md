@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.26] - 2026-09-17
+
+### Fixed
+
+- **Side notch card edge flapped when switching providers.** Each provider's
+  detail card mounts at its own height and the window snapped to it, so the
+  card's bottom edge jumped while the strip stayed put. Height-only resizes
+  now glide; folds, card side flips, drags, and screen changes still snap.
+  The pointer beak glides to the newly hovered ring with it.
+
 ## [0.2.25] - 2026-09-17
 
 ### Fixed
