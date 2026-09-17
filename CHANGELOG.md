@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.25] - 2026-09-17
+
+### Fixed
+
+- **Antigravity pacing banner went silent on an exhausted window.** When the
+  most-constrained window sat at 100%, its ETA computed as `nil` and the side
+  notch detail card showed no pacing banner at all, unlike every other
+  provider. An exhausted window now reports its reset countdown ("how long
+  until you can go again"), so the banner renders with an honest
+  "Exhausted early — waiting for reset" subtitle instead of disappearing or
+  falsely claiming "Paced to last until reset".
+
 ## [0.2.24] - 2026-09-17
 
 ### Fixed
