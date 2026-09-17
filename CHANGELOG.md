@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.29] - 2026-09-17
+
+### Fixed
+
+- **Side notch nudged 1px hovering short cards.** Measured card heights land
+  fractional (text baselines), and the window was framed from the raw size,
+  sitting it half a point off the pixel grid: one physical pixel of shift on
+  a 2x display each time such a card mounts. Frames now snap up to whole
+  points. Found through frame logging on the reporter's machine, not
+  inspection.
+
 ## [0.2.28] - 2026-09-17
 
 ### Fixed
