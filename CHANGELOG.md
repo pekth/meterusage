@@ -4,67 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
-## [0.2.31] - 2026-09-17
+## [0.2.32] - 2026-09-17
 
 ### Fixed
 
-- **Side notch resized on every provider switch.** Cards mount at their own
-  height, so sweeping hover flapped the window. The card column now holds the
-  tallest height measured this session: short cards show quiet empty space
-  and the window stays put. No animation involved.
-
-## [0.2.30] - 2026-09-17
-
-### Fixed
-
-- **Side notch top edge still off by a pixel.** Snapping frames up left a
-  transparent hairline where the window exceeded its content. Frames now snap
-  down instead, clipping at most a point of black padding, so the top edge
-  renders on the identical row on every hover.
-
-## [0.2.29] - 2026-09-17
-
-### Fixed
-
-- **Side notch nudged 1px hovering short cards.** Measured card heights land
-  fractional (text baselines), and the window was framed from the raw size,
-  sitting it half a point off the pixel grid: one physical pixel of shift on
-  a 2x display each time such a card mounts. Frames now snap up to whole
-  points. Found through frame logging on the reporter's machine, not
-  inspection.
-
-## [0.2.28] - 2026-09-17
-
-### Fixed
-
-- **Side notch motion reverted to instant placement.** The 0.2.26 AppKit frame
-  glide stuttered when hover swept across rings, and the 0.2.27 SwiftUI glide
-  was worse: the view animates its height, the controller reframes the window
-  from each animated intermediate size, and the reframe re-lays-out the view,
-  so the loop never settles. Both attempts are out. Placement snaps again
-  while the original card-height flap is diagnosed with frame logs instead of
-  another blind attempt.
-
-## [0.2.27] - 2026-09-17
-
-### Fixed
-
-- **Side notch stuttered when sweeping hover across providers.** The 0.2.26
-  glide animated AppKit frame resizes, and overlapping frame animations fight
-  each other, so rapid switches shuddered worse than the original snap. The
-  glide now lives in SwiftUI, which retargets interrupted animations cleanly:
-  the card container height interpolates on hover change and the controller
-  tracks each step instantly. Folds, flips, drags, and data ticks still snap.
-
-## [0.2.26] - 2026-09-17
-
-### Fixed
-
-- **Side notch card edge flapped when switching providers.** Each provider's
-  detail card mounts at its own height and the window snapped to it, so the
-  card's bottom edge jumped while the strip stayed put. Height-only resizes
-  now glide; folds, card side flips, drags, and screen changes still snap.
-  The pointer beak glides to the newly hovered ring with it.
+- **Side notch top edge moved a pixel when hovering Grok or OpenRouter.** Card
+  heights measured fractional for some providers (532.5pt, 443.5pt) and whole
+  points for others. AppKit rounds a fractional window frame up, leaving the
+  window up to a point taller than its content, and SwiftUI centered that
+  leftover above and below the content, so fractional-height cards drew about
+  a pixel lower than the rest. The content is now anchored to the top of the
+  window, and the strip's width and height are whole points, so the visible
+  top edge lands on the same row for every provider.
 
 ## [0.2.25] - 2026-09-17
 
@@ -73,10 +24,9 @@ follows [Semantic Versioning](https://semver.org/).
 - **Antigravity pacing banner went silent on an exhausted window.** When the
   most-constrained window sat at 100%, its ETA computed as `nil` and the side
   notch detail card showed no pacing banner at all, unlike every other
-  provider. An exhausted window now reports its reset countdown ("how long
-  until you can go again"), so the banner renders with an honest
-  "Exhausted early — waiting for reset" subtitle instead of disappearing or
-  falsely claiming "Paced to last until reset".
+  provider. An exhausted window now reports its reset countdown, so the banner
+  renders with the subtitle "Exhausted early — waiting for reset" instead of
+  disappearing or claiming "Paced to last until reset".
 
 ## [0.2.24] - 2026-09-17
 
