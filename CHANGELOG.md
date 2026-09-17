@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.23] - 2026-09-16
+
+### Fixed
+
+- **Today total counts sessions started today, at every hour** — deriving
+  today from UTC day buckets still zeroed each evening past 20:00 EDT. The
+  strip now counts sessions started today against local midnight, which holds
+  in any time zone, and the 7-day total still sums the UTC buckets.
+
 ## [0.2.22] - 2026-09-16
 
 ### Fixed
