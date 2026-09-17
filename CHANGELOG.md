@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.30] - 2026-09-17
+
+### Fixed
+
+- **Side notch top edge still off by a pixel.** Snapping frames up left a
+  transparent hairline where the window exceeded its content. Frames now snap
+  down instead, clipping at most a point of black padding, so the top edge
+  renders on the identical row on every hover.
+
 ## [0.2.29] - 2026-09-17
 
 ### Fixed
