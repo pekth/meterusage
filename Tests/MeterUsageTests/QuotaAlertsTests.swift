@@ -208,12 +208,47 @@ final class QuotaAlertsTests: XCTestCase {
         let window = QuotaWindow(label: "5-hour", usedPercent: 92, resetsAt: resetsAt)
         let q = ProviderQuota(provider: .codex, windows: [window], capturedAt: now)
 
-        let events = evaluator.events(for: [.codex: .value(q)], now: now)
+        // Pace events claim a current burn, so they require burn evidence
+        // inside the quiet period.
+        let events = evaluator.events(
+            for: [.codex: .value(q)],
+            lastBurn: [.codex: now.addingTimeInterval(-5 * 60)],
+            now: now)
         XCTAssertTrue(events.contains {
             if case .paceCliff(let p, let lbl, let mins) = $0 {
                 return p == .codex && lbl == "5-hour" && mins > 0
             }
             return false
         })
+    }
+
+    @MainActor
+    func testStaleDeficitFiresNoPaceEvents() {
+        // Regression for the "burning fast with no sessions today" failure:
+        // a window whose shape still looks ahead of pace must not raise pace
+        // alerts when the burn has gone quiet. Threshold alerts are state
+        // claims and stay ungated.
+        var evaluator = QuotaAlertEvaluator()
+        let now = Date()
+        let resetsAt = now.addingTimeInterval(3600)
+        let window = QuotaWindow(label: "5-hour", usedPercent: 92, resetsAt: resetsAt)
+        let q = ProviderQuota(provider: .codex, windows: [window], capturedAt: now)
+
+        func hasPaceEvents(_ events: [QuotaAlertEvent]) -> Bool {
+            events.contains {
+                if case .paceCliff = $0 { return true }
+                if case .paceSoftWarning = $0 { return true }
+                return false
+            }
+        }
+
+        // No burn evidence at all: the deficit is demoted, pace stays silent.
+        XCTAssertFalse(hasPaceEvents(evaluator.events(for: [.codex: .value(q)], now: now)))
+
+        // A burn older than the quiet period behaves the same.
+        XCTAssertFalse(hasPaceEvents(evaluator.events(
+            for: [.codex: .value(q)],
+            lastBurn: [.codex: now.addingTimeInterval(-6 * 3600)],
+            now: now)))
     }
 }

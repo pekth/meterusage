@@ -129,4 +129,32 @@ final class LimitsReportTests: XCTestCase {
         let json = String(data: data, encoding: .utf8) ?? ""
         XCTAssertTrue(json.contains("remaining_percent"))
     }
+
+    func testQuietDeficitReportsOnPaceInMachineReport() {
+        // The machine surface mirrors the UI's honesty: a window-shape
+        // deficit without a current burn reports on-pace, and only a fresh
+        // burn earns "burning fast".
+        let now = Date(timeIntervalSince1970: 1_785_200_000)
+        // Weekly window: 1 of 7 days elapsed (~14%), 40% used → raw deficit.
+        let quota = ProviderQuota(
+            provider: .codex,
+            windows: [QuotaWindow(
+                label: "Weekly",
+                usedPercent: 40,
+                resetsAt: now.addingTimeInterval(6 * 86_400),
+                windowDurationMins: 10_080)],
+            planType: "plus",
+            capturedAt: now.addingTimeInterval(-60)
+        )
+
+        let quiet = LimitsReporter.build(quotas: [.codex: .value(quota)], order: [.codex], now: now)
+        XCTAssertEqual(quiet.providers[0].windows[0].pacing, "on pace")
+
+        let fresh = LimitsReporter.build(
+            quotas: [.codex: .value(quota)],
+            order: [.codex],
+            lastBurn: [.codex: now.addingTimeInterval(-120)],
+            now: now)
+        XCTAssertEqual(fresh.providers[0].windows[0].pacing, "burning fast")
+    }
 }

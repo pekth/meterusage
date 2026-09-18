@@ -135,6 +135,64 @@ public struct QuotaPace: Equatable, Sendable {
     }
 }
 
+extension QuotaPace {
+    /// The pace a surface may present: this pace with its deficit demoted to
+    /// on-pace when the provider has not burned within the quiet period.
+    ///
+    /// The deficit math (`usedPercent - elapsedPercent`) assumes usage spreads
+    /// evenly across the window. One burst early in a long window keeps the
+    /// deficit positive until reset, so a window's raw shape cannot carry
+    /// "burning fast" on its own — an idle day still reported "Codex burning
+    /// fast" from yesterday's weekly burn. Every consumer that reads status,
+    /// ETA, or burn rate off a window must ask for the effective pace instead;
+    /// state claims (percent used, threshold alerts) stay on the raw window.
+    public func effective(lastBurn: Date?, now: Date) -> QuotaPace {
+        guard status.isDeficit, !BurnRecency.isActive(lastBurn: lastBurn, now: now) else { return self }
+        return QuotaPace(
+            usedPercent: usedPercent,
+            remainingPercent: remainingPercent,
+            elapsedPercent: elapsedPercent,
+            deficitPercent: 0,
+            burnRate: 1.0,
+            projectedExhaustion: nil,
+            status: .onPace
+        )
+    }
+}
+
+/// Whether a provider demonstrably burned recently. Pacing claims are about
+/// *now*; window shape is about *since the window started*. This is the bridge
+/// between the two: the last observable burn decides whether a pace deficit
+/// still describes the present.
+public enum BurnRecency {
+    /// Quiet span after which a provider is no longer considered actively
+    /// burning. Long enough to bridge a coffee break, short enough that an
+    /// overnight gap always clears it.
+    public static let quietPeriod: TimeInterval = 30 * 60
+
+    /// The most recent observable burn across a provider's sessions, using
+    /// each session's activity close (`activeUntil`).
+    public static func lastBurn(of sessions: [SessionSummary]) -> Date? {
+        sessions.map(\.activeUntil).max()
+    }
+
+    /// Last burn per provider from loaded local activity. Providers without a
+    /// session store are absent — no burn evidence, no pace claims. Internal
+    /// because the coordinator is the only caller that maps whole activities.
+    static func lastBurns(from activities: [Provider: Loaded<LocalActivity>]) -> [Provider: Date] {
+        activities.compactMapValues { lastBurn(of: $0.value?.sessions ?? []) }
+    }
+
+    /// `true` when the provider burned within the quiet period ending at
+    /// `now`. A last burn in the future (clock skew, synthetic fixtures) is
+    /// inactive: it cannot evidence burning now.
+    public static func isActive(lastBurn: Date?, now: Date) -> Bool {
+        guard let lastBurn else { return false }
+        let age = now.timeIntervalSince(lastBurn)
+        return age >= 0 && age < quietPeriod
+    }
+}
+
 /// A single rate-limit window reported by a provider.
 public struct QuotaWindow: Equatable, Sendable {
     /// Human label for the window, e.g. "5-hour", "Weekly".
