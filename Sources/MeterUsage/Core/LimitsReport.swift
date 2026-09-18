@@ -87,8 +87,11 @@ struct WindowReport: Equatable, Sendable, Codable {
         self.burnRate = burnRate
     }
 
-    static func from(_ window: QuotaWindow, now: Date) -> WindowReport {
-        let pace = window.pace(now: now)
+    /// Builds one window's report. Pacing and ETA come from the effective
+    /// pace — the raw pace with a burn-quiet deficit demoted — so the
+    /// machine surface stays as honest as the UI it mirrors.
+    static func from(_ window: QuotaWindow, lastBurn: Date? = nil, now: Date) -> WindowReport {
+        let pace = window.pace(now: now)?.effective(lastBurn: lastBurn, now: now)
         return WindowReport(
             label: window.label,
             usedPercent: window.usedPercent,
@@ -139,9 +142,16 @@ enum LimitsReporter {
     /// order. Unavailable sources appear with their calm user-facing reason —
     /// never a raw error — so a consumer can distinguish "not installed"
     /// from "offline" without this module exposing anything sensitive.
+    ///
+    /// `lastBurn` gates pace-derived fields (pacing, projected ETA) on burn
+    /// recency: a window-shape deficit outlives its burst, so without the
+    /// gate the report would tell agents and scripts "burning fast" about a
+    /// burn that stopped days ago. Pacing is reported as on-pace for those
+    /// quiet windows; percent-used figures are state claims and stay raw.
     static func build(
         quotas: [Provider: Loaded<ProviderQuota>],
         order: [Provider],
+        lastBurn: [Provider: Date] = [:],
         now: Date = Date()
     ) -> LimitsReport {
         let providers = order.map { provider -> ProviderReport in
@@ -157,7 +167,9 @@ enum LimitsReporter {
                     provider: provider.rawValue,
                     status: "ok",
                     plan: quota.planType,
-                    windows: windows.map { WindowReport.from($0, now: now) },
+                    windows: windows.map {
+                        WindowReport.from($0, lastBurn: lastBurn[provider], now: now)
+                    },
                     credits: quota.credits.map {
                         CreditsReport(
                             balance: $0.balance,

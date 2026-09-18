@@ -534,9 +534,14 @@ struct SideNotchPanelView: View {
                 StatusBadge(severity: status.severity)
             }
 
-            // Ambient Time-To-Empty banner
+            // Ambient Time-To-Empty banner. The effective pace demotes a
+            // deficit whose burn has gone quiet, so a stale window shows the
+            // reset countdown in the calm tint instead of a burn alarm.
             if let headline = provider.headlineWindow(from: Self.effectiveWindows(for: provider, quota: quota)),
-               let pace = headline.pace(now: coordinator.clock),
+               let pace = headline.pace(now: coordinator.clock)?.effective(
+                    lastBurn: BurnRecency.lastBurn(
+                        of: coordinator.activities[provider]?.value?.sessions ?? []),
+                    now: coordinator.clock),
                let etaText = pace.etaText(resetsAt: headline.resetsAt, now: coordinator.clock) {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -757,7 +762,14 @@ struct SideNotchPanelView: View {
 
     @ViewBuilder
     private func windowRow(window: QuotaWindow, quota: ProviderQuota?, provider: Provider) -> some View {
-        let pace = showPacingBurnRate ? window.pace(now: coordinator.clock) : nil
+        // Effective pace: a deficit without a current burn reads as on-pace,
+        // never as a "burning fast" alarm for a burst that already cooled.
+        let pace = showPacingBurnRate
+            ? window.pace(now: coordinator.clock)?.effective(
+                lastBurn: BurnRecency.lastBurn(
+                    of: coordinator.activities[provider]?.value?.sessions ?? []),
+                now: coordinator.clock)
+            : nil
         let figure = Self.windowFigure(window: window, quota: quota, provider: provider)
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -1318,9 +1330,10 @@ struct SideNotchPanelView: View {
         quotas: [Provider: Loaded<ProviderQuota>],
         statuses: [Provider: Loaded<ServiceStatus>],
         archivedQuotas: [Provider: ProviderQuota] = [:],
+        lastBurn: [Provider: Date] = [:],
         now: Date = Date()
     ) -> [Entry] {
-        SideNotchPanelView.entries(providers: menuBarProviders, quotas: quotas, statuses: statuses, archivedQuotas: archivedQuotas, now: now)
+        SideNotchPanelView.entries(providers: menuBarProviders, quotas: quotas, statuses: statuses, archivedQuotas: archivedQuotas, lastBurn: lastBurn, now: now)
     }
 
     static func entries(
@@ -1328,6 +1341,7 @@ struct SideNotchPanelView: View {
         quotas: [Provider: Loaded<ProviderQuota>],
         statuses: [Provider: Loaded<ServiceStatus>],
         archivedQuotas: [Provider: ProviderQuota] = [:],
+        lastBurn: [Provider: Date] = [:],
         now: Date = Date()
     ) -> [Entry] {
         providers.compactMap { provider in
@@ -1342,9 +1356,13 @@ struct SideNotchPanelView: View {
             } else {
                 markTint = Notch.color(usedPercent: window.usedPercent)
             }
-            let pace = window.pace(now: now)
-            let showAmbient = window.shouldShowAmbientETA(now: now)
-            let eta = showAmbient ? window.paceETA(now: now, short: true) : nil
+            // Effective pace: a deficit without a current burn is demoted to
+            // on-pace, so the strip never reports "burning fast" from a
+            // stale window and the ETA chip carries the honest reset
+            // countdown instead of a projected exhaustion that already ended.
+            let pace = window.pace(now: now)?.effective(lastBurn: lastBurn[provider], now: now)
+            let showAmbient = pace?.shouldShowAmbientETA(resetsAt: window.resetsAt, now: now) ?? false
+            let eta = showAmbient ? pace?.etaText(resetsAt: window.resetsAt, now: now, short: true) : nil
             let isDeficit = pace?.status.isDeficit ?? false
 
             return Entry(
@@ -1367,6 +1385,7 @@ struct SideNotchPanelView: View {
             quotas: coordinator.quotas,
             statuses: coordinator.statuses,
             archivedQuotas: coordinator.archivedQuotas,
+            lastBurn: coordinator.lastBurnByProvider,
             now: coordinator.clock
         )
     }

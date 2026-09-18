@@ -69,7 +69,20 @@ struct QuotaAlertEvaluator {
     /// events to deliver. Must be called with every enabled provider's latest
     /// result each sweep — a provider missing from `quotas` keeps its old
     /// high-water mark rather than being silently re-armed.
-    mutating func events(for quotas: [Provider: Loaded<ProviderQuota>], now: Date) -> [QuotaAlertEvent] {
+    ///
+    /// `lastBurn` carries each provider's most recent observable burn. Pace
+    /// events claim "burning fast" in the present tense, so a deficit only
+    /// fires when the provider actually burned within the quiet period — a
+    /// window-shape deficit outlives its burst (one early weekly burst holds
+    /// the deficit until reset) and would otherwise wake the user about a
+    /// burn that stopped days ago. Threshold alerts are state claims and stay
+    /// ungated. Providers absent from the map lose pace alerts but keep
+    /// threshold alerts.
+    mutating func events(
+        for quotas: [Provider: Loaded<ProviderQuota>],
+        lastBurn: [Provider: Date] = [:],
+        now: Date
+    ) -> [QuotaAlertEvent] {
         var events: [QuotaAlertEvent] = []
 
         for (provider, state) in quotas {
@@ -101,8 +114,10 @@ struct QuotaAlertEvaluator {
                 }
                 highWater[key] = max(rearmedPrevious, window.usedPercent)
 
-                // Pace-based checks
-                if let pace = window.pace(now: now) {
+                // Pace-based checks. The effective pace demotes a deficit
+                // whose burn has gone quiet, so soft warnings and cliffs
+                // only ever fire on a current burn.
+                if let pace = window.pace(now: now)?.effective(lastBurn: lastBurn[provider], now: now) {
                     if pace.status.isDeficit,
                        window.usedPercent >= 50,
                        !flaggedSoftWarnings.contains(key) {
@@ -172,9 +187,14 @@ final class QuotaAlertService {
     }
 
     /// Called by the coordinator after each sweep with the full quota map.
-    func process(quotas: [Provider: Loaded<ProviderQuota>], now: Date = Date()) {
+    /// `lastBurn` gates pace events on burn recency (see the evaluator).
+    func process(
+        quotas: [Provider: Loaded<ProviderQuota>],
+        lastBurn: [Provider: Date] = [:],
+        now: Date = Date()
+    ) {
         guard preferences.quotaAlertsEnabled, let center else { return }
-        let events = evaluator.events(for: quotas, now: now)
+        let events = evaluator.events(for: quotas, lastBurn: lastBurn, now: now)
         guard !events.isEmpty else { return }
         Task {
             // Authorization is requested lazily on the first eligible event

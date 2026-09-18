@@ -67,6 +67,76 @@ struct StripTotals {
     }
 }
 
+// MARK: - Failover nudge
+//
+// Pure decision behind the "X burning fast. Switch to Y" line in the totals
+// card, extracted so the honesty rules are unit-testable without rendering
+// the popover.
+//
+// Two claims, never mixed: "burning fast" is present tense and requires a
+// pace deficit plus burn evidence inside the quiet period (`BurnRecency`);
+// "near its limit" is a state claim from `usedPercent >= 80` alone. A
+// window-shape deficit without a recent burn is neither — a weekly window
+// holds its deficit for days after the burst — so it produces no burning
+// claim at all, only the near-limit wording when the window is nearly gone.
+
+struct FailoverNudge: Equatable {
+    /// One provider worth warning about. A struct rather than a tuple so
+    /// key paths work for the ordering and exclusion sets below.
+    private struct Hot: Equatable {
+        let provider: Provider
+        let window: QuotaWindow
+        let activelyBurning: Bool
+    }
+
+    let message: String?
+    let accessibilityLabel: String
+
+    static func evaluate(
+        providers: [Provider],
+        headline: (Provider) -> QuotaWindow?,
+        lastBurn: (Provider) -> Date?,
+        now: Date
+    ) -> FailoverNudge {
+        // A provider is worth warning about when it is actively burning
+        // fast, or when its headline window is nearly gone — the former is a
+        // pace claim gated on burn recency, the latter a plain state claim.
+        let hot: [Hot] = providers.compactMap { p in
+            guard let h = headline(p) else { return nil }
+            let burning = h.pace(now: now)?.status.isDeficit == true
+                && BurnRecency.isActive(lastBurn: lastBurn(p), now: now)
+            guard burning || h.usedPercent >= 80 else { return nil }
+            return Hot(provider: p, window: h, activelyBurning: burning)
+        }
+
+        // Never suggest switching to a provider that is itself hot —
+        // "Codex burning fast. Switch to Codex" is the exact failure.
+        let hotProviders = Set(hot.map(\.provider))
+        let alternatives = providers.filter { p in
+            guard !hotProviders.contains(p), let h = headline(p) else { return false }
+            return h.usedPercent < 50
+        }
+
+        // An actively burning provider outranks one that merely sits near
+        // its limit; without alternatives there is nothing to switch to.
+        guard let first = hot.first(where: \.activelyBurning) ?? hot.first,
+              !alternatives.isEmpty else {
+            return FailoverNudge(message: nil, accessibilityLabel: "")
+        }
+
+        let names = alternatives.map(\.displayName).joined(separator: ", ")
+        let label = first.window.label.lowercased()
+        let limit = label.contains("limit") ? label : "\(label) limit"
+        let claim = first.activelyBurning
+            ? "\(first.provider.displayName) burning fast."
+            : "\(first.provider.displayName) near its \(limit)."
+        return FailoverNudge(
+            message: "\(claim) Switch to \(names) for headroom.",
+            accessibilityLabel: "\(claim) Headroom in \(names)."
+        )
+    }
+}
+
 /// The whole popover: a fixed header, a scrolling body, and a settings pane that
 /// swaps in place of the body.
 ///
@@ -290,7 +360,9 @@ struct PopoverRoot: View {
                         // ledger); Claude shades by tokens. Other providers
                         // pass nothing and render unchanged.
                         heatmapDaily: heatmapDaily(for: provider),
-                        heatmapIntensity: provider == .codex ? .sessions : .tokens
+                        heatmapIntensity: provider == .codex ? .sessions : .tokens,
+                        lastBurn: BurnRecency.lastBurn(
+                            of: coordinator.activities[provider]?.value?.sessions ?? [])
                     )
                 }
             }
@@ -405,23 +477,17 @@ struct PopoverRoot: View {
         // label. `>=` on a -7d start would silently count 8 days.
         let weekStart = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
 
-        let burningFast = coordinator.visibleQuotaProviders.compactMap { p -> (Provider, QuotaWindow, QuotaPace)? in
-            guard let q = coordinator.displayQuota(for: p)?.quota,
-                  let h = p.headlineWindow(from: q.windows),
-                  let pace = h.pace(now: coordinator.clock),
-                  pace.status.isDeficit || h.usedPercent >= 80 else { return nil }
-            return (p, h, pace)
-        }
-
-        let burningProviders = Set(burningFast.map(\.0))
-        let headroomAlternatives = coordinator.visibleQuotaProviders.filter { p in
-            // Never suggest switching to a provider that is itself burning —
-            // "Codex burning fast. Switch to Codex" is the exact failure.
-            guard !burningProviders.contains(p) else { return false }
-            guard let q = coordinator.displayQuota(for: p)?.quota,
-                  let h = p.headlineWindow(from: q.windows) else { return false }
-            return h.usedPercent < 50
-        }
+        let nudge = FailoverNudge.evaluate(
+            providers: coordinator.visibleQuotaProviders,
+            headline: { p in
+                guard let q = coordinator.displayQuota(for: p)?.quota else { return nil }
+                return p.headlineWindow(from: q.windows)
+            },
+            lastBurn: { p in
+                BurnRecency.lastBurn(of: coordinator.activities[p]?.value?.sessions ?? [])
+            },
+            now: coordinator.clock
+        )
 
         return VStack(alignment: .leading, spacing: 6) {
             Card(padding: 12) {
@@ -478,13 +544,13 @@ struct PopoverRoot: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("\(Fmt.tokenCountString(todayTokens)) tokens today, \(Fmt.tokenCountString(weekTokens)) last 7 days")
 
-                    if let burning = burningFast.first, !headroomAlternatives.isEmpty {
+                    if let message = nudge.message {
                         HStack(alignment: .top, spacing: 4) {
                             Image(systemName: "arrow.triangle.swap")
                                 .font(.system(size: 9.5))
                                 .foregroundColor(MU.warn)
                                 .padding(.top, 1)
-                            Text("\(burning.0.displayName) burning fast. Switch to \(headroomAlternatives.map(\.displayName).joined(separator: ", ")) for headroom.")
+                            Text(message)
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(MU.warn)
                                 .lineLimit(2)
@@ -492,7 +558,7 @@ struct PopoverRoot: View {
                         }
                         .padding(.top, 2)
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("\(burning.0.displayName) burning fast. Headroom in \(headroomAlternatives.map(\.displayName).joined(separator: ", ")).")
+                        .accessibilityLabel(nudge.accessibilityLabel)
                     }
 
                     // Attribution covers every token-bearing provider over the

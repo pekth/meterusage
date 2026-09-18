@@ -139,9 +139,16 @@ struct MenuBarLabel: View {
             }
 
             if let window {
-                let pace = window.pace(now: coordinator.clock)
-                let showAmbient = window.shouldShowAmbientETA(now: coordinator.clock)
-                let eta = showAmbient ? window.paceETA(now: coordinator.clock, short: true) : nil
+                // The effective pace demotes a deficit whose burn has gone
+                // quiet, so the ambient chip shows a burn ETA only while the
+                // provider is actually burning; a stale window falls through
+                // to the honest reset countdown (or no chip at all).
+                let pace = window.pace(now: coordinator.clock)?.effective(
+                    lastBurn: BurnRecency.lastBurn(
+                        of: coordinator.activities[provider]?.value?.sessions ?? []),
+                    now: coordinator.clock)
+                let showAmbient = pace?.shouldShowAmbientETA(resetsAt: window.resetsAt, now: coordinator.clock) ?? false
+                let eta = showAmbient ? pace?.etaText(resetsAt: window.resetsAt, now: coordinator.clock, short: true) : nil
                 let isDeficit = pace?.status.isDeficit ?? false
 
                 return Cluster(

@@ -33,11 +33,26 @@ enum CliMode {
     /// hanging the calling script.
     static let sourceTimeout: TimeInterval = 30
 
+    /// Scans one activity source down to its most recent observable burn.
+    /// A source that cannot be read contributes nothing — no burn evidence,
+    /// no pace claims for that provider.
+    private static func scanBurn(_ source: LocalActivitySource) async -> (Provider, Date?) {
+        let at = (try? await source.scan()).flatMap { BurnRecency.lastBurn(of: $0.sessions) }
+        return (source.provider, at)
+    }
+
     /// Polls every configured quota source concurrently and builds the report.
     /// Runs off the main actor entirely: AppKit is never touched on this path.
+    ///
+    /// Local activity is scanned alongside quota so the report can gate its
+    /// pace fields on burn recency (`BurnRecency`): "burning fast" claims a
+    /// current burn, and a headless poll has the same obligation as the UI —
+    /// a weekly window's stale deficit is not evidence of one.
     static func run() async -> LimitsReport {
         let sources = Composition.quotaSources()
+        let activitySources = Composition.activitySources()
         var loaded: [Provider: Loaded<ProviderQuota>] = [:]
+        var lastBurn: [Provider: Date] = [:]
         await withTaskGroup(of: (Provider, Loaded<ProviderQuota>).self) { group in
             for source in sources {
                 group.addTask {
@@ -48,10 +63,23 @@ enum CliMode {
                 loaded[provider] = result
             }
         }
+        await withTaskGroup(of: (Provider, Date?).self) { group in
+            for source in activitySources {
+                group.addTask {
+                    await Self.scanBurn(source)
+                }
+            }
+            for await (provider, at) in group {
+                if let at {
+                    lastBurn[provider] = at
+                }
+            }
+        }
         let order = sources.map(\.provider)
         return LimitsReporter.build(
             quotas: loaded,
             order: order,
+            lastBurn: lastBurn,
             now: Date()
         )
     }

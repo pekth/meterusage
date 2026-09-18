@@ -389,11 +389,16 @@ final class AppCoordinator: ObservableObject {
         clock = Date()
         // Threshold alerts evaluate the full map after every sweep, whether or
         // not individual sources were skipped for backoff — a skipped source
-        // simply keeps its previous reading.
-        quotaAlertService?.process(quotas: quotas)
+        // simply keeps its previous reading. Pace alerts additionally require
+        // a current burn, so the last-burn map rides along.
+        quotaAlertService?.process(quotas: quotas, lastBurn: lastBurnByProvider)
         // Build the machine-readable report and notify any snapshot listener.
         didPublishSnapshot?(
-            LimitsReporter.build(quotas: quotas, order: visibleQuotaProviders, now: clock))
+            LimitsReporter.build(
+                quotas: quotas,
+                order: visibleQuotaProviders,
+                lastBurn: lastBurnByProvider,
+                now: clock))
         saveArchive()
     }
 
@@ -420,9 +425,13 @@ final class AppCoordinator: ObservableObject {
             }
         }
         clock = Date()
-        quotaAlertService?.process(quotas: quotas)
+        quotaAlertService?.process(quotas: quotas, lastBurn: lastBurnByProvider)
         didPublishSnapshot?(
-            LimitsReporter.build(quotas: quotas, order: visibleQuotaProviders, now: clock))
+            LimitsReporter.build(
+                quotas: quotas,
+                order: visibleQuotaProviders,
+                lastBurn: lastBurnByProvider,
+                now: clock))
         saveArchive()
     }
 
@@ -441,6 +450,13 @@ final class AppCoordinator: ObservableObject {
 
     private func saveArchive() {
         QuotaArchive.save(archivedQuotas, to: quotaArchiveURL)
+    }
+
+    /// Most recent observable burn per provider. Feeds the pace-honesty gate:
+    /// alerts and the machine report may only claim "burning fast" while the
+    /// provider burned inside the quiet period (see `BurnRecency`).
+    var lastBurnByProvider: [Provider: Date] {
+        BurnRecency.lastBurns(from: activities)
     }
 
     private func isBackedOff(kind: String, provider: Provider, now: Date) -> Bool {
