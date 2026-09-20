@@ -230,6 +230,53 @@ final class NewPipelineTests: XCTestCase {
         XCTAssertEqual(breakdown?.contributors.map(\.projectName).sorted(), ["meterusage", "tivox"])
     }
 
+    /// Sessions without a token ledger carry no burn evidence. A scope whose
+    /// every session is token-less must return nil (the section hides) instead
+    /// of surfacing an all-zero card ("0 tokens", "0%", "Avg/turn: 0") — the
+    /// codebase only renders a breakdown that measured something.
+    func testBurnAttributionHidesScopesWithoutTokenEvidence() {
+        let now = Date()
+        let window = QuotaWindow(
+            label: "Weekly",
+            usedPercent: 11.0,
+            resetsAt: now.addingTimeInterval(6 * 86_400),
+            windowDurationMins: 10_080
+        )
+        let ledgerless = [
+            SessionSummary(
+                id: "voice",
+                projectName: "realtime-voice-chat",
+                model: "codex",
+                tokens: TokenTotals(),
+                estimatedCostUSD: 0,
+                startedAt: now.addingTimeInterval(-3_600),
+                messageCount: 0
+            )
+        ]
+
+        // Nothing measurable in scope: no contributors, no zero-token card.
+        XCTAssertNil(
+            BurnAttributionCalculator.calculate(sessions: ledgerless, window: window, now: now)
+        )
+
+        // One measured session nearby outweighs the ledger-less one: the
+        // zero-token session is excluded rather than shown as a 0% row.
+        let measured = SessionSummary(
+            id: "work",
+            projectName: "meterusage",
+            model: "codex",
+            tokens: TokenTotals(input: 42_000, output: 188),
+            estimatedCostUSD: 0,
+            startedAt: now.addingTimeInterval(-1_800),
+            messageCount: 2
+        )
+        let breakdown = try? XCTUnwrap(
+            BurnAttributionCalculator.calculate(sessions: ledgerless + [measured], window: window, now: now)
+        )
+        XCTAssertEqual(breakdown?.totalTokens, 42_188)
+        XCTAssertEqual(breakdown?.contributors.map(\.projectName), ["meterusage"])
+    }
+
     func testQuotaPaceAmbientETA() {
         let now = Date()
         let resetsAt = now.addingTimeInterval(3600) // 1h remaining
