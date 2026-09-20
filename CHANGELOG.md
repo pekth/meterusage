@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.33] - 2026-09-20
+
+### Fixed
+
+- **Active window burn no longer shows an all-zero card.** When the active
+  window's only sessions carried no token ledger (for example Codex realtime
+  sessions whose rollout records no `token_count` event), the burn card
+  rendered fabricated zeros ("0 tokens", a 0% contributor row, "Avg/turn: 0").
+  Sessions without a token ledger are now excluded from burn attribution, so a
+  scope with no measured burn yields no breakdown and the card hides instead —
+  the same rule the popover already applies to an empty week.
+
 ## [0.2.32] - 2026-09-17
 
 ### Fixed
