@@ -83,6 +83,15 @@ public enum BurnAttributionCalculator {
 
         guard !relevantSessions.isEmpty else { return nil }
 
+        // A session without a token ledger carries no burn evidence — a
+        // realtime/voice session whose rollout never records `token_count`
+        // would otherwise force the card open with fabricated zeros
+        // ("0 tokens", "0%", "Avg/turn: 0"). Keep it out of attribution,
+        // and when the whole scope has no measured burn, hide the section
+        // — the same rule the popover applies to an empty week.
+        let attributedSessions = relevantSessions.filter { $0.tokens.total > 0 }
+        guard !attributedSessions.isEmpty else { return nil }
+
         // Aggregate by project + model
         var grouped: [String: (project: String, model: String, turns: Int, tokens: TokenTotals, hasRealSession: Bool)] = [:]
         var totalWindowTokens = 0
@@ -92,7 +101,7 @@ public enum BurnAttributionCalculator {
         var totalCacheWrite = 0
         var longChats = 0
 
-        for session in relevantSessions {
+        for session in attributedSessions {
             let key = "\(session.projectName)|\(session.model)"
             let tokens = session.tokens
             let turns = max(1, session.messageCount)
