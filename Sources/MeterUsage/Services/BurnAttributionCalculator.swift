@@ -86,10 +86,13 @@ public enum BurnAttributionCalculator {
         // A session without a token ledger carries no burn evidence — a
         // realtime/voice session whose rollout never records `token_count`
         // would otherwise force the card open with fabricated zeros
-        // ("0 tokens", "0%", "Avg/turn: 0"). Keep it out of attribution,
-        // and when the whole scope has no measured burn, hide the section
-        // — the same rule the popover applies to an empty week.
-        let attributedSessions = relevantSessions.filter { $0.tokens.total > 0 }
+        // ("0 tokens", "0%", "Avg/turn: 0"). Provider-scheduled automations
+        // are skipped too: they run in per-thread folders instead of a repo,
+        // so attributing them would name thread directories rather than the
+        // repos the user worked in. When the whole scope has no measured,
+        // user-driven burn, hide the section — the same rule the popover
+        // applies to an empty week.
+        let attributedSessions = relevantSessions.filter { $0.tokens.total > 0 && !$0.isAutomation }
         guard !attributedSessions.isEmpty else { return nil }
 
         // Aggregate by project + model

@@ -277,6 +277,50 @@ final class NewPipelineTests: XCTestCase {
         XCTAssertEqual(breakdown?.contributors.map(\.projectName), ["meterusage"])
     }
 
+    /// Provider-scheduled automations carry real ledgers but run in
+    /// per-thread folders, not repos. Attribution skips them so the card
+    /// names the active session's repo instead of thread directories — and an
+    /// automation-only scope hides the card rather than showing those rows.
+    func testBurnAttributionSkipsAutomationSessions() {
+        let now = Date()
+        let window = QuotaWindow(
+            label: "Weekly",
+            usedPercent: 14.0,
+            resetsAt: now.addingTimeInterval(6 * 86_400),
+            windowDurationMins: 10_080
+        )
+        let automation = SessionSummary(
+            id: "auto",
+            projectName: "review-recent-email-and-calendar-activity",
+            model: "codex",
+            tokens: TokenTotals(input: 3_000_000, output: 6_000),
+            estimatedCostUSD: 0,
+            startedAt: now.addingTimeInterval(-3_600),
+            messageCount: 40,
+            isAutomation: true
+        )
+        let repo = SessionSummary(
+            id: "work",
+            projectName: "meterusage",
+            model: "codex",
+            tokens: TokenTotals(input: 1_000_000, output: 8_000),
+            estimatedCostUSD: 0,
+            startedAt: now.addingTimeInterval(-1_800),
+            messageCount: 12
+        )
+
+        let breakdown = try? XCTUnwrap(
+            BurnAttributionCalculator.calculate(sessions: [automation, repo], window: window, now: now)
+        )
+        XCTAssertEqual(breakdown?.totalTokens, 1_008_000)
+        XCTAssertEqual(breakdown?.contributors.map(\.projectName), ["meterusage"])
+
+        XCTAssertNil(
+            BurnAttributionCalculator.calculate(sessions: [automation], window: window, now: now),
+            "an automation-only scope hides the card instead of naming thread folders"
+        )
+    }
+
     func testQuotaPaceAmbientETA() {
         let now = Date()
         let resetsAt = now.addingTimeInterval(3600) // 1h remaining
