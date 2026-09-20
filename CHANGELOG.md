@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.34] - 2026-09-20
+
+### Fixed
+
+- **Active window burn shows the active session's repo, not automation
+  threads.** Codex Desktop scheduled automations run in per-thread folders
+  instead of a repo checkout, so the card named thread directories (morning
+  brief, email review) rather than the repos being worked in. Sessions are now
+  flagged at scan time and skipped by burn attribution on both surfaces, while
+  telemetry and pace recency still count them since they really burn quota.
+
 ## [0.2.33] - 2026-09-20
 
 ### Fixed
