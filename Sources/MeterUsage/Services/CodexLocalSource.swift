@@ -63,7 +63,8 @@ public actor CodexLocalSource: LocalActivitySource {
                     estimatedCostUSD: 0,
                     startedAt: startedAt,
                     lastActivityAt: modified,
-                    messageCount: 0
+                    messageCount: 0,
+                    isAutomation: start?.isAutomation ?? false
                 )
             )
         }
@@ -133,6 +134,11 @@ public actor CodexLocalSource: LocalActivitySource {
         /// Last path component of the session's working directory — the same
         /// directory-basename-only identifier the Claude source reports.
         let project: String
+        /// True when the rollout's `session_meta` marks it a scheduled run
+        /// (`thread_source == "automation"`). Those sessions execute in
+        /// per-thread folders instead of a repo, so attribution skips them
+        /// and the card names the repos the user actually worked in.
+        let isAutomation: Bool
     }
 
     /// Reads only the first line of a rollout file and takes its top-level
@@ -147,10 +153,12 @@ public actor CodexLocalSource: LocalActivitySource {
               let object = try? JSONSerialization.jsonObject(with: chunk[..<newline]) as? [String: Any],
               let raw = object["timestamp"] as? String,
               let date = parseTimestamp(raw) else { return nil }
-        let project = (object["payload"] as? [String: Any])
+        let payload = object["payload"] as? [String: Any]
+        let project = payload
             .flatMap { $0["cwd"] as? String }
             .map { URL(fileURLWithPath: $0).lastPathComponent } ?? ""
-        return SessionStart(date: date, project: project)
+        let isAutomation = (payload?["thread_source"] as? String) == "automation"
+        return SessionStart(date: date, project: project, isAutomation: isAutomation)
     }
 
     // MARK: - Token ledger

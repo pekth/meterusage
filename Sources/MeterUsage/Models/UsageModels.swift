@@ -658,6 +658,12 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     /// that week, never one chat. Aggregates join token and cost totals but
     /// never count as long chats.
     public let isAggregate: Bool
+    /// True for provider-scheduled runs rather than the user's own work —
+    /// currently Codex Desktop automations (`thread_source == "automation"`),
+    /// which execute in per-thread folders instead of a repo. They join
+    /// telemetry totals but are excluded from burn attribution, so the card
+    /// shows the repos the user actually worked in.
+    public let isAutomation: Bool
 
     public init(
         id: String,
@@ -668,7 +674,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
         startedAt: Date,
         lastActivityAt: Date? = nil,
         messageCount: Int,
-        isAggregate: Bool = false
+        isAggregate: Bool = false,
+        isAutomation: Bool = false
     ) {
         self.id = id
         self.projectName = projectName
@@ -679,6 +686,7 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
         self.lastActivityAt = lastActivityAt
         self.messageCount = messageCount
         self.isAggregate = isAggregate
+        self.isAutomation = isAutomation
     }
 
     /// The session's activity window closes at `lastActivityAt` when known,

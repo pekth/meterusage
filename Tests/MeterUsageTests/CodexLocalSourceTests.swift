@@ -29,17 +29,22 @@ final class CodexLocalSourceTests: XCTestCase {
         name: String,
         timestamp: String,
         cwd: String? = nil,
-        tokens: (input: Int, cached: Int, output: Int, reasoning: Int)? = nil
+        tokens: (input: Int, cached: Int, output: Int, reasoning: Int)? = nil,
+        threadSource: String? = nil
     ) throws -> URL {
         let dir = root
             .appendingPathComponent("2026", isDirectory: true)
             .appendingPathComponent("08", isDirectory: true)
             .appendingPathComponent("11", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        var payload = ""
+        var payloadParts: [String] = []
         if let cwd {
-            payload = #","payload":{"cwd":"\#(cwd)"}"#
+            payloadParts.append(#""cwd":"\#(cwd)""#)
         }
+        if let threadSource {
+            payloadParts.append(#""thread_source":"\#(threadSource)""#)
+        }
+        let payload = payloadParts.isEmpty ? "" : #","payload":{\#(payloadParts.joined(separator: ","))}"#
         var lines = #"{"timestamp":"\#(timestamp)","type":"session_meta"\#(payload)}"#
         if let tokens {
             lines += "\n" + #"{"timestamp":"\#(timestamp)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":\#(tokens.input),"cached_input_tokens":\#(tokens.cached),"output_tokens":\#(tokens.output),"reasoning_output_tokens":\#(tokens.reasoning),"total_tokens":\#(tokens.input + tokens.output)}}}}"#
@@ -195,6 +200,35 @@ final class CodexLocalSourceTests: XCTestCase {
 
         let day = try XCTUnwrap(CodexLocalSource.sessionDay(for: fileURL))
         XCTAssertEqual(day, Self.day(2026, 8, 15))
+    }
+
+    /// A rollout whose `session_meta` marks `thread_source == "automation"`
+    /// (a Codex Desktop scheduled run in a per-thread folder, not a repo) is
+    /// flagged on the session, so burn attribution can skip it and name the
+    /// repos the user actually worked in. Ordinary sessions stay unflagged.
+    func testScanFlagsAutomationSessions() async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeRollout(
+            root,
+            name: "rollout-2026-08-11T12-00-00-auto",
+            timestamp: "2026-08-11T12:00:00.000Z",
+            cwd: "/Users/test/Documents/Codex/2026-08-11/review-recent-email-and-calendar-activity",
+            threadSource: "automation"
+        )
+        try writeRollout(
+            root,
+            name: "rollout-2026-08-11T13-00-00-work",
+            timestamp: "2026-08-11T13:00:00.000Z",
+            cwd: "/Users/test/meterusage"
+        )
+
+        let activity = try await CodexLocalSource(root: root).scan()
+
+        let auto = try XCTUnwrap(activity.sessions.first { $0.projectName == "review-recent-email-and-calendar-activity" })
+        XCTAssertTrue(auto.isAutomation)
+        let work = try XCTUnwrap(activity.sessions.first { $0.projectName == "meterusage" })
+        XCTAssertFalse(work.isAutomation)
     }
 
     // MARK: - Heatmap intensity
