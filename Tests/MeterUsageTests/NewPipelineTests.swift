@@ -81,6 +81,23 @@ final class NewPipelineTests: XCTestCase {
         XCTAssertEqual(loadedAfterPurge.first?.tokens.input, 1000) // yesterday preserved
     }
 
+    func testDurableHistoryStorePreservesUnreadableFile() throws {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("durable-corrupt-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let original = Data("not durable history".utf8)
+        try original.write(to: tempURL)
+
+        let store = DurableHistoryStore(storeURL: tempURL)
+        store.record(
+            provider: .codex,
+            daily: [DailyActivity(day: Date(), tokens: TokenTotals(input: 1_000, output: 200), estimatedCostUSD: 0, sessionCount: 1)]
+        )
+
+        XCTAssertEqual(try Data(contentsOf: tempURL), original)
+    }
+
     func testBurnShareIsPercentNotFraction() {
         let now = Date()
         let sessions = [

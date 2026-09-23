@@ -77,6 +77,10 @@ Do not mix unrelated fixes in the same commit.
 
 ## Build and test
 
+GitHub Actions runs `swift build` and `swift test` on macOS 15 for pushes to
+`main` and pull requests. Repository owners must enable Actions under
+Settings > Actions > General for these checks to run.
+
 Run these checks before a pull request:
 
 ```sh

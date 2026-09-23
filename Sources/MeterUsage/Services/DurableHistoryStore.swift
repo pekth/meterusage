@@ -36,12 +36,18 @@ public struct StoredDailyRecord: Codable, Equatable, Sendable {
     }
 }
 
+public enum DurableHistoryStoreError: String, Equatable, Sendable {
+    case loadFailed
+    case writeFailed
+}
+
 public final class DurableHistoryStore: @unchecked Sendable {
     public static let shared = DurableHistoryStore()
 
     private let storeURL: URL
     private let lock = NSLock()
     private var inMemory: [String: [StoredDailyRecord]] = [:]
+    private var storeError: DurableHistoryStoreError?
 
     public init(storeURL: URL? = nil) {
         self.storeURL = storeURL ?? HomeDirectory.real
@@ -58,11 +64,20 @@ public final class DurableHistoryStore: @unchecked Sendable {
     }()
 
     private func load() {
-        guard let data = try? Data(contentsOf: storeURL),
-              let decoded = try? JSONDecoder().decode([String: [StoredDailyRecord]].self, from: data) else {
-            return
+        do {
+            let data = try Data(contentsOf: storeURL)
+            self.inMemory = try JSONDecoder().decode([String: [StoredDailyRecord]].self, from: data)
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            // A first launch has no history file yet.
+        } catch {
+            storeError = .loadFailed
         }
-        self.inMemory = decoded
+    }
+
+    public var error: DurableHistoryStoreError? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storeError
     }
 
     public func records(for provider: Provider) -> [DailyActivity] {
@@ -113,10 +128,15 @@ public final class DurableHistoryStore: @unchecked Sendable {
         let sorted = byDay.values.sorted(by: { $0.dayISO < $1.dayISO })
         inMemory[provider.rawValue] = sorted
 
-        // Atomic write
-        if let data = try? JSONEncoder().encode(inMemory) {
-            try? FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: storeURL, options: .atomic)
+        guard storeError != .loadFailed else { return }
+
+        do {
+            let data = try JSONEncoder().encode(inMemory)
+            try FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: storeURL, options: .atomic)
+            storeError = nil
+        } catch {
+            storeError = .writeFailed
         }
     }
 }

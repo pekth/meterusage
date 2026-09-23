@@ -8,10 +8,9 @@ import Foundation
 // account hints), which leaves a user with "Couldn't read Codex usage" and no
 // way to describe the problem when filing an issue.
 //
-// The report carries categories and counts only. It is built from the same
-// published state the views read, so it cannot contain anything the popover
-// wouldn't already show: no paths, no hostnames, no account ids, no raw
-// provider errors. Enforced by test.
+// The report carries categories and counts only, including local history
+// persistence status: no paths, no hostnames, no account ids, no raw provider
+// errors. Enforced by test.
 
 enum DiagnosticsReport {
 
@@ -29,7 +28,8 @@ enum DiagnosticsReport {
         activities: [Provider: Loaded<LocalActivity>],
         usages: [Provider: Loaded<ProviderUsage>],
         statuses: [Provider: Loaded<ServiceStatus>],
-        plans: [Provider: Loaded<PlanTier>]
+        plans: [Provider: Loaded<PlanTier>],
+        historyError: DurableHistoryStoreError? = nil
     ) -> String {
         var lines: [String] = []
         lines.append("\(appName) \(appVersion)")
@@ -42,6 +42,10 @@ enum DiagnosticsReport {
         }
         lines.append("enabled: \(enabledProviders.map(\.rawValue).sorted().joined(separator: ", "))")
         lines.append("")
+
+        if let historyError {
+            lines.append("history: \(historyError.rawValue)")
+        }
 
         for provider in enabledProviders {
             lines.append("[\(provider.rawValue)]")
