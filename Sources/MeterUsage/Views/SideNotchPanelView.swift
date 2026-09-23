@@ -239,7 +239,7 @@ struct SideNotchPanelView: View {
         // OpenRouter) those cards drew a pixel off from the integral ones.
         // Top-anchoring keeps the visible top edge on one row and pushes any
         // leftover below the card's own black edge, where it cannot be seen.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: panel.cardOnRight ? .topLeading : .topTrailing)
         // The panel is always on screen, so unlike the popover it never
         // refreshes on open: unfolding is the moment the numbers are read.
         // Refresh then (the same 20-second staleness guard the popover uses)

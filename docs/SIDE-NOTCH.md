@@ -49,7 +49,8 @@ intermediate sizes back into placement and never settled. Both were reverted in
 
 - Hover a ring to open its card. Move between rings to read another provider.
 - Drag anywhere on the strip or card to move the panel. The card hides during
-  the drag and the side settles on drop.
+  the drag, the strip stays against its side of the retained frame, and the
+  side settles on drop.
   On macOS 15 and later, an explicit native window-drag gesture handles this
   alongside the context menu and buttons. Older systems keep AppKit's
   background-window dragging. The final strip corner is saved before the
@@ -77,6 +78,10 @@ hosted panel in folded and pinned states. It checks initiation, release, and
 ordinary clicks without setting the drag state itself. It does not prove
 physical pointer movement by the Window Server. A simulated frame move before
 release also checks that the drop keeps its new position.
+
+A native bitmap test renders the strip inside a retained expanded window for
+both card sides and two heights. It checks the visible strip's anchored edge
+and top row, catching horizontal recentering when the card hides during drag.
 
 Drag from both the strip and an open card. Release once inside the panel and
 once outside it. After each drop, hover a provider to reopen its card and drag
