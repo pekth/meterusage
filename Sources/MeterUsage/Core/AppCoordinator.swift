@@ -719,9 +719,8 @@ final class AppCoordinator: ObservableObject {
         return ProviderAccount(plan: plan, via: provider.sourceLabel)
     }
 
-    /// Sanitized diagnostics for the "Copy diagnostics" button. Built from the
-    /// same published state the views read, so it can never carry more than the
-    /// popover shows — see `DiagnosticsReport`.
+    /// Sanitized diagnostics for the "Copy diagnostics" button, including
+    /// provider state and local history persistence errors.
     func diagnosticsText() -> String {
         DiagnosticsReport.build(
             appName: AppInfo.name,
@@ -735,7 +734,8 @@ final class AppCoordinator: ObservableObject {
             activities: activities,
             usages: usages,
             statuses: statuses,
-            plans: plans
+            plans: plans,
+            historyError: isDemoMode ? nil : DurableHistoryStore.shared.error
         )
     }
 }
