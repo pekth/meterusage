@@ -24,8 +24,9 @@ public struct AntigravityUsageSource: UsageSource {
     public let provider: Provider = .antigravity
     private let historyURL: URL
     private let conversationsDirectory: URL?
+    private let runtimeExecutable: String?
 
-    public init(historyURL: URL? = nil, conversationsDirectory: URL? = nil) {
+    public init(historyURL: URL? = nil, conversationsDirectory: URL? = nil, runtimeExecutable: String? = nil) {
         self.historyURL = historyURL ?? HomeDirectory.real
             .appendingPathComponent(".gemini", isDirectory: true)
             .appendingPathComponent("antigravity-cli", isDirectory: true)
@@ -34,6 +35,7 @@ public struct AntigravityUsageSource: UsageSource {
             .appendingPathComponent(".gemini", isDirectory: true)
             .appendingPathComponent("antigravity-cli", isDirectory: true)
             .appendingPathComponent("conversations", isDirectory: true)
+        self.runtimeExecutable = runtimeExecutable
     }
 
     public func fetchUsage() async throws -> ProviderUsage {
@@ -50,14 +52,14 @@ public struct AntigravityUsageSource: UsageSource {
         }
         // 3. Containerised agy keeps its conversation databases inside the
         //    `antigravity-config` volume, reachable through the runtime.
-        if let copied = Self.copyContainerConversations() {
+        if let copied = Self.copyContainerConversations(runtime: runtimeExecutable) {
             defer { try? FileManager.default.removeItem(at: copied) }
             if let usage = try? AntigravityConversations.readUsage(in: copied, now: Date()) {
                 return usage
             }
         }
         // 4. Containerised agy on older builds keeps only the prompt history.
-        if let historyData = Self.readContainerHistory(),
+        if let historyData = Self.readContainerHistory(runtime: runtimeExecutable),
            let usage = try? Self.parseHistory(data: historyData, now: Date()) {
             return usage
         }
@@ -209,30 +211,15 @@ public struct AntigravityUsageSource: UsageSource {
     /// The volume is only mounted read-only, and only after an existence check:
     /// `docker run` would otherwise create a phantom `antigravity-config`
     /// volume on machines that never had agy's containerised setup.
-    private static func readContainerHistory() -> Data? {
-        guard let executable = resolveDockerExecutable(),
+    private static func readContainerHistory(runtime: String?) -> Data? {
+        guard let executable = runtime ?? AntigravityRuntime.resolve(),
               runtimeVolumeExists(executable, name: "antigravity-config"),
               runtimeImageExists(executable, name: "alpine") else { return nil }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = [
-            "run", "--rm",
+        return AntigravityRuntime.run(executable: executable, arguments: [
+            "run", "--rm", "--pull=never",
             "-v", "antigravity-config:/data:ro",
             "alpine", "cat", "/data/antigravity-cli/history.jsonl"
-        ]
-        let output = Pipe()
-        let error = Pipe()
-        process.standardOutput = output
-        process.standardError = error
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0, !data.isEmpty else { return nil }
-        return data
+        ])
     }
 
     /// Copies agy's conversation databases out of the `antigravity-config`
@@ -246,8 +233,8 @@ public struct AntigravityUsageSource: UsageSource {
     /// runtime is absent, the volume or image is missing, nothing could be
     /// copied, or the temporary directory cannot be created. The caller owns
     /// the returned directory and must remove it.
-    private static func copyContainerConversations() -> URL? {
-        guard let executable = resolveDockerExecutable(),
+    private static func copyContainerConversations(runtime: String?) -> URL? {
+        guard let executable = runtime ?? AntigravityRuntime.resolve(),
               runtimeVolumeExists(executable, name: "antigravity-config"),
               runtimeImageExists(executable, name: "alpine") else { return nil }
         let destination = FileManager.default.temporaryDirectory
@@ -256,7 +243,7 @@ public struct AntigravityUsageSource: UsageSource {
             return nil
         }
         _ = run(executable: executable, arguments: [
-            "run", "--rm",
+            "run", "--rm", "--pull=never",
             "-v", "antigravity-config:/data:ro",
             "-v", "\(destination.path):/out",
             "alpine", "sh", "-c",
@@ -282,44 +269,9 @@ public struct AntigravityUsageSource: UsageSource {
     }
 
     private static func run(executable: String, arguments: [String]) -> Data? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        let output = Pipe()
-        let error = Pipe()
-        process.standardOutput = output
-        process.standardError = error
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        return data
+        AntigravityRuntime.run(executable: executable, arguments: arguments)
     }
 
-    private static func resolveDockerExecutable() -> String? {
-        let fileManager = FileManager.default
-        let candidates: [String] = [
-            "/opt/homebrew/bin/docker",
-            "/opt/homebrew/bin/podman",
-            "/usr/local/bin/docker",
-            "/usr/local/bin/podman",
-            "/usr/bin/docker"
-        ]
-        for candidate in candidates where fileManager.isExecutableFile(atPath: candidate) {
-            return candidate
-        }
-        if let path = ProcessInfo.processInfo.environment["PATH"] {
-            for directory in path.split(separator: ":") {
-                let candidate = String(directory) + "/docker"
-                if fileManager.isExecutableFile(atPath: candidate) { return candidate }
-            }
-        }
-        return nil
-    }
 
     /// Parses agy `history.jsonl` content (one JSON object per prompt line)
     /// into usage counts, grouping lines by `conversationId`.

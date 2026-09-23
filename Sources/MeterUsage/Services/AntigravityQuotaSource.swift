@@ -49,74 +49,29 @@ public struct AntigravityQuotaSource: QuotaSource {
     /// runtime, image, or volume is missing — an install without agy is a
     /// calm "unavailable", not an error.
     static func runUsageCommand(runtime: String?) -> Data {
-        guard let executable = runtime ?? Self.resolveRuntimeExecutable(),
+        guard let executable = runtime ?? AntigravityRuntime.resolve(),
               Self.exists(executable, ["image", "inspect", Self.imageName]),
-              Self.exists(executable, ["volume", "inspect", Self.volumeName]) else {
+              Self.exists(executable, ["volume", "inspect", Self.volumeName]),
+              Self.exists(executable, ["volume", "inspect", Self.binVolumeName]) else {
             return Data()
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = [
-            "run", "--rm",
+        let data = AntigravityRuntime.run(executable: executable, arguments: [
+            "run", "--rm", "--pull=never",
             "-v", "\(Self.volumeName):/root/.gemini",
             "-v", "\(Self.binVolumeName):/root/.local/bin",
             Self.imageName,
             "-p", "/usage"
-        ]
-        let output = Pipe()
-        let error = Pipe()
-        process.standardOutput = output
-        process.standardError = error
-        do {
-            try process.run()
-        } catch {
-            return Data()
-        }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard process.terminationStatus == 0, !data.isEmpty else { return Data() }
-        return data
+        ])
+        return data ?? Data()
     }
 
     static let imageName = "antigravity-cli:local"
     static let volumeName = "antigravity-config"
     static let binVolumeName = "antigravity-bin"
 
-    private static func resolveRuntimeExecutable() -> String? {
-        let fileManager = FileManager.default
-        let candidates: [String] = [
-            "/opt/homebrew/bin/docker",
-            "/opt/homebrew/bin/podman",
-            "/usr/local/bin/docker",
-            "/usr/local/bin/podman",
-            "/usr/bin/docker"
-        ]
-        for candidate in candidates where fileManager.isExecutableFile(atPath: candidate) {
-            return candidate
-        }
-        if let path = ProcessInfo.processInfo.environment["PATH"] {
-            for directory in path.split(separator: ":") {
-                let candidate = String(directory) + "/docker"
-                if fileManager.isExecutableFile(atPath: candidate) { return candidate }
-            }
-        }
-        return nil
-    }
-
     private static func exists(_ executable: String, _ arguments: [String]) -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-        } catch {
-            return false
-        }
-        process.waitUntilExit()
-        return process.terminationStatus == 0
+        return AntigravityRuntime.run(executable: executable, arguments: arguments) != nil
     }
 
     // MARK: Parsing
