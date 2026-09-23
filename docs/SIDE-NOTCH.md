@@ -62,10 +62,16 @@ explicit "Show details" action rather than a focusable control.
 
 ## Verifying a change
 
-Unit tests cover the geometry and cannot see the rendered result. For any change
-to side notch layout or motion, capture the panel for at least two providers
-whose cards differ in height, and confirm the top edge renders on the same row
-and the strip does not move. Report the captures in the pull request.
+Automated tests cover geometry and in-process drag events, but cannot see the
+rendered result. For any change to side notch layout or motion, capture the
+panel for at least two providers whose cards differ in height, and confirm the
+top edge renders on the same row and the strip does not move. Report the
+captures in the pull request.
+
+Drag from both the strip and an open card. Release once inside the panel and
+once outside it. After each drop, hover a provider to reopen its card and drag
+again. The panel must follow the pointer, settle on release, and reopen cards
+at their full width without moving the saved strip anchor.
 
 The bug fixed in 0.2.32 was found by logging requested and applied window frames
 on the reporter's machine after six inspection-based attempts failed. Prefer a
