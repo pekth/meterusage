@@ -400,10 +400,10 @@ final class SideNotchPanelTests: XCTestCase {
         // pacing block every other provider shows.
         let coordinator = try await Self.coordinator(quotas: [
             (Provider.antigravity, [
-                ("Gemini Weekly", 24.0, 6 * 86_400),
+                ("Gemini Weekly", 24.0, 6.0 * 86_400),
                 ("Gemini 5-hour", 100.0, 6_900),
-                ("Claude/GPT Weekly", 0.0, 7 * 86_400),
-                ("Claude/GPT 5-hour", 0.0, 5 * 3_600),
+                ("Claude/GPT Weekly", 0.0, 7.0 * 86_400),
+                ("Claude/GPT 5-hour", 0.0, 5.0 * 3_600),
             ]),
         ])
 
