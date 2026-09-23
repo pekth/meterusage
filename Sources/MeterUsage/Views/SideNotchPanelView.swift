@@ -247,17 +247,6 @@ struct SideNotchPanelView: View {
             }
         )
         .contextMenu {
-            if showSideNotchResetButton,
-               let codexQuota = coordinator.displayQuota(for: .codex)?.quota,
-               let credit = codexQuota.resetCredits.first(where: { isAvailable($0) }) {
-                Button("Use Codex reset (\(credit.title))...") {
-                    cancelFold()
-                    isHoveringPanel = true
-                    hoveredProvider = .codex
-                    confirmingResetID = credit.id
-                }
-                Divider()
-            }
             Toggle("Keep open", isOn: $isPinned)
             Button("Refresh now") { coordinator.refresh() }
             Divider()

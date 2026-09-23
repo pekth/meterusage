@@ -50,8 +50,8 @@ intermediate sizes back into placement and never settled. Both were reverted in
 - Hover a ring to open its card. Move between rings to read another provider.
 - Drag anywhere on the strip or card to move the panel. The card hides during
   the drag and the side settles on drop.
-- Right-click for the context menu: use a Codex reset, keep open, refresh now,
-  hide panel.
+- Right-click for the context menu: keep open, refresh now, or hide panel.
+  Codex reset credits are available in the Codex detail card.
 - The share button captures the hovered card at 2x and opens macOS share
   services. The capture crops to the card and excludes the ring strip.
 
