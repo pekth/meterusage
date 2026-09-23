@@ -186,9 +186,9 @@ final class SideNotchPanelController: ObservableObject {
     /// that launch frame must never be recorded as a drag.
     private var hasPlaced = false
     private var cancellables = Set<AnyCancellable>()
-    /// Global mouse-up monitor ending drags. Stored for life; the controller
-    /// lives as long as the app.
-    private var mouseUpMonitor: Any?
+    /// Mouse-up monitors ending drags. The local monitor handles releases in
+    /// this app; the global monitor handles drops outside it.
+    private var mouseUpMonitors: [Any] = []
     /// Retains the sharing picker while its sheet is on screen; dropping the
     /// reference would dismiss it mid-interaction.
     private var sharingPicker: NSSharingServicePicker?
@@ -254,20 +254,7 @@ final class SideNotchPanelController: ObservableObject {
             .sink { [weak self] _ in
                 guard let self, !self.isPlacing, self.hasPlaced else { return }
                 guard NSEvent.pressedMouseButtons != 0 else { return }
-                // Persist the strip's top-right corner, not the window's:
-                // with the card docked right the window outgrows the strip.
-                let stripWidth = self.stripSize.width
-                let corner = CGPoint(
-                    x: self.cardOnRight && stripWidth > 0
-                        ? self.panel.frame.minX + stripWidth
-                        : self.panel.frame.maxX,
-                    y: self.panel.frame.maxY
-                )
-                self.userCorner = corner
-                UserDefaults.standard.set(
-                    SideNotchPanelLayout.cornerString(corner),
-                    forKey: PrefKey.sideNotchPanelCorner
-                )
+                self.saveDraggedCorner()
                 if !self.isDragging { self.isDragging = true }
             }
             .store(in: &cancellables)
@@ -275,11 +262,18 @@ final class SideNotchPanelController: ObservableObject {
         // A drag records its corner per move above but never re-places (that
         // would fight the cursor). The matching mouse-up ends the drag: the
         // side recomputes from the dropped position and the window settles.
-        // Global so a drop outside the panel still counts. The callback can
-        // arrive off the main thread; placement stays main-bound.
-        mouseUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in
-            DispatchQueue.main.async { self?.endDrag() }
-        }
+        // The local monitor handles releases in this app. The global monitor
+        // handles drops outside it. Callbacks can arrive off the main thread;
+        // placement stays main-bound.
+        mouseUpMonitors = [
+            NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
+                DispatchQueue.main.async { self?.endDrag() }
+                return event
+            },
+            NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in
+                DispatchQueue.main.async { self?.endDrag() }
+            }
+        ].compactMap { $0 }
 
         // Re-place on display changes (resolution, monitor plug/unplug) so the
         // strip follows its screen instead of stranding on a dead one.
@@ -364,7 +358,7 @@ final class SideNotchPanelController: ObservableObject {
     }
 
     deinit {
-        if let mouseUpMonitor {
+        for mouseUpMonitor in mouseUpMonitors {
             NSEvent.removeMonitor(mouseUpMonitor)
         }
     }
@@ -372,11 +366,27 @@ final class SideNotchPanelController: ObservableObject {
     /// Ends a drag on mouse-up: clears the flag (the view drops any stale
     /// hover with it) and settles the window, recomputing the card side from
     /// the dropped position. Cheap no-op for ordinary clicks.
-    private func endDrag() {
+    func endDrag() {
         guard isDragging else { return }
+        saveDraggedCorner()
         isDragging = false
         guard panel.isVisible else { return }
         place(panel: panel, on: panel.screen ?? NSScreen.main)
+    }
+
+    private func saveDraggedCorner() {
+        let stripWidth = stripSize.width
+        let corner = CGPoint(
+            x: cardOnRight && stripWidth > 0
+                ? panel.frame.minX + stripWidth
+                : panel.frame.maxX,
+            y: panel.frame.maxY
+        )
+        userCorner = corner
+        UserDefaults.standard.set(
+            SideNotchPanelLayout.cornerString(corner),
+            forKey: PrefKey.sideNotchPanelCorner
+        )
     }
 
     /// Records a measured size and reports whether a placement is owed.
@@ -390,7 +400,7 @@ final class SideNotchPanelController: ObservableObject {
     }
 
     private func place(panel: NSPanel, on screen: NSScreen?) {
-        guard let screen, contentSize.width > 0, contentSize.height > 0 else { return }
+        guard !isDragging, let screen, contentSize.width > 0, contentSize.height > 0 else { return }
         // The persisted corner is the strip's top-right, so the strip never
         // moves under the cursor when the card opens, closes, or flips sides.
         let stripTopRight: CGPoint

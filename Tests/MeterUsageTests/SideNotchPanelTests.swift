@@ -1,4 +1,6 @@
 import XCTest
+import AppKit
+import SwiftUI
 @testable import MeterUsage
 
 final class SideNotchPanelTests: XCTestCase {
@@ -842,6 +844,123 @@ final class SideNotchPanelTests: XCTestCase {
             resetConsumer: StubResetConsumer()
         )
         XCTAssertTrue(withConsumer.canUseCodexReset)
+    }
+
+    @MainActor
+    func testSideNotchStartsAndEndsDragFromMouseEvents() async throws {
+        guard #available(macOS 15.0, *) else { throw XCTSkip("WindowDragGesture requires macOS 15") }
+        let savedCorner = UserDefaults.standard.object(forKey: PrefKey.sideNotchPanelCorner)
+        defer { UserDefaults.standard.set(savedCorner, forKey: PrefKey.sideNotchPanelCorner) }
+        let suiteName = "MeterUsageTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let coordinator = try await Self.coordinator(quotas: [(.claude, [("Session", 40, 3600)])])
+        let windowsBefore = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let controller = SideNotchPanelController(coordinator: coordinator)
+        let panel = try XCTUnwrap(
+            NSApplication.shared.windows.first { !windowsBefore.contains(ObjectIdentifier($0)) }
+        )
+        defer {
+            panel.contentView = nil
+            panel.close()
+        }
+        let originalHost = try XCTUnwrap(panel.contentView as? NSHostingView<SideNotchPanelView>)
+        let host = NSHostingView(rootView: originalHost.rootView.defaultAppStorage(defaults))
+        panel.contentView = host
+        controller.show()
+
+        for pinned in [false, true] {
+            defaults.set(pinned, forKey: PrefKey.sideNotchPanelPinned)
+            try await Task.sleep(nanoseconds: 200_000_000)
+            host.layoutSubtreeIfNeeded()
+            let start = NSPoint(x: host.bounds.midX, y: host.bounds.midY)
+            let end = NSPoint(x: start.x + 10, y: start.y + 10)
+            var droppedOrigin: NSPoint?
+            for (kind, point) in [
+                (NSEvent.EventType.leftMouseDown, start),
+                (.leftMouseUp, start),
+                (.leftMouseDown, start),
+                (.leftMouseDragged, end),
+                (.leftMouseUp, end)
+            ] {
+                let event = try XCTUnwrap(NSEvent.mouseEvent(
+                    with: kind, location: point, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: panel.windowNumber, context: nil,
+                    eventNumber: 1, clickCount: 1, pressure: kind == .leftMouseUp ? 0 : 1
+                ))
+                NSApp.postEvent(event, atStart: true)
+                let queued = try XCTUnwrap(NSApp.nextEvent(
+                    matching: NSEvent.EventTypeMask(rawValue: 1 << kind.rawValue),
+                    until: Date(), inMode: .default, dequeue: true
+                ))
+                NSApp.sendEvent(queued)
+                try await Task.sleep(nanoseconds: 20_000_000)
+                XCTAssertEqual(controller.isDragging, kind == .leftMouseDragged,
+                               "event=\(kind), pinned=\(pinned)")
+                if kind == .leftMouseDragged {
+                    droppedOrigin = panel.frame.offsetBy(dx: -20, dy: -20).origin
+                    panel.setFrameOrigin(try XCTUnwrap(droppedOrigin))
+                } else if kind == .leftMouseUp, let droppedOrigin {
+                    XCTAssertEqual(panel.frame.origin, droppedOrigin)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func testSideNotchDragIgnoresResizeUntilLocalMouseUp() async throws {
+        let savedCorner = UserDefaults.standard.object(forKey: PrefKey.sideNotchPanelCorner)
+        defer { UserDefaults.standard.set(savedCorner, forKey: PrefKey.sideNotchPanelCorner) }
+        let suiteName = "MeterUsageTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let preferences = Preferences(defaults: defaults)
+        let archiveURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meterusage-tests-" + UUID().uuidString + ".json")
+        let coordinator = AppCoordinator(
+            preferences: preferences,
+            isDemoMode: true,
+            quotaArchiveURL: archiveURL
+        )
+        let windowsBefore = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let controller = SideNotchPanelController(coordinator: coordinator)
+        let panel = try XCTUnwrap(
+            NSApplication.shared.windows.first { !windowsBefore.contains(ObjectIdentifier($0)) }
+        )
+        defer {
+            panel.contentView = nil
+            panel.close()
+        }
+        let host = try XCTUnwrap(panel.contentView as? NSHostingView<SideNotchPanelView>)
+
+        host.rootView.onStripSizeChange(CGSize(width: 58, height: 180))
+        host.rootView.onSizeChange(CGSize(width: 308, height: 420))
+        let expandedFrame = panel.frame
+        XCTAssertGreaterThan(expandedFrame.width, 0)
+        XCTAssertGreaterThan(expandedFrame.height, 0)
+
+        controller.isDragging = true
+        host.rootView.onStripSizeChange(CGSize(width: 58, height: 120))
+        host.rootView.onSizeChange(CGSize(width: 58, height: 120))
+        XCTAssertEqual(panel.frame, expandedFrame)
+
+        let event = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: NSPoint(x: 5, y: 5),
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: panel.windowNumber,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 0
+        ))
+        NSApplication.shared.sendEvent(event)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        XCTAssertFalse(controller.isDragging)
     }
 
     // MARK: - Helpers
