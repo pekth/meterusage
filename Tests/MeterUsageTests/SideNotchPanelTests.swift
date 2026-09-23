@@ -963,6 +963,61 @@ final class SideNotchPanelTests: XCTestCase {
         XCTAssertFalse(controller.isDragging)
     }
 
+    @MainActor
+    func testRenderedDraggingStripStaysAtItsSideAcrossRetainedHeights() async throws {
+        let suiteName = "MeterUsageTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(true, forKey: PrefKey.sideNotchPanelPinned)
+        let coordinator = try await Self.coordinator(quotas: [(.claude, [("Session", 40, 3600)])])
+        let windowsBefore = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let controller = SideNotchPanelController(coordinator: coordinator)
+        let panel = try XCTUnwrap(
+            NSApplication.shared.windows.first { !windowsBefore.contains(ObjectIdentifier($0)) }
+        )
+        defer {
+            panel.contentView = nil
+            panel.close()
+        }
+        let originalHost = try XCTUnwrap(panel.contentView as? NSHostingView<SideNotchPanelView>)
+        let host = NSHostingView(rootView: originalHost.rootView.defaultAppStorage(defaults))
+        panel.contentView = host
+        controller.show()
+        controller.isDragging = true
+
+        for cardOnRight in [false, true] {
+            controller.cardOnRight = cardOnRight
+            for height in [240, 420] {
+                let bounds = NSRect(x: 0, y: 0, width: 294, height: height)
+                panel.setFrame(bounds, display: true)
+                host.layoutSubtreeIfNeeded()
+                XCTAssertEqual(host.bounds, bounds)
+                guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+                    XCTFail("could not allocate rendered bitmap")
+                    return
+                }
+                host.cacheDisplay(in: host.bounds, to: bitmap)
+                var minX = bitmap.pixelsWide
+                var maxX = -1
+                var minY = bitmap.pixelsHigh
+                for pixelY in 0..<bitmap.pixelsHigh {
+                    for pixelX in 0..<bitmap.pixelsWide {
+                        if let color = bitmap.colorAt(x: pixelX, y: pixelY)?.usingColorSpace(.deviceRGB),
+                           color.alphaComponent > 0.05 {
+                            minX = min(minX, pixelX)
+                            maxX = max(maxX, pixelX)
+                            minY = min(minY, pixelY)
+                        }
+                    }
+                }
+                XCTAssertGreaterThanOrEqual(maxX, minX, "rendered strip was empty")
+                XCTAssertEqual(cardOnRight ? minX : maxX, cardOnRight ? 0 : bitmap.pixelsWide - 1,
+                               "rendered strip was not on the expected edge at height \(height)")
+                XCTAssertEqual(minY, 0, "rendered strip top edge moved")
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     /// Builds a coordinator with stub quota sources and lets one refresh sweep
