@@ -1,12 +1,12 @@
 # Project knowledge
 
-Last verified: 2026-09-17
+Last verified: 2026-09-23
 
 ## Repository state
 
 - Default branch: `main`.
-- Verified source revision: `998d7dd`.
-- The clean checkout was verified before this documentation change. This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
+- Reviewed source revision: `6e8c3a0`.
+- This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
 
@@ -15,7 +15,7 @@ Last verified: 2026-09-17
 - Provider data sources are implemented under `Sources/MeterUsage/Services/`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
 - Antigravity quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
-- `CHANGELOG.md` records version 0.2.34 as the latest repository release entry, with the burn-attribution automation-skip fix dated 2026-09-20. This is repository release-note state, not proof of a published release.
+- `CHANGELOG.md` records version 0.2.35 as the latest repository release entry, with history preservation, side-notch interaction, and Antigravity recovery fixes dated 2026-09-23. This is repository release-note state, not proof of a published release.
 - `CONTRIBUTING.md` requires focused changes, synthetic fixtures, and `swift build`, `swift test`, and `Scripts/make-app.sh` before a code pull request.
 - The side notch panel is anchored by the strip's top-right corner and uses whole-point frames, so switching providers never moves the strip. `docs/SIDE-NOTCH.md` describes the states, geometry invariants, and required evidence. ADR 0004 records the decision.
 - Pace claims are gated on burn recency (`BurnRecency` in `Sources/MeterUsage/Models/UsageModels.swift`): a quota window's shape can hold a pace deficit long after the burst that caused it, so "burning fast" requires the provider to have burned within a 30-minute quiet period. Surfaces consume `QuotaPace.effective(lastBurn:now:)`, which demotes a burn-quiet deficit to on-pace. A headline window at 80%+ without a current burn renders as "near its limit", not "burning fast". Providers without a local session store have no burn evidence: they keep the 80%/95% threshold alerts but never raise pace alerts.
