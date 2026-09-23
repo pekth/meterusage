@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.35] - 2026-09-23
+
+### Fixed
+
+- Unreadable daily history is preserved instead of overwritten. Copy diagnostics
+  reports a sanitized load or save error, and the app suspends history writes
+  until the file is repaired and the app restarts.
+- The side-notch right-click menu stays the same for every provider. Dragging
+  starts from the strip or card again, keeps the strip anchored while the card
+  hides, and saves the final position when released.
+- Antigravity usage recovers when its existing local container runtime stops.
+  Recovery does not create a machine or pull an image, and failures are bounded
+  by a cooldown.
+
 ## [0.2.34] - 2026-09-20
 
 ### Fixed
