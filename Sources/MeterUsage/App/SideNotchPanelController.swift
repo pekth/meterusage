@@ -254,20 +254,7 @@ final class SideNotchPanelController: ObservableObject {
             .sink { [weak self] _ in
                 guard let self, !self.isPlacing, self.hasPlaced else { return }
                 guard NSEvent.pressedMouseButtons != 0 else { return }
-                // Persist the strip's top-right corner, not the window's:
-                // with the card docked right the window outgrows the strip.
-                let stripWidth = self.stripSize.width
-                let corner = CGPoint(
-                    x: self.cardOnRight && stripWidth > 0
-                        ? self.panel.frame.minX + stripWidth
-                        : self.panel.frame.maxX,
-                    y: self.panel.frame.maxY
-                )
-                self.userCorner = corner
-                UserDefaults.standard.set(
-                    SideNotchPanelLayout.cornerString(corner),
-                    forKey: PrefKey.sideNotchPanelCorner
-                )
+                self.saveDraggedCorner()
                 if !self.isDragging { self.isDragging = true }
             }
             .store(in: &cancellables)
@@ -379,11 +366,27 @@ final class SideNotchPanelController: ObservableObject {
     /// Ends a drag on mouse-up: clears the flag (the view drops any stale
     /// hover with it) and settles the window, recomputing the card side from
     /// the dropped position. Cheap no-op for ordinary clicks.
-    private func endDrag() {
+    func endDrag() {
         guard isDragging else { return }
+        saveDraggedCorner()
         isDragging = false
         guard panel.isVisible else { return }
         place(panel: panel, on: panel.screen ?? NSScreen.main)
+    }
+
+    private func saveDraggedCorner() {
+        let stripWidth = stripSize.width
+        let corner = CGPoint(
+            x: cardOnRight && stripWidth > 0
+                ? panel.frame.minX + stripWidth
+                : panel.frame.maxX,
+            y: panel.frame.maxY
+        )
+        userCorner = corner
+        UserDefaults.standard.set(
+            SideNotchPanelLayout.cornerString(corner),
+            forKey: PrefKey.sideNotchPanelCorner
+        )
     }
 
     /// Records a measured size and reports whether a placement is owed.

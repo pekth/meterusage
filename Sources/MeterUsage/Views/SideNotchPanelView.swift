@@ -200,6 +200,18 @@ struct SideNotchPanelView: View {
     }
 
     var body: some View {
+        if #available(macOS 15.0, *) {
+            panelContent.simultaneousGesture(
+                WindowDragGesture()
+                    .onChanged { _ in panel.isDragging = true }
+                    .onEnded { _ in panel.endDrag() }
+            )
+        } else {
+            panelContent
+        }
+    }
+
+    private var panelContent: some View {
         // No transition here by design: the hosting panel resizes itself
         // from this view's measured size, and an animated swap reports
         // mid-flight sizes that strand the window too narrow for the card.

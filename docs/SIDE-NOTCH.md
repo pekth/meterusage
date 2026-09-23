@@ -50,6 +50,10 @@ intermediate sizes back into placement and never settled. Both were reverted in
 - Hover a ring to open its card. Move between rings to read another provider.
 - Drag anywhere on the strip or card to move the panel. The card hides during
   the drag and the side settles on drop.
+  On macOS 15 and later, an explicit native window-drag gesture handles this
+  alongside the context menu and buttons. Older systems keep AppKit's
+  background-window dragging. The final strip corner is saved before the
+  panel settles, including when the final move arrives after mouse release.
 - Right-click for the context menu: keep open, refresh now, or hide panel.
   Codex reset credits are available in the Codex detail card.
 - The share button captures the hovered card at 2x and opens macOS share
@@ -67,6 +71,12 @@ rendered result. For any change to side notch layout or motion, capture the
 panel for at least two providers whose cards differ in height, and confirm the
 top edge renders on the same row and the strip does not move. Report the
 captures in the pull request.
+
+The macOS 15+ event test sends mouse-down, drag, and mouse-up through the real
+hosted panel in folded and pinned states. It checks initiation, release, and
+ordinary clicks without setting the drag state itself. It does not prove
+physical pointer movement by the Window Server. A simulated frame move before
+release also checks that the drop keeps its new position.
 
 Drag from both the strip and an open card. Release once inside the panel and
 once outside it. After each drop, hover a provider to reopen its card and drag
