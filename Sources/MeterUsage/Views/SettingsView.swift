@@ -490,7 +490,11 @@ private struct ProviderRow: View {
                     Button {
                         menuBarIsOn.wrappedValue.toggle()
                     } label: {
-                        Image(systemName: menuBarIsOn.wrappedValue ? "menubar.rectangle.fill" : "menubar.rectangle")
+                        // One glyph for both states: `menubar.rectangle.fill`
+                        // is absent from the system symbol catalog (it
+                        // returns nil and renders as nothing), active state
+                        // is carried by the tint alone.
+                        Image(systemName: "menubar.rectangle")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(
                                 menuBarIsOn.wrappedValue
