@@ -12,6 +12,14 @@ record is [`docs/adr/0004`](adr/0004-side-notch-anchor-invariant.md).
 | Strip | Unfolded | One ring per menu-bar provider, with the used percent and, when the reading warrants it, an ETA chip. |
 | Detail card | Pointer on a ring, or the accessibility "Show details" action | The provider's rate-limit windows, reset times, pacing, telemetry, and reset credits. |
 
+## Tints
+
+Shared with the menu bar by `MenuBarLabel.statusTint`: the ring and percents
+carry quota headroom, while the provider mark keeps its identity colour until a
+service check diverges from healthy — degraded or outage repaints the mark
+(amber/red), an unreadable check greys it, and an operational check recolours
+nothing.
+
 The panel unfolds while pinned, while the pointer is on it, or while a reset
 action is active. A pointer exit schedules a fold after 450ms so a brief exit
 does not collapse the card.

@@ -11,7 +11,9 @@ import AppKit
 /// * **Mark** — the provider's own glyph. Codex uses the real logo asset
 ///   (bundled, tintable as a template image); other providers use a close SF
 ///   Symbol stand-in. The mark carries that provider's *service status* signal:
-///   amber on a degraded service, red on any outage, independent of its quota.
+///   it keeps the provider's identity colour while the service is healthy, and
+///   only a check that diverges from healthy recolours it — amber on a degraded
+///   service, red on any outage, grey when the check is unreadable.
 /// * **Percent** — that provider's tightest window, tinted by quota headroom
 ///   (green → amber → red).
 ///
@@ -131,11 +133,12 @@ struct MenuBarLabel: View {
             let status = coordinator.statuses[provider]?.value
             let markTint: Color
             if let status {
-                markTint = Self.statusTint(status.severity)
-            } else if let window {
-                markTint = headroomColor(window.usedPercent)
+                markTint = Self.statusTint(status.severity, for: provider)
             } else {
-                markTint = MU.neutral
+                // No status source for this provider (or the check has not
+                // come back yet): the mark keeps its identity colour. Headroom
+                // stays on the number, never on the mark.
+                markTint = providerColor(provider)
             }
 
             if let window {
@@ -186,12 +189,16 @@ struct MenuBarLabel: View {
         clusters.map(\.usedFraction).max() ?? 0
     }
 
-    /// Mirrors the popover's `severityColor` mapping, except that a partial
-    /// outage reads as an alert (red) rather than a warning, matching the old
-    /// tray behaviour where any partial outage escalated the whole label.
-    static func statusTint(_ severity: Severity) -> Color {
+    /// The mark's service-status tint. Healthy stays the provider's identity
+    /// colour (an operational check recolours nothing), degraded and outages
+    /// recolour it (a partial outage reads as a full alert in the tray, matching
+    /// the old behaviour), and an unreadable check goes neutral grey.
+    ///
+    /// Provider-specific logic lives in `SharedComponents` so the side notch
+    /// and any future surface tint their marks with the same rule.
+    static func statusTint(_ severity: Severity, for provider: Provider) -> Color {
         switch severity {
-        case .operational:   return MU.calm
+        case .operational:   return providerColor(provider)
         case .degraded:      return MU.warn
         case .partialOutage, .majorOutage: return MU.alert
         case .unknown:       return MU.neutral
