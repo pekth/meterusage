@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Codex service status reads the real outage vocabulary again. status.openai.com
+  runs on incident.io, whose compatible feed reports `full_outage` where
+  Statuspage pages report `major_outage`, so an active outage rendered as
+  "Unknown"; it now reports the outage.
+
 ## [0.2.36] - 2026-09-25
 
 ### Fixed
