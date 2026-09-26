@@ -705,10 +705,10 @@ private struct StatusStrip: View {
                                 Divider().overlay(MU.hairline)
                             }
                             HStack(spacing: 8) {
-                                // The provider's mark, tinted by service
-                                // severity so identity and health share one
-                                // glyph instead of a plain colour dot.
-                                ProviderMark(provider: row.provider, tint: severityColor(row.severity))
+                                // Identity and health share one glyph; the
+                                // tint only moves off identity when the
+                                // check diverges from healthy.
+                                ProviderMark(provider: row.provider, tint: MenuBarLabel.statusTint(row.severity, for: row.provider))
                                     .frame(width: 13, height: 13)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(row.provider.displayName)

@@ -11,6 +11,11 @@ import Foundation
 // worst possible failure mode for a health indicator. The documented
 // `components.json` contract is stable, and anything we cannot parse degrades to
 // `.unknown` (visibly not-a-claim) rather than to a false all-clear.
+//
+// VOCABULARY: status.openai.com runs on incident.io, which serves a Statuspage-
+// compatible `components.json` but uses `full_outage` where Atlassian pages use
+// `major_outage`. An unmapped status degrades to `.unknown`, which once read a
+// live `full_outage` as "Codex Web: unknown" instead of an outage.
 
 /// Fetches provider component health from a public Statuspage API.
 ///
@@ -111,28 +116,37 @@ public struct StatusPageSource: StatusSource {
     // MARK: Mapping
 
     private func summarise(_ components: [Component]) -> ServiceStatus {
+        Self.summarise(components, for: provider, matching: interestingComponents)
+    }
+
+    /// Pure so tests can feed captured fixtures without a network stub.
+    static func summarise(
+        _ components: [Component],
+        for provider: Provider,
+        matching fragments: [String]
+    ) -> ServiceStatus {
         let relevant = components.filter { component in
             guard component.group != true else { return false }  // groups duplicate their children
             let name = component.name.lowercased()
-            return interestingComponents.contains { name.contains($0) }
+            return fragments.contains { name.contains($0) }
         }
 
         // Fall back to every component rather than reporting `.unknown`: an
         // unrecognised naming scheme still gives a usable overall picture.
         let pool = relevant.isEmpty ? components.filter { $0.group != true } : relevant
         guard !pool.isEmpty else {
-            return Self.unknown(provider: provider, reason: "Status unavailable")
+            return unknown(provider: provider, reason: "Status unavailable")
         }
 
-        let severities = pool.map { Self.severity(for: $0.status) }
+        let severities = pool.map { severity(for: $0.status) }
         // `Severity` sorts `.unknown` highest, which would let one unparsed
         // component mask a real outage. Rank by real-world badness instead.
-        let worst = severities.max(by: { Self.rank($0) < Self.rank($1) }) ?? .unknown
+        let worst = severities.max(by: { rank($0) < rank($1) }) ?? .unknown
 
         let description: String
         if worst == .operational {
             description = "All systems operational"
-        } else if let culprit = zip(pool, severities).first(where: { Self.rank($0.1) == Self.rank(worst) })?.0 {
+        } else if let culprit = zip(pool, severities).first(where: { rank($0.1) == rank(worst) })?.0 {
             description = "\(culprit.name): \(worst.displayName.lowercased())"
         } else {
             description = worst.displayName
@@ -146,13 +160,15 @@ public struct StatusPageSource: StatusSource {
         )
     }
 
-    /// Statuspage's documented component status vocabulary.
+    /// Statuspage's documented component status vocabulary, plus incident.io's
+    /// `full_outage` (status.openai.com runs on incident.io, whose compatible
+    /// endpoint uses `full_outage` where Statuspage uses `major_outage`).
     static func severity(for raw: String) -> Severity {
         switch raw.lowercased() {
         case "operational":          return .operational
         case "degraded_performance": return .degraded
         case "partial_outage":       return .partialOutage
-        case "major_outage":         return .majorOutage
+        case "major_outage", "full_outage": return .majorOutage
         case "under_maintenance":    return .degraded
         default:                     return .unknown
         }
@@ -179,11 +195,11 @@ public struct StatusPageSource: StatusSource {
     // Only the three fields we use are decoded. Statuspage adds fields freely;
     // decoding the whole document would turn an additive change into a failure.
 
-    private struct ComponentsPayload: Decodable {
+    struct ComponentsPayload: Decodable {
         let components: [Component]
     }
 
-    private struct Component: Decodable {
+    struct Component: Decodable {
         let name: String
         let status: String
         let group: Bool?

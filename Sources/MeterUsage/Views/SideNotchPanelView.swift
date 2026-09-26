@@ -137,8 +137,9 @@ private struct ShareButton: NSViewRepresentable {
 //
 // Data comes straight from the coordinator, exactly like the menu-bar label:
 // each provider's declared headline window drives its ring, tinted by quota
-// headroom, and the mark is tinted by service status. A provider with no
-// headline reading is skipped rather than drawn as an empty ring.
+// headroom, and the mark keeps its identity colour unless the service status
+// recolours it. A provider with no headline reading is skipped rather than
+// drawn as an empty ring.
 //
 // Interaction: the panel folds to a slim pill and unfolds on hover;
 // "Keep open" pins it unfolded across relaunches. Hover only — rings and
@@ -1353,9 +1354,12 @@ struct SideNotchPanelView: View {
             else { return nil }
             let markTint: Color
             if let status = statuses[provider]?.value {
-                markTint = MenuBarLabel.statusTint(status.severity)
+                markTint = MenuBarLabel.statusTint(status.severity, for: provider)
             } else {
-                markTint = Notch.color(usedPercent: window.usedPercent)
+                // Headroom tints rings and percents only; the mark keeps the
+                // provider's identity colour until a status check says
+                // otherwise.
+                markTint = providerColor(provider)
             }
             // Effective pace: a deficit without a current burn is demoted to
             // on-pace, so the strip never reports "burning fast" from a
