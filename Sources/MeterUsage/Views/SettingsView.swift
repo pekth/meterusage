@@ -147,7 +147,27 @@ struct SettingsView: View {
             }
 
             Group {
-                SectionHeader("Second accounts")
+                SectionHeader(title: "Second accounts") {
+                    // One compact affordance; the menu names the tool, so the
+                    // button never truncates at card width.
+                    Menu {
+                        ForEach(Provider.supportsAdditionalAccounts, id: \.self) { provider in
+                            Button("Add \(provider.displayName) account") {
+                                let count = managedAccounts.filter { $0.provider == provider }.count
+                                preferences.add(account: ManagedAccount(
+                                    provider: provider,
+                                    label: "Account \(count + 2)",
+                                    path: ""
+                                ))
+                            }
+                        }
+                    } label: {
+                        Label("Add account", systemImage: "plus")
+                    }
+                    .controlSize(.small)
+                    .fixedSize()
+                    .accessibilityLabel("Add second account")
+                }
                 Card(padding: 10) {
                     // Additional accounts of one tool, each its own meter row
                     // everywhere in the app: its own quota windows, plan,
@@ -158,41 +178,27 @@ struct SettingsView: View {
                     // never opens credential files. No account identifier is
                     // read or displayed anywhere.
                     if managedAccounts.isEmpty {
-                        Text("Two logins with the same tool? Add each one here and it gets its own meter.")
+                        Text("More than one login for Codex or Claude? Add it here and it gets its own meter.")
                             .font(.muBody)
                             .foregroundColor(MU.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        ForEach(managedAccounts) { account in
-                            ManagedAccountRow(
-                                account: accountBinding(for: account),
-                                supported: Provider.supportsAdditionalAccounts.contains(account.provider),
-                                onDelete: { preferences.remove(accountID: account.id) }
-                            )
-                            .padding(.vertical, 2)
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        ForEach(Provider.supportsAdditionalAccounts, id: \.self) { provider in
-                            Button {
-                                let count = managedAccounts.filter { $0.provider == provider }.count
-                                preferences.add(account: ManagedAccount(
-                                    provider: provider,
-                                    label: "Account \\(count + 2)",
-                                    path: ""
-                                ))
-                            } label: {
-                                Label("Add \\(provider.displayName) account", systemImage: "plus")
+                        VStack(spacing: 2) {
+                            ForEach(managedAccounts) { account in
+                                ManagedAccountRow(
+                                    account: accountBinding(for: account),
+                                    supported: Provider.supportsAdditionalAccounts.contains(account.provider),
+                                    onDelete: { preferences.remove(accountID: account.id) }
+                                )
+                                .padding(.vertical, 2)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
                             }
-                            .controlSize(.small)
                         }
-                        Spacer(minLength: 0)
+                        .animation(.easeOut(duration: 0.15), value: managedAccounts.map(\.id))
                     }
-                    .padding(.top, 2)
 
                     Divider().overlay(MU.hairline)
-                    Text("Point each row at that account's own config directory, sign the CLI in there, and relaunch MeterUsage. Removing a row stops metering that account; nothing in the directory is deleted.")
+                    Text("Point each row at that account's config directory, sign the CLI in there, and relaunch. Removing a row stops metering it — nothing is deleted.")
                         .font(.muCaption)
                         .foregroundColor(MU.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -619,14 +625,18 @@ private struct ManagedAccountRow: View {
             ProviderMark(provider: account.provider, tint: providerColor(account.provider))
                 .frame(width: 13, height: 13)
                 .opacity(supported ? 1.0 : 0.4)
+            // The name is short and bounded; the directory is the string
+            // that matters, so it takes the remaining width.
             TextField("Name", text: $account.label, prompt: Text("Name"))
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.small)
-                .frame(width: 74)
+                .frame(width: 64)
+                .lineLimit(1)
                 .disabled(!supported)
             TextField("Directory", text: $account.path, prompt: Text(account.provider == .codex ? "~/.codex-alt" : "~/.claude-alt"))
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.small)
+                .lineLimit(1)
                 .disabled(!supported)
                 .help("That account's own CLI config directory. Readings appear after relaunch.")
             Toggle("Enabled", isOn: $account.enabled)
@@ -641,6 +651,7 @@ private struct ManagedAccountRow: View {
             }
             .buttonStyle(.plain)
             .help("Remove this second account")
+            .accessibilityLabel("Remove \(account.label.isEmpty ? account.provider.displayName : account.label) second account")
         }
         .accessibilityElement(children: .contain)
     }
