@@ -5,7 +5,7 @@ Last verified: 2026-09-27
 ## Repository state
 
 - Default branch: `main`.
-- Reviewed source revision: `68d2e9b`, plus the Anthropic API changes documented here.
+- Reviewed source revision: `0f160a9`, plus the session-only connection and OpenAI side-notch changes documented here.
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
@@ -27,8 +27,10 @@ Last verified: 2026-09-27
 - Provider mark tint is identity unless the service check diverges from healthy (`MenuBarLabel.statusTint(_:for:)`): operational keeps `providerColor`, degraded/outage repaint amber/red, unreadable goes neutral grey. Quota headroom tint stays on rings and percents only; the side notch, menu bar, and status rows share this rule per ADR 0002's mark semantics.
 - Second accounts (multi-account support, ADR 0005): `.codexAlt` / `.claudeAlt` provider slots are keyed by an alternate config directory resolved in `AccountSlots` (`Sources/MeterUsage/Services/DataSource.swift`) from `METERUSAGE_CODEX_ALT_HOME` / `METERUSAGE_CLAUDE_ALT_CONFIG` or the `meterusage.codexAltHome` / `meterusage.claudeAltConfig` defaults keys, which are editable in Settings → Providers. A slot exists only when its directory exists; slots never merge with the primary account, keep per-slot durable history and archive keys, and are named by position only (no account identity is read). The JSON report lists them under `codexAlt` / `claudeAlt`.
 
-- OpenAI API monitoring is opt-in and separate from Codex. `OpenAIUsageSource` reads organization completion usage and USD costs for today and the last 30 UTC calendar days using `OPENAI_ADMIN_KEY`. The popover shows reported spend and completion tokens/requests. It does not supply quota rings, the quota JSON CLI, or local coding/burn totals. See [ADR 0007](adr/0007-openai-api-usage.md) and the README setup instructions.
+- OpenAI API monitoring is opt-in and separate from Codex. `OpenAIUsageSource` reads organization completion usage and USD costs for today and the last 30 UTC calendar days using an explicitly supplied Admin key. The popover and side-notch card show reported spend and completion tokens/requests. The notch strip shows 30-day spend, or N/A when unavailable; its Settings Notch control persists across launches. It does not supply quota rings, menu-bar clusters, the quota JSON CLI, or local coding/burn totals. See [ADR 0007](adr/0007-openai-api-usage.md), [ADR 0010](adr/0010-openai-side-notch.md), and the README setup instructions.
 - Anthropic API monitoring is opt-in and separate from Claude Code. `AnthropicUsageSource` reads organization Messages API tokens and reported spend using `ANTHROPIC_ADMIN_KEY`, for the same UTC day windows. It converts decimal cents to USD, includes all reported cache-token categories, and omits request counts because the endpoint does not supply them. Reported costs exclude Priority Tier charges. Organization usage does not supply quota rings or contribute to local coding/burn totals. See [ADR 0008](adr/0008-anthropic-api-usage.md) and the README setup instructions.
+- Both API providers have Connect and Test connection controls in Settings. Masked key entry stays in `APIKeySession` memory until disconnect or quit; no credential is saved to preferences, files, or Keychain. Disconnect clears the displayed reading and rejects in-flight results from that credential. Explicit launcher environment keys remain supported. See [ADR 0009](adr/0009-session-only-api-connections.md).
+- Anthropic's Admin API excludes individual accounts. Those users can view usage in Claude Console, but MeterUsage cannot sync their history through the reporting API. An organization Admin role alone does not establish an eligible account type. See the README's Anthropic setup section and its official documentation link.
 
 ## Verification gaps
 

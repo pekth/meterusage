@@ -9,8 +9,16 @@ record is [`docs/adr/0004`](adr/0004-side-notch-anchor-invariant.md).
 | State | Trigger | What shows |
 | --- | --- | --- |
 | Folded pill | Resting, no pointer | A capsule of up to five tinted dots, one per provider ring. |
-| Strip | Unfolded | One ring per menu-bar provider, with the used percent and, when the reading warrants it, an ETA chip. |
-| Detail card | Pointer on a ring, or the accessibility "Show details" action | The provider's rate-limit windows, reset times, pacing, telemetry, and reset credits. |
+| Strip | Unfolded | Selected quota providers show used percent and, when warranted, an ETA chip. OpenAI API shows reported 30-day spend beneath its mark, without a progress arc. |
+| Detail card | Pointer on a provider, or the accessibility "Show details" action | Quota providers show rate-limit windows, reset times, pacing, telemetry, and reset credits. OpenAI API shows reported spend, completion tokens and requests for today and the last 30 UTC calendar days. |
+
+Enable OpenAI API in Settings, then use its Notch control to select it for the
+strip. An unavailable reading shows N/A and the same connection guidance as
+the popover. A measured zero shows $0.00. Costs do not establish a quota,
+balance, reset, or pace. The shared usage details retain their capture time
+and reporting-delay notice. See [ADR 0010](adr/0010-openai-side-notch.md).
+Quota percentages keep the same text size when cards change. Spend labels
+may shrink to fit the narrow strip.
 
 ## Tints
 
@@ -105,3 +113,14 @@ measured frame over a plausible cause.
 - `Sources/MeterUsage/App/SideNotchPanelController.swift`
 - `Sources/MeterUsage/Views/SideNotchPanelView.swift`
 - `Tests/MeterUsageTests/SideNotchPanelTests.swift`
+
+### OpenAI API card fixtures
+
+The native rendering test `testRenderedOpenAIAndQuotaDetailCards` captures
+synthetic OpenAI and Codex detail cards at different heights. These captures
+verify card content and layout. They do not prove physical hover, full-panel
+motion, or live account access. The strip anchor and drag checks remain in
+`SideNotchPanelTests`.
+
+![OpenAI API synthetic detail card](images/side-notch-openai-fixture.png)
+![Codex synthetic detail card](images/side-notch-codex-fixture.png)

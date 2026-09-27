@@ -38,6 +38,8 @@ final class AppCoordinator: ObservableObject {
     @Published private(set) var quotas: [ProviderSlot: Loaded<ProviderQuota>] = [:]
     @Published private(set) var activities: [ProviderSlot: Loaded<LocalActivity>] = [:]
     @Published private(set) var usages: [ProviderSlot: Loaded<ProviderUsage>] = [:]
+    @Published private(set) var testingAPIProviders: Set<Provider> = []
+    private let apiKeys: APIKeySession
     @Published private(set) var statuses: [Provider: Loaded<ServiceStatus>] = [:]
     /// Subscription tier per provider. Kept in its own map rather than folded
     /// into `quotas` because a plan is read from a different place than the
@@ -162,7 +164,8 @@ final class AppCoordinator: ObservableObject {
         planSources: [PlanSource] = [],
         activitySourceFactory: (() -> [LocalActivitySource])? = nil,
         quotaArchiveURL: URL? = nil,
-        accountHome: ((ManagedAccount) -> URL?)? = nil
+        accountHome: ((ManagedAccount) -> URL?)? = nil,
+        apiKeys: APIKeySession = APIKeySession()
     ) {
         self.preferences = preferences
         self.isDemoMode = isDemoMode
@@ -186,6 +189,7 @@ final class AppCoordinator: ObservableObject {
         self.activitySources = activitySources
         self.activitySourceFactory = activitySourceFactory
         self.usageSources = usageSources
+        self.apiKeys = apiKeys
         self.statusSources = statusSources
         self.planSources = planSources
         let archiveURL = quotaArchiveURL ?? QuotaArchive.defaultURL
@@ -309,6 +313,32 @@ final class AppCoordinator: ObservableObject {
     }
 
     // MARK: Refresh
+
+    func hasAPIKey(for provider: Provider) -> Bool {
+        apiKeys.key(for: provider) != nil
+    }
+
+    /// Test both reporting endpoints using the same source as scheduled refreshes.
+    func connectAPI(_ provider: Provider, key: String) async {
+        guard provider.isOrganizationAPI, !isDemoMode,
+              !testingAPIProviders.contains(provider),
+              let source = usageSources.first(where: { $0.provider == provider }) else { return }
+        apiKeys.set(key, for: provider)
+        let revision = apiKeys.revision(for: provider)
+        usages[.primary(provider)] = .idle
+        testingAPIProviders.insert(provider)
+        await load(usage: source)
+        guard apiKeys.revision(for: provider) == revision else { return }
+        testingAPIProviders.remove(provider)
+        clock = Date()
+    }
+
+    func disconnectAPI(_ provider: Provider) {
+        guard provider.isOrganizationAPI else { return }
+        apiKeys.set(nil, for: provider)
+        testingAPIProviders.remove(provider)
+        usages[.primary(provider)] = .missing(.dataNotFound("API connection"))
+    }
 
     /// Kicks off a refresh, coalescing with one already in flight.
     ///
@@ -610,12 +640,15 @@ final class AppCoordinator: ObservableObject {
     }
 
     private func load(usage source: UsageSource) async {
+        let revision = apiKeys.revision(for: source.provider)
         let result: Loaded<ProviderUsage>
         do {
             result = .value(try await source.fetchUsage())
         } catch {
             result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
+        // A disconnected or replaced key must not publish a late account reading.
+        guard apiKeys.revision(for: source.provider) == revision else { return }
         usages[source.slot] = result
         record(kind: "usage", slot: source.slot, result: result.unavailable)
     }
@@ -751,17 +784,17 @@ final class AppCoordinator: ObservableObject {
     }
 
     /// Enabled slots the user also chose to show in the menu bar, in the
-    /// stable display order. OpenRouter is pay-as-you-go (no quota), so it is
-    /// always excluded from the tray regardless of the stored preference.
+    /// stable display order. OpenRouter and OpenAI API stay out of the tray.
     var menuBarSlots: [ProviderSlot] {
-        visibleSlots.filter { preferences.showsInMenuBar($0.provider) && $0.provider != .openRouter }
+        visibleSlots.filter {
+            preferences.showsInMenuBar($0.provider) && $0.provider != .openRouter && $0.provider != .openAI
+        }
     }
 
     /// Enabled slots the user also chose to show in the side notch panel,
     /// in the stable display order. The tray and the notch are independent
-    /// surfaces (see `menuBarSlots`): the tray keeps OpenRouter out, while
-    /// the notch honors its toggle — a configured key limit yields a real
-    /// quota window for the ring to render.
+    /// surfaces (see `menuBarSlots`). OpenAI API shows reported spend without
+    /// a quota ring; OpenRouter can show a key limit or account balance.
     var sideNotchSlots: [ProviderSlot] {
         visibleSlots.filter { preferences.showsInMenuBar($0.provider) }
     }

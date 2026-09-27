@@ -29,18 +29,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let preferences = Preferences()
+        let apiKeys = APIKeySession()
         let quotaSources = Composition.quotaSources()
         let coordinator = AppCoordinator(
             preferences: preferences,
             isDemoMode: Composition.isDemoMode,
             quotaSources: quotaSources,
             activitySources: Composition.activitySources(),
-            usageSources: Composition.usageSources(),
+            usageSources: Composition.usageSources(apiKeys: apiKeys),
             statusSources: Composition.statusSources(),
             planSources: Composition.planSources(),
             // Same factory, so "clear cache" can rebuild the activity sources
             // and get a genuinely cold scan rather than a re-warmed one.
-            activitySourceFactory: Composition.activitySources
+            activitySourceFactory: Composition.activitySources,
+            apiKeys: apiKeys
         )
         self.preferences = preferences
         self.coordinator = coordinator
@@ -380,7 +382,7 @@ enum Composition {
             .appendingPathComponent("MeterUsage", isDirectory: true)
     }
 
-    static func usageSources() -> [UsageSource] {
+    static func usageSources(apiKeys: APIKeySession = APIKeySession()) -> [UsageSource] {
         if isDemoMode {
             return [
                 DemoAntigravityUsageSource(),
@@ -396,8 +398,8 @@ enum Composition {
             OpenCodeGoUsageSource(),
             GrokUsageSource(),
             OpenRouterUsageSource(),
-            OpenAIUsageSource(),
-            AnthropicUsageSource()
+            OpenAIUsageSource(adminKey: { apiKeys.key(for: .openAI) }),
+            AnthropicUsageSource(adminKey: { apiKeys.key(for: .anthropic) })
         ]
     }
 

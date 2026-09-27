@@ -410,6 +410,15 @@ struct SideNotchPanelView: View {
 
     // MARK: - Strip
 
+    static func stripReading(for entry: Entry) -> some View {
+        Text(entry.primaryText)
+            .font(.system(size: 9, weight: .semibold).monospacedDigit())
+            .foregroundColor(Notch.text)
+            .lineLimit(1)
+            .minimumScaleFactor(entry.usedPercent == nil ? 0.6 : 1)
+            .frame(maxWidth: SideNotchPanelLayout.stripWidth - 12)
+    }
+
     private var strip: some View {
         VStack(spacing: 3) {
             if entries.isEmpty {
@@ -427,9 +436,7 @@ struct SideNotchPanelView: View {
                             markTint: entry.markTint,
                             reduceMotion: reduceMotion
                         )
-                        Text(Fmt.percent(entry.usedPercent))
-                            .font(.system(size: 9, weight: .semibold).monospacedDigit())
-                            .foregroundColor(Notch.text)
+                        Self.stripReading(for: entry)
                         if let eta = entry.etaText {
                             Text(eta)
                                 .font(.system(size: 7.5, weight: .bold).monospacedDigit())
@@ -446,7 +453,8 @@ struct SideNotchPanelView: View {
                     // explicit activation wins, and a later mouse enter still
                     // re-asserts, so the two inputs never fight.
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel(accessibilityRingText(for: entry))
+                    .accessibilityLabel(entry.accessibilityText)
+                    .help(entry.accessibilityText)
                     .accessibilityAction(named: "Show details") {
                         cancelFold()
                         isHoveringPanel = true
@@ -510,7 +518,7 @@ struct SideNotchPanelView: View {
 
     // MARK: - Detail card for hovered provider
 
-    private func detailCard(for slot: ProviderSlot) -> some View {
+    func detailCard(for slot: ProviderSlot) -> some View {
         // The card follows the ring: live reading when present, otherwise
         // the archived last-good reading, dated as such.
         let display = coordinator.displayQuota(for: slot)
@@ -550,6 +558,12 @@ struct SideNotchPanelView: View {
             if let status = coordinator.status(for: slot.provider)?.value,
                status.severity != .operational {
                 StatusBadge(severity: status.severity)
+            }
+
+            if slot.provider == .openAI {
+                ProviderUsageRow(provider: .openAI, state: coordinator.usages[slot] ?? .idle, now: coordinator.clock)
+                    .detail
+                    .environment(\.colorScheme, .dark)
             }
 
             // Ambient Time-To-Empty banner. It reports the window's own pace:
@@ -628,7 +642,7 @@ struct SideNotchPanelView: View {
             // Activity Telemetry 2-column grid
             if showActivityTelemetry, let tel = telemetry(for: slot) {
                 telemetryView(tel: tel)
-            } else if let tokenUsage = tokenUsage(for: slot),
+            } else if slot.provider != .openAI, let tokenUsage = tokenUsage(for: slot),
                (tokenUsage.todayText != nil || tokenUsage.last30DaysText != nil) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Token usage")
@@ -745,7 +759,7 @@ struct SideNotchPanelView: View {
                 Text("Last reading \(Fmt.timeSince(quota.capturedAt, now: coordinator.clock))")
                     .font(.system(size: 10, weight: .regular))
                     .foregroundColor(Notch.subtext)
-            } else if let last = coordinator.lastRefreshedAt {
+            } else if slot.provider != .openAI, let last = coordinator.lastRefreshedAt {
                 Text("Updated \(Fmt.timeSince(last, now: coordinator.clock))")
                     .font(.system(size: 10, weight: .regular))
                     .foregroundColor(Notch.subtext)
@@ -1299,8 +1313,9 @@ struct SideNotchPanelView: View {
         /// The slot digit shown for additional accounts ("2", "3", …); nil
         /// for primary slots.
         let digit: String?
-        let usedPercent: Double
-        let fraction: Double
+        let usedPercent: Double?
+        let fraction: Double?
+        let spendUSD: Double?
         let ringTint: Color
         let markTint: Color
         let resetsAt: Date?
@@ -1312,22 +1327,39 @@ struct SideNotchPanelView: View {
 
         var id: String { slot.key }
 
+        var primaryText: String {
+            if let usedPercent { return Fmt.percent(usedPercent) }
+            return spendUSD.map(Fmt.usd) ?? "N/A"
+        }
+
+        var accessibilityText: String {
+            if let usedPercent {
+                return "\(slot.displayName) \(Fmt.percent(usedPercent)) used\(isStale ? ", last known reading" : "")"
+            }
+            if let spendUSD {
+                return "\(slot.displayName), last 30 days (UTC), reported spend \(Fmt.usd(spendUSD))"
+            }
+            return "\(slot.displayName), usage unavailable"
+        }
+
         init(
             slot: ProviderSlot,
             digit: String? = nil,
-            usedPercent: Double,
-            fraction: Double,
+            usedPercent: Double?,
+            fraction: Double?,
             ringTint: Color,
             markTint: Color,
             resetsAt: Date?,
             isStale: Bool,
             etaText: String? = nil,
-            isDeficit: Bool = false
+            isDeficit: Bool = false,
+            spendUSD: Double? = nil
         ) {
             self.slot = slot
             self.digit = digit
             self.usedPercent = usedPercent
             self.fraction = fraction
+            self.spendUSD = spendUSD
             self.ringTint = ringTint
             self.markTint = markTint
             self.resetsAt = resetsAt
@@ -1350,6 +1382,7 @@ struct SideNotchPanelView: View {
         menuBarSlots: [ProviderSlot],
         quotas: [ProviderSlot: Loaded<ProviderQuota>],
         statuses: [Provider: Loaded<ServiceStatus>],
+        usages: [ProviderSlot: Loaded<ProviderUsage>] = [:],
         archivedQuotas: [ProviderSlot: ProviderQuota] = [:],
         now: Date = Date()
     ) -> [Entry] {
@@ -1357,6 +1390,14 @@ struct SideNotchPanelView: View {
         // display order, so their rings stay tellable from the primary's.
         var familyCounts: [Provider: Int] = [:]
         return menuBarSlots.compactMap { slot in
+            if slot.provider == .openAI {
+                return Entry(
+                    slot: slot, usedPercent: nil, fraction: nil,
+                    ringTint: providerColor(.openAI), markTint: providerColor(.openAI),
+                    resetsAt: nil, isStale: false,
+                    spendUSD: usages[slot]?.value?.estimatedCostUSD
+                )
+            }
             let live = quotas[slot]?.value
             let quota = live ?? archivedQuotas[slot]
             let windows = effectiveWindows(for: slot.provider, quota: quota)
@@ -1404,6 +1445,7 @@ struct SideNotchPanelView: View {
             menuBarSlots: coordinator.sideNotchSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses,
+            usages: coordinator.usages,
             archivedQuotas: coordinator.archivedQuotas,
             now: coordinator.clock
         )
@@ -1458,16 +1500,9 @@ struct SideNotchPanelView: View {
         return .remaining(percent: max(100 - window.usedPercent, 0))
     }
 
-    private func accessibilityRingText(for entry: Entry) -> String {
-        "\(entry.slot.displayName) \(Fmt.percent(entry.usedPercent)) used\(entry.isStale ? ", last known reading" : "")"
-    }
-
     private var accessibilityText: String {
         if entries.isEmpty { return "Usage unavailable" }
-        return entries.map {
-            "\($0.slot.displayName) \(Fmt.percent($0.usedPercent)) used\($0.isStale ? ", last known" : "")"
-        }
-        .joined(separator: ", ")
+        return entries.map(\.accessibilityText).joined(separator: ", ")
     }
 }
 
@@ -1532,7 +1567,7 @@ private struct HoverSensor: NSViewRepresentable {
 // MARK: - Ring
 
 private struct QuotaRing: View {
-    let fraction: Double
+    let fraction: Double?
     let tint: Color
     let slot: ProviderSlot
     /// The slot digit for an additional account, drawn as a tiny chip so two
@@ -1548,15 +1583,17 @@ private struct QuotaRing: View {
                 .fill(Notch.disc)
             Circle()
                 .stroke(Notch.track, lineWidth: 2.5)
-            Circle()
-                .trim(from: 0, to: fraction.muClamped(to: 0...1))
-                .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+            if let fraction {
+                Circle()
+                    .trim(from: 0, to: fraction.muClamped(to: 0...1))
+                    .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
             ProviderMark(provider: slot.provider, tint: markTint)
                 .frame(width: 9, height: 9)
                 // A hit limit dims the glyph: the full orange ring already
                 // carries the state, and the mark steps back.
-                .opacity(fraction >= 1 ? 0.5 : 1.0)
+                .opacity((fraction ?? 0) >= 1 ? 0.5 : 1.0)
             if let digit {
                 Text(digit)
                     .font(.system(size: 6.5, weight: .bold))

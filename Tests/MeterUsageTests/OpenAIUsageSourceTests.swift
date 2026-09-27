@@ -188,7 +188,9 @@ final class OpenAIUsageSourceTests: XCTestCase {
         let name = "MeterUsageTests-" + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
-        XCTAssertFalse(Preferences(defaults: defaults).isEnabled(.openAI))
+        let initial = AppCoordinator(preferences: Preferences(defaults: defaults))
+        XCTAssertFalse(initial.preferences.isEnabled(.openAI))
+        XCTAssertFalse(initial.sideNotchSlots.contains(.primary(.openAI)))
         defaults.set(true, forKey: PrefKey.showOpenAI)
         defaults.set(false, forKey: PrefKey.showCodex)
         let preferences = Preferences(defaults: defaults)
@@ -197,7 +199,11 @@ final class OpenAIUsageSourceTests: XCTestCase {
         XCTAssertFalse(preferences.isEnabled(.codex))
         XCTAssertFalse(coordinator.visibleQuotaSlots.contains(.primary(.openAI)))
         XCTAssertFalse(coordinator.menuBarSlots.contains(.primary(.openAI)))
-        XCTAssertFalse(coordinator.sideNotchSlots.contains(.primary(.openAI)))
+        XCTAssertTrue(coordinator.sideNotchSlots.contains(.primary(.openAI)))
+        defaults.set(false, forKey: PrefKey.menuBarOpenAI)
+        let relaunched = AppCoordinator(preferences: Preferences(defaults: defaults))
+        XCTAssertTrue(relaunched.preferences.isEnabled(.openAI))
+        XCTAssertFalse(relaunched.sideNotchSlots.contains(.primary(.openAI)))
         XCTAssertTrue(Composition.usageSources().contains { $0.provider == .openAI })
     }
 
