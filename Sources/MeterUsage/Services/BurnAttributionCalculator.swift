@@ -21,7 +21,8 @@ public enum BurnAttributionCalculator {
             }
         }
         for (slot, state) in usages.sorted(by: { $0.key < $1.key }) {
-            guard let usage = state.value else { continue }
+            // Organization totals are not this machine's coding sessions.
+            guard let usage = state.value, usage.provider != .openAI else { continue }
             if let breakdown = usage.projectBreakdown, !breakdown.isEmpty {
                 for split in breakdown {
                     result.append(

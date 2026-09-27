@@ -281,7 +281,7 @@ struct ProviderMark: View {
     var body: some View {
         Group {
             switch provider {
-            case .codex, .grok, .openCodeGo, .antigravity:
+            case .codex, .openAI, .grok, .openCodeGo, .antigravity:
                 bundledMark(named: Self.resourceName(for: provider))
             case .claude:
                 ClaudeMascotShape()
@@ -323,7 +323,7 @@ struct ProviderMark: View {
     /// asset; `nil` would mean "no logo" but callers guard by provider first.
     private static func resourceName(for provider: Provider) -> String {
         switch provider {
-        case .codex:      return "codex-logo"
+        case .codex, .openAI: return "codex-logo"
         case .grok:       return "grok-logo"
         case .openCodeGo: return "opencode-logo"
         case .antigravity:return "antigravity-logo"
@@ -333,7 +333,7 @@ struct ProviderMark: View {
 
     static func symbol(for provider: Provider) -> String {
         switch provider {
-        case .codex:      return "sparkle"
+        case .codex, .openAI: return "sparkle"
         case .antigravity:return "sparkles"
         case .grok:       return "eye"
         // A real SF Symbol name: an invalid name renders as nothing, which

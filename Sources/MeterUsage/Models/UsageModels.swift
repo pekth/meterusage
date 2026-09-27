@@ -426,6 +426,7 @@ public struct ProviderQuota: Equatable, Sendable {
 
 public enum Provider: String, CaseIterable, Codable, Sendable {
     case codex
+    case openAI
     case antigravity
     case grok
     case openCodeGo
@@ -438,6 +439,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     public var displayName: String {
         switch self {
         case .codex: return "Codex"
+        case .openAI: return "OpenAI API"
         case .antigravity: return "Antigravity"
         case .grok: return "Grok"
         case .openCodeGo: return "OpenCode Go"
@@ -490,6 +492,8 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
                 return session
             }
             return windows.count == 1 ? windows[0] : nil
+        case .openAI:
+            return nil
         case .claude:
             if let session = windows.first(where: { $0.isSessionWindow }) {
                 return session
@@ -513,6 +517,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     public var sourceLabel: String {
         switch self {
         case .codex: return "Codex CLI"
+        case .openAI: return "OpenAI Admin API"
         case .claude: return "Claude Code"
         case .antigravity: return "agy CLI"
         case .grok: return "Grok CLI"
@@ -529,7 +534,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     /// than sending the user to a guessed or unrelated page.
     public var statusPageURL: URL? {
         switch self {
-        case .codex:
+        case .codex, .openAI:
             return URL(string: "https://status.openai.com/")
         case .claude:
             return URL(string: "https://status.claude.com/")

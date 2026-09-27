@@ -1,5 +1,24 @@
 import Foundation
 
+/// Synthetic API usage, separate from the Codex subscription fixture.
+struct DemoOpenAIUsageSource: UsageSource {
+    let provider: Provider = .openAI
+
+    func fetchUsage() async throws -> ProviderUsage {
+        let today = TokenTotals(input: 12_000, output: 3_000, cacheRead: 5_000)
+        let total = TokenTotals(input: 180_000, output: 45_000, cacheRead: 75_000)
+        return ProviderUsage(
+            provider: .openAI, sessionCount: 0, messageCount: 900,
+            tokens: total, estimatedCostUSD: 12.50, todayMessageCount: 60,
+            todayTokens: today, weekTokens: today, todayCostUSD: 0.80,
+            usageWindows: [
+                UsageWindow(label: "Today (UTC)", sessionCount: 0, messageCount: 60, tokens: today, estimatedCostUSD: 0.80),
+                UsageWindow(label: "last 30d", sessionCount: 0, messageCount: 900, tokens: total, estimatedCostUSD: 12.50)
+            ], capturedAt: Date()
+        )
+    }
+}
+
 // MARK: - Demo mode
 //
 // Demo mode swaps the *data sources* and nothing else. The real views, the real

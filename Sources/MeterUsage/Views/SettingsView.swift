@@ -21,6 +21,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval: Double = Preferences.defaultRefreshInterval
     @AppStorage(PrefKey.showClaude) private var showClaude: Bool = false
     @AppStorage(PrefKey.showCodex) private var showCodex: Bool = true
+    @AppStorage(PrefKey.showOpenAI) private var showOpenAI: Bool = false
     @AppStorage(PrefKey.showAntigravity) private var showAntigravity: Bool = false
     @AppStorage(PrefKey.showGrok) private var showGrok: Bool = false
     @AppStorage(PrefKey.showOpenCodeGo) private var showOpenCodeGo: Bool = true
@@ -86,6 +87,12 @@ struct SettingsView: View {
                         subtitle: "Quota and local sessions",
                         isOn: $showCodex,
                         menuBarIsOn: $menuBarCodex
+                    )
+                    Divider().overlay(MU.hairline)
+                    ProviderRow(
+                        provider: .openAI,
+                        subtitle: "API spend and tokens (Admin key)",
+                        isOn: $showOpenAI
                     )
                     Divider().overlay(MU.hairline)
                     ProviderRow(
