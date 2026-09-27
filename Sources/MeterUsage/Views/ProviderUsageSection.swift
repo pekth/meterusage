@@ -63,9 +63,11 @@ private struct ProviderUsageRow: View {
     private var trailingValue: some View {
         switch state {
         case .value(let usage):
-            Text(provider == .openAI ? "\(Fmt.count(usage.messageCount)) requests" : Fmt.count(usage.messageCount))
-                .font(.muNumber)
-                .foregroundColor(providerColor(provider))
+            if provider != .anthropic {
+                Text(provider == .openAI ? "\(Fmt.count(usage.messageCount)) requests" : Fmt.count(usage.messageCount))
+                    .font(.muNumber)
+                    .foregroundColor(providerColor(provider))
+            }
         case .idle, .missing:
             EmptyView()
         }
@@ -75,7 +77,7 @@ private struct ProviderUsageRow: View {
     private var detail: some View {
         switch state {
         case .idle:
-            Text(provider == .openAI ? "Checking API usage…" : "Checking local history…")
+            Text(provider.isOrganizationAPI ? "Checking API usage…" : "Checking local history…")
                 .font(.muCaption)
                 .foregroundColor(MU.textTertiary)
         case .missing(let reason):
@@ -89,8 +91,8 @@ private struct ProviderUsageRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         case .value(let usage):
-            if provider == .openAI {
-                OpenAIUsageDetails(usage: usage, now: now)
+            if provider.isOrganizationAPI {
+                APIUsageDetails(usage: usage, now: now)
             } else if let windows = usage.usageWindows, !windows.isEmpty {
                 // Rolling-window view (OpenCode Go): one row per window with a
                 // share-of-30d bar + percentage, then counts, then a caption.
@@ -144,6 +146,9 @@ private struct ProviderUsageRow: View {
         case .missing(let reason):
             return "\(provider.displayName): \(reason.userFacingMessage)"
         case .value(let usage):
+            if provider == .anthropic {
+                return "Anthropic API, last 30 days, \(usage.tokens?.total ?? 0) tokens, reported spend \(Fmt.usd(usage.estimatedCostUSD ?? 0)), excludes Priority Tier costs"
+            }
             if provider == .openAI {
                 return "OpenAI API, last 30 days, \(usage.messageCount) completion requests, \(usage.tokens?.total ?? 0) tokens, reported spend \(Fmt.usd(usage.estimatedCostUSD ?? 0))"
             }
@@ -164,9 +169,12 @@ private struct ProviderUsageRow: View {
     }
 
     private func hint(for reason: SourceUnavailable) -> String {
-        if provider == .openAI {
+        if provider.isOrganizationAPI {
             switch reason {
             case .dataNotFound, .notSignedIn:
+                if provider == .anthropic {
+                    return "Launch with ANTHROPIC_ADMIN_KEY set to a Console organization Admin key. Individual accounts, workspace keys, and Claude subscription logins cannot supply this reading."
+                }
                 return "Launch with OPENAI_ADMIN_KEY set to an organization Admin key with usage access. A project API key or Codex login cannot supply this reading."
             case .offline: return "Connect to the internet, then refresh API usage."
             default: return "API usage is unavailable. Will retry on the next refresh."
@@ -183,8 +191,8 @@ private struct ProviderUsageRow: View {
     }
 }
 
-/// Dollar totals cover the organization; token and request counts cover completions.
-private struct OpenAIUsageDetails: View {
+/// Organization spend and endpoint-specific tokens, without invented request counts.
+private struct APIUsageDetails: View {
     let usage: ProviderUsage
     let now: Date
 
@@ -199,19 +207,24 @@ private struct OpenAIUsageDetails: View {
                     }
                     .font(.muBody)
                     .foregroundColor(MU.text)
-                    Text("\(Fmt.compactCount(window.tokens.total)) tokens · \(Fmt.count(window.messageCount)) completion requests")
+                    Text(usage.provider == .anthropic
+                         ? "\(Fmt.compactCount(window.tokens.total)) tokens"
+                         : "\(Fmt.compactCount(window.tokens.total)) tokens · \(Fmt.count(window.messageCount)) completion requests")
                         .font(.muCaption)
                         .foregroundColor(MU.textSecondary)
                 }
             }
-            Text("Organization spend reported by OpenAI. Tokens cover completions only. Reporting can lag.")
+            Text(usage.provider == .anthropic
+                 ? "Reported API spend excludes Priority Tier. Tokens cover Messages API. Reporting can lag."
+                 : "Organization spend reported by OpenAI. Tokens cover completions only. Reporting can lag.")
                 .font(.muCaption)
                 .foregroundColor(MU.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
             Text("Updated \(Fmt.timeSince(usage.capturedAt, now: now))")
                 .font(.muCaption)
                 .foregroundColor(MU.textTertiary)
-            Link("Open usage dashboard", destination: URL(string: "https://platform.openai.com/usage")!)
+            Link("Open usage dashboard", destination: URL(string: usage.provider == .anthropic
+                 ? "https://platform.claude.com/usage" : "https://platform.openai.com/usage")!)
                 .font(.muCaption)
         }
     }

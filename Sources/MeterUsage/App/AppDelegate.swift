@@ -387,7 +387,8 @@ enum Composition {
                 DemoOpenCodeGoUsageSource(),
                 DemoGrokUsageSource(),
                 DemoOpenRouterUsageSource(),
-                DemoOpenAIUsageSource()
+                DemoOpenAIUsageSource(),
+                DemoAnthropicUsageSource()
             ]
         }
         return [
@@ -395,7 +396,8 @@ enum Composition {
             OpenCodeGoUsageSource(),
             GrokUsageSource(),
             OpenRouterUsageSource(),
-            OpenAIUsageSource()
+            OpenAIUsageSource(),
+            AnthropicUsageSource()
         ]
     }
 
