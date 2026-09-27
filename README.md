@@ -82,6 +82,7 @@ Toggle providers on or off, choose refresh cadence, and switch themes:
 | Provider | Live Cloud Quota | Local Activity & Tokens | Reset Countdowns | 26-Week Heatmap | Source Mechanism |
 |---|:---:|:---:|:---:|:---:|---|
 | **Codex** | ✅ | ✅ | ✅ | ✅ | Local JSON-RPC via `codex app-server --stdio` |
+| **OpenAI API** | N/A | API totals | N/A | N/A | Organization Usage and Costs APIs; Admin key required |
 | **Antigravity** | ✅ | ✅ | ✅ | — | CLI `/usage` & local conversation SQLite |
 | **Claude Code** | Optional* | ✅ | ✅* | ✅ | Local session JSONL streams (`limits[]` file optional) |
 | **OpenRouter** | ✅ | ✅ | ✅ | — | Public account API & `/api/v1/activity` telemetry |
@@ -110,6 +111,36 @@ Toggle providers on or off, choose refresh cadence, and switch themes:
 * **26-Week Activity Heatmaps** — GitHub-style activity matrix inside Codex and Claude cards with Day, Week, or Cumulative views, accompanied by 7-day sparklines.
 * **Opt-In Pacing Alerts** — Native macOS notifications when an active window crosses critical burn velocity or drops below 30 minutes to empty. Pace alerts fire only on a current burn; threshold alerts (80%/95%) remain state-based.
 * **Share screenshot**: The share button on each provider's usage card (side notch panel detail card) shares a sharp 2x image of the panel through macOS share services, or saves it for X and other apps.
+
+### OpenAI API usage
+
+Enable **Settings → Providers → OpenAI API** to show organization spend and
+completion tokens and requests for today and the last 30 calendar days,
+including today. Day boundaries use UTC. Spend comes from OpenAI's Costs API;
+it is not calculated from the app's price table. Token totals cover the
+completions usage endpoint, not every OpenAI product. Reporting can lag.
+
+The app reads `OPENAI_ADMIN_KEY` from its process environment. It must contain
+an [organization Admin key](https://platform.openai.com/settings/organization/admin-keys)
+with usage access. A regular project key or Codex subscription login does not
+provide this access. Make the variable available through your existing secure
+launcher, then launch the app executable from that environment:
+
+```sh
+/Applications/MeterUsage.app/Contents/MacOS/meterusage
+```
+
+Finder launches do not inherit terminal variables. Quit any running copy first.
+meterusage has no key-entry field and does not save the key. Missing access,
+offline requests, and incomplete responses show an unavailable reading.
+
+This monitor appears in the popover's Usage card. It has no quota ring, reset
+countdown, or pace alert. Organization usage stays separate from Codex limits
+and the local coding summary to avoid counting the same work twice. The quota
+JSON CLI does not include this usage-only provider.
+
+See [OpenAI's Usage and Costs example](https://developers.openai.com/cookbook/examples/completions_usage_api)
+and [the privacy boundary](docs/PRIVACY.md).
 
 ### Second accounts
 

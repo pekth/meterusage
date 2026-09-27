@@ -20,6 +20,7 @@ enum PrefKey {
     static let refreshInterval = "refreshIntervalSeconds"
     static let showClaude = "showProviderClaude"
     static let showCodex = "showProviderCodex"
+    static let showOpenAI = "showProviderOpenAI"
     /// User-configured additional accounts (Claude, Codex). Encoded
     /// `[ManagedAccount]` JSON data; empty/absent means "no additional
     /// accounts", which is the single-account default install.
@@ -155,6 +156,7 @@ final class Preferences: ObservableObject {
             // normal use.
             PrefKey.showClaude: false,
             PrefKey.showCodex: true,
+            PrefKey.showOpenAI: false,
             PrefKey.showAntigravity: false,
             PrefKey.showGrok: false,
             PrefKey.showOpenCodeGo: true,
@@ -213,6 +215,7 @@ final class Preferences: ObservableObject {
 
         var providers = Set<Provider>()
         if defaults.bool(forKey: PrefKey.showCodex) { providers.insert(.codex) }
+        if defaults.bool(forKey: PrefKey.showOpenAI) { providers.insert(.openAI) }
         if defaults.bool(forKey: PrefKey.showAntigravity) { providers.insert(.antigravity) }
         if defaults.bool(forKey: PrefKey.showGrok) { providers.insert(.grok) }
         if defaults.bool(forKey: PrefKey.showOpenCodeGo) { providers.insert(.openCodeGo) }

@@ -63,7 +63,7 @@ private struct ProviderUsageRow: View {
     private var trailingValue: some View {
         switch state {
         case .value(let usage):
-            Text(Fmt.count(usage.messageCount))
+            Text(provider == .openAI ? "\(Fmt.count(usage.messageCount)) requests" : Fmt.count(usage.messageCount))
                 .font(.muNumber)
                 .foregroundColor(providerColor(provider))
         case .idle, .missing:
@@ -75,7 +75,7 @@ private struct ProviderUsageRow: View {
     private var detail: some View {
         switch state {
         case .idle:
-            Text("Checking local history…")
+            Text(provider == .openAI ? "Checking API usage…" : "Checking local history…")
                 .font(.muCaption)
                 .foregroundColor(MU.textTertiary)
         case .missing(let reason):
@@ -89,7 +89,9 @@ private struct ProviderUsageRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         case .value(let usage):
-            if let windows = usage.usageWindows, !windows.isEmpty {
+            if provider == .openAI {
+                OpenAIUsageDetails(usage: usage, now: now)
+            } else if let windows = usage.usageWindows, !windows.isEmpty {
                 // Rolling-window view (OpenCode Go): one row per window with a
                 // share-of-30d bar + percentage, then counts, then a caption.
                 UsageWindowBars(windows: windows, provider: provider, now: now)
@@ -138,10 +140,13 @@ private struct ProviderUsageRow: View {
     private var accessibilityLabel: String {
         switch state {
         case .idle:
-            return "\(provider.displayName): checking local history"
+            return "\(provider.displayName): checking usage"
         case .missing(let reason):
             return "\(provider.displayName): \(reason.userFacingMessage)"
         case .value(let usage):
+            if provider == .openAI {
+                return "OpenAI API, last 30 days, \(usage.messageCount) completion requests, \(usage.tokens?.total ?? 0) tokens, reported spend \(Fmt.usd(usage.estimatedCostUSD ?? 0))"
+            }
             var parts = [
                 provider.displayName,
                 "\(usage.sessionCount) sessions",
@@ -159,6 +164,14 @@ private struct ProviderUsageRow: View {
     }
 
     private func hint(for reason: SourceUnavailable) -> String {
+        if provider == .openAI {
+            switch reason {
+            case .dataNotFound, .notSignedIn:
+                return "Launch with OPENAI_ADMIN_KEY set to an organization Admin key with usage access. A project API key or Codex login cannot supply this reading."
+            case .offline: return "Connect to the internet, then refresh API usage."
+            default: return "API usage is unavailable. Will retry on the next refresh."
+            }
+        }
         switch reason {
         case .cliNotFound(let name): return "Install \(name) to read local usage."
         case .dataNotFound: return "Enable this provider after its local history is available."
@@ -166,6 +179,40 @@ private struct ProviderUsageRow: View {
         case .notSignedIn: return "Sign in with the \(provider.displayName) CLI."
         case .offline: return "Local usage remains available when the provider is online."
         case .failed: return "Will retry on the next refresh."
+        }
+    }
+}
+
+/// Dollar totals cover the organization; token and request counts cover completions.
+private struct OpenAIUsageDetails: View {
+    let usage: ProviderUsage
+    let now: Date
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(usage.usageWindows ?? [], id: \.label) { window in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(window.label == "last 30d" ? "Last 30 days (UTC)" : window.label)
+                        Spacer(minLength: 4)
+                        Text(Fmt.usd(window.estimatedCostUSD)).monospacedDigit()
+                    }
+                    .font(.muBody)
+                    .foregroundColor(MU.text)
+                    Text("\(Fmt.compactCount(window.tokens.total)) tokens · \(Fmt.count(window.messageCount)) completion requests")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textSecondary)
+                }
+            }
+            Text("Organization spend reported by OpenAI. Tokens cover completions only. Reporting can lag.")
+                .font(.muCaption)
+                .foregroundColor(MU.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Updated \(Fmt.timeSince(usage.capturedAt, now: now))")
+                .font(.muCaption)
+                .foregroundColor(MU.textTertiary)
+            Link("Open usage dashboard", destination: URL(string: "https://platform.openai.com/usage")!)
+                .font(.muCaption)
         }
     }
 }

@@ -6,7 +6,7 @@ meterusage reads AI coding-assistant usage from your own machine. That means it 
 
 ### ⚡ TL;DR
 
-* 🛡️ **Zero Credential Exposure**: Never touches Claude or Codex authentication tokens, passwords, or macOS Keychain items. OpenRouter uses an existing environment variable/local key strictly for aggregate balances in memory.
+* 🛡️ **Zero Credential Exposure**: Never touches Claude or Codex authentication tokens, passwords, or macOS Keychain items. OpenRouter uses an existing environment variable/local key for aggregate balances in memory. OpenAI API monitoring uses an explicitly configured OPENAI_ADMIN_KEY in memory for organization usage and costs.
 * 🚫 **No Prompts, Code, or Message Inspection**: Only reads numeric token tallies and event timestamps from local CLI stores. Message bodies, prompts, tool inputs/outputs, and workspace paths are never decoded or transmitted.
 * 🧼 **Sanitized at the Boundary**: User paths (`/Users/<username>/`), terminal IDs, hostnames, and emails are structurally dropped before reaching memory or the UI.
 * 🔒 **Strict Network Isolation**: Zero analytics, telemetry, crash reporting, or remote tracking servers. Only connects directly to documented usage endpoints or public status feeds.
@@ -16,10 +16,10 @@ meterusage reads AI coding-assistant usage from your own machine. That means it 
 
 ## What meterusage never does
 
-- **Never reads Codex or Claude credentials.** It does not open `~/.codex/auth.json`, `~/.claude/.credentials.json`, or any macOS Keychain item. OpenRouter is the explicit exception: when configured, it reads an existing `OPENROUTER_API_KEY` or supported local key file in memory only to call OpenRouter's aggregate usage and balance endpoints; it never displays, logs, or stores that key.
+- **Never reads Codex or Claude credentials.** It does not open `~/.codex/auth.json`, `~/.claude/.credentials.json`, or any macOS Keychain item. OpenRouter and OpenAI API monitoring are explicit exceptions. OpenAI reads only `OPENAI_ADMIN_KEY` from the process environment when enabled, and never displays, logs, or stores it. When configured, OpenRouter reads an existing `OPENROUTER_API_KEY` or supported local key file in memory only to call OpenRouter's aggregate usage and balance endpoints; it never displays, logs, or stores that key.
 - **Never asks you to paste a key.** There is no login screen, no token field, and no account connection flow.
 - **Never uses undocumented provider APIs.** It does not reuse another application's OAuth client id, and it does not call private endpoints.
-- **Never sends prompts or code anywhere.** Provider requests are limited to the documented Codex/OpenRouter usage calls and public status feeds. There is no telemetry, analytics, crash reporting, or update ping; it has no server.
+- **Never sends prompts or code anywhere.** Provider requests are limited to the documented Codex/OpenRouter/OpenAI usage calls and public status feeds. There is no telemetry, analytics, crash reporting, or update ping; it has no server.
 - **Never reads your prompts or code.** It parses only usage and metadata fields from local transcripts. Message content is skipped, not stored.
 
 ## Where the numbers actually come from
@@ -29,6 +29,7 @@ meterusage reads AI coding-assistant usage from your own machine. That means it 
 | Codex quota | Spawns `codex app-server --stdio` and makes a JSON-RPC `account/rateLimits/read` call with the CLI's experimental rate-limit detail capability enabled. That returns general/model-specific windows and earned reset-credit expiry details when the account provides them. This is a supported CLI surface; the subprocess authenticates itself using your existing `codex login`. meterusage never sees the token. | Yes, by the CLI subprocess |
 | Second Codex account | The same subprocess mechanism with `CODEX_HOME` pointed at the alternate account's config directory (`METERUSAGE_CODEX_ALT_HOME` or a stored default). The child authenticates itself from that home; meterusage still never opens any auth file, and only spawns the subprocess when that directory exists. | Yes, by the CLI subprocess |
 | OpenRouter quota | Calls the documented `/api/v1/key` and `/api/v1/credits` endpoints with an existing API key and retains only aggregate dollar usage, account balance, optional limit, and reset cadence. It does not send prompts or model requests. | Yes |
+| OpenAI API usage and costs | GET requests to `/v1/organization/usage/completions` and `/v1/organization/costs` on `api.openai.com` with an explicitly configured organization Admin key. Only numeric usage, USD amounts, and bucket timestamps are decoded. Account, project, key, and user identifiers are ignored. An ephemeral session rejects redirects and retains no disk cache or cookies. | Yes |
 | OpenRouter activity | Calls `https://openrouter.ai/api/v1/activity` with an OpenRouter Management Key (`OPENROUTER_MANAGEMENT_KEY` or `~/.cli-proxy-api/openrouter-management-key`) to fetch aggregate daily token volume (input, output, reasoning) over the last 30 days. | Yes |
 | Grok quota | Calls the billing endpoint the Grok CLI itself uses (`cli-chat-proxy.grok.com/v1/billing`). The OIDC bearer token is re-read from `~/.grok/auth.json` on every refresh — never cached from launch — and is sent only in the request Authorization header. Only the allowance percent, period type, and reset time are retained; no prompts or model requests are sent. | Yes |
 | Claude activity | Streams your own transcript files under `~/.claude/projects/`, summing token-usage fields. | No |
@@ -59,9 +60,11 @@ Anthropic publishes no supported API for Claude subscription quota. The only san
 
 The consequence is honest rather than hidden: Codex shows real live quota, including Codex's 2,500-credits-to-$100 display conversion; OpenRouter shows provider-reported dollar usage and remaining account balance, local usage rows show only the fields each provider can prove, and Claude quota bars appear only if a usage file is already present — and only with the windows that file actually contains. Nothing is silently estimated and labelled as authoritative.
 
-## Cost figures are estimates
+## Cost figures
 
-Costs are computed locally from token counts against a rate table in `Sources/MeterUsage/Services/Pricing.swift`. Published rates change, and the table can drift. Treat every cost in this app as an approximation for awareness — never as a billing figure. Your provider's dashboard is the only source of truth for what you owe.
+OpenAI API spend is the USD amount reported by the organization Costs API, including adjustments. It is separate from local estimates and can lag the billing dashboard. Completion token totals do not represent every OpenAI product.
+
+Local cost estimates use token counts and a rate table in `Sources/MeterUsage/Services/Pricing.swift`. Published rates change, and the table can drift. Treat locally estimated costs as approximations for awareness, never as billing figures. Your provider's dashboard is the only source of truth for what you owe.
 
 ## What leaves your machine
 
@@ -73,6 +76,7 @@ Outbound requests or subprocess-backed provider checks, all of which you can ver
 4. meterusage fetches OpenRouter's documented `/api/v1/key` and `/api/v1/credits` endpoints with the existing key, retaining only aggregate dollar usage and balance fields. When an OpenRouter Management Key is configured, it queries `/api/v1/activity` for 30-day token volumes.
 5. meterusage fetches Grok's billing endpoint (`cli-chat-proxy.grok.com/v1/billing`) with the OIDC bearer token re-read from `~/.grok/auth.json`, retaining only the allowance percent, period type, and reset time. No prompts or model requests are sent.
 6. At most once a day, meterusage fetches `https://api.github.com/repos/pekth/meterusage/releases/latest` to check for a newer release. The request is unauthenticated, carries no body, no identifier, and no usage data — the server sees only your IP and a User-Agent string, the same as any web visit. The response's version tag is compared to the running build; a failed or rate-limited check is silently ignored. This check can be switched off in Settings → General → "Check for updates". When you click Install, the release zip is downloaded from the same release's asset URL and its SHA-256 is verified against the digest GitHub publishes with the asset; a missing or mismatched digest aborts the install.
+7. When OpenAI API monitoring is enabled, meterusage reads organization usage and costs directly from `https://api.openai.com/v1/organization/usage/completions` and `https://api.openai.com/v1/organization/costs`. Its Admin key stays in memory and is sent only in the Authorization header. Requests include date bounds, daily bucket width, page size, and an opaque pagination cursor. No model request is made.
 
 The local usage commands and file reads above add no outbound request. There is no analytics endpoint to disable because there is none.
 

@@ -27,7 +27,11 @@ Last verified: 2026-09-27
 - Provider mark tint is identity unless the service check diverges from healthy (`MenuBarLabel.statusTint(_:for:)`): operational keeps `providerColor`, degraded/outage repaint amber/red, unreadable goes neutral grey. Quota headroom tint stays on rings and percents only; the side notch, menu bar, and status rows share this rule per ADR 0002's mark semantics.
 - Second accounts (multi-account support, ADR 0005): `.codexAlt` / `.claudeAlt` provider slots are keyed by an alternate config directory resolved in `AccountSlots` (`Sources/MeterUsage/Services/DataSource.swift`) from `METERUSAGE_CODEX_ALT_HOME` / `METERUSAGE_CLAUDE_ALT_CONFIG` or the `meterusage.codexAltHome` / `meterusage.claudeAltConfig` defaults keys, which are editable in Settings → Providers. A slot exists only when its directory exists; slots never merge with the primary account, keep per-slot durable history and archive keys, and are named by position only (no account identity is read). The JSON report lists them under `codexAlt` / `claudeAlt`.
 
+- OpenAI API monitoring is opt-in and separate from Codex. `OpenAIUsageSource` reads organization completion usage and USD costs for today and the last 30 UTC calendar days using `OPENAI_ADMIN_KEY`. The popover shows reported spend and completion tokens/requests. It does not supply quota rings, the quota JSON CLI, or local coding/burn totals. See [ADR 0007](adr/0007-openai-api-usage.md) and the README setup instructions.
+
 ## Verification gaps
+
+
 
 - Repository files do not prove current provider authentication, quota freshness, network responses, local machine state, app installation, signed-bundle state, GitHub Release state, or runtime UI behavior.
 - Treat cost figures as estimates. `README.md` identifies provider dashboards as the billing source of record.
