@@ -113,33 +113,21 @@ Toggle providers on or off, choose refresh cadence, and switch themes:
 
 ### Second accounts
 
-Two accounts with the same tool are two different budgets, so meterusage gives
-each one its own meter row — own quota windows, plan badge, session history,
-heatmap, alerts, and (for Codex) reset credits. Slots are named by position
-("Codex second account", a "2" beside the mark); no account identifier is ever
-read or displayed.
+Two or more accounts with the same tool are separate budgets, so meterusage
+gives each one its own meter row — own quota windows, plan badge, session
+history, alerts, and (for Codex) reset credits. Add as many as you need:
+**Settings → Second accounts → "Add Codex/Claude account"**, then name the
+account and point it at that account's own config directory (e.g.
+`~/.codex-work`, `~/.claude-personal`). Sign the CLI in under that directory
+(`CODEX_HOME=~/.codex-work codex login`, or run Claude Code with
+`CLAUDE_CONFIG_DIR=~/.claude-personal`), and relaunch meterusage — readings
+appear once the directory exists. Removing a row stops metering that account;
+nothing in the directory is deleted.
 
-A slot exists when its alternate config directory exists on this Mac. Set it
-in **Settings → Providers → "Codex second account" / "Claude second account"**
-(type the directory, e.g. `~/.codex-alt`, then relaunch MeterUsage), or point
-meterusage at it through the environment:
-
-```sh
-# Codex: the alternate home is passed to the codex subprocess the same way
-# you would run the CLI for that account.
-launchctl setenv METERUSAGE_CODEX_ALT_HOME ~/.codex-alt
-
-# Claude: the alternate config directory (CLAUDE_CONFIG_DIR-equivalent) holds
-# that account's projects/ transcripts, .claude.json plan tier, and any
-# companion quota snapshot.
-launchctl setenv METERUSAGE_CLAUDE_ALT_CONFIG ~/.claude-alt
-```
-
-The environment wins over the stored default. Sign the second CLI account in
-under that directory (e.g. `CODEX_HOME=~/.codex-alt codex login`); readings
-appear after relaunch. Toggle the slots on or off in Settings → Providers;
-both accounts always stay under their own keys in the Agent Budget API
-(`codexAlt` / `claudeAlt`).
+Slots are named by your own label ("Codex · Work", a digit beside the mark in
+the tray and notch); no account identifier is ever read or displayed. Each
+account stays under its own keys in the Agent Budget API, which reports the
+label in an additive `account` field.
 
 ---
 
