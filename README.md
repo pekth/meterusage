@@ -119,26 +119,27 @@ heatmap, alerts, and (for Codex) reset credits. Slots are named by position
 ("Codex second account", a "2" beside the mark); no account identifier is ever
 read or displayed.
 
-A slot exists when its alternate config directory exists on this Mac. Point
-meterusage at the second account's directory either through the environment or
-a stored default, then relaunch the app:
+A slot exists when its alternate config directory exists on this Mac. Set it
+in **Settings → Providers → "Codex second account" / "Claude second account"**
+(type the directory, e.g. `~/.codex-alt`, then relaunch MeterUsage), or point
+meterusage at it through the environment:
 
 ```sh
 # Codex: the alternate home is passed to the codex subprocess the same way
 # you would run the CLI for that account.
 launchctl setenv METERUSAGE_CODEX_ALT_HOME ~/.codex-alt
-# or: defaults write meterusage meterusage.codexAltHome ~/.codex-alt
 
 # Claude: the alternate config directory (CLAUDE_CONFIG_DIR-equivalent) holds
 # that account's projects/ transcripts, .claude.json plan tier, and any
 # companion quota snapshot.
 launchctl setenv METERUSAGE_CLAUDE_ALT_CONFIG ~/.claude-alt
-# or: defaults write meterusage meterusage.claudeAltConfig ~/.claude-alt
 ```
 
-The environment wins over the stored default. Toggle the slots on or off in
-Settings → Providers; both accounts always stay under their own keys in the
-Agent Budget API (`codexAlt` / `claudeAlt`).
+The environment wins over the stored default. Sign the second CLI account in
+under that directory (e.g. `CODEX_HOME=~/.codex-alt codex login`); readings
+appear after relaunch. Toggle the slots on or off in Settings → Providers;
+both accounts always stay under their own keys in the Agent Budget API
+(`codexAlt` / `claudeAlt`).
 
 ---
 

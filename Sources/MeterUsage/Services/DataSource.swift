@@ -172,30 +172,6 @@ public enum AccountSlots {
         default: return true
         }
     }
-
-    /// Tilde-relative display of a slot home (Settings rows only). The path
-    /// never enters caches, diagnostics, or the JSON report; this renders the
-    /// user's own configuration back to them, with the OS username reduced to
-    /// `~` exactly like any shell prompt.
-    public static func displayPath(
-        for provider: Provider,
-        homes: Resolved,
-        home: URL = HomeDirectory.real
-    ) -> String? {
-        let url: URL?
-        switch provider {
-        case .codexAlt: url = homes.codexAltHome
-        case .claudeAlt: url = homes.claudeAltConfig
-        default: url = nil
-        }
-        guard let url else { return nil }
-        let homePath = home.path
-        if url.path == homePath { return "~" }
-        if url.path.hasPrefix(homePath + "/") {
-            return "~" + url.path.dropFirst(homePath.count)
-        }
-        return url.path
-    }
 }
 
 // MARK: - Privacy

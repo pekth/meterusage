@@ -19,6 +19,10 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showCodex) private var showCodex: Bool = true
     @AppStorage(PrefKey.showCodexAlt) private var showCodexAlt: Bool = false
     @AppStorage(PrefKey.showClaudeAlt) private var showClaudeAlt: Bool = false
+    // Second-account config directories. Empty means "not configured"; the
+    // same keys AccountSlots resolves (environment still wins over these).
+    @AppStorage(AccountSlots.codexAltHomeKey) private var codexAltHomePath: String = ""
+    @AppStorage(AccountSlots.claudeAltConfigKey) private var claudeAltHomePath: String = ""
     @AppStorage(PrefKey.showAntigravity) private var showAntigravity: Bool = false
     @AppStorage(PrefKey.showGrok) private var showGrok: Bool = false
     @AppStorage(PrefKey.showOpenCodeGo) private var showOpenCodeGo: Bool = true
@@ -87,15 +91,19 @@ struct SettingsView: View {
                         isOn: $showCodex,
                         menuBarIsOn: $menuBarCodex
                     )
-                    if codexAltPresent {
-                        Divider().overlay(MU.hairline)
-                        ProviderRow(
-                            provider: .codexAlt,
-                            subtitle: "Second Codex account · \(codexAltPath ?? "")",
-                            isOn: $showCodexAlt,
-                            menuBarIsOn: $menuBarCodexAlt
-                        )
-                    }
+                    Divider().overlay(MU.hairline)
+                    // Second-account rows always show with their directory
+                    // field, so the feature is discoverable before anything
+                    // is configured. The card itself still appears only once
+                    // that directory exists (after a relaunch).
+                    AltAccountRow(
+                        provider: .codexAlt,
+                        subtitle: "Second CODEX home · quota and reset credits",
+                        pathPlaceholder: "~/.codex-alt",
+                        isOn: $showCodexAlt,
+                        menuBarIsOn: $menuBarCodexAlt,
+                        homePath: $codexAltHomePath
+                    )
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .antigravity,
@@ -131,15 +139,15 @@ struct SettingsView: View {
                         isOn: $showClaude,
                         menuBarIsOn: $menuBarClaude
                     )
-                    if claudeAltPresent {
-                        Divider().overlay(MU.hairline)
-                        ProviderRow(
-                            provider: .claudeAlt,
-                            subtitle: "Second Claude account · \(claudeAltPath ?? "")",
-                            isOn: $showClaudeAlt,
-                            menuBarIsOn: $menuBarClaudeAlt
-                        )
-                    }
+                    Divider().overlay(MU.hairline)
+                    AltAccountRow(
+                        provider: .claudeAlt,
+                        subtitle: "Second CLAUDE_CONFIG_DIR · plan and sessions",
+                        pathPlaceholder: "~/.claude-alt",
+                        isOn: $showClaudeAlt,
+                        menuBarIsOn: $menuBarClaudeAlt,
+                        homePath: $claudeAltHomePath
+                    )
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .cursor,
@@ -196,12 +204,11 @@ struct SettingsView: View {
                     Text("Switching a provider off above stops reading its credential entirely. It does not sign you out of that tool.")
                         .font(.muCaption)
                         .foregroundColor(MU.textTertiary)
-                    if codexAltPresent || claudeAltPresent {
-                        Divider().overlay(MU.hairline)
-                        Text("A second account appears when its config directory exists — \(codexAltPresent ? AccountSlots.displayPath(for: .codexAlt, homes: coordinator.slotHomes) ?? "" : "")\(codexAltPresent && claudeAltPresent ? " · " : "")\(claudeAltPresent ? AccountSlots.displayPath(for: .claudeAlt, homes: coordinator.slotHomes) ?? "" : "").")
-                            .font(.muCaption)
-                            .foregroundColor(MU.textTertiary)
-                    }
+                    Divider().overlay(MU.hairline)
+                    Text("A second account appears once its directory exists: sign that CLI in under the directory you set above (for example CODEX_HOME=~/.codex-alt codex login), then relaunch MeterUsage.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -362,8 +369,8 @@ struct SettingsView: View {
 
     // MARK: Second-account slots
 
-    // Demo builds mount synthetic second-account rows, so their toggles show
-    // there even though no real config directory exists.
+    // Demo builds mount synthetic second-account rows, so the presence-based
+    // Accounts list shows them even though no real config directory exists.
 
     private var codexAltPresent: Bool {
         coordinator.isDemoMode || AccountSlots.isPresent(.codexAlt, homes: coordinator.slotHomes)
@@ -371,14 +378,6 @@ struct SettingsView: View {
 
     private var claudeAltPresent: Bool {
         coordinator.isDemoMode || AccountSlots.isPresent(.claudeAlt, homes: coordinator.slotHomes)
-    }
-
-    private var codexAltPath: String? {
-        AccountSlots.displayPath(for: .codexAlt, homes: coordinator.slotHomes)
-    }
-
-    private var claudeAltPath: String? {
-        AccountSlots.displayPath(for: .claudeAlt, homes: coordinator.slotHomes)
     }
 
     private var visibleAccounts: [Provider] {
@@ -573,6 +572,78 @@ private struct ProviderRow: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.mini)
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// One second-account row: the same switch pair as `ProviderRow` plus a
+/// directory field, because an alternate account is *defined* by the config
+/// directory it points at. The field stores the raw string the user typed
+/// (usually tilde-relative); it never displays a resolved absolute path.
+private struct AltAccountRow: View {
+    let provider: Provider
+    let subtitle: String
+    let pathPlaceholder: String
+    @Binding var isOn: Bool
+    var menuBarIsOn: Binding<Bool>?
+    @Binding var homePath: String
+
+    @State private var hoveringTray = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
+                ProviderMark(provider: provider, tint: providerColor(provider))
+                    .frame(width: 13, height: 13)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(provider.displayName)
+                        .font(.muBody)
+                        .foregroundColor(MU.text)
+                    Text(subtitle)
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                if let menuBarIsOn {
+                    HStack(spacing: 4) {
+                        Text("Notch")
+                            .font(.muCaption)
+                            .foregroundColor(MU.textTertiary)
+                        Button {
+                            menuBarIsOn.wrappedValue.toggle()
+                        } label: {
+                            Image(systemName: "menubar.rectangle")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(
+                                    menuBarIsOn.wrappedValue
+                                        ? MU.calm
+                                        : (hoveringTray ? MU.textSecondary : MU.textTertiary.opacity(0.6))
+                                )
+                                .frame(width: 22, height: 20)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                        .fill(hoveringTray ? MU.well : Color.clear)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help(menuBarIsOn.wrappedValue
+                              ? "Hide \(provider.displayName) from the side notch and menu bar"
+                              : "Show \(provider.displayName) in the side notch and menu bar")
+                        .onHover { hoveringTray = $0 }
+                    }
+                }
+                Toggle("Show \(provider.displayName)", isOn: $isOn)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+            }
+            TextField("Directory, e.g. \(pathPlaceholder)", text: $homePath, prompt: Text(pathPlaceholder))
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                .font(.muCaption)
+                .help("The config directory of the second account. Readings appear after MeterUsage relaunches.")
         }
         .accessibilityElement(children: .contain)
     }

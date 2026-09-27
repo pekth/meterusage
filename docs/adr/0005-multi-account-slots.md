@@ -38,7 +38,8 @@ these CLIs expose:
 Resolution lives in one place (`AccountSlots`): the path comes from the
 environment (`METERUSAGE_CODEX_ALT_HOME`, `METERUSAGE_CLAUDE_ALT_CONFIG`) or
 the stored defaults keys (`meterusage.codexAltHome`,
-`meterusage.claudeAltConfig`). A slot exists only when its directory exists —
+`meterusage.claudeAltConfig`), which the Settings → Providers rows edit in
+place. A slot exists only when its directory exists —
 an alternate slot without its directory is not an account, so it never polls,
 renders, or alerts.
 
