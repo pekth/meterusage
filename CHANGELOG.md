@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Accent colour themes.** Settings → Appearance now offers an accent palette
+  (Blue, Violet, Teal, Amber, Rose, Graphite). It recolours the app accent and
+  the primary provider's (Codex's) mark across the popover, the menu bar, and
+  the side notch, tints the popover's interactive controls, and drives the side
+  notch's chrome — its body, hover card, and ring disc/track all take the
+  accent. Quota headroom colours and every other provider identity stay fixed.
+- **Dark surfaces are dark grey, not black.** The popover backdrop and cards and
+  the side notch body and hover card now use dark greys, so the app reads as one
+  object instead of a black slab.
+
 ## [0.2.39] - 2026-09-27
 
 ### Fixed

@@ -175,6 +175,10 @@ struct PopoverRoot: View {
         .onPreferenceChange(HeaderHeightKey.self) { headerHeight = $0 }
         .onPreferenceChange(ContentHeightKey.self) { contentHeight = $0 }
         .background(MU.canvas)
+        // Interactive controls (toggles, pickers, selection) adopt the accent
+        // so a theme change is immediately visible across the popover, not
+        // only on the heatmap and the primary provider's mark.
+        .tint(MU.accent)
         .preferredColorScheme(preferences.theme.colorScheme)
     }
 

@@ -3,15 +3,22 @@ import AppKit
 
 // MARK: - Notch palette
 //
-// The side panel is a hardware-like object: fixed black in every appearance,
-// never the app's dynamic surfaces. Values below follow the codenotch design
-// frame (reference only — nothing is shared with that project): pure-black
-// body, near-black card, dark-grey ring fill and track, vivid state bands,
-// white figures. Provider marks keep their existing tints; only the panel
-// chrome and state colours live here.
+// The side panel is a hardware-like object with a dark-grey body (not black),
+// carrying the accent theme: the body, card, and ring disc/track are mixed
+// toward the selected accent, so the strip's whole colour follows the theme
+// instead of staying neutral. The ring band, text, and provider marks keep
+// their own semantics — headroom stays green/amber/red and provider identity
+// stays the provider's own colour — so only the chrome moves with the theme.
+// Because every mix keeps luminance fixed (see `blend`), the white figures and
+// status bands stay legible on any accent. Each colour is resolved once per
+// theme (`AccentTheme.color` is cached), so the ring views can index the table
+// directly without re-resolving a dynamic colour on every redraw.
 
-/// Ring state band. Same thresholds as the app's headroom scale, so severity
-/// never disagrees between the notch and the popover — only the hues differ.
+/// Ring state band. The thresholds and the hues are the app's own headroom
+/// scale (`headroomColor`): the notch previously used its own 50/80/100 bands
+/// and its own vivid palette, so a 75% window read green here and amber in the
+/// popover, and nothing followed an accent change. Delegating to `headroomColor`
+/// makes severity, colour, and theme agree on every surface.
 enum NotchBand: Equatable {
     case plenty
     case gettingClose
@@ -20,33 +27,110 @@ enum NotchBand: Equatable {
 
     static func band(usedPercent: Double) -> NotchBand {
         switch usedPercent {
-        case ..<50:  return .plenty
-        case ..<80:  return .gettingClose
+        case ..<80:  return .plenty
+        case ..<95:  return .gettingClose
         case ..<100: return .nearlyOut
         default:     return .atLimit
         }
     }
 }
 
+/// Perceptual luminance (Rec. 709), the axis the notch chrome must hold.
+///
+/// Two colours with the same max channel can look very different in brightness:
+/// a saturated hue at a fixed max channel reads far darker than a neutral grey
+/// at that channel. The chrome is compared against the popover's grey surfaces
+/// and read as text behind, so it is luminance — not max channel — that has to
+/// stay put or the tinted themes render darker than the window beside them.
+private func relativeLuminance(_ c: (r: CGFloat, g: CGFloat, b: CGFloat)) -> CGFloat {
+    func lin(_ v: CGFloat) -> CGFloat {
+        v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b)
+}
+
+/// Blends a neutral `base` toward `tint` at the base's own luminance.
+///
+/// The notch keeps a dark-grey body that must stay the same dark grey as the
+/// popover — not black, not darker — and white figures that must stay legible on
+/// every accent. The mix takes the accent's hue and saturation, then rescales
+/// the result to the base's luminance so a saturated theme lands at the same
+/// perceived brightness as the neutral it replaced. Without that rescale, a blue
+/// or teal body rendered below the popover's grey, which is what made the strip
+/// look black and the themes "not match".
+private func blendTinted(_ base: (r: CGFloat, g: CGFloat, b: CGFloat),
+                         with tint: NSColor,
+                         amount: CGFloat) -> Color {
+    let tintColor = tint.usingColorSpace(.sRGB) ?? NSColor.black
+    var h: CGFloat = 0, s: CGFloat = 0, v: CGFloat = 0, a: CGFloat = 0
+    tintColor.getHue(&h, saturation: &s, brightness: &v, alpha: &a)
+
+    // Start from the base's own hue-saturation-value.
+    var bh: CGFloat = 0, bs: CGFloat = 0, bv: CGFloat = 0, ba: CGFloat = 0
+    NSColor(srgbRed: base.r, green: base.g, blue: base.b, alpha: 1)
+        .getHue(&bh, saturation: &bs, brightness: &bv, alpha: &ba)
+
+    // Take the accent's hue, pull its saturation in by `amount`, and keep the
+    // base's brightness as the starting point.
+    let mixed = NSColor(hue: h, saturation: min(1, s * amount), brightness: bv, alpha: 1)
+        .usingColorSpace(.sRGB) ?? NSColor.black
+
+    // Rescale to the base's luminance: nudge brightness up or down so the tinted
+    // chrome is exactly as bright as the neutral it stands in for.
+    let target = relativeLuminance(base)
+    var lo: CGFloat = 0, hi: CGFloat = 1
+    for _ in 0..<20 {
+        let mid = (lo + hi) / 2
+        let candidate = NSColor(hue: h, saturation: min(1, s * amount), brightness: mid, alpha: 1)
+            .usingColorSpace(.sRGB) ?? .black
+        let l = relativeLuminance((candidate.redComponent, candidate.greenComponent, candidate.blueComponent))
+        if l < target { lo = mid } else { hi = mid }
+    }
+    let adjusted = NSColor(hue: h, saturation: min(1, s * amount), brightness: (lo + hi) / 2, alpha: 1)
+        .usingColorSpace(.sRGB) ?? mixed
+    return Color(red: Double(adjusted.redComponent), green: Double(adjusted.greenComponent), blue: Double(adjusted.blueComponent))
+}
+
 enum Notch {
-    static let body = Color(red: 0, green: 0, blue: 0)
-    static let card = Color(red: 0.04, green: 0.04, blue: 0.04)
-    static let disc = Color(red: 0.16, green: 0.16, blue: 0.16)
-    static let track = Color(red: 0.23, green: 0.23, blue: 0.23)
+
+    // Neutrals the accent is mixed into. These start from the popover's own
+    // dark surface values (`MU.canvas` / `MU.surface` / `MU.well`) so the strip
+    // is the same dark grey as the window beside it, then the accent is mixed
+    // in on top. A body that started darker than the popover was what made the
+    // strip read as black next to the window.
+    private static let bodyBase: (r: CGFloat, g: CGFloat, b: CGFloat) = (28/255, 28/255, 30/255)
+    private static let cardBase: (r: CGFloat, g: CGFloat, b: CGFloat) = (38/255, 38/255, 41/255)
+    private static let discBase: (r: CGFloat, g: CGFloat, b: CGFloat) = (52/255, 52/255, 56/255)
+    private static let trackBase: (r: CGFloat, g: CGFloat, b: CGFloat) = (64/255, 64/255, 68/255)
+
+    /// The accent each chrome colour is derived from, in theme order matching
+    /// `AccentTheme.allCases`. Resolved once; `AccentTheme.color` is cached, so
+    /// indexing the table in a ring view costs nothing per redraw.
+    static let body = chrome(AccentTheme.allCases.map { blendTinted(bodyBase, with: $0.light, amount: 0.55) })
+    static let card = chrome(AccentTheme.allCases.map { blendTinted(cardBase, with: $0.light, amount: 0.55) })
+    static let disc = chrome(AccentTheme.allCases.map { blendTinted(discBase, with: $0.light, amount: 0.50) })
+    static let track = chrome(AccentTheme.allCases.map { blendTinted(trackBase, with: $0.light, amount: 0.50) })
+
+    /// A chrome colour table indexed by `AccentTheme.allCases`. Callers pass the
+    /// accent in (from the observed `preferences`) rather than reading a global,
+    /// so a themed view can never resolve a different accent than its neighbour.
+    struct chrome {
+        let colors: [Color]
+        init(_ colors: [Color]) { self.colors = colors }
+        subscript(index: Int) -> Color { colors[min(max(index, 0), colors.count - 1)] }
+    }
+
     static let text = Color.white
     static let subtext = Color(white: 1, opacity: 0.55)
-    static let deficit = Color(red: 1.0, green: 0.584, blue: 0.0) // #FF9500 amber
-    static let surplus = Color(red: 0.204, green: 0.78, blue: 0.349) // #34C759 calm green
-    static let warn = Color(red: 1.0, green: 0.584, blue: 0.0)
-    static let good = Color(red: 0.204, green: 0.78, blue: 0.349)
+
+    // The notch shows the app's own headroom scale, not a private palette:
+    // status text, banners, and ring bands all resolve through `headroomColor`
+    // so a reading looks the same here as in the popover and menu bar.
+    static var deficit: Color { MU.warn }
+    static var surplus: Color { MU.good }
 
     static func color(usedPercent: Double) -> Color {
-        switch NotchBand.band(usedPercent: usedPercent) {
-        case .plenty:       return Color(red: 0.16, green: 0.88, blue: 0.48)
-        case .gettingClose: return Color(red: 0.96, green: 0.89, blue: 0.0)
-        case .nearlyOut, .atLimit:
-            return Color(red: 1.0, green: 0.27, blue: 0.0)
-        }
+        headroomColor(usedPercent)
     }
 }
 
@@ -127,6 +211,14 @@ private struct ShareButton: NSViewRepresentable {
     }
 }
 
+/// Hover-card identity. The provider slot alone is not enough: the card's
+/// chrome is themed, so an accent change must invalidate it or the card keeps
+/// the previous theme while the strip beside it recolours.
+private struct CardIdentity: Hashable {
+    let slot: ProviderSlot
+    let accent: AccentTheme
+}
+
 // MARK: - Side notch panel view
 //
 // The content of the floating right-edge strip: one progress ring per menu-bar
@@ -153,6 +245,9 @@ struct SideNotchPanelView: View {
     /// re-render the panel. (Both live for the life of the app, so the
     /// reference cycle is harmless.)
     @ObservedObject var panel: SideNotchPanelController
+    /// Observed so a changed accent re-renders the strip and its cards: the
+    /// primary mark and every `MU.accent`-based figure follow the palette.
+    @ObservedObject var preferences: Preferences
     /// Reports the view's natural size so the hosting panel can keep its
     /// top-right corner pinned while the content grows and shrinks. Same
     /// contract as `MenuBarLabel.onWidthChange`.
@@ -192,6 +287,16 @@ struct SideNotchPanelView: View {
     /// re-enter before the delay fires cancels it. 450ms — deliberately
     /// longer than a tooltip grace, so the fold never feels twitchy.
     @State private var collapseTask: Task<Void, Never>?
+
+    /// The selected accent's index into `Notch`'s chrome tables.
+    ///
+    /// Taken from the observed `preferences`, not from `UserDefaults` directly:
+    /// the strip chrome and the hover-card identity must resolve the accent from
+    /// one source, or a change between them can leave the card on the old theme
+    /// while the strip recolours.
+    private var accentIndex: Int {
+        AccentTheme.allCases.firstIndex(of: preferences.accentTheme) ?? 0
+    }
 
     /// Unfolded while pinned, while the pointer is on the panel, or while a
     /// reset action / confirmation is active.
@@ -344,11 +449,15 @@ struct SideNotchPanelView: View {
             let effectiveHeight = max(cardHeight, stripHeight)
             let isBeakWithinBounds = Self.isBeakWithinBounds(beakY: beakY, cardHeight: effectiveHeight)
             detailCard(for: hovered)
-                .id(hovered)
+                // Identity includes the accent, not just the provider: a card
+                // keyed on the slot alone is reused across an accent change and
+                // keeps its old chrome while the strip recolours, so the two
+                // halves of one object show different themes.
+                .id(CardIdentity(slot: hovered, accent: preferences.accentTheme))
                 .accessibilityElement(children: .contain)
                 .overlay(alignment: panel.cardOnRight ? .topLeading : .topTrailing) {
                     if isBeakWithinBounds {
-                        ArrowBeakView()
+                        ArrowBeakView(accent: preferences.accentTheme)
                             .scaleEffect(x: panel.cardOnRight ? -1 : 1, y: 1)
                             .offset(x: panel.cardOnRight ? -3.5 : 3.5, y: beakY)
                     }
@@ -387,13 +496,13 @@ struct SideNotchPanelView: View {
         .padding(.horizontal, 6)
         .background(
             Capsule(style: .continuous)
-                .fill(Notch.body)
+                .fill(Notch.body[accentIndex])
         )
         .overlay(
             // The one border in the notch: without it the resting pill
             // vanishes into dark wallpapers. Track-grey keeps it a whisper.
             Capsule(style: .continuous)
-                .strokeBorder(Notch.track, lineWidth: 1)
+                .strokeBorder(Notch.track[accentIndex], lineWidth: 1)
         )
         .fixedSize()
         .contentShape(Rectangle())
@@ -425,6 +534,7 @@ struct SideNotchPanelView: View {
                             slot: entry.slot,
                             digit: entry.digit,
                             markTint: entry.markTint,
+                            accent: preferences.accentTheme,
                             reduceMotion: reduceMotion
                         )
                         Text(Fmt.percent(entry.usedPercent))
@@ -504,7 +614,7 @@ struct SideNotchPanelView: View {
                 topTrailingRadius: isCardShowing ? (panel.cardOnRight ? 0 : 20) : 20,
                 style: .continuous
             )
-            .fill(Notch.body)
+            .fill(Notch.body[accentIndex])
         )
     }
 
@@ -772,7 +882,7 @@ struct SideNotchPanelView: View {
                 topTrailingRadius: panel.cardOnRight ? 16 : 0,
                 style: .continuous
             )
-            .fill(Notch.card)
+            .fill(Notch.card[accentIndex])
         )
     }
 
@@ -809,7 +919,7 @@ struct SideNotchPanelView: View {
             // Fixed-width track so layout never collapses or jumps
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)
-                    .fill(Notch.track)
+                    .fill(Notch.track[accentIndex])
                     .frame(width: 222, height: 4)
                 Capsule(style: .continuous)
                     .fill(Notch.color(usedPercent: window.usedPercent))
@@ -972,7 +1082,7 @@ struct SideNotchPanelView: View {
                     .fill(
                         isToday
                             ? providerColor(provider)
-                            : (hasActivity ? Notch.subtext.opacity(0.85) : Notch.track.opacity(0.6))
+                            : (hasActivity ? Notch.subtext.opacity(0.85) : Notch.track[accentIndex].opacity(0.6))
                     )
                     .frame(width: 5, height: heightFrac * 22)
             }
@@ -1072,7 +1182,7 @@ struct SideNotchPanelView: View {
 
                     if idx > 0 {
                         Divider()
-                            .overlay(Notch.track.opacity(0.6))
+                            .overlay(Notch.track[accentIndex].opacity(0.6))
                     }
 
                     HStack(alignment: .center, spacing: 6) {
@@ -1139,7 +1249,7 @@ struct SideNotchPanelView: View {
                                     .padding(.vertical, 2.5)
                                     .background(
                                         Capsule(style: .continuous)
-                                            .fill(Notch.track)
+                                            .fill(Notch.track[accentIndex])
                                     )
                             }
                             .buttonStyle(.plain)
@@ -1485,9 +1595,15 @@ private struct TriangleArrow: Shape {
 }
 
 private struct ArrowBeakView: View {
+    /// Passed in rather than read from `UserDefaults`, so the beak is themed
+    /// from the same observed value as the card it sits on.
+    let accent: AccentTheme
+
+    private var accentIndex: Int { AccentTheme.allCases.firstIndex(of: accent) ?? 0 }
+
     var body: some View {
         TriangleArrow()
-            .fill(Notch.card)
+            .fill(Notch.card[accentIndex])
             .frame(width: 7, height: 12)
     }
 }
@@ -1540,14 +1656,19 @@ private struct QuotaRing: View {
     /// attribute that exists in this app (see the privacy contract).
     let digit: String?
     let markTint: Color
+    /// Passed in rather than read from `UserDefaults`, so the ring chrome is
+    /// themed from the same observed value as the rest of the panel.
+    let accent: AccentTheme
     var reduceMotion = false
+
+    private var accentIndex: Int { AccentTheme.allCases.firstIndex(of: accent) ?? 0 }
 
     var body: some View {
         ZStack {
             Circle()
-                .fill(Notch.disc)
+                .fill(Notch.disc[accentIndex])
             Circle()
-                .stroke(Notch.track, lineWidth: 2.5)
+                .stroke(Notch.track[accentIndex], lineWidth: 2.5)
             Circle()
                 .trim(from: 0, to: fraction.muClamped(to: 0...1))
                 .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
@@ -1562,8 +1683,11 @@ private struct QuotaRing: View {
                     .font(.system(size: 6.5, weight: .bold))
                     .foregroundColor(Notch.text)
                     .frame(width: 9, height: 9)
-                    .background(Circle().fill(Notch.track))
+                    .background(Circle().fill(Notch.track[accentIndex]))
                     .offset(x: 10, y: 10)
+                    // A ring recolours with the accent theme at rest; the
+                    // digit chip shares that chrome so it stays part of the
+                    // ring rather than a separate disk.
             }
         }
         .frame(width: 26, height: 26)

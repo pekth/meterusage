@@ -32,6 +32,9 @@ import AppKit
 struct MenuBarLabel: View {
 
     @ObservedObject var coordinator: AppCoordinator
+    /// Observed so a changed accent re-renders the tray: the primary mark and
+    /// every `MU.accent`-based figure resolve from the shared palette.
+    @ObservedObject var preferences: Preferences
     /// The host reports the label's natural width so the `NSStatusItem` can
     /// match it: too narrow a slot clips "100%" to "10", and a wider fixed
     /// slot pads short figures like "9%" away from the gauge.
@@ -49,7 +52,7 @@ struct MenuBarLabel: View {
                     .clipShape(RoundedRectangle(cornerRadius: 3))
             }
 
-            if coordinator.preferences.menuBarCompactEnabled {
+            if preferences.menuBarCompactEnabled {
                 CompactTrayGlyph()
             } else {
                 trayClusters
@@ -71,7 +74,7 @@ struct MenuBarLabel: View {
         )
         .animation(.easeOut(duration: 0.3), value: fraction)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(coordinator.preferences.menuBarCompactEnabled ? "MeterUsage" : accessibilityText)
+        .accessibilityLabel(preferences.menuBarCompactEnabled ? "MeterUsage" : accessibilityText)
     }
 
     /// The per-slot `[mark] digit percent` clusters, unchanged from the

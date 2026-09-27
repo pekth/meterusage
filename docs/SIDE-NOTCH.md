@@ -14,11 +14,23 @@ record is [`docs/adr/0004`](adr/0004-side-notch-anchor-invariant.md).
 
 ## Tints
 
-Shared with the menu bar by `MenuBarLabel.statusTint`: the ring and percents
-carry quota headroom, while the provider mark keeps its identity colour until a
-service check diverges from healthy — degraded or outage repaints the mark
-(amber/red), an unreadable check greys it, and an operational check recolours
-nothing.
+The panel's chrome — body, hover card, ring disc and track — is tinted by the
+selected accent theme, so the strip's whole colour follows the accent. The mix
+takes the accent's hue and saturation and then pins the result at the base's
+Rec. 709 relative luminance, so each theme renders at the same perceived
+brightness as the popover's grey surfaces it stands in for; a saturated hue at a
+fixed channel otherwise reads darker than a grey and made the tinted themes look
+near-black. The bases are the popover's own dark values (`MU.canvas`,
+`MU.surface`, `MU.well`), so strip and window are the same dark grey. Legibility
+of the white figures and status bands follows from that match. The window forces
+`darkAqua` (`SideNotchPanelController`) so the shared `MU` headroom scale resolves
+its high-contrast variants on the dark chrome.
+
+Within that chrome, the ring and percents carry quota headroom, while the
+provider mark keeps its identity colour until a service check diverges from
+healthy — degraded or outage repaints the mark (amber/red), an unreadable check
+greys it, and an operational check recolours nothing. This is shared with the
+menu bar by `MenuBarLabel.statusTint`.
 
 The panel unfolds while pinned, while the pointer is on it, or while a reset
 action is active. A pointer exit schedules a fold after 450ms so a brief exit
