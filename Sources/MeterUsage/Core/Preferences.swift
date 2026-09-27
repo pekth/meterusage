@@ -35,6 +35,7 @@ enum PrefKey {
     static let showGemini = "showProviderGemini"
     static let menuBarClaude = "menuBarProviderClaude"
     static let menuBarCodex = "menuBarProviderCodex"
+    static let menuBarOpenAI = "menuBarProviderOpenAI"
     static let menuBarAntigravity = "menuBarProviderAntigravity"
     static let menuBarGrok = "menuBarProviderGrok"
     static let menuBarOpenCodeGo = "menuBarProviderOpenCodeGo"
@@ -174,6 +175,7 @@ final class Preferences: ObservableObject {
             // down to the ones they glance at.
             PrefKey.menuBarClaude: true,
             PrefKey.menuBarCodex: true,
+            PrefKey.menuBarOpenAI: true,
             PrefKey.menuBarAntigravity: true,
             PrefKey.menuBarGrok: true,
             PrefKey.menuBarOpenCodeGo: true,
@@ -236,6 +238,7 @@ final class Preferences: ObservableObject {
 
         var menuBar = Set<Provider>()
         if defaults.bool(forKey: PrefKey.menuBarCodex) { menuBar.insert(.codex) }
+        if defaults.bool(forKey: PrefKey.menuBarOpenAI) { menuBar.insert(.openAI) }
         if defaults.bool(forKey: PrefKey.menuBarAntigravity) { menuBar.insert(.antigravity) }
         if defaults.bool(forKey: PrefKey.menuBarGrok) { menuBar.insert(.grok) }
         if defaults.bool(forKey: PrefKey.menuBarOpenCodeGo) { menuBar.insert(.openCodeGo) }

@@ -7,7 +7,8 @@ import AppKit
 /// toggles, and a menu-bar app that opens windows loses its "glance and
 /// dismiss" quality.
 ///
-/// Every control binds `@AppStorage` directly. `Preferences` observes the same
+/// Saved controls bind `@AppStorage` directly. API keys stay in memory.
+/// `Preferences` observes the same
 /// keys and republishes, so changing the interval here restarts the coordinator's
 /// timer with no explicit plumbing between the two.
 struct SettingsView: View {
@@ -32,6 +33,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showGemini) private var showGemini: Bool = true
     @AppStorage(PrefKey.menuBarClaude) private var menuBarClaude: Bool = true
     @AppStorage(PrefKey.menuBarCodex) private var menuBarCodex: Bool = true
+    @AppStorage(PrefKey.menuBarOpenAI) private var menuBarOpenAI: Bool = true
     @AppStorage(PrefKey.menuBarAntigravity) private var menuBarAntigravity: Bool = true
     @AppStorage(PrefKey.menuBarGrok) private var menuBarGrok: Bool = true
     @AppStorage(PrefKey.menuBarOpenCodeGo) private var menuBarOpenCodeGo: Bool = true
@@ -92,15 +94,22 @@ struct SettingsView: View {
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .openAI,
-                        subtitle: "API spend and tokens (Admin key)",
-                        isOn: $showOpenAI
+                        subtitle: "Organization spend and tokens",
+                        isOn: $showOpenAI,
+                        menuBarIsOn: $menuBarOpenAI
                     )
+                    if showOpenAI {
+                        APIConnectionControls(provider: .openAI, coordinator: coordinator)
+                    }
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .anthropic,
-                        subtitle: "API spend and tokens (Admin key)",
+                        subtitle: "Organization spend and tokens",
                         isOn: $showAnthropic
                     )
+                    if showAnthropic {
+                        APIConnectionControls(provider: .anthropic, coordinator: coordinator)
+                    }
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .antigravity,
@@ -222,18 +231,15 @@ struct SettingsView: View {
             Group {
                 SectionHeader("Accounts")
                 Card(padding: 10) {
-                    // Whose readings these are. This app signs in nowhere: every
-                    // number is borrowed from a credential a tool on this Mac
-                    // already holds, so each row names the owning tool and the
-                    // plan it reports. No address, no account id — a plan tier
-                    // is context for the percentages, never an identity.
+                    // Local tools own these credentials. Organization API
+                    // connections have their own controls above.
                     //
                     // Only shown slots are listed: a hidden provider or a
                     // removed second account is not read at all, so showing
                     // its row would present a credential that is currently
                     // doing nothing.
                     if visibleAccounts.isEmpty {
-                        Text("All providers are hidden. Turn one on in Providers above.")
+                        Text("No local provider accounts enabled. API connections are managed above.")
                             .font(.muBody)
                             .foregroundColor(MU.textSecondary)
                     } else {
@@ -465,7 +471,7 @@ struct SettingsView: View {
         // The coordinator's visibility, not the raw preference: an
         // additional account with no config directory is not an account,
         // so it gets no row.
-        coordinator.visibleSlots
+        coordinator.visibleSlots.filter { !$0.provider.isOrganizationAPI }
     }
 
     private static func intervalLabel(_ seconds: Double) -> String {
@@ -640,7 +646,11 @@ private struct ProviderRow: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .help(menuBarIsOn.wrappedValue
+                    .help(provider == .openAI
+                          ? (menuBarIsOn.wrappedValue
+                             ? "Hide OpenAI API from the side notch"
+                             : "Show OpenAI API in the side notch")
+                          : menuBarIsOn.wrappedValue
                           ? "Hide \(provider.displayName) from the side notch and menu bar"
                           : "Show \(provider.displayName) in the side notch and menu bar")
                     .accessibilityLabel(menuBarIsOn.wrappedValue
@@ -736,4 +746,3 @@ private struct AccountRow: View {
         .accessibilityLabel("\(account.name), \(account.plan ?? "plan unknown"), via \(account.via)")
     }
 }
-

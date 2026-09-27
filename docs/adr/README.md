@@ -14,3 +14,5 @@ This directory records decisions that affect repository work. Read an ADR before
 | [0006](0006-managed-account-list.md) | Additional accounts are a managed, unbounded Settings list; `ProviderSlot` (provider + generated id, label display-only) keys every metered surface, with primary-slot persistence formats unchanged. | Accepted |
 | [0007](0007-openai-api-usage.md) | Keep OpenAI API organization usage separate from Codex limits and local coding totals; use an opt-in Admin key for aggregate usage and costs. | Accepted |
 | [0008](0008-anthropic-api-usage.md) | Apply the organization-monitor boundary to Anthropic API spend and Messages API tokens, separate from Claude Code and subscription quota. | Accepted |
+| [0009](0009-session-only-api-connections.md) | Add masked API key entry and connection testing, retaining credentials only for the app session. | Accepted; amends credential input in 0007 and 0008 |
+| [0010](0010-openai-side-notch.md) | Show OpenAI API reported spend in the side notch without quota semantics; reuse the popover usage details. | Accepted; extends display locations in 0007 |

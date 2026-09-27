@@ -34,7 +34,7 @@ struct ProviderUsageSection: View {
     }
 }
 
-private struct ProviderUsageRow: View {
+struct ProviderUsageRow: View {
     let provider: Provider
     let state: Loaded<ProviderUsage>
     let now: Date
@@ -74,7 +74,7 @@ private struct ProviderUsageRow: View {
     }
 
     @ViewBuilder
-    private var detail: some View {
+    var detail: some View {
         switch state {
         case .idle:
             Text(provider.isOrganizationAPI ? "Checking API usage…" : "Checking local history…")
@@ -173,9 +173,9 @@ private struct ProviderUsageRow: View {
             switch reason {
             case .dataNotFound, .notSignedIn:
                 if provider == .anthropic {
-                    return "Launch with ANTHROPIC_ADMIN_KEY set to a Console organization Admin key. Individual accounts, workspace keys, and Claude subscription logins cannot supply this reading."
+                    return "Connect in Settings → Providers → Anthropic API with a Console organization Admin key. Individual accounts, workspace keys, and Claude subscription logins cannot supply this reading."
                 }
-                return "Launch with OPENAI_ADMIN_KEY set to an organization Admin key with usage access. A project API key or Codex login cannot supply this reading."
+                return "Connect in Settings → Providers → OpenAI API with an organization Admin key that has usage access. A project API key or Codex login cannot supply this reading."
             case .offline: return "Connect to the internet, then refresh API usage."
             default: return "API usage is unavailable. Will retry on the next refresh."
             }

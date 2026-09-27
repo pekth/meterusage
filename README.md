@@ -122,22 +122,36 @@ including today. Day boundaries use UTC. Spend comes from OpenAI's Costs API;
 it is not calculated from the app's price table. Token totals cover the
 completions usage endpoint, not every OpenAI product. Reporting can lag.
 
-The app reads `OPENAI_ADMIN_KEY` from its process environment. It must contain
-an [organization Admin key](https://platform.openai.com/settings/organization/admin-keys)
-with usage access. A regular project key or Codex subscription login does not
-provide this access. Make the variable available through your existing secure
-launcher, then launch the app executable from that environment:
+Select **Connect** below the provider toggle, enter an
+[organization Admin key](https://platform.openai.com/settings/organization/admin-keys)
+in the masked field, and select **Test connection**. The test reads both usage
+and costs. A successful reading shows **Connected** and its update time.
+A regular project key or Codex subscription login does not provide this access.
+
+The entered key stays in memory until you disconnect or quit. It is never
+saved to preferences, files, or Keychain. **Disconnect** clears the key and
+the displayed reading. Reconnect after restarting the app. Closing Settings
+clears unfinished key entry.
+
+For an existing secure launcher, `OPENAI_ADMIN_KEY` is also supported at
+launch. Run the app executable from that environment:
 
 ```sh
 /Applications/MeterUsage.app/Contents/MacOS/meterusage
 ```
 
 Finder launches do not inherit terminal variables. Quit any running copy first.
-meterusage has no key-entry field and does not save the key. Missing access,
-offline requests, and incomplete responses show an unavailable reading.
+Missing access, offline requests, and incomplete responses show an unavailable
+reading. Disconnect also suppresses a launcher-provided key for the rest of
+that app session.
 
-This monitor appears in the popover's Usage card. It has no quota ring, reset
-countdown, or pace alert. Organization usage stays separate from Codex limits
+This monitor appears in the popover's Usage card and the side notch. Enable
+the side notch in Settings and use **Notch** beside OpenAI API to show or hide
+its entry. The strip shows reported spend for the last 30 UTC calendar days.
+Hover its mark for today's and 30-day spend, completion tokens, requests, and
+the reading's update time. Missing access shows **N/A**, with connection
+guidance in the detail card. No quota percentage, reset countdown, or pace
+alert is inferred from spend. Organization usage stays separate from Codex limits
 and the local coding summary to avoid counting the same work twice. The quota
 JSON CLI does not include this usage-only provider.
 
@@ -153,12 +167,20 @@ cache creation. Anthropic reports cost amounts in cents; meterusage converts
 them to USD. The cost report excludes Priority Tier charges and can lag.
 The API does not supply a total request count, so the card omits that count.
 
-The app reads `ANTHROPIC_ADMIN_KEY` from its process environment. Use a Console
-organization Admin key through your existing secure launcher, then launch the
-executable as described under [OpenAI API usage](#openai-api-usage). Individual
-accounts do not have Admin API access. Regular workspace keys and Claude
-subscription logins do not provide this access. meterusage has no key-entry
-field and does not save the key.
+Select **Connect**, enter a Console organization Admin key in the masked field,
+and select **Test connection**. Key handling and Disconnect work as described
+under [OpenAI API usage](#openai-api-usage). `ANTHROPIC_ADMIN_KEY` is also
+supported through an existing secure launcher. Workspace keys and Claude
+subscription logins do not provide this access. Anthropic also documents organization-level keys and
+`org:admin` OAuth credentials; this app provides key entry, with no OAuth login.
+
+**Individual Anthropic accounts cannot connect this monitor.** Anthropic's
+[Admin API documentation](https://platform.claude.com/docs/en/manage-claude/admin-api)
+states that the Admin API is unavailable for individual accounts. An Admin
+role alone does not establish an eligible organization account. If your account
+is individual, use the [Claude Console usage page](https://platform.claude.com/usage)
+to check usage. MeterUsage cannot sync that account's history through this API.
+A missing Admin keys page does not, by itself, confirm the account type.
 
 This monitor appears in the popover's Usage card, separate from Claude Code
 activity and subscription quota. It has no quota ring, countdown, or pace
