@@ -148,8 +148,9 @@ struct SettingsView: View {
 
             Group {
                 SectionHeader(title: "Second accounts") {
-                    // One compact affordance; the menu names the tool, so the
-                    // button never truncates at card width.
+                    // One compact affordance; the menu names the tool. The
+                    // label stays short so the button always fits inside the
+                    // popover at its header position.
                     Menu {
                         ForEach(Provider.supportsAdditionalAccounts, id: \.self) { provider in
                             Button("Add \(provider.displayName) account") {
@@ -162,10 +163,9 @@ struct SettingsView: View {
                             }
                         }
                     } label: {
-                        Label("Add account", systemImage: "plus")
+                        Label("Add", systemImage: "plus")
                     }
                     .controlSize(.small)
-                    .fixedSize()
                     .accessibilityLabel("Add second account")
                 }
                 Card(padding: 10) {
