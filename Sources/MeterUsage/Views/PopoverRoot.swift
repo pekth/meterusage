@@ -81,10 +81,10 @@ struct StripTotals {
 // claim at all, only the near-limit wording when the window is nearly gone.
 
 struct FailoverNudge: Equatable {
-    /// One provider worth warning about. A struct rather than a tuple so
+    /// One metered slot worth warning about. A struct rather than a tuple so
     /// key paths work for the ordering and exclusion sets below.
     private struct Hot: Equatable {
-        let provider: Provider
+        let slot: ProviderSlot
         let window: QuotaWindow
         let activelyBurning: Bool
     }
@@ -93,31 +93,31 @@ struct FailoverNudge: Equatable {
     let accessibilityLabel: String
 
     static func evaluate(
-        providers: [Provider],
-        headline: (Provider) -> QuotaWindow?,
-        lastBurn: (Provider) -> Date?,
+        slots: [ProviderSlot],
+        headline: (ProviderSlot) -> QuotaWindow?,
+        lastBurn: (ProviderSlot) -> Date?,
         now: Date
     ) -> FailoverNudge {
-        // A provider is worth warning about when it is actively burning
-        // fast, or when its headline window is nearly gone — the former is a
+        // A slot is worth warning about when it is actively burning fast,
+        // or when its headline window is nearly gone — the former is a
         // pace claim gated on burn recency, the latter a plain state claim.
-        let hot: [Hot] = providers.compactMap { p in
-            guard let h = headline(p) else { return nil }
+        let hot: [Hot] = slots.compactMap { slot in
+            guard let h = headline(slot) else { return nil }
             let burning = h.pace(now: now)?.status.isDeficit == true
-                && BurnRecency.isActive(lastBurn: lastBurn(p), now: now)
+                && BurnRecency.isActive(lastBurn: lastBurn(slot), now: now)
             guard burning || h.usedPercent >= 80 else { return nil }
-            return Hot(provider: p, window: h, activelyBurning: burning)
+            return Hot(slot: slot, window: h, activelyBurning: burning)
         }
 
-        // Never suggest switching to a provider that is itself hot —
+        // Never suggest switching to a slot that is itself hot —
         // "Codex burning fast. Switch to Codex" is the exact failure.
-        let hotProviders = Set(hot.map(\.provider))
-        let alternatives = providers.filter { p in
-            guard !hotProviders.contains(p), let h = headline(p) else { return false }
+        let hotSlots = Set(hot.map(\.slot))
+        let alternatives = slots.filter { slot in
+            guard !hotSlots.contains(slot), let h = headline(slot) else { return false }
             return h.usedPercent < 50
         }
 
-        // An actively burning provider outranks one that merely sits near
+        // An actively burning slot outranks one that merely sits near
         // its limit; without alternatives there is nothing to switch to.
         guard let first = hot.first(where: \.activelyBurning) ?? hot.first,
               !alternatives.isEmpty else {
@@ -128,8 +128,8 @@ struct FailoverNudge: Equatable {
         let label = first.window.label.lowercased()
         let limit = label.contains("limit") ? label : "\(label) limit"
         let claim = first.activelyBurning
-            ? "\(first.provider.displayName) burning fast."
-            : "\(first.provider.displayName) near its \(limit)."
+            ? "\(first.slot.displayName) burning fast."
+            : "\(first.slot.displayName) near its \(limit)."
         return FailoverNudge(
             message: "\(claim) Switch to \(names) for headroom.",
             accessibilityLabel: "\(claim) Headroom in \(names)."
@@ -244,7 +244,7 @@ struct PopoverRoot: View {
         ScrollView(.vertical) {
             Group {
                 if showingSettings {
-                    SettingsView(coordinator: coordinator)
+                    SettingsView(coordinator: coordinator, preferences: preferences)
                         .transition(.opacity.combined(with: .move(edge: .trailing)))
                 } else if !onboardingDone {
                     onboarding
@@ -337,7 +337,7 @@ struct PopoverRoot: View {
             unifiedActivityStrip
 
             SectionHeader("Quotas")
-            if coordinator.visibleQuotaProviders.isEmpty {
+            if coordinator.visibleQuotaSlots.isEmpty {
                 Card {
                     InfoState(
                         message: "No quota providers shown",
@@ -345,41 +345,52 @@ struct PopoverRoot: View {
                     )
                 }
             } else {
-                ForEach(coordinator.visibleQuotaProviders, id: \.self) { provider in
+                ForEach(coordinator.visibleQuotaSlots, id: \.key) { slot in
                     QuotaSection(
-                        provider: provider,
-                        state: coordinator.quotas[provider] ?? .idle,
-                        plan: coordinator.plans[provider] ?? .idle,
+                        slot: slot,
+                        state: coordinator.quotas[slot] ?? .idle,
+                        plan: coordinator.plans[slot] ?? .idle,
                         now: coordinator.clock,
                         onUseReset: { creditID in
-                            try await coordinator.consumeCodexReset(creditID: creditID)
+                            // The slot is passed explicitly: with a second
+                            // Codex account mounted, a reset belongs to the
+                            // card it was confirmed on.
+                            try await coordinator.consumeCodexReset(creditID: creditID, in: slot)
                         },
                         // Codex and Claude render their weekly heatmaps inside
                         // their own quota cards so all of a provider's figures
                         // sit together. Codex shades by sessions (no token
                         // ledger); Claude shades by tokens. Other providers
-                        // pass nothing and render unchanged.
-                        heatmapDaily: heatmapDaily(for: provider),
-                        heatmapIntensity: provider == .codex ? .sessions : .tokens,
+                        // pass nothing and render unchanged. Each account
+                        // slot shades its own activity.
+                        heatmapDaily: heatmapDaily(for: slot),
+                        heatmapIntensity: slot.provider == .codex ? .sessions : .tokens,
                         lastBurn: BurnRecency.lastBurn(
-                            of: coordinator.activities[provider]?.value?.sessions ?? [])
+                            of: coordinator.activities[slot]?.value?.sessions ?? [])
                     )
                 }
             }
 
+            // Usage rows have no additional-account slots (their sources are
+            // per tool), so the slot map folds back to provider keys here.
             ProviderUsageSection(
-                usages: coordinator.usages,
+                usages: Dictionary(
+                    uniqueKeysWithValues: coordinator.usages.compactMap { slot, state in
+                        slot.isPrimary ? (slot.provider, state) : nil
+                    }
+                ),
                 providers: coordinator.visibleUsageProviders,
                 now: coordinator.clock
             )
         }
     }
 
-    private func heatmapDaily(for provider: Provider) -> [DailyActivity] {
-        switch provider {
-        case .codex:  return coordinator.activities[.codex]?.value?.daily ?? []
-        case .claude: return coordinator.activities[.claude]?.value?.daily ?? []
-        default:      return []
+    private func heatmapDaily(for slot: ProviderSlot) -> [DailyActivity] {
+        // Each account slot carries its own daily history, so a second
+        // account's card shades its own activity.
+        switch slot.provider {
+        case .codex, .claude: return coordinator.activities[slot]?.value?.daily ?? []
+        default:              return []
         }
     }
 
@@ -464,8 +475,8 @@ struct PopoverRoot: View {
         // approximations of "work done today" from stores that never record
         // per-day ledgers; the difference only shows at day boundaries.
         let totals = StripTotals.calculate(
-            activities: Provider.allCases.compactMap { coordinator.activities[$0]?.value },
-            usages: Provider.allCases.compactMap { coordinator.usages[$0]?.value },
+            activities: coordinator.visibleActivitySlots.compactMap { coordinator.activities[$0]?.value },
+            usages: coordinator.visibleUsageProviders.compactMap { coordinator.usages[.primary($0)]?.value },
             now: coordinator.clock
         )
         let todayTokens = totals.todayTokens
@@ -478,13 +489,13 @@ struct PopoverRoot: View {
         let weekStart = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
 
         let nudge = FailoverNudge.evaluate(
-            providers: coordinator.visibleQuotaProviders,
-            headline: { p in
-                guard let q = coordinator.displayQuota(for: p)?.quota else { return nil }
-                return p.headlineWindow(from: q.windows)
+            slots: coordinator.visibleQuotaSlots,
+            headline: { slot in
+                guard let q = coordinator.displayQuota(for: slot)?.quota else { return nil }
+                return slot.provider.headlineWindow(from: q.windows)
             },
-            lastBurn: { p in
-                BurnRecency.lastBurn(of: coordinator.activities[p]?.value?.sessions ?? [])
+            lastBurn: { slot in
+                BurnRecency.lastBurn(of: coordinator.activities[slot]?.value?.sessions ?? [])
             },
             now: coordinator.clock
         )
@@ -532,14 +543,14 @@ struct PopoverRoot: View {
                         Spacer()
 
                         HStack(spacing: 3) {
-                            ForEach(coordinator.menuBarProviders, id: \.self) { p in
-                                ProviderMark(provider: p, tint: providerColor(p))
+                            ForEach(coordinator.menuBarSlots, id: \.key) { slot in
+                                ProviderMark(provider: slot.provider, tint: providerColor(slot.provider))
                                     .frame(width: 11, height: 11)
-                                    .help(p.displayName)
+                                    .help(slot.displayName)
                             }
                         }
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Includes: \(coordinator.menuBarProviders.map(\.displayName).joined(separator: ", "))")
+                        .accessibilityLabel("Includes: \(coordinator.menuBarSlots.map(\.displayName).joined(separator: ", "))")
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("\(Fmt.tokenCountString(todayTokens)) tokens today, \(Fmt.tokenCountString(weekTokens)) last 7 days")

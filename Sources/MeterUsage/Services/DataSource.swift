@@ -7,9 +7,19 @@ import Foundation
 
 /// A source of live, provider-reported quota.
 public protocol QuotaSource: Sendable {
+    /// The tool this source meters. Stays a requirement so simple sources
+    /// only declare it; `slot` then defaults to the primary account.
     var provider: Provider { get }
+    /// Which metered account this instance reads. The default is the
+    /// provider's primary slot; a source instance mounted for an additional
+    /// account declares its own (see `ProviderSlot`).
+    var slot: ProviderSlot { get }
     /// Returns current quota, or throws `SourceUnavailable`.
     func fetchQuota() async throws -> ProviderQuota
+}
+
+extension QuotaSource {
+    public var slot: ProviderSlot { .primary(provider) }
 }
 
 /// Optional account action exposed by a quota source. Keeping redemption out
@@ -21,17 +31,31 @@ public protocol QuotaResetConsumer: Sendable {
 
 /// A source of locally-computed activity, derived from the user's own files.
 public protocol LocalActivitySource: Sendable {
+    /// The tool this source meters (see `QuotaSource.provider`).
     var provider: Provider { get }
+    /// Which metered account this instance scans (see `QuotaSource.slot`).
+    var slot: ProviderSlot { get }
     /// Scans local transcripts. Never performs network I/O.
     func scan() async throws -> LocalActivity
+}
+
+extension LocalActivitySource {
+    public var slot: ProviderSlot { .primary(provider) }
 }
 
 /// A local usage source for providers whose native history is not Claude's
 /// token transcript format. Sources may report sessions/messages only when
 /// token or cost data is unavailable.
 public protocol UsageSource: Sendable {
+    /// The tool this source meters (see `QuotaSource.provider`).
     var provider: Provider { get }
+    /// Which metered account this instance reads (see `QuotaSource.slot`).
+    var slot: ProviderSlot { get }
     func fetchUsage() async throws -> ProviderUsage
+}
+
+extension UsageSource {
+    public var slot: ProviderSlot { .primary(provider) }
 }
 
 /// A source of provider service health.
@@ -55,6 +79,27 @@ public enum HomeDirectory {
             if !path.isEmpty { return URL(fileURLWithPath: path) }
         }
         return URL(fileURLWithPath: NSHomeDirectory())
+    }
+}
+
+/// Status sources stay per service (never per account): one public feed per
+/// service, polled once. Their slot identity is always the primary slot so
+/// the coordinator's backoff map can key them uniformly.
+public extension StatusSource {
+    var statusSlot: ProviderSlot { .primary(provider) }
+}
+
+/// Where a managed account's config directory lives, with a leading tilde
+/// expanded against the real home directory. Blank or whitespace-only paths
+/// resolve to nil — "not configured", never a broken path.
+public enum ManagedAccountPaths {
+    public static func home(for account: ManagedAccount, home: URL = HomeDirectory.real) -> URL? {
+        let raw = account.path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return nil }
+        if raw == "~" || raw.hasPrefix("~/") {
+            return home.appendingPathComponent(String(raw.dropFirst(2)))
+        }
+        return URL(fileURLWithPath: raw, isDirectory: true)
     }
 }
 

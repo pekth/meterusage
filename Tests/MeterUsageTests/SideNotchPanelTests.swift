@@ -259,12 +259,12 @@ final class SideNotchPanelTests: XCTestCase {
         ])
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
 
-        XCTAssertEqual(entries.map(\.provider), [.codex, .grok])
+        XCTAssertEqual(entries.map(\.slot), [.codex, .grok])
         XCTAssertEqual(entries[0].usedPercent, 80)
         XCTAssertEqual(entries[1].usedPercent, 40)
     }
@@ -279,7 +279,7 @@ final class SideNotchPanelTests: XCTestCase {
         ])
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
@@ -297,7 +297,7 @@ final class SideNotchPanelTests: XCTestCase {
         ])
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
@@ -313,7 +313,7 @@ final class SideNotchPanelTests: XCTestCase {
         ])
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
@@ -331,7 +331,7 @@ final class SideNotchPanelTests: XCTestCase {
         ])
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
@@ -348,7 +348,7 @@ final class SideNotchPanelTests: XCTestCase {
             (Provider.claude, [("7-day", 44.0, 3600)]),
         ])
         let legacyEntries = SideNotchPanelView.entries(
-            menuBarProviders: legacy.menuBarProviders,
+            menuBarSlots: legacy.menuBarSlots,
             quotas: legacy.quotas,
             statuses: legacy.statuses
         )
@@ -359,7 +359,7 @@ final class SideNotchPanelTests: XCTestCase {
             (Provider.claude, [("Weekly · All models", 61.0, 3600)]),
         ])
         let transientEntries = SideNotchPanelView.entries(
-            menuBarProviders: transient.menuBarProviders,
+            menuBarSlots: transient.menuBarSlots,
             quotas: transient.quotas,
             statuses: transient.statuses
         )
@@ -410,12 +410,12 @@ final class SideNotchPanelTests: XCTestCase {
         ])
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
 
-        XCTAssertEqual(entries.map(\.provider), [.antigravity])
+        XCTAssertEqual(entries.map(\.slot), [.antigravity])
         XCTAssertEqual(entries[0].usedPercent, 100.0)
         XCTAssertNotNil(entries[0].etaText)
     }
@@ -470,12 +470,12 @@ final class SideNotchPanelTests: XCTestCase {
         ])
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
 
-        XCTAssertEqual(entries.map(\.provider), [.codex])
+        XCTAssertEqual(entries.map(\.slot), [.codex])
     }
 
     @MainActor
@@ -485,7 +485,7 @@ final class SideNotchPanelTests: XCTestCase {
         ])
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
@@ -497,7 +497,7 @@ final class SideNotchPanelTests: XCTestCase {
     @MainActor
     func testBeakGeometryAndBoundsCheck() throws {
         let entry0 = SideNotchPanelView.Entry(
-            provider: .claude,
+            slot: .primary(.claude),
             usedPercent: 20,
             fraction: 0.2,
             ringTint: .green,
@@ -506,7 +506,7 @@ final class SideNotchPanelTests: XCTestCase {
             isStale: false
         )
         let entry1 = SideNotchPanelView.Entry(
-            provider: .codex,
+            slot: .primary(.codex),
             usedPercent: 40,
             fraction: 0.4,
             ringTint: .green,
@@ -515,7 +515,7 @@ final class SideNotchPanelTests: XCTestCase {
             isStale: false
         )
         let entry2 = SideNotchPanelView.Entry(
-            provider: .openRouter,
+            slot: .primary(.openRouter),
             usedPercent: 32,
             fraction: 0.32,
             ringTint: .green,
@@ -572,12 +572,12 @@ final class SideNotchPanelTests: XCTestCase {
 
         // Entry generation for OpenRouter
         let entries = SideNotchPanelView.entries(
-            providers: [.openRouter],
+            menuBarSlots: [.openRouter],
             quotas: [.openRouter: .value(creditsQuota)],
             statuses: [:]
         )
         XCTAssertEqual(entries.count, 1)
-        XCTAssertEqual(entries[0].provider, Provider.openRouter)
+        XCTAssertEqual(entries[0].slot, ProviderSlot.primary(.openRouter))
         XCTAssertEqual(entries[0].usedPercent, 32.2, accuracy: 0.01)
 
         // Case 2: OpenRouter with an explicit key limit window
@@ -787,7 +787,7 @@ final class SideNotchPanelTests: XCTestCase {
 
         // A single-provider refresh must load that provider without touching
         // the other: one cell never spends the others' rate-limit budget.
-        coordinator.refresh(provider: .codex)
+        coordinator.refresh(slot: .codex)
         for _ in 0..<200 {
             if coordinator.lastRefreshedAt != nil { break }
             try? await Task.sleep(nanoseconds: 10_000_000)
@@ -837,13 +837,13 @@ final class SideNotchPanelTests: XCTestCase {
         let prefs = Preferences(defaults: defaults)
 
         let withoutConsumer = AppCoordinator(preferences: prefs)
-        XCTAssertFalse(withoutConsumer.canUseCodexReset)
+        XCTAssertFalse(withoutConsumer.canUseCodexReset())
 
         let withConsumer = AppCoordinator(
             preferences: prefs,
             resetConsumer: StubResetConsumer()
         )
-        XCTAssertTrue(withConsumer.canUseCodexReset)
+        XCTAssertTrue(withConsumer.canUseCodexReset())
     }
 
     @MainActor

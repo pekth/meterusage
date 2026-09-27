@@ -28,23 +28,24 @@ enum QuotaAlertThreshold: Int, CaseIterable {
     }
 }
 
-/// One alertable observation, produced by the evaluator.
+/// One alertable observation, produced by the evaluator. Events name the
+/// metered slot, so two accounts of one tool alert (and re-arm) separately.
 enum QuotaAlertEvent: Equatable {
     /// A window crossed `threshold` upward this refresh.
-    case threshold(provider: Provider, windowLabel: String, usedPercent: Double, threshold: QuotaAlertThreshold)
+    case threshold(slot: ProviderSlot, windowLabel: String, usedPercent: Double, threshold: QuotaAlertThreshold)
     /// Burning fast and projected to run out in < 30 minutes before reset.
-    case paceCliff(provider: Provider, windowLabel: String, etaMinutes: Int)
+    case paceCliff(slot: ProviderSlot, windowLabel: String, etaMinutes: Int)
     /// Soft warning when burning fast past 50% window consumption.
-    case paceSoftWarning(provider: Provider, windowLabel: String, usedPercent: Double)
+    case paceSoftWarning(slot: ProviderSlot, windowLabel: String, usedPercent: Double)
     /// A reset credit will expire within `ExpiringCredit.window`.
-    case expiringCredit(provider: Provider, creditID: String, creditTitle: String)
+    case expiringCredit(slot: ProviderSlot, creditID: String, creditTitle: String)
 
-    var provider: Provider {
+    var slot: ProviderSlot {
         switch self {
-        case .threshold(let provider, _, _, _): return provider
-        case .paceCliff(let provider, _, _): return provider
-        case .paceSoftWarning(let provider, _, _): return provider
-        case .expiringCredit(let provider, _, _): return provider
+        case .threshold(let slot, _, _, _): return slot
+        case .paceCliff(let slot, _, _): return slot
+        case .paceSoftWarning(let slot, _, _): return slot
+        case .expiringCredit(let slot, _, _): return slot
         }
     }
 }
@@ -79,17 +80,17 @@ struct QuotaAlertEvaluator {
     /// ungated. Providers absent from the map lose pace alerts but keep
     /// threshold alerts.
     mutating func events(
-        for quotas: [Provider: Loaded<ProviderQuota>],
-        lastBurn: [Provider: Date] = [:],
+        for quotas: [ProviderSlot: Loaded<ProviderQuota>],
+        lastBurn: [ProviderSlot: Date] = [:],
         now: Date
     ) -> [QuotaAlertEvent] {
         var events: [QuotaAlertEvent] = []
 
-        for (provider, state) in quotas {
+        for (slot, state) in quotas {
             guard let quota = state.value else { continue }
 
             for window in quota.windows {
-                let key = "\(provider.rawValue)/\(window.label)"
+                let key = "\(slot.key)/\(window.label)"
                 let previous = highWater[key] ?? 0
 
                 // A drop below the last alerted threshold re-arms the ladder:
@@ -106,7 +107,7 @@ struct QuotaAlertEvaluator {
                    let threshold = QuotaAlertThreshold.allCases.last(where: { window.usedPercent >= Double($0.rawValue) }),
                    rearmedPrevious < Double(threshold.rawValue) {
                     events.append(.threshold(
-                        provider: provider,
+                        slot: slot,
                         windowLabel: window.label,
                         usedPercent: window.usedPercent,
                         threshold: threshold
@@ -117,13 +118,13 @@ struct QuotaAlertEvaluator {
                 // Pace-based checks. The effective pace demotes a deficit
                 // whose burn has gone quiet, so soft warnings and cliffs
                 // only ever fire on a current burn.
-                if let pace = window.pace(now: now)?.effective(lastBurn: lastBurn[provider], now: now) {
+                if let pace = window.pace(now: now)?.effective(lastBurn: lastBurn[slot], now: now) {
                     if pace.status.isDeficit,
                        window.usedPercent >= 50,
                        !flaggedSoftWarnings.contains(key) {
                         flaggedSoftWarnings.insert(key)
                         events.append(.paceSoftWarning(
-                            provider: provider,
+                            slot: slot,
                             windowLabel: window.label,
                             usedPercent: window.usedPercent
                         ))
@@ -135,7 +136,7 @@ struct QuotaAlertEvaluator {
                        !flaggedPaceCliffs.contains(key) {
                         flaggedPaceCliffs.insert(key)
                         events.append(.paceCliff(
-                            provider: provider,
+                            slot: slot,
                             windowLabel: window.label,
                             etaMinutes: max(1, Int(eta / 60))
                         ))
@@ -144,14 +145,14 @@ struct QuotaAlertEvaluator {
             }
 
             for credit in quota.resetCredits {
-                let key = "\(provider.rawValue)/\(credit.id)"
+                let key = "\(slot.key)/\(credit.id)"
                 guard !flaggedCredits.contains(key),
                       let expiresAt = credit.expiresAt,
                       expiresAt > now,
                       expiresAt.timeIntervalSince(now) <= Self.expiringCreditWindow else { continue }
                 flaggedCredits.insert(key)
                 events.append(.expiringCredit(
-                    provider: provider,
+                    slot: slot,
                     creditID: credit.id,
                     creditTitle: credit.title
                 ))
@@ -189,8 +190,8 @@ final class QuotaAlertService {
     /// Called by the coordinator after each sweep with the full quota map.
     /// `lastBurn` gates pace events on burn recency (see the evaluator).
     func process(
-        quotas: [Provider: Loaded<ProviderQuota>],
-        lastBurn: [Provider: Date] = [:],
+        quotas: [ProviderSlot: Loaded<ProviderQuota>],
+        lastBurn: [ProviderSlot: Date] = [:],
         now: Date = Date()
     ) {
         guard preferences.quotaAlertsEnabled, let center else { return }
@@ -244,37 +245,37 @@ final class QuotaAlertService {
 
     /// Builds the delivered notification. Bodies carry percentages and labels
     /// only — never account detail, paths, or raw provider payloads.
-    private static func computeFailoverNudge(for excluded: Provider, quotas: [Provider: Loaded<ProviderQuota>]) -> String? {
+    private static func computeFailoverNudge(for excluded: ProviderSlot, quotas: [ProviderSlot: Loaded<ProviderQuota>]) -> String? {
         var options: [String] = []
-        for (p, state) in quotas {
-            guard p != excluded, let q = state.value, let h = p.headlineWindow(from: q.windows) else { continue }
+        for (slot, state) in quotas {
+            guard slot != excluded, let q = state.value, let h = slot.provider.headlineWindow(from: q.windows) else { continue }
             if h.usedPercent < 50 {
-                options.append("\(p.displayName) \(Int(h.usedPercent))%")
+                options.append("\(slot.displayName) \(Int(h.usedPercent))%")
             }
         }
         guard !options.isEmpty else { return nil }
         return " Switch suggestion: " + options.joined(separator: " · ")
     }
 
-    private static func request(for event: QuotaAlertEvent, quotas: [Provider: Loaded<ProviderQuota>] = [:]) -> UNNotificationRequest {
+    private static func request(for event: QuotaAlertEvent, quotas: [ProviderSlot: Loaded<ProviderQuota>] = [:]) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
-        let failover = computeFailoverNudge(for: event.provider, quotas: quotas) ?? ""
+        let failover = computeFailoverNudge(for: event.slot, quotas: quotas) ?? ""
         switch event {
-        case .threshold(let provider, let windowLabel, let usedPercent, let threshold):
+        case .threshold(let slot, let windowLabel, let usedPercent, let threshold):
             content.title = threshold.title
-            content.body = "\(provider.displayName) \(windowLabel) window is at \(Fmt.percent(usedPercent)) used.\(failover)"
+            content.body = "\(slot.displayName) \(windowLabel) window is at \(Fmt.percent(usedPercent)) used.\(failover)"
             content.sound = threshold == .critical ? .default : nil
-        case .paceCliff(let provider, let windowLabel, let etaMinutes):
-            content.title = "\(provider.displayName) burning fast"
+        case .paceCliff(let slot, let windowLabel, let etaMinutes):
+            content.title = "\(slot.displayName) burning fast"
             content.body = "\(windowLabel) window projected to empty in ~\(etaMinutes)m before reset.\(failover)"
             content.sound = .default
-        case .paceSoftWarning(let provider, let windowLabel, let usedPercent):
-            content.title = "\(provider.displayName) pace warning"
+        case .paceSoftWarning(let slot, let windowLabel, let usedPercent):
+            content.title = "\(slot.displayName) pace warning"
             content.body = "\(windowLabel) window at \(Fmt.percent(usedPercent)) used and burning faster than pace.\(failover)"
             content.sound = nil
-        case .expiringCredit(let provider, _, let creditTitle):
+        case .expiringCredit(let slot, _, let creditTitle):
             content.title = "Reset credit expiring"
-            content.body = "A \(provider.displayName) reset credit (\(creditTitle)) expires within 24 hours."
+            content.body = "A \(slot.displayName) reset credit (\(creditTitle)) expires within 24 hours."
         }
         return UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
     }

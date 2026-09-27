@@ -13,6 +13,10 @@ import AppKit
 struct SettingsView: View {
 
     @ObservedObject var coordinator: AppCoordinator
+    /// Observed so the second-accounts card re-renders when the managed
+    /// account list changes (add, remove, edit). The coordinator republishes
+    /// the per-provider toggles; the list itself lives on `Preferences`.
+    @ObservedObject var preferences: Preferences
 
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval: Double = Preferences.defaultRefreshInterval
     @AppStorage(PrefKey.showClaude) private var showClaude: Bool = false
@@ -143,6 +147,65 @@ struct SettingsView: View {
             }
 
             Group {
+                SectionHeader(title: "Second accounts") {
+                    // One compact affordance; the menu names the tool. The
+                    // label stays short so the button always fits inside the
+                    // popover at its header position.
+                    Menu {
+                        ForEach(Provider.supportsAdditionalAccounts, id: \.self) { provider in
+                            Button("Add \(provider.displayName) account") {
+                                let count = managedAccounts.filter { $0.provider == provider }.count
+                                preferences.add(account: ManagedAccount(
+                                    provider: provider,
+                                    label: "Account \(count + 2)",
+                                    path: ""
+                                ))
+                            }
+                        }
+                    } label: {
+                        Label("Add", systemImage: "plus")
+                    }
+                    .controlSize(.small)
+                    .accessibilityLabel("Add second account")
+                }
+                Card(padding: 10) {
+                    // Additional accounts of one tool, each its own meter row
+                    // everywhere in the app: its own quota windows, plan,
+                    // history, and alerts. The label is the user's own name
+                    // for the account and the path is that account's CLI
+                    // config directory — the app reads the same usage
+                    // surfaces there it reads for the primary account, and
+                    // never opens credential files. No account identifier is
+                    // read or displayed anywhere.
+                    if managedAccounts.isEmpty {
+                        Text("More than one login for Codex or Claude? Add it here and it gets its own meter.")
+                            .font(.muBody)
+                            .foregroundColor(MU.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        VStack(spacing: 2) {
+                            ForEach(managedAccounts) { account in
+                                ManagedAccountRow(
+                                    account: accountBinding(for: account),
+                                    supported: Provider.supportsAdditionalAccounts.contains(account.provider),
+                                    onDelete: { preferences.remove(accountID: account.id) }
+                                )
+                                .padding(.vertical, 2)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
+                        }
+                        .animation(.easeOut(duration: 0.15), value: managedAccounts.map(\.id))
+                    }
+
+                    Divider().overlay(MU.hairline)
+                    Text("Point each row at that account's config directory, sign the CLI in there, and relaunch. Removing a row stops metering it — nothing is deleted.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Group {
                 SectionHeader("Accounts")
                 Card(padding: 10) {
                     // Whose readings these are. This app signs in nowhere: every
@@ -151,21 +214,22 @@ struct SettingsView: View {
                     // plan it reports. No address, no account id — a plan tier
                     // is context for the percentages, never an identity.
                     //
-                    // Only enabled providers are listed: a hidden provider is
-                    // not read at all, so showing its row would present a
-                    // credential that is currently doing nothing.
+                    // Only shown slots are listed: a hidden provider or a
+                    // removed second account is not read at all, so showing
+                    // its row would present a credential that is currently
+                    // doing nothing.
                     if visibleAccounts.isEmpty {
                         Text("All providers are hidden. Turn one on in Providers above.")
                             .font(.muBody)
                             .foregroundColor(MU.textSecondary)
                     } else {
-                        ForEach(Array(visibleAccounts.enumerated()), id: \.element) { index, provider in
+                        ForEach(Array(visibleAccounts.enumerated()), id: \.element.key) { index, slot in
                             if index > 0 {
                                 Divider().overlay(MU.hairline)
                             }
                             AccountRow(
-                                provider: provider,
-                                account: coordinator.account(for: provider),
+                                slot: slot,
+                                account: coordinator.account(for: slot),
                                 enabled: true
                             )
                         }
@@ -332,8 +396,27 @@ struct SettingsView: View {
         }
     }
 
-    private var visibleAccounts: [Provider] {
-        Provider.allCases.filter { coordinator.preferences.isEnabled($0) }
+    // MARK: Second accounts
+
+    private var managedAccounts: [ManagedAccount] {
+        preferences.managedAccounts
+    }
+
+    /// A per-row binding: each edit writes the whole row back through
+    /// `Preferences.update`, which persists and republishes. Identity never
+    /// changes, so history and archive keys survive label and path edits.
+    private func accountBinding(for account: ManagedAccount) -> Binding<ManagedAccount> {
+        Binding(
+            get: { preferences.managedAccounts.first { $0.id == account.id } ?? account },
+            set: { preferences.update(account: $0) }
+        )
+    }
+
+    private var visibleAccounts: [ProviderSlot] {
+        // The coordinator's visibility, not the raw preference: an
+        // additional account with no config directory is not an account,
+        // so it gets no row.
+        coordinator.visibleSlots
     }
 
     private static func intervalLabel(_ seconds: Double) -> String {
@@ -526,19 +609,67 @@ private struct ProviderRow: View {
     }
 }
 
+/// One managed second-account row: a name for the account (display only),
+/// the config directory it meters, an enable switch, and a remove button.
+/// Both fields write through `Preferences` immediately; readings appear
+/// after the app relaunches, when composition builds that slot's sources.
+private struct ManagedAccountRow: View {
+    @Binding var account: ManagedAccount
+    /// Tools without per-account config directories don't mount extra slots;
+    /// a row for one reads as inert rather than broken.
+    let supported: Bool
+    let onDelete: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            ProviderMark(provider: account.provider, tint: providerColor(account.provider))
+                .frame(width: 13, height: 13)
+                .opacity(supported ? 1.0 : 0.4)
+            // The name is short and bounded; the directory is the string
+            // that matters, so it takes the remaining width.
+            TextField("Name", text: $account.label, prompt: Text("Name"))
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                .frame(width: 64)
+                .lineLimit(1)
+                .disabled(!supported)
+            TextField("Directory", text: $account.path, prompt: Text(account.provider == .codex ? "~/.codex-alt" : "~/.claude-alt"))
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                .lineLimit(1)
+                .disabled(!supported)
+                .help("That account's own CLI config directory. Readings appear after relaunch.")
+            Toggle("Enabled", isOn: $account.enabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .disabled(!supported)
+            Button(action: onDelete) {
+                Image(systemName: "minus.circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(MU.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .help("Remove this second account")
+            .accessibilityLabel("Remove \(account.label.isEmpty ? account.provider.displayName : account.label) second account")
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
 /// One row of the Accounts section: the provider's mark, its reported plan
 /// (when the provider reports one), and the tool holding the credential.
 /// Read-only — visibility lives in the Providers section above.
 private struct AccountRow: View {
-    let provider: Provider
+    let slot: ProviderSlot
     let account: AppCoordinator.ProviderAccount
     let enabled: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            ProviderMark(provider: provider, tint: providerColor(provider))
+            ProviderMark(provider: slot.provider, tint: providerColor(slot.provider))
                 .frame(width: 13, height: 13)
-            Text(provider.displayName)
+            Text(account.name)
                 .font(.muBody)
                 .foregroundColor(MU.text)
             if let plan = account.plan {
@@ -553,7 +684,7 @@ private struct AccountRow: View {
         // A hidden provider is not read at all, so its row steps back.
         .opacity(enabled ? 1.0 : 0.5)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(provider.displayName), \(account.plan ?? "plan unknown"), via \(account.via)")
+        .accessibilityLabel("\(account.name), \(account.plan ?? "plan unknown"), via \(account.via)")
     }
 }
 

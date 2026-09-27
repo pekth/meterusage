@@ -62,16 +62,23 @@ import Foundation
 //      for a JSON decode at all.
 public actor ClaudeLocalSource: LocalActivitySource {
 
-    public nonisolated let provider: Provider = .claude
+    public nonisolated let slot: ProviderSlot
+    public nonisolated var provider: Provider { slot.provider }
 
     /// Root directory to scan. Defaults to the real `~/.claude/projects`,
     /// but is injectable so tests can point at a fixture tree instead of
-    /// the user's actual home directory.
+    /// the user's actual home directory. An additional-account instance
+    /// points this at that account's own `projects` tree (see
+    /// `ManagedAccount`) so only that account's transcripts are counted.
     private let root: URL
     private let fileManager: FileManager
 
     /// Where the on-disk scan cache is persisted. Injectable so tests never
-    /// touch the user's real Application Support directory.
+    /// touch the user's real Application Support directory. Each account slot
+    /// persists its own cache file: two concurrent scans writing one file
+    /// would let a later writer drop the earlier scan's freshly-parsed
+    /// entries (each write carries the loader's own snapshot), so slots are
+    /// kept disjoint rather than merged.
     private let cacheFileURL: URL
 
     /// Per-file parse cache, keyed by a non-reversible hash of the file's
@@ -84,7 +91,8 @@ public actor ClaudeLocalSource: LocalActivitySource {
     private var diskCacheLoaded = false
     private var diskCacheDirty = false
 
-    public init(root: URL? = nil, fileManager: FileManager = .default, cacheFileURL: URL? = nil) {
+    public init(slot: ProviderSlot = .primary(.claude), root: URL? = nil, fileManager: FileManager = .default, cacheFileURL: URL? = nil) {
+        self.slot = slot
         self.root = root ?? HomeDirectory.real.appendingPathComponent(".claude/projects", isDirectory: true)
         self.fileManager = fileManager
         self.cacheFileURL = cacheFileURL ?? Self.defaultCacheFileURL
@@ -188,7 +196,7 @@ public actor ClaudeLocalSource: LocalActivitySource {
         )
 
         return LocalActivity(
-            provider: .claude,
+            provider: slot.provider,
             sessions: sortedSessions,
             daily: daily,
             scannedAt: now,

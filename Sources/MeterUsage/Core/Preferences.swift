@@ -20,6 +20,10 @@ enum PrefKey {
     static let refreshInterval = "refreshIntervalSeconds"
     static let showClaude = "showProviderClaude"
     static let showCodex = "showProviderCodex"
+    /// User-configured additional accounts (Claude, Codex). Encoded
+    /// `[ManagedAccount]` JSON data; empty/absent means "no additional
+    /// accounts", which is the single-account default install.
+    static let managedAccounts = "managedAccounts"
     static let showAntigravity = "showProviderAntigravity"
     static let showGrok = "showProviderGrok"
     static let showOpenCodeGo = "showProviderOpenCodeGo"
@@ -130,6 +134,11 @@ final class Preferences: ObservableObject {
     @Published private(set) var showActivityTelemetry: Bool = true
     @Published private(set) var showDailyActivityChart: Bool = true
     @Published private(set) var showSideNotchResetButton: Bool = true
+    /// Additional, user-configured accounts per tool. Unbounded on purpose:
+    /// a user with three Codex logins adds three rows and the app meters
+    /// each. Sources are built from this list at launch (see `Composition`),
+    /// so edits apply after relaunch.
+    @Published private(set) var managedAccounts: [ManagedAccount] = []
 
     private let defaults: UserDefaults
     private var observer: NSObjectProtocol?
@@ -264,6 +273,48 @@ final class Preferences: ObservableObject {
 
         let sideNotchReset = defaults.object(forKey: PrefKey.showSideNotchResetButton) == nil ? true : defaults.bool(forKey: PrefKey.showSideNotchResetButton)
         if sideNotchReset != showSideNotchResetButton { showSideNotchResetButton = sideNotchReset }
+
+        // Managed accounts: absent key means "no additional accounts", the
+        // everyday single-account case. A malformed payload degrades to the
+        // empty list rather than throwing away the rest of the settings.
+        let accounts: [ManagedAccount] = {
+            guard let data = defaults.data(forKey: PrefKey.managedAccounts),
+                  let decoded = try? JSONDecoder().decode([ManagedAccount].self, from: data)
+            else { return [] }
+            return decoded
+        }()
+        if accounts != managedAccounts { managedAccounts = accounts }
+    }
+
+    // MARK: Additional accounts
+
+    /// Adds one additional account. The list is the single source of truth
+    /// for which additional meters exist; composition reads it at launch.
+    func add(account: ManagedAccount) {
+        managedAccounts.append(account)
+        persistAccounts()
+    }
+
+    /// Replaces one account (label, path, or enabled flag changed). Identity
+    /// (`id`) never changes, so history and archive keys survive edits.
+    func update(account: ManagedAccount) {
+        guard let index = managedAccounts.firstIndex(where: { $0.id == account.id }) else { return }
+        managedAccounts[index] = account
+        persistAccounts()
+    }
+
+    /// Removes one additional account. Its readings simply stop; nothing is
+    /// deleted from the tool's own directory, and persisted history for the
+    /// removed slot key is left in place so re-adding the same directory
+    /// (same generated id) keeps its past. Unknown ids are a no-op.
+    func remove(accountID: String) {
+        managedAccounts.removeAll { $0.id == accountID }
+        persistAccounts()
+    }
+
+    private func persistAccounts() {
+        guard let data = try? JSONEncoder().encode(managedAccounts) else { return }
+        defaults.set(data, forKey: PrefKey.managedAccounts)
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }

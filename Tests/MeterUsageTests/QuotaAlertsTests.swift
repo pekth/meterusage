@@ -159,7 +159,7 @@ final class QuotaAlertsTests: XCTestCase {
             refreshInterval: 60,
             lastRefreshedAt: Date(),
             now: Date(),
-            enabledProviders: [.codex, .grok],
+            enabledSlots: [.codex, .grok],
             quotas: [.codex: .missing(.failed(.codex))],
             activities: [:],
             usages: [:],
@@ -183,7 +183,7 @@ final class QuotaAlertsTests: XCTestCase {
         let report = DiagnosticsReport.build(
             appName: "MeterUsage", appVersion: "0.2.0", isDemoMode: true,
             refreshInterval: 60, lastRefreshedAt: nil, now: Date(),
-            enabledProviders: [.codex], quotas: [:], activities: [:],
+            enabledSlots: [.codex], quotas: [:], activities: [:],
             usages: [:], statuses: [:], plans: [:]
         )
         XCTAssertTrue(report.contains("mode: demo"))

@@ -55,12 +55,20 @@ enum DemoMode {
 /// colour scale in one alarming tint, so the user could not tell that the app
 /// distinguishes healthy from tight at all.
 struct DemoClaudeQuotaSource: QuotaSource {
-    let provider: Provider = .claude
+    /// Defaults to the primary demo slot; demo composition mounts a second
+    /// instance on an additional slot so screenshots exercise multi-account
+    /// rows.
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
+
+    init(slot: ProviderSlot = .primary(.claude)) {
+        self.slot = slot
+    }
 
     func fetchQuota() async throws -> ProviderQuota {
         let now = Date()
         return ProviderQuota(
-            provider: .claude,
+            provider: slot.provider,
             windows: [
                 // Comfortable. Renders green.
                 QuotaWindow(label: "5-hour", usedPercent: 34, resetsAt: now.addingTimeInterval(3.25 * 3600)),
@@ -83,12 +91,20 @@ struct DemoClaudeQuotaSource: QuotaSource {
 /// looks broken rather than calm. 82% is tight enough to tint and low enough
 /// not to read as a crisis.
 struct DemoCodexQuotaSource: QuotaSource {
-    let provider: Provider = .codex
+    /// Defaults to the primary demo slot; demo composition mounts a second
+    /// instance on an additional slot so screenshots exercise multi-account
+    /// rows.
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
+
+    init(slot: ProviderSlot = .primary(.codex)) {
+        self.slot = slot
+    }
 
     func fetchQuota() async throws -> ProviderQuota {
         let now = Date()
         return ProviderQuota(
-            provider: .codex,
+            provider: slot.provider,
             windows: [
                 QuotaWindow(label: "5-hour", usedPercent: 82, resetsAt: now.addingTimeInterval(1.75 * 3600)),
                 QuotaWindow(label: "Weekly", usedPercent: 72, resetsAt: now.addingTimeInterval(4.5 * 86_400))
@@ -266,11 +282,21 @@ struct DemoAntigravityQuotaSource: QuotaSource {
 
 /// Synthetic subscription tier. `.max5x` rather than `.max20x` so the badge
 /// shows a mid-tier plan — the common case, and the one where the percentages
-/// beside it most need the context.
+/// beside it most need the context. The second-account demo slot reports a
+/// different tier so the two accounts' rows don't read as one account
+/// rendered twice.
 struct DemoPlanSource: PlanSource {
-    let provider: Provider = .claude
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
 
-    func fetchPlan() async throws -> PlanTier { .max5x }
+    init(slot: ProviderSlot = .primary(.claude), tier: PlanTier = .max5x) {
+        self.slot = slot
+        self.tier = tier
+    }
+
+    private let tier: PlanTier
+
+    func fetchPlan() async throws -> PlanTier { tier }
 }
 
 // MARK: - Status
@@ -494,12 +520,17 @@ struct DemoOpenRouterUsageSource: UsageSource {
 /// in the app for a future model with no published rate; the demo simply
 /// doesn't need to exercise them right now.
 struct DemoLocalActivitySource: LocalActivitySource {
-    let provider: Provider = .claude
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
+
+    init(slot: ProviderSlot = .primary(.claude)) {
+        self.slot = slot
+    }
 
     func scan() async throws -> LocalActivity {
         let now = Date()
         return LocalActivity(
-            provider: .claude,
+            provider: slot.provider,
             sessions: DemoActivityData.sessions(now: now),
             daily: DemoActivityData.daily(now: now),
             scannedAt: now
@@ -512,7 +543,12 @@ struct DemoLocalActivitySource: LocalActivitySource {
 /// real source's will. The days reuse `DemoActivityData` but strip tokens and
 /// keep only the per-day session counts, matching Codex's count-based data.
 struct DemoCodexActivitySource: LocalActivitySource {
-    let provider: Provider = .codex
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
+
+    init(slot: ProviderSlot = .primary(.codex)) {
+        self.slot = slot
+    }
 
     func scan() async throws -> LocalActivity {
         let now = Date()
@@ -545,7 +581,7 @@ struct DemoCodexActivitySource: LocalActivitySource {
             dailyHistory: history
         )
         return LocalActivity(
-            provider: .codex,
+            provider: slot.provider,
             sessions: [],
             daily: daily,
             scannedAt: now,

@@ -49,7 +49,7 @@ final class MenuBarTests: XCTestCase {
         )
 
         XCTAssertFalse(
-            coordinator.menuBarProviders.contains(.openRouter),
+            coordinator.menuBarSlots.contains(.openRouter),
             "OpenRouter must not appear as a menu-bar cluster"
         )
     }
@@ -65,7 +65,7 @@ final class MenuBarTests: XCTestCase {
         )
 
         XCTAssertTrue(
-            coordinator.sideNotchProviders.contains(.openRouter),
+            coordinator.sideNotchSlots.contains(.openRouter),
             "OpenRouter must appear in the side notch when its toggle is on"
         )
     }

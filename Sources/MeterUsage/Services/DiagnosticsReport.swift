@@ -23,12 +23,12 @@ enum DiagnosticsReport {
         refreshInterval: TimeInterval,
         lastRefreshedAt: Date?,
         now: Date,
-        enabledProviders: [Provider],
-        quotas: [Provider: Loaded<ProviderQuota>],
-        activities: [Provider: Loaded<LocalActivity>],
-        usages: [Provider: Loaded<ProviderUsage>],
+        enabledSlots: [ProviderSlot],
+        quotas: [ProviderSlot: Loaded<ProviderQuota>],
+        activities: [ProviderSlot: Loaded<LocalActivity>],
+        usages: [ProviderSlot: Loaded<ProviderUsage>],
         statuses: [Provider: Loaded<ServiceStatus>],
-        plans: [Provider: Loaded<PlanTier>],
+        plans: [ProviderSlot: Loaded<PlanTier>],
         historyError: DurableHistoryStoreError? = nil
     ) -> String {
         var lines: [String] = []
@@ -40,17 +40,17 @@ enum DiagnosticsReport {
         } else {
             lines.append("last refresh: never")
         }
-        lines.append("enabled: \(enabledProviders.map(\.rawValue).sorted().joined(separator: ", "))")
+        lines.append("enabled: \(enabledSlots.map(\.key).sorted().joined(separator: ", "))")
         lines.append("")
 
         if let historyError {
             lines.append("history: \(historyError.rawValue)")
         }
 
-        for provider in enabledProviders {
-            lines.append("[\(provider.rawValue)]")
+        for slot in enabledSlots {
+            lines.append("[\(slot.key)]")
 
-            if let state = quotas[provider] {
+            if let state = quotas[slot] {
                 line(&lines, "quota", describe(state))
                 if let quota = state.value {
                     let windows = quota.windows.map { "\($0.label) \(Fmt.percent($0.usedPercent))" }
@@ -63,16 +63,16 @@ enum DiagnosticsReport {
                     }
                 }
             }
-            if let state = activities[provider] {
+            if let state = activities[slot] {
                 line(&lines, "activity", describe(state))
             }
-            if let state = usages[provider] {
+            if let state = usages[slot] {
                 line(&lines, "usage", describe(state))
             }
-            if let state = statuses[provider] {
+            if let state = statuses[slot.provider] {
                 line(&lines, "status", describe(state))
             }
-            if let state = plans[provider] {
+            if let state = plans[slot] {
                 line(&lines, "plan", describe(state))
             }
             lines.append("")

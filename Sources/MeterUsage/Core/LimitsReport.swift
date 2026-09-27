@@ -35,6 +35,10 @@ struct LimitsReport: Equatable, Sendable, Codable {
 
 struct ProviderReport: Equatable, Sendable, Codable {
     var provider: String
+    /// The user's name for the metered account, present only for additional
+    /// accounts (a second Codex login, for example). Primary slots omit it,
+    /// so existing consumers keyed on `provider` see no change.
+    var account: String?
     /// "ok" when windows or credits were read; "unavailable" otherwise.
     var status: String
     /// Present only when status is "unavailable"; verbatim from
@@ -44,10 +48,11 @@ struct ProviderReport: Equatable, Sendable, Codable {
     var windows: [WindowReport]
     var credits: CreditsReport?
 
-    init(provider: String, status: String, reason: String? = nil,
+    init(provider: String, account: String? = nil, status: String, reason: String? = nil,
          plan: String? = nil, windows: [WindowReport] = [],
          credits: CreditsReport? = nil) {
         self.provider = provider
+        self.account = account
         self.status = status
         self.reason = reason
         self.plan = plan
@@ -149,13 +154,13 @@ enum LimitsReporter {
     /// burn that stopped days ago. Pacing is reported as on-pace for those
     /// quiet windows; percent-used figures are state claims and stay raw.
     static func build(
-        quotas: [Provider: Loaded<ProviderQuota>],
-        order: [Provider],
-        lastBurn: [Provider: Date] = [:],
+        quotas: [ProviderSlot: Loaded<ProviderQuota>],
+        order: [ProviderSlot],
+        lastBurn: [ProviderSlot: Date] = [:],
         now: Date = Date()
     ) -> LimitsReport {
-        let providers = order.map { provider -> ProviderReport in
-            switch quotas[provider] {
+        let providers = order.map { slot -> ProviderReport in
+            switch quotas[slot] {
             case .value(let quota):
                 // The report is the glance-level usage view (tray, widget,
                 // CLI), so it carries the provider's regular allowance
@@ -164,11 +169,12 @@ enum LimitsReporter {
                 // regular usage the tray does, never a model-specific limit.
                 let windows = quota.windows
                 return ProviderReport(
-                    provider: provider.rawValue,
+                    provider: slot.provider.rawValue,
+                    account: slot.isPrimary ? nil : slot.label,
                     status: "ok",
                     plan: quota.planType,
                     windows: windows.map {
-                        WindowReport.from($0, lastBurn: lastBurn[provider], now: now)
+                        WindowReport.from($0, lastBurn: lastBurn[slot], now: now)
                     },
                     credits: quota.credits.map {
                         CreditsReport(
@@ -180,14 +186,19 @@ enum LimitsReporter {
                 )
             case .missing(let reason):
                 return ProviderReport(
-                    provider: provider.rawValue,
+                    provider: slot.provider.rawValue,
+                    account: slot.isPrimary ? nil : slot.label,
                     status: "unavailable",
                     reason: reason.userFacingMessage
                 )
             case .idle, .none:
                 // Never refreshed — indistinguishable to a reader from a
                 // source we haven't polled yet, which is exactly what it is.
-                return ProviderReport(provider: provider.rawValue, status: "unavailable")
+                return ProviderReport(
+                    provider: slot.provider.rawValue,
+                    account: slot.isPrimary ? nil : slot.label,
+                    status: "unavailable"
+                )
             }
         }
         return LimitsReport(generatedAt: now, providers: providers)

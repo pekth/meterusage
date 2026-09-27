@@ -80,10 +80,13 @@ public final class DurableHistoryStore: @unchecked Sendable {
         return storeError
     }
 
-    public func records(for provider: Provider) -> [DailyActivity] {
+    /// Reads one slot's daily history. The key is `ProviderSlot.key` — the
+    /// provider raw value for a primary slot (matching files written before
+    /// slots existed), `"<rawValue>#<slotID>"` for additional accounts.
+    public func records(forKey key: String) -> [DailyActivity] {
         lock.lock()
         defer { lock.unlock() }
-        guard let list = inMemory[provider.rawValue] else { return [] }
+        guard let list = inMemory[key] else { return [] }
         return list.compactMap { rec in
             guard let date = Self.dayFormatter.date(from: rec.dayISO) else { return nil }
             return DailyActivity(
@@ -95,12 +98,12 @@ public final class DurableHistoryStore: @unchecked Sendable {
         }
     }
 
-    public func record(provider: Provider, daily: [DailyActivity], peakUsedPercent: Double? = nil) {
+    public func record(key: String, daily: [DailyActivity], peakUsedPercent: Double? = nil) {
         guard !daily.isEmpty else { return }
         lock.lock()
         defer { lock.unlock() }
 
-        let current = inMemory[provider.rawValue] ?? []
+        let current = inMemory[key] ?? []
         var byDay: [String: StoredDailyRecord] = [:]
         for r in current { byDay[r.dayISO] = r }
 
@@ -126,7 +129,7 @@ public final class DurableHistoryStore: @unchecked Sendable {
         }
 
         let sorted = byDay.values.sorted(by: { $0.dayISO < $1.dayISO })
-        inMemory[provider.rawValue] = sorted
+        inMemory[key] = sorted
 
         guard storeError != .loadFailed else { return }
 
@@ -138,5 +141,16 @@ public final class DurableHistoryStore: @unchecked Sendable {
         } catch {
             storeError = .writeFailed
         }
+    }
+
+    /// Primary-slot convenience over the key-based API: keys by the
+    /// provider's raw value, exactly as files were written before slots
+    /// existed.
+    public func record(provider: Provider, daily: [DailyActivity], peakUsedPercent: Double? = nil) {
+        record(key: provider.rawValue, daily: daily, peakUsedPercent: peakUsedPercent)
+    }
+
+    public func records(for provider: Provider) -> [DailyActivity] {
+        records(forKey: provider.rawValue)
     }
 }

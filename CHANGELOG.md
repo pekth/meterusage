@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Multi-account meters for Codex and Claude.** People who hold two or more
+  accounts with the same tool get one independent meter row per account
+  instead of a merge — two accounts' windows are two different budgets. Add
+  accounts in Settings → Second accounts (name + config directory, any
+  number, add or remove freely); readings appear after relaunch once the
+  directory exists. The Codex slot spawns its own `codex` subprocess with
+  that home (the CLI authenticates as that account; meterusage still never
+  touches any auth file); the Claude slot scans that account's own transcript
+  tree, plan file, and companion quota snapshot. Account rows carry your
+  label ("Codex · Work") and a digit beside the mark in the tray and side
+  notch, and the `meterusage json` report lists each account with its own
+  windows, plan, and reset credits plus an additive `account` label field.
+  No account identifier is ever read or displayed — labels are user-typed,
+  and each account's history, archive, and alerts are kept separate.
+
 ## [0.2.37] - 2026-09-25
 
 ### Fixed
