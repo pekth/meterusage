@@ -56,7 +56,7 @@ final class MarkTintTests: XCTestCase {
         )
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
@@ -75,7 +75,7 @@ final class MarkTintTests: XCTestCase {
         )
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )
@@ -93,7 +93,7 @@ final class MarkTintTests: XCTestCase {
         )
 
         let entries = SideNotchPanelView.entries(
-            menuBarProviders: coordinator.menuBarProviders,
+            menuBarSlots: coordinator.menuBarSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses
         )

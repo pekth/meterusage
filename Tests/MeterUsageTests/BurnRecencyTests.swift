@@ -34,7 +34,7 @@ final class BurnRecencyTests: XCTestCase {
 
     func testLastBurnsMapSkipsProvidersWithoutSessions() {
         let now = Date()
-        let activities: [Provider: Loaded<LocalActivity>] = [
+        let activities: [ProviderSlot: Loaded<LocalActivity>] = [
             .codex: .value(LocalActivity(
                 provider: .codex,
                 sessions: [session(start: now.addingTimeInterval(-600), last: nil)],
@@ -106,9 +106,9 @@ final class BurnRecencyTests: XCTestCase {
         // and no near-limit window must not nag the user to switch.
         let now = Date()
         let nudge = FailoverNudge.evaluate(
-            providers: [.codex, .grok],
-            headline: { p in
-                p == .codex ? weekly(60, elapsedDays: 3, now: now) : weekly(10, elapsedDays: 3, now: now)
+            slots: [.codex, .grok],
+            headline: { slot in
+                slot == .codex ? weekly(60, elapsedDays: 3, now: now) : weekly(10, elapsedDays: 3, now: now)
             },
             lastBurn: { $0 == .codex ? now.addingTimeInterval(-86_400) : nil },
             now: now
@@ -119,9 +119,9 @@ final class BurnRecencyTests: XCTestCase {
     func testNudgeReportsNearLimitForHighUsageWithoutCurrentBurn() {
         let now = Date()
         let nudge = FailoverNudge.evaluate(
-            providers: [.codex, .grok],
-            headline: { p in
-                p == .codex ? weekly(85, elapsedDays: 4, now: now) : weekly(10, elapsedDays: 3, now: now)
+            slots: [.codex, .grok],
+            headline: { slot in
+                slot == .codex ? weekly(85, elapsedDays: 4, now: now) : weekly(10, elapsedDays: 3, now: now)
             },
             lastBurn: { $0 == .codex ? now.addingTimeInterval(-86_400) : nil },
             now: now
@@ -137,7 +137,7 @@ final class BurnRecencyTests: XCTestCase {
     func testNudgeKeepsBurningFastWhenBurnIsCurrent() {
         let now = Date()
         let nudge = FailoverNudge.evaluate(
-            providers: [.codex, .grok],
+            slots: [.codex, .grok],
             headline: { p in
                 p == .codex ? weekly(30, elapsedDays: 1, now: now) : weekly(10, elapsedDays: 3, now: now)
             },
@@ -152,7 +152,7 @@ final class BurnRecencyTests: XCTestCase {
     func testActivelyBurningOutranksNearLimit() {
         let now = Date()
         let nudge = FailoverNudge.evaluate(
-            providers: [.codex, .claude, .grok],
+            slots: [.codex, .claude, .grok],
             headline: { p in
                 switch p {
                 case .codex: return weekly(85, elapsedDays: 4, now: now)
@@ -171,7 +171,7 @@ final class BurnRecencyTests: XCTestCase {
     func testNudgeNeverSuggestsAHotProvider() {
         let now = Date()
         let nudge = FailoverNudge.evaluate(
-            providers: [.codex, .grok],
+            slots: [.codex, .grok],
             headline: { p in
                 switch p {
                 case .codex: return weekly(85, elapsedDays: 4, now: now)

@@ -62,13 +62,14 @@ import Foundation
 //      for a JSON decode at all.
 public actor ClaudeLocalSource: LocalActivitySource {
 
-    public nonisolated let provider: Provider
+    public nonisolated let slot: ProviderSlot
+    public nonisolated var provider: Provider { slot.provider }
 
     /// Root directory to scan. Defaults to the real `~/.claude/projects`,
     /// but is injectable so tests can point at a fixture tree instead of
-    /// the user's actual home directory. A second-account instance points
-    /// this at the alternate config directory's `projects` tree (see
-    /// `AccountSlots`) so only that account's transcripts are counted.
+    /// the user's actual home directory. An additional-account instance
+    /// points this at that account's own `projects` tree (see
+    /// `ManagedAccount`) so only that account's transcripts are counted.
     private let root: URL
     private let fileManager: FileManager
 
@@ -90,8 +91,8 @@ public actor ClaudeLocalSource: LocalActivitySource {
     private var diskCacheLoaded = false
     private var diskCacheDirty = false
 
-    public init(provider: Provider = .claude, root: URL? = nil, fileManager: FileManager = .default, cacheFileURL: URL? = nil) {
-        self.provider = provider
+    public init(slot: ProviderSlot = .primary(.claude), root: URL? = nil, fileManager: FileManager = .default, cacheFileURL: URL? = nil) {
+        self.slot = slot
         self.root = root ?? HomeDirectory.real.appendingPathComponent(".claude/projects", isDirectory: true)
         self.fileManager = fileManager
         self.cacheFileURL = cacheFileURL ?? Self.defaultCacheFileURL
@@ -195,7 +196,7 @@ public actor ClaudeLocalSource: LocalActivitySource {
         )
 
         return LocalActivity(
-            provider: provider,
+            provider: slot.provider,
             sessions: sortedSessions,
             daily: daily,
             scannedAt: now,

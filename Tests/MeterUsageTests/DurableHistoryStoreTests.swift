@@ -31,7 +31,7 @@ final class DurableHistoryStoreTests: XCTestCase {
         XCTAssertEqual(store.error, .writeFailed)
         XCTAssertTrue(DiagnosticsReport.build(
             appName: "MeterUsage", appVersion: "1", isDemoMode: false, refreshInterval: 60,
-            lastRefreshedAt: nil, now: Date(), enabledProviders: [], quotas: [:], activities: [:],
+            lastRefreshedAt: nil, now: Date(), enabledSlots: [], quotas: [:], activities: [:],
             usages: [:], statuses: [:], plans: [:], historyError: store.error
         ).contains("history: writeFailed"))
 
@@ -58,7 +58,7 @@ final class DurableHistoryStoreTests: XCTestCase {
         }
         let report = DiagnosticsReport.build(
             appName: "MeterUsage", appVersion: "1", isDemoMode: false, refreshInterval: 60,
-            lastRefreshedAt: nil, now: Date(), enabledProviders: [], quotas: [:], activities: [:],
+            lastRefreshedAt: nil, now: Date(), enabledSlots: [], quotas: [:], activities: [:],
             usages: [:], statuses: [:], plans: [:], historyError: store.error
         )
         XCTAssertTrue(report.contains("history: loadFailed"))

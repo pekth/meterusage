@@ -107,7 +107,7 @@ final class QuotaArchiveTests: XCTestCase {
     // MARK: - Entries stale fallback
 
     func testEntriesFallBackToArchivedReadingAsStale() {
-        let archived: [Provider: ProviderQuota] = [
+        let archived: [ProviderSlot: ProviderQuota] = [
             .codex: ProviderQuota(
                 provider: .codex,
                 windows: [QuotaWindow(label: "5-hour", usedPercent: 55, resetsAt: nil)],
@@ -116,7 +116,7 @@ final class QuotaArchiveTests: XCTestCase {
         ]
 
         let stale = SideNotchPanelView.entries(
-            providers: [.codex],
+            menuBarSlots: [.codex],
             quotas: [:],
             statuses: [:],
             archivedQuotas: archived
@@ -125,7 +125,7 @@ final class QuotaArchiveTests: XCTestCase {
         XCTAssertEqual(stale[0].usedPercent, 55)
         XCTAssertTrue(stale[0].isStale)
 
-        let live: [Provider: Loaded<ProviderQuota>] = [
+        let live: [ProviderSlot: Loaded<ProviderQuota>] = [
             .codex: .value(ProviderQuota(
                 provider: .codex,
                 windows: [QuotaWindow(label: "5-hour", usedPercent: 80, resetsAt: nil)],
@@ -133,7 +133,7 @@ final class QuotaArchiveTests: XCTestCase {
             )),
         ]
         let fresh = SideNotchPanelView.entries(
-            providers: [.codex],
+            menuBarSlots: [.codex],
             quotas: live,
             statuses: [:],
             archivedQuotas: archived

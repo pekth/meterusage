@@ -118,7 +118,7 @@ func severityColor(_ severity: Severity) -> Color {
 /// red headroom scale. Alternate-account slots share their base provider's
 /// identity colour: the tool is the identity, the account is named in text.
 func providerColor(_ provider: Provider) -> Color {
-    switch provider.statusProvider {
+    switch provider {
     case .codex:      return MU.accent
     case .antigravity:return MU.antigravity
     case .grok:       return MU.grok

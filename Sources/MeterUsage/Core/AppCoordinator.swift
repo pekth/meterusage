@@ -32,22 +32,25 @@ final class AppCoordinator: ObservableObject {
 
     // MARK: Published state
 
-    @Published private(set) var quotas: [Provider: Loaded<ProviderQuota>] = [:]
-    @Published private(set) var activities: [Provider: Loaded<LocalActivity>] = [:]
-    @Published private(set) var usages: [Provider: Loaded<ProviderUsage>] = [:]
+    /// State per metered account slot. Primary slots key exactly like the
+    /// pre-slot maps; additional slots key on their own generated id, so two
+    /// accounts of one tool never overwrite each other.
+    @Published private(set) var quotas: [ProviderSlot: Loaded<ProviderQuota>] = [:]
+    @Published private(set) var activities: [ProviderSlot: Loaded<LocalActivity>] = [:]
+    @Published private(set) var usages: [ProviderSlot: Loaded<ProviderUsage>] = [:]
     @Published private(set) var statuses: [Provider: Loaded<ServiceStatus>] = [:]
     /// Subscription tier per provider. Kept in its own map rather than folded
     /// into `quotas` because a plan is read from a different place than the
     /// quota (account metadata vs. rate-limit endpoint) and either can be
     /// present without the other.
-    @Published private(set) var plans: [Provider: Loaded<PlanTier>] = [:]
+    @Published private(set) var plans: [ProviderSlot: Loaded<PlanTier>] = [:]
     @Published private(set) var isRefreshing = false
     @Published private(set) var isClearingCache = false
     @Published private(set) var lastRefreshedAt: Date?
     /// Last good quota per provider, restored from disk at launch. Feeds only
     /// the ambient surfaces (notch, tray, tooltip) when live data is absent —
     /// always rendered dimmed and dated, never as a live number.
-    @Published private(set) var archivedQuotas: [Provider: ProviderQuota] = [:]
+    @Published private(set) var archivedQuotas: [ProviderSlot: ProviderQuota] = [:]
     private let quotaArchiveURL: URL
 
     /// Ticks once a minute purely so relative labels ("resets in 2h 14m") stay
@@ -72,7 +75,7 @@ final class AppCoordinator: ObservableObject {
     /// Codex account's reset credits are redeemed against that account's own
     /// subprocess (each slot's source holds its own client). A credit id can
     /// only be redeemed by the slot whose quota reported it.
-    private let resetConsumers: [Provider: QuotaResetConsumer]
+    private let resetConsumers: [ProviderSlot: QuotaResetConsumer]
     /// Not `let`: clearing the cache replaces these instances (see
     /// `performCacheClear`), which is how a re-scan is made genuinely cold.
     private var activitySources: [LocalActivitySource]
@@ -87,11 +90,10 @@ final class AppCoordinator: ObservableObject {
     /// Optional quota-alert delivery. `nil` in tests and any build that does
     /// not want notifications; the coordinator never depends on it.
     var quotaAlertService: QuotaAlertService?
-    /// Resolved alternate-account homes. A slot only polls, renders, and
-    /// alerts when its own config directory exists — an alternate account is
-    /// a directory the user configured, not a guess. Injectable so tests can
-    /// point slots at fixture directories.
-    let slotHomes: AccountSlots.Resolved
+    /// Resolves where an additional account's config directory lives, for
+    /// presence checks. Injectable so tests can point slots at fixture
+    /// directories instead of the user's real home.
+    let accountHome: (ManagedAccount) -> URL?
     /// Optional update-availability checker. `nil` in demo builds (an update
     /// banner would spoil marketing screenshots) and tests. Its published
     /// state is forwarded to `objectWillChange` so the popover re-renders
@@ -144,8 +146,8 @@ final class AppCoordinator: ObservableObject {
         return Double(min(exp, 30)) * 60
     }
 
-    private static func backoffKey(kind: String, provider: Provider) -> String {
-        "\(kind)-\(provider.rawValue)"
+    private static func backoffKey(kind: String, slot: ProviderSlot) -> String {
+        "\(kind)-\(slot.key)"
     }
 
     init(
@@ -153,14 +155,14 @@ final class AppCoordinator: ObservableObject {
         isDemoMode: Bool = false,
         quotaSources: [QuotaSource] = [],
         resetConsumer: QuotaResetConsumer? = nil,
-        resetConsumers: [Provider: QuotaResetConsumer] = [:],
+        resetConsumers: [ProviderSlot: QuotaResetConsumer] = [:],
         activitySources: [LocalActivitySource] = [],
         usageSources: [UsageSource] = [],
         statusSources: [StatusSource] = [],
         planSources: [PlanSource] = [],
         activitySourceFactory: (() -> [LocalActivitySource])? = nil,
         quotaArchiveURL: URL? = nil,
-        slotHomes: AccountSlots.Resolved = .none
+        accountHome: ((ManagedAccount) -> URL?)? = nil
     ) {
         self.preferences = preferences
         self.isDemoMode = isDemoMode
@@ -170,10 +172,10 @@ final class AppCoordinator: ObservableObject {
         // resets, so the map builds itself as slots come and go. The explicit
         // single-consumer parameter stays for tests and simpler call sites;
         // a derived entry wins when both exist for the same slot.
-        var consumers: [Provider: QuotaResetConsumer] = resetConsumers
+        var consumers: [ProviderSlot: QuotaResetConsumer] = resetConsumers
         for source in quotaSources {
             if let consumer = source as? QuotaResetConsumer {
-                consumers[source.provider] = consumer
+                consumers[source.slot] = consumer
             }
         }
         if let resetConsumer {
@@ -189,7 +191,9 @@ final class AppCoordinator: ObservableObject {
         let archiveURL = quotaArchiveURL ?? QuotaArchive.defaultURL
         self.quotaArchiveURL = archiveURL
         self.archivedQuotas = QuotaArchive.load(from: archiveURL)
-        self.slotHomes = slotHomes
+        // Default: the account's configured path, tilde-expanded against the
+        // real home. A nil result (blank path) reads as "not configured".
+        self.accountHome = accountHome ?? { ManagedAccountPaths.home(for: $0) }
     }
 
     // No `deinit`: one coordinator is created by the app delegate and lives for
@@ -202,9 +206,9 @@ final class AppCoordinator: ObservableObject {
     private nonisolated static func resetConsumerSlot(
         of consumer: QuotaResetConsumer,
         sources: [QuotaSource]
-    ) -> Provider {
-        if let source = consumer as? QuotaSource { return source.provider }
-        return sources.first(where: { $0 is QuotaResetConsumer })?.provider ?? .codex
+    ) -> ProviderSlot {
+        if let source = consumer as? QuotaSource { return source.slot }
+        return sources.first(where: { $0 is QuotaResetConsumer })?.slot ?? .primary(.codex)
     }
 
     // MARK: Lifecycle
@@ -346,12 +350,13 @@ final class AppCoordinator: ObservableObject {
         if Date().timeIntervalSince(last) > maxAge { refresh() }
     }
 
-    /// Refreshes only one provider's quota, usage, status, and plan sources.
+    /// Refreshes only one metered slot's quota, usage, status, and plan
+    /// sources.
     ///
     /// An explicit per-ring request: it bypasses backoff like any other
-    /// user-initiated refresh, but never spends the other providers'
+    /// user-initiated refresh, but never spends the other slots'
     /// rate-limit budget. Used by the side notch panel's click-to-refresh.
-    func refresh(provider: Provider) {
+    func refresh(slot: ProviderSlot) {
         guard refreshTask == nil else {
             // A sweep is already running; fall back to a forced full refresh
             // afterwards rather than dropping the request.
@@ -360,7 +365,7 @@ final class AppCoordinator: ObservableObject {
         }
         isRefreshing = true
         refreshTask = Task { [weak self] in
-            await self?.performRefresh(providers: [provider])
+            await self?.performRefresh(slots: [slot])
             self?.isRefreshing = false
             self?.lastRefreshedAt = Date()
             self?.refreshTask = nil
@@ -372,10 +377,10 @@ final class AppCoordinator: ObservableObject {
     }
 
     /// Whether a Codex rate-limit reset action is currently usable for a
-    /// slot. Defaults to the primary account; a second Codex account is
+    /// slot. Defaults to the primary account; an additional Codex account is
     /// redeemable only through its own source's subprocess.
-    func canUseCodexReset(for provider: Provider = .codex) -> Bool {
-        resetConsumers[provider] != nil
+    func canUseCodexReset(for slot: ProviderSlot = .primary(.codex)) -> Bool {
+        resetConsumers[slot] != nil
     }
 
     /// Performs the explicitly confirmed Codex reset and refreshes all data so
@@ -388,15 +393,15 @@ final class AppCoordinator: ObservableObject {
     /// account's own subprocess. When no loaded quota claims the id (credit
     /// expired between sweeps), the requested slot's consumer is used, and a
     /// single-account build keeps behaving exactly as before.
-    func consumeCodexReset(creditID: String, in provider: Provider = .codex) async throws {
-        let claimedProvider = quotas.first(where: { _, state in
+    func consumeCodexReset(creditID: String, in slot: ProviderSlot = .primary(.codex)) async throws {
+        let claimedSlot = quotas.first(where: { _, state in
             state.value?.resetCredits.contains { $0.id == creditID } == true
-        })?.key ?? provider
-        guard let consumer = resetConsumers[claimedProvider] ?? resetConsumers[provider] else {
-            throw SourceUnavailable.failed(claimedProvider)
+        })?.key ?? slot
+        guard let consumer = resetConsumers[claimedSlot] ?? resetConsumers[slot] else {
+            throw SourceUnavailable.failed(claimedSlot.provider)
         }
         guard try await consumer.consumeReset(creditID: creditID) else {
-            throw SourceUnavailable.failed(claimedProvider)
+            throw SourceUnavailable.failed(claimedSlot.provider)
         }
         refresh()
     }
@@ -409,30 +414,30 @@ final class AppCoordinator: ObservableObject {
         // the sweep costs as long as the slowest one, not their sum.
         let now = Date()
         await withTaskGroup(of: Void.self) { group in
-            for source in quotaSources where showsProvider(source.provider) {
-                if forceAll || !isBackedOff(kind: "quota", provider: source.provider, now: now) {
+            for source in quotaSources where showsSlot(source.slot) {
+                if forceAll || !isBackedOff(kind: "quota", slot: source.slot, now: now) {
                     group.addTask { [weak self] in await self?.load(quota: source) }
                 }
             }
-            for source in activitySources where showsProvider(source.provider) {
-                if forceAll || !isBackedOff(kind: "activity", provider: source.provider, now: now) {
+            for source in activitySources where showsSlot(source.slot) {
+                if forceAll || !isBackedOff(kind: "activity", slot: source.slot, now: now) {
                     group.addTask { [weak self] in await self?.load(activity: source) }
                 }
             }
-            for source in usageSources where showsProvider(source.provider) {
-                if forceAll || !isBackedOff(kind: "usage", provider: source.provider, now: now) {
+            for source in usageSources where showsSlot(source.slot) {
+                if forceAll || !isBackedOff(kind: "usage", slot: source.slot, now: now) {
                     group.addTask { [weak self] in await self?.load(usage: source) }
                 }
             }
             // Server health is independent of the provider visibility toggles:
             // hiding Claude usage should not hide the top-level health signal.
             for source in statusSources {
-                if forceAll || !isBackedOff(kind: "status", provider: source.provider, now: now) {
+                if forceAll || !isBackedOff(kind: "status", slot: source.statusSlot, now: now) {
                     group.addTask { [weak self] in await self?.load(status: source) }
                 }
             }
-            for source in planSources where showsProvider(source.provider) {
-                if forceAll || !isBackedOff(kind: "plan", provider: source.provider, now: now) {
+            for source in planSources where showsSlot(source.slot) {
+                if forceAll || !isBackedOff(kind: "plan", slot: source.slot, now: now) {
                     group.addTask { [weak self] in await self?.load(plan: source) }
                 }
             }
@@ -442,46 +447,46 @@ final class AppCoordinator: ObservableObject {
         // not individual sources were skipped for backoff — a skipped source
         // simply keeps its previous reading. Pace alerts additionally require
         // a current burn, so the last-burn map rides along.
-        quotaAlertService?.process(quotas: quotas, lastBurn: lastBurnByProvider)
+        quotaAlertService?.process(quotas: quotas, lastBurn: lastBurnBySlot)
         // Build the machine-readable report and notify any snapshot listener.
         didPublishSnapshot?(
             LimitsReporter.build(
                 quotas: quotas,
-                order: visibleQuotaProviders,
-                lastBurn: lastBurnByProvider,
+                order: visibleQuotaSlots,
+                lastBurn: lastBurnBySlot,
                 now: clock))
         saveArchive()
     }
 
-    /// Single-provider variant of the sweep above. Loads only the named
-    /// provider's sources; status sources stay included because hiding usage
-    /// must not hide the health signal.
-    private func performRefresh(providers: [Provider]) async {
-        let wanted = Set(providers)
+    /// Single-slot variant of the sweep above. Loads only the named slot's
+    /// sources; status sources stay included because hiding usage must not
+    /// hide the health signal.
+    private func performRefresh(slots: [ProviderSlot]) async {
+        let wanted = Set(slots)
         await withTaskGroup(of: Void.self) { group in
-            for source in quotaSources where wanted.contains(source.provider) && showsProvider(source.provider) {
+            for source in quotaSources where wanted.contains(source.slot) && showsSlot(source.slot) {
                 group.addTask { [weak self] in await self?.load(quota: source) }
             }
-            for source in activitySources where wanted.contains(source.provider) && showsProvider(source.provider) {
+            for source in activitySources where wanted.contains(source.slot) && showsSlot(source.slot) {
                 group.addTask { [weak self] in await self?.load(activity: source) }
             }
-            for source in usageSources where wanted.contains(source.provider) && showsProvider(source.provider) {
+            for source in usageSources where wanted.contains(source.slot) && showsSlot(source.slot) {
                 group.addTask { [weak self] in await self?.load(usage: source) }
             }
-            for source in statusSources where wanted.contains(source.provider) {
+            for source in statusSources where wanted.contains(source.statusSlot) {
                 group.addTask { [weak self] in await self?.load(status: source) }
             }
-            for source in planSources where wanted.contains(source.provider) && showsProvider(source.provider) {
+            for source in planSources where wanted.contains(source.slot) && showsSlot(source.slot) {
                 group.addTask { [weak self] in await self?.load(plan: source) }
             }
         }
         clock = Date()
-        quotaAlertService?.process(quotas: quotas, lastBurn: lastBurnByProvider)
+        quotaAlertService?.process(quotas: quotas, lastBurn: lastBurnBySlot)
         didPublishSnapshot?(
             LimitsReporter.build(
                 quotas: quotas,
-                order: visibleQuotaProviders,
-                lastBurn: lastBurnByProvider,
+                order: visibleQuotaSlots,
+                lastBurn: lastBurnBySlot,
                 now: clock))
         saveArchive()
     }
@@ -490,17 +495,17 @@ final class AppCoordinator: ObservableObject {
     /// base provider's check: the service is shared across accounts, and
     //  only one status source exists per service.
     func status(for provider: Provider) -> Loaded<ServiceStatus>? {
-        statuses[provider] ?? provider.baseProvider.flatMap { statuses[$0] }
+        statuses[provider]
     }
 
     /// The quota an ambient surface should render: the live reading when
     /// present, otherwise the archived last-good reading marked stale. `nil`
     /// only when neither exists — the honest "we do not know" case.
-    func displayQuota(for provider: Provider) -> (quota: ProviderQuota, isStale: Bool)? {
-        if let live = quotas[provider]?.value {
+    func displayQuota(for slot: ProviderSlot) -> (quota: ProviderQuota, isStale: Bool)? {
+        if let live = quotas[slot]?.value {
             return (live, false)
         }
-        if let remembered = archivedQuotas[provider] {
+        if let remembered = archivedQuotas[slot] {
             return (remembered, true)
         }
         return nil
@@ -513,12 +518,12 @@ final class AppCoordinator: ObservableObject {
     /// Most recent observable burn per provider. Feeds the pace-honesty gate:
     /// alerts and the machine report may only claim "burning fast" while the
     /// provider burned inside the quiet period (see `BurnRecency`).
-    var lastBurnByProvider: [Provider: Date] {
+    var lastBurnBySlot: [ProviderSlot: Date] {
         BurnRecency.lastBurns(from: activities)
     }
 
-    private func isBackedOff(kind: String, provider: Provider, now: Date) -> Bool {
-        guard let backoff = backoffs[Self.backoffKey(kind: kind, provider: provider)] else { return false }
+    private func isBackedOff(kind: String, slot: ProviderSlot, now: Date) -> Bool {
+        guard let backoff = backoffs[Self.backoffKey(kind: kind, slot: slot)] else { return false }
         return now < backoff.nextAttemptAt
     }
 
@@ -528,8 +533,8 @@ final class AppCoordinator: ObservableObject {
     /// yet — are facts about the machine, not outages, so they never back off:
     /// the user should see them resolve on the very next sweep after they fix
     /// the cause.
-    private func record(kind: String, provider: Provider, result: SourceUnavailable?) {
-        let key = Self.backoffKey(kind: kind, provider: provider)
+    private func record(kind: String, slot: ProviderSlot, result: SourceUnavailable?) {
+        let key = Self.backoffKey(kind: kind, slot: slot)
         guard let reason = result, Self.isTransient(reason) else {
             backoffs[key] = nil
             return
@@ -553,12 +558,12 @@ final class AppCoordinator: ObservableObject {
         do {
             let quota = try await source.fetchQuota()
             result = .value(quota)
-            archivedQuotas[source.provider] = quota
+            archivedQuotas[source.slot] = quota
         } catch {
-            result = .missing(Self.reason(for: error, provider: source.provider))
+            result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
-        quotas[source.provider] = result
-        record(kind: "quota", provider: source.provider, result: result.unavailable)
+        quotas[source.slot] = result
+        record(kind: "quota", slot: source.slot, result: result.unavailable)
     }
 
     private func load(activity source: LocalActivitySource) async {
@@ -566,9 +571,9 @@ final class AppCoordinator: ObservableObject {
         do {
             var activity = try await source.scan()
             if !isDemoMode {
-                let peak = quotas[source.provider]?.value?.windows.map(\.usedPercent).max()
-                DurableHistoryStore.shared.record(provider: source.provider, daily: activity.daily, peakUsedPercent: peak)
-                let durableDaily = DurableHistoryStore.shared.records(for: source.provider)
+                let peak = quotas[source.slot]?.value?.windows.map(\.usedPercent).max()
+                DurableHistoryStore.shared.record(key: source.slot.key, daily: activity.daily, peakUsedPercent: peak)
+                let durableDaily = DurableHistoryStore.shared.records(forKey: source.slot.key)
                 if !durableDaily.isEmpty {
                     var byDay: [String: DailyActivity] = [:]
                     let dayFormatter = DateFormatter()
@@ -598,10 +603,10 @@ final class AppCoordinator: ObservableObject {
                 ? .missing(.noData)
                 : .value(activity)
         } catch {
-            result = .missing(Self.reason(for: error, provider: source.provider))
+            result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
-        activities[source.provider] = result
-        record(kind: "activity", provider: source.provider, result: result.unavailable)
+        activities[source.slot] = result
+        record(kind: "activity", slot: source.slot, result: result.unavailable)
     }
 
     private func load(usage source: UsageSource) async {
@@ -609,10 +614,10 @@ final class AppCoordinator: ObservableObject {
         do {
             result = .value(try await source.fetchUsage())
         } catch {
-            result = .missing(Self.reason(for: error, provider: source.provider))
+            result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
-        usages[source.provider] = result
-        record(kind: "usage", provider: source.provider, result: result.unavailable)
+        usages[source.slot] = result
+        record(kind: "usage", slot: source.slot, result: result.unavailable)
     }
 
     private func load(status source: StatusSource) async {
@@ -623,7 +628,7 @@ final class AppCoordinator: ObservableObject {
             result = .missing(Self.reason(for: error, provider: source.provider))
         }
         statuses[source.provider] = result
-        record(kind: "status", provider: source.provider, result: result.unavailable)
+        record(kind: "status", slot: source.statusSlot, result: result.unavailable)
     }
 
     /// A plan we couldn't read is not worth a message.
@@ -637,10 +642,10 @@ final class AppCoordinator: ObservableObject {
         do {
             result = .value(try await source.fetchPlan())
         } catch {
-            result = .missing(Self.reason(for: error, provider: source.provider))
+            result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
-        plans[source.provider] = result
-        record(kind: "plan", provider: source.provider, result: result.unavailable)
+        plans[source.slot] = result
+        record(kind: "plan", slot: source.slot, result: result.unavailable)
     }
 
     /// Downloads, verifies, and installs the visible update, then relaunches.
@@ -707,55 +712,69 @@ final class AppCoordinator: ObservableObject {
 
     // MARK: Derived state
 
-    /// Whether a slot's sources should be polled and shown: the provider
-    /// toggle is on AND an alternate-account slot's config directory exists.
-    /// Service status is polled independently of both gates (see
-    /// `performRefresh`), so hiding an account never hides an outage.
-    /// Demo mode mounts synthetic rows for both accounts of the demoed
-    /// tools regardless of either gate — they exist to be screenshotted.
-    func showsProvider(_ provider: Provider) -> Bool {
+    /// Whether a slot's sources should be polled and shown: the primary
+    /// slot follows its provider toggle; an additional slot must be enabled
+    /// AND its config directory must exist — an additional account is a
+    /// directory the user configured, not a guess. Service status is polled
+    /// independently of both gates (see `performRefresh`), so hiding an
+    /// account never hides an outage. Demo mode mounts synthetic slots for
+    /// the additional accounts of the demoed tools regardless of either
+    /// gate — they exist to be screenshotted.
+    func showsSlot(_ slot: ProviderSlot) -> Bool {
         if isDemoMode {
-            return provider.isAltSlot || preferences.isEnabled(provider)
+            return slot.isPrimary ? preferences.isEnabled(slot.provider) : true
         }
-        return preferences.isEnabled(provider)
-            && AccountSlots.isPresent(provider, homes: slotHomes)
+        if slot.isPrimary {
+            return preferences.isEnabled(slot.provider)
+        }
+        guard let account = preferences.managedAccounts.first(where: { $0.id == slot.slotID }),
+              account.enabled,
+              accountHome(account) != nil else { return false }
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: accountHome(account)!.path, isDirectory: &isDirectory)
+            && isDirectory.boolValue
     }
 
-    /// Providers the user has switched on, in a stable display order.
-    var visibleProviders: [Provider] {
-        Provider.allCases.filter { showsProvider($0) }
+    /// Metered slots the user has switched on, in a stable display order.
+    var visibleSlots: [ProviderSlot] {
+        (Provider.allCases.map { ProviderSlot.primary($0) } + additionalSlots).filter { showsSlot($0) }
     }
 
-    var visibleQuotaProviders: [Provider] {
-        let providers = Set(quotaSources.map(\.provider))
-        return visibleProviders.filter { providers.contains($0) }
+    /// Additional configured slots, in the order they were added.
+    var additionalSlots: [ProviderSlot] {
+        preferences.managedAccounts.map(\.slot)
     }
 
-    /// Enabled providers the user also chose to show in the menu bar, in the
+    var visibleQuotaSlots: [ProviderSlot] {
+        let slots = Set(quotaSources.map(\.slot))
+        return visibleSlots.filter { slots.contains($0) }
+    }
+
+    /// Enabled slots the user also chose to show in the menu bar, in the
     /// stable display order. OpenRouter is pay-as-you-go (no quota), so it is
     /// always excluded from the tray regardless of the stored preference.
-    var menuBarProviders: [Provider] {
-        visibleProviders.filter { preferences.showsInMenuBar($0) && $0 != .openRouter }
+    var menuBarSlots: [ProviderSlot] {
+        visibleSlots.filter { preferences.showsInMenuBar($0.provider) && $0.provider != .openRouter }
     }
 
-    /// Enabled providers the user also chose to show in the side notch panel,
+    /// Enabled slots the user also chose to show in the side notch panel,
     /// in the stable display order. The tray and the notch are independent
-    /// surfaces (see `menuBarProviders`): the tray keeps OpenRouter out, while
+    /// surfaces (see `menuBarSlots`): the tray keeps OpenRouter out, while
     /// the notch honors its toggle — a configured key limit yields a real
     /// quota window for the ring to render.
-    var sideNotchProviders: [Provider] {
-        visibleProviders.filter { preferences.showsInMenuBar($0) }
+    var sideNotchSlots: [ProviderSlot] {
+        visibleSlots.filter { preferences.showsInMenuBar($0.provider) }
     }
 
-    var visibleActivityProviders: [Provider] {
-        let providers = Set(activitySources.map(\.provider))
-        return visibleProviders.filter { providers.contains($0) }
+    var visibleActivitySlots: [ProviderSlot] {
+        let slots = Set(activitySources.map(\.slot))
+        return visibleSlots.filter { slots.contains($0) }
     }
 
     var visibleUsageProviders: [Provider] {
-        let providers = Set(usageSources.map(\.provider))
-        let quotaProviders = Set(visibleQuotaProviders)
-        return visibleProviders.filter { providers.contains($0) && !quotaProviders.contains($0) }
+        let providers = Set(usageSources.map(\.slot.provider))
+        let quotaProviders = Set(visibleQuotaSlots.map(\.provider))
+        return visibleSlots.map(\.provider).filter { providers.contains($0) && !quotaProviders.contains($0) }
     }
 
     var visibleStatusProviders: [Provider] {
@@ -774,21 +793,24 @@ final class AppCoordinator: ObservableObject {
     }
 
     var combinedActivity: [LocalActivity] {
-        visibleActivityProviders.compactMap { activities[$0]?.value }
+        visibleActivitySlots.compactMap { activities[$0]?.value }
     }
 
-    /// Whose readings these are: the plan the provider reports (when it
-    /// reports one) and the tool holding the credential. No identity is
-    /// read — a plan tier is context for the percentages, never an account.
+    /// Whose readings these are: the plan the slot reports (when it reports
+    /// one) and the tool holding the credential. No identity is read — a
+    /// plan tier is context for the percentages, never an account.
     struct ProviderAccount {
         let plan: String?
         let via: String
+        /// The slot's own display name, so two accounts of one tool read as
+        /// two rows.
+        let name: String
     }
 
-    func account(for provider: Provider) -> ProviderAccount {
-        let plan = plans[provider]?.value?.displayName
-            ?? quotas[provider]?.value?.planType
-        return ProviderAccount(plan: plan, via: provider.sourceLabel)
+    func account(for slot: ProviderSlot) -> ProviderAccount {
+        let plan = plans[slot]?.value?.displayName
+            ?? quotas[slot]?.value?.planType
+        return ProviderAccount(plan: plan, via: slot.provider.sourceLabel, name: slot.displayName)
     }
 
     /// Sanitized diagnostics for the "Copy diagnostics" button, including
@@ -801,7 +823,7 @@ final class AppCoordinator: ObservableObject {
             refreshInterval: preferences.refreshInterval,
             lastRefreshedAt: lastRefreshedAt,
             now: clock,
-            enabledProviders: visibleProviders,
+            enabledSlots: visibleSlots,
             quotas: quotas,
             activities: activities,
             usages: usages,

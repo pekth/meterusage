@@ -14,7 +14,11 @@ import SwiftUI
 /// headers and account hints into a screenshot.
 struct QuotaSection: View {
 
-    let provider: Provider
+    /// Which metered account this card renders: the primary slot shows the
+    /// provider's own name; an additional account shows "<Provider> · <label>"
+    /// and reads family behavior (marks, heatmaps, tone) from its provider.
+    let slot: ProviderSlot
+    var provider: Provider { slot.provider }
     let state: Loaded<ProviderQuota>
     /// Subscription tier, where the provider exposes one separately from its
     /// quota. Defaults to `.idle` so a build with no plan source is a no-op.
@@ -44,7 +48,7 @@ struct QuotaSection: View {
     @AppStorage(PrefKey.showCodexHeatmap) private var showCodexHeatmap: Bool = true
 
     init(
-        provider: Provider,
+        slot: ProviderSlot,
         state: Loaded<ProviderQuota>,
         plan: Loaded<PlanTier> = .idle,
         now: Date,
@@ -53,7 +57,7 @@ struct QuotaSection: View {
         heatmapIntensity: HeatmapView.Intensity = .tokens,
         lastBurn: Date? = nil
     ) {
-        self.provider = provider
+        self.slot = slot
         self.state = state
         self.plan = plan
         self.now = now
@@ -101,7 +105,7 @@ struct QuotaSection: View {
     // MARK: Header
 
     private var showsRemaining: Bool {
-        provider.statusProvider == .codex || provider.statusProvider == .antigravity
+        provider == .codex || provider == .antigravity
     }
 
     private var header: some View {
@@ -110,7 +114,7 @@ struct QuotaSection: View {
             // glyph means one provider everywhere in the app.
             ProviderMark(provider: provider, tint: providerColor(provider))
                 .frame(width: 13, height: 13)
-            Text(provider.displayName)
+            Text(slot.displayName)
                 .font(.muTitle)
                 .foregroundColor(MU.text)
 
@@ -259,9 +263,9 @@ struct QuotaSection: View {
     }
 
     private var providerHeatmapEnabled: Bool {
-        // Alternate-account slots share the family toggle: it governs the
+        // Every account of a tool shares the family toggle: it governs the
         // heatmap feature for the tool, not for one account.
-        switch provider.statusProvider {
+        switch provider {
         case .codex:  return showCodexHeatmap
         case .claude: return showClaudeHeatmap
         default:      return false
@@ -354,10 +358,10 @@ private struct WindowRow: View {
     @AppStorage(PrefKey.showPacingBurnRate) private var showPacingBurnRate: Bool = true
 
     private var showsRemaining: Bool {
-        provider.statusProvider == .codex || provider.statusProvider == .antigravity
+        provider == .codex || provider == .antigravity
     }
 
-    private var isCodex: Bool { provider.statusProvider == .codex }
+    private var isCodex: Bool { provider == .codex }
 
     private var tint: Color { headroomColor(window.usedPercent) }
 

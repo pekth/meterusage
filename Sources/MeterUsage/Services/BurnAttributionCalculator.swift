@@ -10,23 +10,23 @@ public enum BurnAttributionCalculator {
     /// tokens with an empty model and `isAggregate`, so they join token totals
     /// without ever posing as one long chat.
     static func attributionSessions(
-        activities: [Provider: Loaded<LocalActivity>],
-        usages: [Provider: Loaded<ProviderUsage>],
+        activities: [ProviderSlot: Loaded<LocalActivity>],
+        usages: [ProviderSlot: Loaded<ProviderUsage>],
         now: Date = Date()
     ) -> [SessionSummary] {
         var result: [SessionSummary] = []
-        for provider in Provider.allCases {
-            if let act = activities[provider]?.value {
+        for (slot, state) in activities.sorted(by: { $0.key < $1.key }) {
+            if let act = state.value {
                 result.append(contentsOf: act.sessions)
             }
         }
-        for provider in Provider.allCases {
-            guard let usage = usages[provider]?.value else { continue }
+        for (slot, state) in usages.sorted(by: { $0.key < $1.key }) {
+            guard let usage = state.value else { continue }
             if let breakdown = usage.projectBreakdown, !breakdown.isEmpty {
                 for split in breakdown {
                     result.append(
                         SessionSummary(
-                            id: "aggregate-\(Privacy.opaqueID("\(provider.rawValue)/\(split.project)"))",
+                            id: "aggregate-\(Privacy.opaqueID("\(slot.key)/\(split.project)"))",
                             projectName: split.project,
                             model: "",
                             tokens: split.tokens,
@@ -42,8 +42,8 @@ public enum BurnAttributionCalculator {
             guard let week = usage.weekTokens, week.total > 0 else { continue }
             result.append(
                 SessionSummary(
-                    id: "aggregate-\(provider.rawValue)",
-                    projectName: provider.displayName,
+                    id: "aggregate-\(slot.key)",
+                    projectName: slot.displayName,
                     model: "",
                     tokens: week,
                     estimatedCostUSD: 0,

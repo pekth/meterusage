@@ -14,18 +14,20 @@ import Foundation
 // in the payloads is read — no prompts, no tool output.
 public actor CodexLocalSource: LocalActivitySource {
 
-    public nonisolated let provider: Provider
+    public nonisolated let slot: ProviderSlot
+    public nonisolated var provider: Provider { slot.provider }
 
     private let root: URL
     private let fileManager: FileManager
 
     /// One Codex account slot. The default scans the primary account's
-    /// rollout store under the real home; a second-account instance passes
-    /// `provider: .codexAlt` and a `root` under the alternate Codex home (see
-    /// `AccountSlots`), so only that login's sessions are counted. The rollout
-    /// format is identical across accounts — only the directory differs.
-    public init(provider: Provider = .codex, root: URL? = nil, fileManager: FileManager = .default) {
-        self.provider = provider
+    /// rollout store under the real home; an additional-account instance
+    /// passes the account's slot and a `root` under its own Codex home (see
+    /// `ManagedAccount`), so only that login's sessions are counted. The
+    /// rollout format is identical across accounts — only the directory
+    /// differs.
+    public init(slot: ProviderSlot = .primary(.codex), root: URL? = nil, fileManager: FileManager = .default) {
+        self.slot = slot
         self.root = root ?? HomeDirectory.real
             .appendingPathComponent(".codex", isDirectory: true)
             .appendingPathComponent("sessions", isDirectory: true)
@@ -105,7 +107,7 @@ public actor CodexLocalSource: LocalActivitySource {
         )
 
         return LocalActivity(
-            provider: provider,
+            provider: slot.provider,
             sessions: sessions.sorted { $0.startedAt < $1.startedAt },
             daily: daily,
             scannedAt: now,

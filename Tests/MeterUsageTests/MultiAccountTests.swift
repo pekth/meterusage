@@ -1,262 +1,253 @@
 import XCTest
 @testable import MeterUsage
 
-// MARK: - Multi-account (second-account slots)
+// MARK: - Multi-account (additional account slots)
 //
-// A second Claude or Codex account is a separately-configured config
-// directory on this Mac, surfaced as its own provider slot (`.codexAlt` /
-// `.claudeAlt`). These tests pin the three seams that make that honest:
-// where the directory comes from (`AccountSlots`), when the slot exists
-// (presence gating in `AppCoordinator`), and that per-slot readings and
-// reset actions never leak across accounts.
+// An additional Claude or Codex account is a user-configured config
+// directory, stored as a `ManagedAccount` and surfaced as its own
+// `ProviderSlot` meter. These tests pin the seams that make that honest:
+// slot identity and keying, presence gating, per-slot polling and reset
+// routing, and the persistence/report formats.
 
 final class MultiAccountTests: XCTestCase {
 
-    // MARK: Provider identity
+    // MARK: Slot identity
 
-    func testAltSlotNamingCarriesNoAccountIdentity() {
-        // The slots are labeled by position, never by any account attribute:
-        // no email, no id, no org name can be derived from these strings.
-        XCTAssertEqual(Provider.codexAlt.displayName, "Codex second account")
-        XCTAssertEqual(Provider.claudeAlt.displayName, "Claude second account")
-        XCTAssertEqual(Provider.codexAlt.sourceLabel, "Codex CLI · second account")
-        XCTAssertEqual(Provider.claudeAlt.sourceLabel, "Claude Code · second account")
+    func testSlotNamingCarriesNoAccountIdentity() {
+        // A slot is named by the user's own label, never by any account
+        // attribute: no email, no id, no org name can be derived from it.
+        let work = ProviderSlot(provider: .codex, slotID: "abc", label: "Work")
+        XCTAssertEqual(work.displayName, "Codex · Work")
+        XCTAssertEqual(ProviderSlot(provider: .claude, slotID: "abc").displayName, "Claude · Account")
+        XCTAssertEqual(ProviderSlot.primary(.codex).displayName, "Codex")
     }
 
-    func testAltSlotsResolveToBaseProviderFacts() {
-        XCTAssertEqual(Provider.codexAlt.baseProvider, .codex)
-        XCTAssertEqual(Provider.claudeAlt.baseProvider, .claude)
-        XCTAssertNil(Provider.codex.baseProvider)
-        XCTAssertNil(Provider.claude.baseProvider)
-
-        // Shared service page, shared glyph family.
-        XCTAssertEqual(Provider.codexAlt.statusPageURL, Provider.codex.statusPageURL)
-        XCTAssertEqual(Provider.claudeAlt.statusPageURL, Provider.claude.statusPageURL)
-        XCTAssertEqual(Provider.codexAlt.markProvider, .codex)
-        XCTAssertEqual(Provider.claudeAlt.markProvider, .claude)
-        XCTAssertFalse(Provider.codex.isAltSlot)
-        XCTAssertTrue(Provider.claudeAlt.isAltSlot)
+    func testSlotKeyIsStableAcrossLabelRenames() {
+        // Identity is provider + generated id; the label is display-only.
+        // Renaming must not orphan history, archive, or alert state.
+        let before = ProviderSlot(provider: .codex, slotID: "abc", label: "Work")
+        let after = ProviderSlot(provider: .codex, slotID: "abc", label: "Job")
+        XCTAssertEqual(before.key, after.key)
+        XCTAssertEqual(before, after)
     }
 
-    func testAltSlotsFollowTheFamilyHeadlineRules() {
-        // The slot is the same tool, so the headline-window contract —
-        // the named session window, never positional — must hold identically.
-        let codexWindows = [
-            QuotaWindow(label: "Weekly", usedPercent: 10, resetsAt: nil),
-            QuotaWindow(label: "5-hour", usedPercent: 20, resetsAt: nil),
-        ]
-        XCTAssertEqual(Provider.codexAlt.headlineWindow(from: codexWindows)?.label, "5-hour")
-
-        let claudeWindows = [
-            QuotaWindow(label: "Weekly · All models", usedPercent: 10, resetsAt: nil),
-            QuotaWindow(label: "5-hour", usedPercent: 20, resetsAt: nil),
-        ]
-        XCTAssertEqual(Provider.claudeAlt.headlineWindow(from: claudeWindows)?.label, "5-hour")
+    func testPrimarySlotKeyMatchesTheProviderRawValue() {
+        // Pre-slot persistence formats keyed by provider.rawValue keep working.
+        XCTAssertEqual(ProviderSlot.primary(.codex).key, "codex")
+        XCTAssertEqual(ProviderSlot.primary(.claude).key, "claude")
     }
 
-    // MARK: AccountSlots resolution
-
-    private final class Overlay: AccountSlots.Environment, @unchecked Sendable {
-        private let values: [String: String]
-        init(_ values: [String: String]) { self.values = values }
-        func string(forKey key: String) -> String? { values[key] }
+    func testPrimarySlotsSortBeforeAdditionalSlotsOfOneTool() {
+        let a = ProviderSlot(provider: .codex, slotID: "b", label: "B")
+        let b = ProviderSlot(provider: .codex, slotID: "c", label: "C")
+        let primary = ProviderSlot.primary(.codex)
+        XCTAssertTrue(primary < a)
+        XCTAssertTrue(a < b)
+        XCTAssertTrue(a < .primary(.claude))
     }
 
-    func testResolutionPrefersEnvironmentOverDefaults() {
+    // MARK: Managed account persistence
+
+    @MainActor
+    func testManagedAccountsRoundTripThroughPreferences() throws {
+        let suiteName = "MeterUsageTests-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let preferences = Preferences(defaults: defaults)
+        XCTAssertTrue(preferences.managedAccounts.isEmpty)
+
+        preferences.add(account: ManagedAccount(provider: .codex, label: "Work", path: "~/.codex-work"))
+        preferences.add(account: ManagedAccount(provider: .claude, label: "Personal", path: "~/.claude-alt", enabled: false))
+
+        let reloaded = Preferences(defaults: defaults)
+        XCTAssertEqual(reloaded.managedAccounts.count, 2)
+        XCTAssertEqual(reloaded.managedAccounts[0].label, "Work")
+        XCTAssertEqual(reloaded.managedAccounts[0].slot.provider, .codex)
+        XCTAssertFalse(reloaded.managedAccounts[1].enabled)
+
+        var edited = reloaded.managedAccounts[0]
+        edited.label = "Job"
+        reloaded.update(account: edited)
+        XCTAssertEqual(Preferences(defaults: defaults).managedAccounts[0].label, "Job")
+
+        reloaded.remove(accountID: edited.id)
+        XCTAssertEqual(Preferences(defaults: defaults).managedAccounts.count, 1)
+        XCTAssertFalse(Preferences(defaults: defaults).managedAccounts.contains { $0.id == edited.id })
+    }
+
+    // MARK: Path resolution
+
+    func testManagedAccountPathResolution() {
         let home = URL(fileURLWithPath: "/home/testuser")
-        let defaults = Overlay([AccountSlots.codexAltHomeKey: "/stored/codex-alt"])
-        let env = Overlay([AccountSlots.codexAltHomeKey: "/env/codex-alt"])
-
-        let withEnv = AccountSlots.resolve(
-            overlays: [env, defaults],
-            home: home
+        XCTAssertEqual(
+            ManagedAccountPaths.home(for: ManagedAccount(provider: .codex, label: "w", path: "~/.codex-work"), home: home)?.path,
+            "/home/testuser/.codex-work"
         )
-        XCTAssertEqual(withEnv.codexAltHome?.path, "/env/codex-alt")
-    }
-
-    func testResolutionFallsBackToStoredDefaults() {
-        let home = URL(fileURLWithPath: "/home/testuser")
-        let defaults = Overlay([AccountSlots.codexAltHomeKey: "/stored/codex-alt"])
-
-        let resolved = AccountSlots.resolve(overlays: [defaults], home: home)
-        XCTAssertEqual(resolved.codexAltHome?.path, "/stored/codex-alt")
-        XCTAssertNil(resolved.claudeAltConfig)
-    }
-
-    func testResolutionExpandsTildeAgainstTheRealHome() {
-        let home = URL(fileURLWithPath: "/home/testuser")
-        let overlay = Overlay([
-            AccountSlots.codexAltHomeKey: "~/codex-alt",
-            AccountSlots.claudeAltConfigKey: "~",
-        ])
-
-        let resolved = AccountSlots.resolve(overlays: [overlay], home: home)
-        XCTAssertEqual(resolved.codexAltHome?.path, "/home/testuser/codex-alt")
-        XCTAssertEqual(resolved.claudeAltConfig?.path, "/home/testuser")
-    }
-
-    func testBlankOrMissingKeysMeanUnconfigured() {
-        let home = URL(fileURLWithPath: "/home/testuser")
-        let overlay = Overlay([
-            AccountSlots.codexAltHomeKey: "   ",
-            AccountSlots.claudeAltConfigKey: "",
-        ])
-
-        let resolved = AccountSlots.resolve(overlays: [overlay], home: home)
-        XCTAssertNil(resolved.codexAltHome)
-        XCTAssertNil(resolved.claudeAltConfig)
+        XCTAssertEqual(
+            ManagedAccountPaths.home(for: ManagedAccount(provider: .codex, label: "w", path: "/absolute/dir"), home: home)?.path,
+            "/absolute/dir"
+        )
+        XCTAssertNil(ManagedAccountPaths.home(for: ManagedAccount(provider: .codex, label: "w", path: ""), home: home))
+        XCTAssertNil(ManagedAccountPaths.home(for: ManagedAccount(provider: .codex, label: "w", path: "   "), home: home))
     }
 
     // MARK: Presence gating
 
     @MainActor
-    func testAltSlotOnlyVisibleWhenItsDirectoryExists() throws {
+    func testAdditionalSlotOnlyVisibleWhenEnabledAndDirectoryExists() throws {
         let base = FileManager.default.temporaryDirectory
             .appendingPathComponent("meterusage-slots-\(UUID().uuidString)", isDirectory: true)
-        let codexHome = base.appendingPathComponent("codex-alt", isDirectory: true)
+        let codexHome = base.appendingPathComponent("codex-work", isDirectory: true)
         try FileManager.default.createDirectory(at: codexHome, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: base) }
 
         let suiteName = "MeterUsageTests-" + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(true, forKey: PrefKey.showCodexAlt)
-        defaults.set(true, forKey: PrefKey.showClaudeAlt)
+        defaults.set(true, forKey: PrefKey.showCodex)
 
-        let homes = AccountSlots.Resolved(codexAltHome: codexHome, claudeAltConfig: nil)
-        let coordinator = AppCoordinator(
-            preferences: Preferences(defaults: defaults),
-            slotHomes: homes
-        )
+        let preferences = Preferences(defaults: defaults)
+        preferences.add(account: ManagedAccount(provider: .codex, label: "Work", path: codexHome.path))
+        preferences.add(account: ManagedAccount(provider: .claude, label: "Missing", path: base.appendingPathComponent("no-such-dir").path))
 
-        // The configured slot appears; the configured-but-missing one does not.
-        XCTAssertTrue(coordinator.visibleProviders.contains(.codexAlt))
-        XCTAssertFalse(coordinator.visibleProviders.contains(.claudeAlt))
+        let coordinator = AppCoordinator(preferences: preferences)
 
-        // Directory removed mid-session: the slot is no longer an account.
-        try FileManager.default.removeItem(at: codexHome)
-        XCTAssertFalse(coordinator.visibleProviders.contains(.codexAlt))
+        XCTAssertTrue(coordinator.visibleSlots.contains { $0.provider == .codex && !$0.isPrimary })
+        XCTAssertFalse(coordinator.visibleSlots.contains { $0.provider == .claude && !$0.isPrimary })
+        XCTAssertTrue(coordinator.visibleSlots.contains { $0 == .primary(.codex) })
+
+        // A disabled account is not an account the app reads.
+        var disabled = preferences.managedAccounts[0]
+        disabled.enabled = false
+        preferences.update(account: disabled)
+        XCTAssertFalse(coordinator.visibleSlots.contains { $0.provider == .codex && !$0.isPrimary })
     }
 
     @MainActor
-    func testPrimarySlotsAreNeverGatedBySlotPresence() throws {
+    func testPrimarySlotsNeverGatedByAccountPresence() throws {
         let suiteName = "MeterUsageTests-" + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         defaults.set(true, forKey: PrefKey.showCodex)
 
-        let coordinator = AppCoordinator(
-            preferences: Preferences(defaults: defaults),
-            slotHomes: .none
-        )
-        XCTAssertTrue(coordinator.visibleProviders.contains(.codex))
+        let coordinator = AppCoordinator(preferences: Preferences(defaults: defaults))
+        XCTAssertTrue(coordinator.visibleSlots.contains(.primary(.codex)))
     }
 
     // MARK: Per-slot polling and readings
 
     @MainActor
-    func testBothCodexSlotsLoadIntoTheirOwnRows() async throws {
+    func testBothCodexAccountsLoadIntoTheirOwnRows() async throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meterusage-slots-\(UUID().uuidString)", isDirectory: true)
+        let codexHome = base.appendingPathComponent("codex-work", isDirectory: true)
+        try FileManager.default.createDirectory(at: codexHome, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
         let suiteName = "MeterUsageTests-" + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(true, forKey: PrefKey.showCodexAlt)
 
-        let codexHome = FileManager.default.temporaryDirectory
-            .appendingPathComponent("meterusage-slots-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: codexHome, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: codexHome) }
+        let preferences = Preferences(defaults: defaults)
+        let account = ManagedAccount(provider: .codex, label: "Work", path: codexHome.path)
+        preferences.add(account: account)
 
         let coordinator = AppCoordinator(
-            preferences: Preferences(defaults: defaults),
+            preferences: preferences,
             quotaSources: [
                 StubQuotaSource(
-                    provider: .codex,
+                    slot: .primary(.codex),
                     windows: [QuotaWindow(label: "5-hour", usedPercent: 10, resetsAt: nil)]
                 ),
                 StubQuotaSource(
-                    provider: .codexAlt,
+                    slot: account.slot,
                     windows: [QuotaWindow(label: "5-hour", usedPercent: 90, resetsAt: nil)]
                 ),
-            ],
-            slotHomes: AccountSlots.Resolved(codexAltHome: codexHome, claudeAltConfig: nil)
+            ]
         )
 
         coordinator.refresh()
         for _ in 0..<200 {
-            if coordinator.quotas[.codex]?.value != nil, coordinator.quotas[.codexAlt]?.value != nil { break }
+            if coordinator.quotas[.primary(.codex)]?.value != nil,
+               coordinator.quotas[account.slot]?.value != nil { break }
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
 
         // Two slots, two readings, never merged or overwritten.
-        XCTAssertEqual(coordinator.quotas[.codex]?.value?.windows.first?.usedPercent, 10)
-        XCTAssertEqual(coordinator.quotas[.codexAlt]?.value?.windows.first?.usedPercent, 90)
+        XCTAssertEqual(coordinator.quotas[.primary(.codex)]?.value?.windows.first?.usedPercent, 10)
+        XCTAssertEqual(coordinator.quotas[account.slot]?.value?.windows.first?.usedPercent, 90)
+        XCTAssertTrue(coordinator.visibleQuotaSlots.contains(account.slot))
     }
 
     // MARK: Reset routing
 
     private final class ResetBox: @unchecked Sendable {
-        var consumed: [Provider: [String]] = [:]
+        var consumed: [String: [String]] = [:] // slot key -> credit ids
     }
 
     private struct SlotResetSource: QuotaSource, QuotaResetConsumer {
-        let provider: Provider
-        let windows: [QuotaWindow]
+        let slot: ProviderSlot
+        var provider: Provider { slot.provider }
         let box: ResetBox
 
         func fetchQuota() async throws -> ProviderQuota {
             ProviderQuota(
-                provider: provider,
-                windows: windows,
+                provider: slot.provider,
+                windows: [],
                 resetCreditCount: 1,
-                resetCredits: [QuotaResetCredit(id: "credit-\(provider.rawValue)", title: "Full reset", status: "available")],
+                resetCredits: [QuotaResetCredit(id: "credit-\(slot.key)", title: "Full reset", status: "available")],
                 capturedAt: Date()
             )
         }
 
         func consumeReset(creditID: String) async throws -> Bool {
-            box.consumed[provider, default: []].append(creditID)
+            box.consumed[slot.key, default: []].append(creditID)
             return true
         }
     }
 
     @MainActor
     func testResetRoutesToTheSlotThatOwnsTheCredit() async throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meterusage-slots-\(UUID().uuidString)", isDirectory: true)
+        let codexHome = base.appendingPathComponent("codex-work", isDirectory: true)
+        try FileManager.default.createDirectory(at: codexHome, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
         let suiteName = "MeterUsageTests-" + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set(true, forKey: PrefKey.showCodexAlt)
 
-        let codexHome = FileManager.default.temporaryDirectory
-            .appendingPathComponent("meterusage-slots-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: codexHome, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: codexHome) }
+        let preferences = Preferences(defaults: defaults)
+        let account = ManagedAccount(provider: .codex, label: "Work", path: codexHome.path)
+        preferences.add(account: account)
 
         let box = ResetBox()
         let coordinator = AppCoordinator(
-            preferences: Preferences(defaults: defaults),
+            preferences: preferences,
             quotaSources: [
-                SlotResetSource(provider: .codex, windows: [], box: box),
-                SlotResetSource(provider: .codexAlt, windows: [], box: box),
-            ],
-            slotHomes: AccountSlots.Resolved(codexAltHome: codexHome, claudeAltConfig: nil)
+                SlotResetSource(slot: .primary(.codex), box: box),
+                SlotResetSource(slot: account.slot, box: box),
+            ]
         )
 
-        // Both slots' credits are redeemable...
-        XCTAssertTrue(coordinator.canUseCodexReset(for: .codex))
-        XCTAssertTrue(coordinator.canUseCodexReset(for: .codexAlt))
-        // ...a non-Codex slot is not...
-        XCTAssertFalse(coordinator.canUseCodexReset(for: .claude))
+        // Both slots' credits are redeemable; a non-Codex slot is not.
+        XCTAssertTrue(coordinator.canUseCodexReset(for: .primary(.codex)))
+        XCTAssertTrue(coordinator.canUseCodexReset(for: account.slot))
+        XCTAssertFalse(coordinator.canUseCodexReset(for: .primary(.claude)))
 
         coordinator.refresh()
         for _ in 0..<200 {
-            if coordinator.quotas[.codex]?.value != nil, coordinator.quotas[.codexAlt]?.value != nil { break }
+            if coordinator.quotas[.primary(.codex)]?.value != nil,
+               coordinator.quotas[account.slot]?.value != nil { break }
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
 
-        // ...and the credit id routes to the slot whose quota reported it.
-        try await coordinator.consumeCodexReset(creditID: "credit-codexAlt")
-        XCTAssertEqual(box.consumed[.codexAlt], ["credit-codexAlt"])
-        XCTAssertNil(box.consumed[.codex])
+        // The credit id routes to the slot whose quota reported it.
+        try await coordinator.consumeCodexReset(creditID: "credit-\(account.slot.key)")
+        XCTAssertEqual(box.consumed[account.slot.key], ["credit-\(account.slot.key)"])
+        XCTAssertNil(box.consumed["codex"])
     }
 
     // MARK: Source identity threading
@@ -271,14 +262,15 @@ final class MultiAccountTests: XCTestCase {
             }
         }
 
-        let alt = CodexQuotaSource(provider: .codexAlt, client: NotSignedInClient())
+        let account = ManagedAccount(provider: .codex, label: "Work", path: "~/.codex-work")
+        let alt = CodexQuotaSource(slot: account.slot, client: NotSignedInClient())
         do {
             _ = try await alt.fetchQuota()
             XCTFail("expected notSignedIn")
         } catch let reason as SourceUnavailable {
-            // The error names the slot, so the calm empty state says which
+            // The error names the account, so the calm empty state says which
             // account to sign in rather than ambiguously "Codex".
-            XCTAssertEqual(reason, .notSignedIn(.codexAlt))
+            XCTAssertEqual(reason, .notSignedIn(.codex))
         }
     }
 
@@ -295,28 +287,39 @@ final class MultiAccountTests: XCTestCase {
         try FileManager.default.copyItem(at: fixture, to: projectDir.appendingPathComponent("session-one.jsonl"))
         defer { try? FileManager.default.removeItem(at: base) }
 
+        let account = ManagedAccount(provider: .claude, label: "Work", path: base.path)
         let altSource = ClaudeLocalSource(
-            provider: .claudeAlt,
+            slot: account.slot,
             root: projects,
             cacheFileURL: base.appendingPathComponent("cache-alt.json")
         )
         let activity = try await altSource.scan()
-        XCTAssertEqual(activity.provider, .claudeAlt)
+        XCTAssertEqual(activity.provider, .claude)
     }
 
-    func testQuotaArchiveRoundTripsAltSlots() {
+    // MARK: Persistence and report formats
+
+    func testQuotaArchiveRoundTripsAdditionalSlots() {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("meterusage-tests-archive-\(UUID().uuidString).json")
-        let quotas: [Provider: ProviderQuota] = [
-            .codexAlt: ProviderQuota(
-                provider: .codexAlt,
+        let account = ManagedAccount(provider: .codex, label: "Work", path: "~/.codex-work")
+        let quotas: [ProviderSlot: ProviderQuota] = [
+            .primary(.codex): ProviderQuota(
+                provider: .codex,
+                windows: [QuotaWindow(label: "5-hour", usedPercent: 10, resetsAt: nil)],
+                capturedAt: Date(timeIntervalSince1970: 1_785_000_000)
+            ),
+            account.slot: ProviderQuota(
+                provider: .codex,
                 windows: [QuotaWindow(label: "5-hour", usedPercent: 33, resetsAt: nil)],
                 capturedAt: Date(timeIntervalSince1970: 1_785_000_000)
             ),
         ]
         QuotaArchive.save(quotas, to: url)
         let loaded = QuotaArchive.load(from: url)
-        XCTAssertEqual(loaded[.codexAlt]?.windows.first?.usedPercent, 33)
+        XCTAssertEqual(loaded[.primary(.codex)]?.windows.first?.usedPercent, 10)
+        XCTAssertEqual(loaded[account.slot]?.windows.first?.usedPercent, 33)
+        XCTAssertEqual(loaded[account.slot]?.provider, .codex)
         try? FileManager.default.removeItem(at: url)
     }
 
@@ -330,41 +333,45 @@ final class MultiAccountTests: XCTestCase {
             estimatedCostUSD: 0,
             sessionCount: 2
         )
-        store.record(provider: .codexAlt, daily: [day])
-        XCTAssertEqual(store.records(for: .codexAlt).first?.tokens.input, 100)
-        XCTAssertNil(store.records(for: .codex).first, "second-account history must not leak into the primary slot")
+        let account = ManagedAccount(provider: .claude, label: "Work", path: "~/.claude-alt")
+        store.record(key: account.slot.key, daily: [day])
+        XCTAssertEqual(store.records(forKey: account.slot.key).first?.tokens.input, 100)
+        XCTAssertNil(store.records(forKey: "claude").first, "second-account history must not leak into the primary slot")
         try? FileManager.default.removeItem(at: url)
     }
 
     func testLimitsReportEmitsDistinctSlotEntries() {
         let now = Date()
+        let account = ManagedAccount(provider: .codex, label: "Work", path: "~/.codex-work")
         let report = LimitsReporter.build(
             quotas: [
-                .codex: .value(ProviderQuota(
+                .primary(.codex): .value(ProviderQuota(
                     provider: .codex,
                     windows: [QuotaWindow(label: "5-hour", usedPercent: 10, resetsAt: nil)],
                     capturedAt: now
                 )),
-                .codexAlt: .value(ProviderQuota(
-                    provider: .codexAlt,
+                account.slot: .value(ProviderQuota(
+                    provider: .codex,
                     windows: [QuotaWindow(label: "5-hour", usedPercent: 80, resetsAt: nil)],
                     capturedAt: now
                 )),
             ],
-            order: [.codex, .codexAlt],
+            order: [.primary(.codex), account.slot],
             now: now
         )
 
-        XCTAssertEqual(report.providers.map(\.provider), ["codex", "codexAlt"])
+        XCTAssertEqual(report.providers.map(\.provider), ["codex", "codex"])
+        XCTAssertEqual(report.providers.map(\.account), [nil, "Work"])
         XCTAssertEqual(report.providers.map(\.windows.first?.usedPercent), [10, 80])
     }
 }
 
 private struct StubQuotaSource: QuotaSource {
-    let provider: Provider
+    let slot: ProviderSlot
+    var provider: Provider { slot.provider }
     let windows: [QuotaWindow]
 
     func fetchQuota() async throws -> ProviderQuota {
-        ProviderQuota(provider: provider, windows: windows, capturedAt: Date())
+        ProviderQuota(provider: slot.provider, windows: windows, capturedAt: Date())
     }
 }

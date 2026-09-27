@@ -176,10 +176,10 @@ public enum BurnRecency {
         sessions.map(\.activeUntil).max()
     }
 
-    /// Last burn per provider from loaded local activity. Providers without a
+    /// Last burn per metered slot from loaded local activity. Slots without a
     /// session store are absent — no burn evidence, no pace claims. Internal
     /// because the coordinator is the only caller that maps whole activities.
-    static func lastBurns(from activities: [Provider: Loaded<LocalActivity>]) -> [Provider: Date] {
+    static func lastBurns(from activities: [ProviderSlot: Loaded<LocalActivity>]) -> [ProviderSlot: Date] {
         activities.compactMapValues { lastBurn(of: $0.value?.sessions ?? []) }
     }
 
@@ -426,83 +426,33 @@ public struct ProviderQuota: Equatable, Sendable {
 
 public enum Provider: String, CaseIterable, Codable, Sendable {
     case codex
-    /// A second, separately-configured Codex account.
-    ///
-    /// Sources for this slot point at an alternate Codex home directory (see
-    /// `AccountSlots`), so its readings come from a different `codex` login
-    /// than the primary slot's. Everything downstream (coordinator maps,
-    /// archive, alerts, JSON report, tray) treats it as its own meter row —
-    /// never merged with `.codex`, because two accounts' percents are two
-    /// different budgets.
-    case codexAlt
     case antigravity
     case grok
     case openCodeGo
     case openRouter
     case claude
-    /// A second, separately-configured Claude Code account.
-    ///
-    /// Sources for this slot scan an alternate Claude projects tree (see
-    /// `AccountSlots`) and a per-account quota/plan snapshot, so readings
-    /// belong to a different Claude account than the primary `.claude` slot.
-    case claudeAlt
     case cursor
     case copilot
     case gemini
 
-    /// The provider this slot reads the same tool as, or `nil` for the
-    /// primary slot. An alternate case answers its own identity here and is
-    /// otherwise present-tense in every surface: "Claude second account" is a
-    /// distinct meter, not a footnote.
-    public var baseProvider: Provider? {
-        switch self {
-        case .codexAlt: return .codex
-        case .claudeAlt: return .claude
-        default: return nil
-        }
-    }
-
-    /// True for the second-account slots. These providers follow their base
-    /// provider for status pages, plan badges, and identity glyphs — see the
-    /// per-field resolution helpers below.
-    public var isAltSlot: Bool { baseProvider != nil }
-
-    /// The slot digit ("2") shown beside an alternate-account slot's mark.
-    /// `nil` for primary slots, which never carry a digit.
-    public var altSlotDigit: String? {
-        switch self {
-        case .codexAlt, .claudeAlt: return "2"
-        default: return nil
-        }
-    }
-
-    /// Service-health identity: an alternate-account slot shares its base
-    /// provider's service, so the status strip keeps one row per service.
-    public var statusProvider: Provider { baseProvider ?? self }
-
-    /// Identity glyph: the alternate-account slots reuse their base
-    /// provider's bundled mark so both account rows read as the same tool.
-    /// ADR 0002 keeps the marks themselves unchanged.
-    public var markProvider: Provider {
-        guard let base = baseProvider else { return self }
-        return base
-    }
-
     public var displayName: String {
         switch self {
         case .codex: return "Codex"
-        case .codexAlt: return "Codex second account"
         case .antigravity: return "Antigravity"
         case .grok: return "Grok"
         case .openCodeGo: return "OpenCode Go"
         case .openRouter: return "OpenRouter"
         case .claude: return "Claude"
-        case .claudeAlt: return "Claude second account"
         case .cursor: return "Cursor"
         case .copilot: return "Copilot CLI"
         case .gemini: return "Gemini CLI"
         }
     }
+
+    /// Tools that support additional, separately-configured accounts. Each
+    /// additional account is a `ProviderSlot` on one of these providers,
+    /// backed by its own config directory (see `ManagedAccount`).
+    public static let supportsAdditionalAccounts: [Provider] = [.codex, .claude]
 
     /// The window the ring, tray cluster, and tooltip headline mean for this
     /// provider — declared by name, never positional and never "whichever is
@@ -535,12 +485,12 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     ///   figure.
     public func headlineWindow(from windows: [QuotaWindow]) -> QuotaWindow? {
         switch self {
-        case .codex, .codexAlt:
+        case .codex:
             if let session = windows.first(where: { $0.isSessionWindow }) {
                 return session
             }
             return windows.count == 1 ? windows[0] : nil
-        case .claude, .claudeAlt:
+        case .claude:
             if let session = windows.first(where: { $0.isSessionWindow }) {
                 return session
             }
@@ -563,9 +513,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     public var sourceLabel: String {
         switch self {
         case .codex: return "Codex CLI"
-        case .codexAlt: return "Codex CLI · second account"
         case .claude: return "Claude Code"
-        case .claudeAlt: return "Claude Code · second account"
         case .antigravity: return "agy CLI"
         case .grok: return "Grok CLI"
         case .openCodeGo: return "OpenCode"
@@ -581,9 +529,9 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     /// than sending the user to a guessed or unrelated page.
     public var statusPageURL: URL? {
         switch self {
-        case .codex, .codexAlt:
+        case .codex:
             return URL(string: "https://status.openai.com/")
-        case .claude, .claudeAlt:
+        case .claude:
             return URL(string: "https://status.claude.com/")
         case .cursor:
             return URL(string: "https://status.cursor.com/")
@@ -592,6 +540,144 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
         case .antigravity, .grok, .openCodeGo, .openRouter, .gemini:
             return nil
         }
+    }
+}
+
+// MARK: - Account slots
+
+/// One metered account: a provider tool plus, for additional accounts, the
+/// slot that identifies which configured account the readings belong to.
+///
+/// The primary slot of each provider carries an empty `slotID` and renders
+/// exactly the provider's own name. Additional slots render as
+/// "<Provider> · <label>", where the label is the user's own name for that
+/// account — never anything read from the provider, whose identifying data
+/// this app structurally cannot display (see the privacy contract above).
+///
+/// Hashing and persistence key on `provider + slotID` only, deliberately
+/// excluding the label: renaming an account must not orphan its history,
+/// archive, or alert state. Codable serializes the same key string, so the
+/// persisted formats stay readable and stable.
+public struct ProviderSlot: Hashable, Comparable, Sendable, Identifiable {
+    public let provider: Provider
+    /// Empty for the primary account slot; a stable generated id for
+    /// additional accounts.
+    public let slotID: String
+    /// The user's name for this account. Empty for primary slots. Carried
+    /// for display only — never part of identity (see above).
+    public let label: String
+
+    public init(provider: Provider, slotID: String = "", label: String = "") {
+        self.provider = provider
+        self.slotID = slotID
+        self.label = label
+    }
+
+    public static func == (lhs: ProviderSlot, rhs: ProviderSlot) -> Bool {
+        lhs.provider == rhs.provider && lhs.slotID == rhs.slotID
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(provider)
+        hasher.combine(slotID)
+    }
+
+    public static func primary(_ provider: Provider) -> ProviderSlot {
+        ProviderSlot(provider: provider)
+    }
+
+    /// Primary-slot shorthands mirroring the `Provider` cases, so call sites
+    /// and tests read `quotas[.codex]` against slot-keyed maps.
+    public static let codex = ProviderSlot(provider: .codex)
+    public static let antigravity = ProviderSlot(provider: .antigravity)
+    public static let grok = ProviderSlot(provider: .grok)
+    public static let openCodeGo = ProviderSlot(provider: .openCodeGo)
+    public static let openRouter = ProviderSlot(provider: .openRouter)
+    public static let claude = ProviderSlot(provider: .claude)
+    public static let cursor = ProviderSlot(provider: .cursor)
+    public static let copilot = ProviderSlot(provider: .copilot)
+    public static let gemini = ProviderSlot(provider: .gemini)
+
+    public var isPrimary: Bool { slotID.isEmpty }
+
+    public var id: String { key }
+
+    /// Stable persistence key: the provider raw value for the primary slot,
+    /// "<rawValue>#<slotID>" for additional slots. Primary keys are byte-
+    /// identical to the pre-slot formats, so existing archives and history
+    /// files keep working.
+    public var key: String {
+        isPrimary ? provider.rawValue : "\(provider.rawValue)#\(slotID)"
+    }
+
+    public var displayName: String {
+        isPrimary
+            ? provider.displayName
+            : "\(provider.displayName) · \(label.isEmpty ? "Account" : label)"
+    }
+
+    /// The digit shown beside this slot's mark in the tray and notch.
+    /// Primary slots never carry a digit; additional slots are numbered from
+    /// 2 in the order they were added (caller supplies that ordinal).
+    public func slotDigit(ordinal: Int) -> String? {
+        isPrimary ? nil : String(max(2, ordinal))
+    }
+
+    /// Primary slots first, then by the provider's stable display order, then
+    /// by slot id.
+    public static func < (lhs: ProviderSlot, rhs: ProviderSlot) -> Bool {
+        if lhs.provider != rhs.provider {
+            return lhs.provider.ordinal < rhs.provider.ordinal
+        }
+        if lhs.isPrimary != rhs.isPrimary {
+            return lhs.isPrimary
+        }
+        return lhs.slotID < rhs.slotID
+    }
+}
+
+private extension Provider {
+    /// Position of this case in `allCases`, for stable slot ordering without
+    /// reaching into CaseIterable from a Comparable conformance.
+    var ordinal: Int {
+        Provider.allCases.firstIndex(of: self) ?? .max
+    }
+}
+
+/// One user-configured additional account, persisted as a list per tool.
+///
+/// The label is the user's own name for the account ("Work", "Personal") —
+/// typed, stored locally, and displayed; nothing is ever read back from the
+/// provider to name it. The path is the account's own CLI config directory
+/// (a `CODEX_HOME`- or `CLAUDE_CONFIG_DIR`-equivalent); meterusage reads the
+/// same usage surfaces there it reads for the primary account, and still
+/// never opens credential files inside it.
+public struct ManagedAccount: Codable, Equatable, Sendable, Identifiable {
+    public var id: String
+    /// The tool this account belongs to. Always a base provider case; slots
+    /// cannot nest.
+    public var provider: Provider
+    public var label: String
+    /// The account's config directory, tilde-relative or absolute.
+    public var path: String
+    public var enabled: Bool
+
+    public init(
+        id: String = UUID().uuidString,
+        provider: Provider,
+        label: String,
+        path: String,
+        enabled: Bool = true
+    ) {
+        self.id = id
+        self.provider = provider
+        self.label = label
+        self.path = path
+        self.enabled = enabled
+    }
+
+    public var slot: ProviderSlot {
+        ProviderSlot(provider: provider, slotID: id, label: label)
     }
 }
 
@@ -1056,8 +1142,15 @@ public enum PlanTier: Equatable, Sendable {
 
 /// Reads which plan the local Claude CLI is signed in under.
 public protocol PlanSource: Sendable {
+    /// The tool this source meters (see `QuotaSource.provider`).
     var provider: Provider { get }
+    /// Which metered account this instance reads (see `ProviderSlot`).
+    var slot: ProviderSlot { get }
     func fetchPlan() async throws -> PlanTier
+}
+
+extension PlanSource {
+    public var slot: ProviderSlot { .primary(provider) }
 }
 
 // MARK: - Service health

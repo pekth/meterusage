@@ -168,14 +168,15 @@ struct SideNotchPanelView: View {
     @AppStorage(PrefKey.showDailyActivityChart) private var showDailyActivityChart = true
     @AppStorage(PrefKey.showSideNotchResetButton) private var showSideNotchResetButton = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hoveredProvider: Provider?
+    @State private var hoveredSlot: ProviderSlot?
     @State private var isHoveringPanel = false
     @State private var confirmingResetID: String?
     @State private var consumingResetID: String?
     /// The slot a pending reset belongs to, so a card pinned open by a
     /// confirmation keeps showing *that* account even after the pointer
-    /// leaves — with two Codex accounts, `.codex` would be the wrong card.
-    @State private var resetProvider: Provider?
+    /// leaves — with two Codex accounts, the primary card would be the
+    /// wrong one.
+    @State private var resetSlot: ProviderSlot?
     @State private var resetStatusMessage: String?
     @State private var resetErrorMessage: String?
     @State private var stripHeight: CGFloat = 0
@@ -195,14 +196,14 @@ struct SideNotchPanelView: View {
     /// Unfolded while pinned, while the pointer is on the panel, or while a
     /// reset action / confirmation is active.
     private var isOpen: Bool {
-        isPinned || isHoveringPanel || hoveredProvider != nil || confirmingResetID != nil || consumingResetID != nil
+        isPinned || isHoveringPanel || hoveredSlot != nil || confirmingResetID != nil || consumingResetID != nil
     }
 
     /// True when a detail card is actively showing beside the strip.
     private var isCardShowing: Bool {
-        let activeHovered = hoveredProvider
-            ?? ((confirmingResetID != nil || consumingResetID != nil) ? (resetProvider ?? .codex) : nil)
-        return !panel.isDragging && activeHovered != nil && entries.contains(where: { $0.provider == activeHovered })
+        let activeHovered = hoveredSlot
+            ?? ((confirmingResetID != nil || consumingResetID != nil) ? resetSlot : nil)
+        return !panel.isDragging && activeHovered != nil && entries.contains(where: { $0.slot == activeHovered })
     }
 
     var body: some View {
@@ -281,7 +282,7 @@ struct SideNotchPanelView: View {
             try? await Task.sleep(nanoseconds: 450_000_000)
             guard !Task.isCancelled else { return }
             guard confirmingResetID == nil && consumingResetID == nil else { return }
-            hoveredProvider = nil
+            hoveredSlot = nil
             isHoveringPanel = false
         }
     }
@@ -316,14 +317,14 @@ struct SideNotchPanelView: View {
             cardHeight = whole
             if whole > maxCardHeight { maxCardHeight = whole }
         }
-        .onChange(of: entries.map(\.provider)) { _ in
+        .onChange(of: entries.map(\.slot.key)) { _ in
             maxCardHeight = 0
         }
         .onChange(of: panel.isDragging) { dragging in
             // A drop can strand a hover from before the drag (the mouse never
             // re-enters to refresh it): always reopen from a clean hover.
             if !dragging && confirmingResetID == nil && consumingResetID == nil {
-                hoveredProvider = nil
+                hoveredSlot = nil
             }
         }
     }
@@ -334,11 +335,11 @@ struct SideNotchPanelView: View {
     /// on drop.
     @ViewBuilder
     private var cardColumn: some View {
-        let activeHovered = hoveredProvider
-            ?? ((confirmingResetID != nil || consumingResetID != nil) ? (resetProvider ?? .codex) : nil)
+        let activeHovered = hoveredSlot
+            ?? ((confirmingResetID != nil || consumingResetID != nil) ? resetSlot : nil)
         if !panel.isDragging,
            let hovered = activeHovered,
-           entries.contains(where: { $0.provider == hovered }) {
+           entries.contains(where: { $0.slot == hovered }) {
             let beakY = beakYOnCard(for: hovered)
             let effectiveHeight = max(cardHeight, stripHeight)
             let isBeakWithinBounds = Self.isBeakWithinBounds(beakY: beakY, cardHeight: effectiveHeight)
@@ -368,6 +369,13 @@ struct SideNotchPanelView: View {
                 Circle()
                     .fill(entry.ringTint)
                     .frame(width: 8, height: 8)
+                    // An additional account's dot carries a thin outline so
+                    // two dots of one tool don't read as a duplicate.
+                    .overlay(
+                        entry.digit != nil
+                            ? Circle().strokeBorder(Notch.text.opacity(0.7), lineWidth: 1)
+                            : nil
+                    )
             }
             if entries.isEmpty {
                 Circle()
@@ -414,7 +422,8 @@ struct SideNotchPanelView: View {
                         QuotaRing(
                             fraction: entry.fraction,
                             tint: entry.ringTint,
-                            provider: entry.provider,
+                            slot: entry.slot,
+                            digit: entry.digit,
                             markTint: entry.markTint,
                             reduceMotion: reduceMotion
                         )
@@ -441,10 +450,10 @@ struct SideNotchPanelView: View {
                     .accessibilityAction(named: "Show details") {
                         cancelFold()
                         isHoveringPanel = true
-                        hoveredProvider = entry.provider
+                        hoveredSlot = entry.slot
                     }
                     .accessibilityAction(named: "Hide details") {
-                        hoveredProvider = nil
+                        hoveredSlot = nil
                     }
                     // A remembered reading is dated information: dim it so it
                     // never passes for a live number.
@@ -461,7 +470,7 @@ struct SideNotchPanelView: View {
                         if hovering {
                             cancelFold()
                             isHoveringPanel = true
-                            hoveredProvider = entry.provider
+                            hoveredSlot = entry.slot
                         }
                     }
                 }
@@ -501,24 +510,24 @@ struct SideNotchPanelView: View {
 
     // MARK: - Detail card for hovered provider
 
-    private func detailCard(for provider: Provider) -> some View {
+    private func detailCard(for slot: ProviderSlot) -> some View {
         // The card follows the ring: live reading when present, otherwise
         // the archived last-good reading, dated as such.
-        let display = coordinator.displayQuota(for: provider)
+        let display = coordinator.displayQuota(for: slot)
         let quota = display?.quota
         let isStale = display?.isStale ?? false
         return VStack(alignment: .leading, spacing: 10) {
-            // Header: icon, "[Provider] Usage", and reset countdown
+            // Header: icon, "[Provider · account] Usage", and reset countdown
             HStack(alignment: .center, spacing: 8) {
-                ProviderMark(provider: provider, tint: providerColor(provider))
+                ProviderMark(provider: slot.provider, tint: providerColor(slot.provider))
                     .frame(width: 14, height: 14)
-                Text("\(provider.displayName) Usage")
+                Text("\(slot.displayName) Usage")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(Notch.text)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: 6)
-                if let countdown = headerResetCountdown(for: provider) {
+                if let countdown = headerResetCountdown(for: slot) {
                     Text("Resets in \(countdown)")
                         .font(.system(size: 11, weight: .regular))
                         .foregroundColor(Notch.subtext)
@@ -536,8 +545,9 @@ struct SideNotchPanelView: View {
 
             // Service status badge for anything but operational. Unknown gets
             // its neutral badge rather than silence: an unreadable check is
-            // information, not health.
-            if let status = coordinator.status(for: provider)?.value,
+            // information, not health. Health is per service, so every
+            // account of one tool shares the check.
+            if let status = coordinator.status(for: slot.provider)?.value,
                status.severity != .operational {
                 StatusBadge(severity: status.severity)
             }
@@ -545,10 +555,10 @@ struct SideNotchPanelView: View {
             // Ambient Time-To-Empty banner. The effective pace demotes a
             // deficit whose burn has gone quiet, so a stale window shows the
             // reset countdown in the calm tint instead of a burn alarm.
-            if let headline = provider.headlineWindow(from: Self.effectiveWindows(for: provider, quota: quota)),
+            if let headline = slot.provider.headlineWindow(from: Self.effectiveWindows(for: slot.provider, quota: quota)),
                let pace = headline.pace(now: coordinator.clock)?.effective(
                     lastBurn: BurnRecency.lastBurn(
-                        of: coordinator.activities[provider]?.value?.sessions ?? []),
+                        of: coordinator.activities[slot]?.value?.sessions ?? []),
                     now: coordinator.clock),
                let etaText = pace.etaText(resetsAt: headline.resetsAt, now: coordinator.clock) {
                 HStack(spacing: 8) {
@@ -591,36 +601,36 @@ struct SideNotchPanelView: View {
                                     .foregroundColor(Notch.subtext)
                             }
                             ForEach(Array(group.windows.enumerated()), id: \.offset) { _, window in
-                                windowRow(window: window, quota: quota, provider: provider)
+                                windowRow(window: window, quota: quota, provider: slot.provider, slot: slot)
                             }
                         }
                     }
                 }
             } else {
-                let windows = Self.effectiveWindows(for: provider, quota: quota)
+                let windows = Self.effectiveWindows(for: slot.provider, quota: quota)
                 if !windows.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
-                            windowRow(window: window, quota: quota, provider: provider)
+                            windowRow(window: window, quota: quota, provider: slot.provider, slot: slot)
                         }
                     }
                 } else if let quota, let credits = quota.credits {
-                    fallbackCreditsSection(credits: credits, provider: provider)
+                    fallbackCreditsSection(credits: credits, provider: slot.provider)
                 }
             }
 
-            // Usage limit resets (either Codex account slot)
+            // Usage limit resets (either Codex account)
             if showSideNotchResetButton,
-               provider.statusProvider == .codex,
+               slot.provider == .codex,
                let quota,
                (quota.resetCreditCount ?? 0) > 0 || !quota.resetCredits.isEmpty {
-                resetCreditsSection(provider: provider, quota: quota)
+                resetCreditsSection(slot: slot, quota: quota)
             }
 
             // Activity Telemetry 2-column grid
-            if showActivityTelemetry, let tel = telemetry(for: provider) {
-                telemetryView(tel: tel, provider: provider)
-            } else if let tokenUsage = tokenUsage(for: provider),
+            if showActivityTelemetry, let tel = telemetry(for: slot) {
+                telemetryView(tel: tel)
+            } else if let tokenUsage = tokenUsage(for: slot),
                (tokenUsage.todayText != nil || tokenUsage.last30DaysText != nil) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Token usage")
@@ -654,13 +664,13 @@ struct SideNotchPanelView: View {
             }
 
             // 30-day activity histogram
-            if showDailyActivityChart, let tel = telemetry(for: provider), tel.dailyHistory.count >= 7 {
-                dailyActivityChart(history: tel.dailyHistory, provider: provider)
+            if showDailyActivityChart, let tel = telemetry(for: slot), tel.dailyHistory.count >= 7 {
+                dailyActivityChart(history: tel.dailyHistory, provider: slot.provider)
             }
 
             // Burn breakdown and context waste hints
-            if let act = coordinator.activities[provider]?.value,
-               let headline = provider.headlineWindow(from: Self.effectiveWindows(for: provider, quota: quota)),
+            if let act = coordinator.activities[slot]?.value,
+               let headline = slot.provider.headlineWindow(from: Self.effectiveWindows(for: slot.provider, quota: quota)),
                let breakdown = act.burnBreakdown(for: headline, now: coordinator.clock),
                !breakdown.contributors.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -769,13 +779,14 @@ struct SideNotchPanelView: View {
     }
 
     @ViewBuilder
-    private func windowRow(window: QuotaWindow, quota: ProviderQuota?, provider: Provider) -> some View {
+    private func windowRow(window: QuotaWindow, quota: ProviderQuota?, provider: Provider, slot: ProviderSlot) -> some View {
         // Effective pace: a deficit without a current burn reads as on-pace,
         // never as a "burning fast" alarm for a burst that already cooled.
+        // Burn evidence is per account slot.
         let pace = showPacingBurnRate
             ? window.pace(now: coordinator.clock)?.effective(
                 lastBurn: BurnRecency.lastBurn(
-                    of: coordinator.activities[provider]?.value?.sessions ?? []),
+                    of: coordinator.activities[slot]?.value?.sessions ?? []),
                 now: coordinator.clock)
             : nil
         let figure = Self.windowFigure(window: window, quota: quota, provider: provider)
@@ -877,17 +888,17 @@ struct SideNotchPanelView: View {
         }
     }
 
-    private func telemetry(for provider: Provider) -> ProviderTelemetry? {
-        if let tel = coordinator.usages[provider]?.value?.telemetry {
+    private func telemetry(for slot: ProviderSlot) -> ProviderTelemetry? {
+        if let tel = coordinator.usages[slot]?.value?.telemetry {
             return tel
         }
-        if let tel = coordinator.activities[provider]?.value?.telemetry {
+        if let tel = coordinator.activities[slot]?.value?.telemetry {
             return tel
         }
         return nil
     }
 
-    private func telemetryView(tel: ProviderTelemetry, provider: Provider) -> some View {
+    private func telemetryView(tel: ProviderTelemetry) -> some View {
         let col1: [(String, String)]
         let col2: [(String, String)]
 
@@ -977,8 +988,8 @@ struct SideNotchPanelView: View {
 
     // MARK: - Geometry helpers
 
-    static func ringCenterY(for provider: Provider, in entries: [Entry]) -> CGFloat {
-        guard let index = entries.firstIndex(where: { $0.provider == provider }) else {
+    static func ringCenterY(for slot: ProviderSlot, in entries: [Entry]) -> CGFloat {
+        guard let index = entries.firstIndex(where: { $0.slot == slot }) else {
             return 19
         }
         return 19 + CGFloat(index) * 43
@@ -986,24 +997,24 @@ struct SideNotchPanelView: View {
 
     /// Beak height on the card. The card always starts at the top edge, so
     /// this is just the ring's center less half the beak.
-    static func beakYOnCard(for provider: Provider, in entries: [Entry]) -> CGFloat {
-        ringCenterY(for: provider, in: entries) - 6
+    static func beakYOnCard(for slot: ProviderSlot, in entries: [Entry]) -> CGFloat {
+        ringCenterY(for: slot, in: entries) - 6
     }
 
     static func isBeakWithinBounds(beakY: CGFloat, cardHeight: CGFloat) -> Bool {
         beakY >= 0 && cardHeight >= (beakY + 12)
     }
 
-    private func ringCenterY(for provider: Provider) -> CGFloat {
-        Self.ringCenterY(for: provider, in: entries)
+    private func ringCenterY(for slot: ProviderSlot) -> CGFloat {
+        Self.ringCenterY(for: slot, in: entries)
     }
 
-    private func beakYOnCard(for provider: Provider) -> CGFloat {
-        Self.beakYOnCard(for: provider, in: entries)
+    private func beakYOnCard(for slot: ProviderSlot) -> CGFloat {
+        Self.beakYOnCard(for: slot, in: entries)
     }
 
     private func windowDisplayTitle(for window: QuotaWindow, provider: Provider) -> String {
-        if provider.statusProvider == .codex && (window.label == "5-hour" || window.label.lowercased().contains("session")) {
+        if provider == .codex && (window.label == "5-hour" || window.label.lowercased().contains("session")) {
             return "Current session"
         }
         // A key spending limit stays a spending limit: only the legacy
@@ -1019,7 +1030,7 @@ struct SideNotchPanelView: View {
     // MARK: - Reset credits
 
     @ViewBuilder
-    private func resetCreditsSection(provider: Provider, quota: ProviderQuota) -> some View {
+    private func resetCreditsSection(slot: ProviderSlot, quota: ProviderQuota) -> some View {
         let count = quota.resetCreditCount ?? quota.resetCredits.count
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
@@ -1096,7 +1107,7 @@ struct SideNotchPanelView: View {
                         } else if isConfirming {
                             HStack(spacing: 4) {
                                 Button {
-                                    executeReset(creditID: credit.id, provider: provider)
+                                    executeReset(creditID: credit.id, slot: slot)
                                 } label: {
                                     Text("Confirm")
                                         .font(.system(size: 10, weight: .semibold))
@@ -1124,7 +1135,7 @@ struct SideNotchPanelView: View {
                         } else if available {
                             Button {
                                 confirmingResetID = credit.id
-                                resetProvider = provider
+                                resetSlot = slot
                             } label: {
                                 Text("Use reset")
                                     .font(.system(size: 10, weight: .medium))
@@ -1137,7 +1148,7 @@ struct SideNotchPanelView: View {
                                     )
                             }
                             .buttonStyle(.plain)
-                            .disabled(consumingResetID != nil || !coordinator.canUseCodexReset(for: provider))
+                            .disabled(consumingResetID != nil || !coordinator.canUseCodexReset(for: slot))
                         } else {
                             Text(statusLabel(for: credit))
                                 .font(.system(size: 9.5, weight: .regular))
@@ -1172,15 +1183,15 @@ struct SideNotchPanelView: View {
         return status.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
-    private func executeReset(creditID: String, provider: Provider) {
+    private func executeReset(creditID: String, slot: ProviderSlot) {
         confirmingResetID = nil
         consumingResetID = creditID
-        resetProvider = provider
+        resetSlot = slot
         resetErrorMessage = nil
         resetStatusMessage = nil
         Task { @MainActor in
             do {
-                try await coordinator.consumeCodexReset(creditID: creditID, in: provider)
+                try await coordinator.consumeCodexReset(creditID: creditID, in: slot)
                 consumingResetID = nil
                 resetStatusMessage = "Reset applied ✓"
                 Task {
@@ -1202,8 +1213,8 @@ struct SideNotchPanelView: View {
         }
     }
 
-    private func headerResetCountdown(for provider: Provider) -> String? {
-        guard let quota = coordinator.displayQuota(for: provider)?.quota else { return nil }
+    private func headerResetCountdown(for slot: ProviderSlot) -> String? {
+        guard let quota = coordinator.displayQuota(for: slot)?.quota else { return nil }
         let windowsWithReset = quota.windows.compactMap { w -> (QuotaWindow, Date)? in
             guard let r = w.resetsAt, r > coordinator.clock else { return nil }
             return (w, r)
@@ -1239,11 +1250,11 @@ struct SideNotchPanelView: View {
         var last30DaysText: String?
     }
 
-    private func tokenUsage(for provider: Provider) -> ProviderTokenUsage? {
+    private func tokenUsage(for slot: ProviderSlot) -> ProviderTokenUsage? {
         var todayStr: String?
         var last30Str: String?
 
-        if let usage = coordinator.usages[provider]?.value {
+        if let usage = coordinator.usages[slot]?.value {
             if let windows = usage.usageWindows {
                 if let window = windows.first(where: { $0.label.lowercased().contains("24h") || $0.label.lowercased().contains("today") }) {
                     let tokenPart = window.tokens.total > 0 ? Fmt.tokenCountString(window.tokens.total) : nil
@@ -1289,7 +1300,10 @@ struct SideNotchPanelView: View {
     // MARK: - Entries
 
     struct Entry: Identifiable {
-        let provider: Provider
+        let slot: ProviderSlot
+        /// The slot digit shown for additional accounts ("2", "3", …); nil
+        /// for primary slots.
+        let digit: String?
         let usedPercent: Double
         let fraction: Double
         let ringTint: Color
@@ -1301,10 +1315,11 @@ struct SideNotchPanelView: View {
         let etaText: String?
         let isDeficit: Bool
 
-        var id: Provider { provider }
+        var id: String { slot.key }
 
         init(
-            provider: Provider,
+            slot: ProviderSlot,
+            digit: String? = nil,
             usedPercent: Double,
             fraction: Double,
             ringTint: Color,
@@ -1314,7 +1329,8 @@ struct SideNotchPanelView: View {
             etaText: String? = nil,
             isDeficit: Bool = false
         ) {
-            self.provider = provider
+            self.slot = slot
+            self.digit = digit
             self.usedPercent = usedPercent
             self.fraction = fraction
             self.ringTint = ringTint
@@ -1336,53 +1352,50 @@ struct SideNotchPanelView: View {
     }
 
     static func entries(
-        menuBarProviders: [Provider],
-        quotas: [Provider: Loaded<ProviderQuota>],
+        menuBarSlots: [ProviderSlot],
+        quotas: [ProviderSlot: Loaded<ProviderQuota>],
         statuses: [Provider: Loaded<ServiceStatus>],
-        archivedQuotas: [Provider: ProviderQuota] = [:],
-        lastBurn: [Provider: Date] = [:],
+        archivedQuotas: [ProviderSlot: ProviderQuota] = [:],
+        lastBurn: [ProviderSlot: Date] = [:],
         now: Date = Date()
     ) -> [Entry] {
-        SideNotchPanelView.entries(providers: menuBarProviders, quotas: quotas, statuses: statuses, archivedQuotas: archivedQuotas, lastBurn: lastBurn, now: now)
-    }
-
-    static func entries(
-        providers: [Provider],
-        quotas: [Provider: Loaded<ProviderQuota>],
-        statuses: [Provider: Loaded<ServiceStatus>],
-        archivedQuotas: [Provider: ProviderQuota] = [:],
-        lastBurn: [Provider: Date] = [:],
-        now: Date = Date()
-    ) -> [Entry] {
-        providers.compactMap { provider in
-            let live = quotas[provider]?.value
-            let quota = live ?? archivedQuotas[provider]
-            let windows = effectiveWindows(for: provider, quota: quota)
-            guard let window = provider.headlineWindow(from: windows)
+        // Additional accounts number from 2 within their tool, in stable
+        // display order, so their rings stay tellable from the primary's.
+        var familyCounts: [Provider: Int] = [:]
+        return menuBarSlots.compactMap { slot in
+            let live = quotas[slot]?.value
+            let quota = live ?? archivedQuotas[slot]
+            let windows = effectiveWindows(for: slot.provider, quota: quota)
+            guard let window = slot.provider.headlineWindow(from: windows)
             else { return nil }
             let markTint: Color
-            // Alternate-account slots resolve to the base service's check:
-            // one outage tints every account row of that service.
-            let status = statuses[provider] ?? statuses[provider.statusProvider]
+            let status = statuses[slot.provider]
             if let status = status?.value {
-                markTint = MenuBarLabel.statusTint(status.severity, for: provider)
+                markTint = MenuBarLabel.statusTint(status.severity, for: slot.provider)
             } else {
                 // Headroom tints rings and percents only; the mark keeps the
                 // provider's identity colour until a status check says
                 // otherwise.
-                markTint = providerColor(provider)
+                markTint = providerColor(slot.provider)
             }
             // Effective pace: a deficit without a current burn is demoted to
             // on-pace, so the strip never reports "burning fast" from a
             // stale window and the ETA chip carries the honest reset
             // countdown instead of a projected exhaustion that already ended.
-            let pace = window.pace(now: now)?.effective(lastBurn: lastBurn[provider], now: now)
+            // Burn evidence is per account slot.
+            let pace = window.pace(now: now)?.effective(lastBurn: lastBurn[slot], now: now)
             let showAmbient = pace?.shouldShowAmbientETA(resetsAt: window.resetsAt, now: now) ?? false
             let eta = showAmbient ? pace?.etaText(resetsAt: window.resetsAt, now: now, short: true) : nil
             let isDeficit = pace?.status.isDeficit ?? false
 
+            if !slot.isPrimary {
+                familyCounts[slot.provider, default: 1] += 1
+            }
+            let digit = slot.isPrimary ? nil : String(familyCounts[slot.provider] ?? 2)
+
             return Entry(
-                provider: provider,
+                slot: slot,
+                digit: digit,
                 usedPercent: window.usedPercent,
                 fraction: window.fraction,
                 ringTint: Notch.color(usedPercent: window.usedPercent),
@@ -1397,11 +1410,11 @@ struct SideNotchPanelView: View {
 
     private var entries: [Entry] {
         SideNotchPanelView.entries(
-            providers: coordinator.sideNotchProviders,
+            menuBarSlots: coordinator.sideNotchSlots,
             quotas: coordinator.quotas,
             statuses: coordinator.statuses,
             archivedQuotas: coordinator.archivedQuotas,
-            lastBurn: coordinator.lastBurnByProvider,
+            lastBurn: coordinator.lastBurnBySlot,
             now: coordinator.clock
         )
     }
@@ -1456,13 +1469,13 @@ struct SideNotchPanelView: View {
     }
 
     private func accessibilityRingText(for entry: Entry) -> String {
-        "\(entry.provider.displayName) \(Fmt.percent(entry.usedPercent)) used\(entry.isStale ? ", last known reading" : "")"
+        "\(entry.slot.displayName) \(Fmt.percent(entry.usedPercent)) used\(entry.isStale ? ", last known reading" : "")"
     }
 
     private var accessibilityText: String {
         if entries.isEmpty { return "Usage unavailable" }
         return entries.map {
-            "\($0.provider.displayName) \(Fmt.percent($0.usedPercent)) used\($0.isStale ? ", last known" : "")"
+            "\($0.slot.displayName) \(Fmt.percent($0.usedPercent)) used\($0.isStale ? ", last known" : "")"
         }
         .joined(separator: ", ")
     }
@@ -1531,7 +1544,11 @@ private struct HoverSensor: NSViewRepresentable {
 private struct QuotaRing: View {
     let fraction: Double
     let tint: Color
-    let provider: Provider
+    let slot: ProviderSlot
+    /// The slot digit for an additional account, drawn as a tiny chip so two
+    /// rings of one tool stay tellable apart. The digit is the only account
+    /// attribute that exists in this app (see the privacy contract).
+    let digit: String?
     let markTint: Color
     var reduceMotion = false
 
@@ -1545,17 +1562,13 @@ private struct QuotaRing: View {
                 .trim(from: 0, to: fraction.muClamped(to: 0...1))
                 .stroke(tint, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-            ProviderMark(provider: provider, tint: markTint)
+            ProviderMark(provider: slot.provider, tint: markTint)
                 .frame(width: 9, height: 9)
                 // A hit limit dims the glyph: the full orange ring already
                 // carries the state, and the mark steps back.
                 .opacity(fraction >= 1 ? 0.5 : 1.0)
-            // A second-account slot meters the same tool, so the mark alone
-            // would be indistinguishable from the primary account's ring.
-            // The digit is the slot number — the only account attribute that
-            // exists in this app (see the privacy contract).
-            if provider.isAltSlot {
-                Text("2")
+            if let digit {
+                Text(digit)
                     .font(.system(size: 6.5, weight: .bold))
                     .foregroundColor(Notch.text)
                     .frame(width: 9, height: 9)

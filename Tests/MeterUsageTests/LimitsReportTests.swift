@@ -66,9 +66,11 @@ final class LimitsReportTests: XCTestCase {
     func testPrivacyContractNoCredentialsInShape() {
         // The report type is the whole machine surface; this pins its fields
         // so a future credential-bearing field cannot slip in silently.
+        // `account` is the user's own label for an additional account
+        // (display-only, never provider-issued identity), so it belongs.
         let row = ProviderReport(provider: "codex", status: "ok")
         XCTAssertEqual(Set(Mirror(reflecting: row).children.compactMap(\.label)),
-                       ["provider", "status", "reason", "plan", "windows", "credits"])
+                       ["provider", "account", "status", "reason", "plan", "windows", "credits"])
     }
 
     // MARK: Encoding round-trip

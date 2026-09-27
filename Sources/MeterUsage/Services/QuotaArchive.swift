@@ -27,6 +27,13 @@ enum QuotaArchive {
 
     private struct Stored: Codable {
         var provider: Provider
+        /// Empty for a primary slot; the generated id of an additional
+        /// account. Absent in files written before slots existed — decoding
+        /// defaults it to nil, which maps to the primary slot.
+        var slotID: String?
+        /// The account label at capture time, so a restored reading can keep
+        /// naming its account. Display-only; identity is provider + slotID.
+        var label: String?
         var windows: [Window]
         var capturedAt: Date
     }
@@ -40,13 +47,18 @@ enum QuotaArchive {
     /// Best-effort load. Any failure — missing file, malformed JSON, unknown
     /// provider key — yields an empty map rather than an error worth
     /// interrupting launch for.
-    static func load(from url: URL) -> [Provider: ProviderQuota] {
+    static func load(from url: URL) -> [ProviderSlot: ProviderQuota] {
         guard let data = try? Data(contentsOf: url),
               let stored = try? JSONDecoder().decode([Stored].self, from: data)
         else { return [:] }
-        var out: [Provider: ProviderQuota] = [:]
+        var out: [ProviderSlot: ProviderQuota] = [:]
         for entry in stored {
-            out[entry.provider] = ProviderQuota(
+            let slot = ProviderSlot(
+                provider: entry.provider,
+                slotID: entry.slotID ?? "",
+                label: entry.label ?? ""
+            )
+            out[slot] = ProviderQuota(
                 provider: entry.provider,
                 windows: entry.windows.map {
                     QuotaWindow(label: $0.label, usedPercent: $0.usedPercent, resetsAt: $0.resetsAt)
@@ -59,10 +71,12 @@ enum QuotaArchive {
 
     /// Best-effort save. A cache that can't be written is not an error worth
     /// surfacing — the next sweep simply tries again.
-    static func save(_ quotas: [Provider: ProviderQuota], to url: URL) {
-        let stored = quotas.map { provider, quota in
+    static func save(_ quotas: [ProviderSlot: ProviderQuota], to url: URL) {
+        let stored = quotas.map { slot, quota in
             Stored(
-                provider: provider,
+                provider: slot.provider,
+                slotID: slot.isPrimary ? nil : slot.slotID,
+                label: slot.label.isEmpty ? nil : slot.label,
                 windows: quota.windows.map {
                     Window(label: $0.label, usedPercent: $0.usedPercent, resetsAt: $0.resetsAt)
                 },

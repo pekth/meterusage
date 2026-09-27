@@ -162,7 +162,7 @@ final class NewPipelineTests: XCTestCase {
 
     func testAttributionSessionsAddsProviderAggregates() {
         let now = Date()
-        let activities: [Provider: Loaded<LocalActivity>] = [
+        let activities: [ProviderSlot: Loaded<LocalActivity>] = [
             .codex: .value(LocalActivity(
                 provider: .codex,
                 sessions: [SessionSummary(
@@ -174,7 +174,7 @@ final class NewPipelineTests: XCTestCase {
                 daily: [], scannedAt: now
             ))
         ]
-        let usages: [Provider: Loaded<ProviderUsage>] = [
+        let usages: [ProviderSlot: Loaded<ProviderUsage>] = [
             .openCodeGo: .value(ProviderUsage(
                 provider: .openCodeGo, sessionCount: 5, messageCount: 50,
                 todaySessionCount: 1, todayMessageCount: 9,
@@ -215,7 +215,7 @@ final class NewPipelineTests: XCTestCase {
     /// synthetic aggregates, so project weeks never pose as one long chat.
     func testAttributionSessionsPrefersProjectBreakdown() {
         let now = Date()
-        let usages: [Provider: Loaded<ProviderUsage>] = [
+        let usages: [ProviderSlot: Loaded<ProviderUsage>] = [
             .openCodeGo: .value(ProviderUsage(
                 provider: .openCodeGo, sessionCount: 5, messageCount: 50,
                 todaySessionCount: 1, todayMessageCount: 9,

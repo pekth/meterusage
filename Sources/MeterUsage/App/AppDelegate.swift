@@ -40,8 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             planSources: Composition.planSources(),
             // Same factory, so "clear cache" can rebuild the activity sources
             // and get a genuinely cold scan rather than a re-warmed one.
-            activitySourceFactory: Composition.activitySources,
-            slotHomes: Composition.slotHomes
+            activitySourceFactory: Composition.activitySources
         )
         self.preferences = preferences
         self.coordinator = coordinator
@@ -122,10 +121,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 static func tooltip(for coordinator: AppCoordinator) -> String {
         var lines: [String] = []
 
-        for provider in coordinator.menuBarProviders {
+        for slot in coordinator.menuBarSlots {
             var parts: [String] = []
-            if let display = coordinator.displayQuota(for: provider),
-               let window = provider.headlineWindow(from: display.quota.windows) {
+            if let display = coordinator.displayQuota(for: slot),
+               let window = slot.provider.headlineWindow(from: display.quota.windows) {
                 parts.append("\(Fmt.percent(window.usedPercent)) used")
                 if let resets = window.resetsAt, let until = Fmt.timeUntil(resets) {
                     parts.append("resets in \(until)")
@@ -134,14 +133,14 @@ static func tooltip(for coordinator: AppCoordinator) -> String {
                     parts.append("last reading \(Fmt.timeSince(display.quota.capturedAt))")
                 }
             }
-            if let service = coordinator.status(for: provider)?.value,
+            if let service = coordinator.status(for: slot.provider)?.value,
                service.severity != .operational {
                 // Unknown reads as its own word, never silence: a check that
                 // cannot report is information, not health.
                 parts.append(service.severity.displayName)
             }
             if !parts.isEmpty {
-                lines.append("\(provider.displayName): \(parts.joined(separator: " · "))")
+                lines.append("\(slot.displayName): \(parts.joined(separator: " · "))")
             }
         }
 
@@ -265,13 +264,13 @@ enum Composition {
 
     static func quotaSources() -> [QuotaSource] {
         if isDemoMode {
-            // Demo mounts both accounts per tool, so multi-account rows get
-            // real screenshot coverage. All numbers stay synthetic.
+            // Demo mounts a second account per tool, so multi-account rows
+            // get real screenshot coverage. All numbers stay synthetic.
             return [
                 DemoClaudeQuotaSource(),
-                DemoClaudeQuotaSource(provider: .claudeAlt),
+                DemoClaudeQuotaSource(slot: Self.demoSlot(.claude)),
                 DemoCodexQuotaSource(),
-                DemoCodexQuotaSource(provider: .codexAlt),
+                DemoCodexQuotaSource(slot: Self.demoSlot(.codex)),
                 DemoOpenRouterQuotaSource(), DemoOpenCodeGoQuotaSource(), DemoGrokQuotaSource(), DemoAntigravityQuotaSource()
             ]
         }
@@ -301,31 +300,37 @@ enum Composition {
             // Google Gemini CLI quota and accounts
             GeminiQuotaSource()
         ]
-        // A second Codex account exists when the user has configured an
-        // alternate Codex home (`AccountSlots`). Its source spawns the CLI
-        // with that home, so the subprocess authenticates as the other
-        // account; meterusage still never touches any auth file.
-        if let codexAltHome = slotHomes.codexAltHome {
-            sources.append(
-                CodexQuotaSource(
-                    provider: .codexAlt,
-                    client: SubprocessJSONRPCClient(codexHome: codexAltHome)
+        // Additional accounts, one source set per configured directory. A
+        // Codex account's source spawns the CLI with that home, so the
+        // subprocess authenticates as that account; meterusage still never
+        // touches any auth file. A Claude account reads its companion-
+        // written quota snapshot inside its own directory; absence is the
+        // normal `.noData` state, exactly like the primary slot.
+        for account in managedAccounts() {
+            guard let home = ManagedAccountPaths.home(for: account) else { continue }
+            switch account.provider {
+            case .codex:
+                sources.append(
+                    CodexQuotaSource(
+                        slot: account.slot,
+                        client: SubprocessJSONRPCClient(codexHome: home)
+                    )
                 )
-            )
-        }
-        // A second Claude account reads its companion-written quota snapshot
-        // inside the alternate config directory, if one exists. Absence is
-        // the normal `.noData` state, exactly like the primary slot.
-        if let claudeAltConfig = slotHomes.claudeAltConfig {
-            sources.append(
-                OptionalQuotaFileSource(
-                    provider: .claudeAlt,
-                    candidatePaths: [
-                        claudeAltConfig.appendingPathComponent("meterusage-usage.json"),
-                        claudeAltConfig.appendingPathComponent("claudewatch-usage.json"),
-                    ]
+            case .claude:
+                sources.append(
+                    OptionalQuotaFileSource(
+                        slot: account.slot,
+                        candidatePaths: [
+                            home.appendingPathComponent("meterusage-usage.json"),
+                            home.appendingPathComponent("claudewatch-usage.json"),
+                        ]
+                    )
                 )
-            )
+            default:
+                // Only tools with per-account config directories mount extra
+                // slots; other providers stay single-account.
+                continue
+            }
         }
         return sources
     }
@@ -334,30 +339,36 @@ enum Composition {
         if isDemoMode {
             return [
                 DemoLocalActivitySource(),
-                DemoLocalActivitySource(provider: .claudeAlt),
+                DemoLocalActivitySource(slot: Self.demoSlot(.claude)),
                 DemoCodexActivitySource(),
-                DemoCodexActivitySource(provider: .codexAlt)
+                DemoCodexActivitySource(slot: Self.demoSlot(.codex))
             ]
         }
         var sources: [LocalActivitySource] = [ClaudeLocalSource(), CodexLocalSource()]
-        if let codexAltHome = slotHomes.codexAltHome {
-            // The alternate account's rollout store lives inside its own
-            // home; the rollout format is the primary account's, relocated.
-            sources.append(
-                CodexLocalSource(provider: .codexAlt, root: codexAltHome.appendingPathComponent("sessions", isDirectory: true))
-            )
-        }
-        if let claudeAltConfig = slotHomes.claudeAltConfig {
-            // A distinct scan cache per slot: two concurrent scans sharing
-            // one cache file would let the later writer drop the earlier
-            // scan's freshly-parsed entries.
-            sources.append(
-                ClaudeLocalSource(
-                    provider: .claudeAlt,
-                    root: claudeAltConfig.appendingPathComponent("projects", isDirectory: true),
-                    cacheFileURL: Self.cacheDirectory.appendingPathComponent("claude-local-scan-cache-alt.json")
+        for account in managedAccounts() {
+            guard let home = ManagedAccountPaths.home(for: account) else { continue }
+            switch account.provider {
+            case .codex:
+                // The account's rollout store lives inside its own home; the
+                // rollout format is the primary account's, relocated.
+                sources.append(
+                    CodexLocalSource(slot: account.slot, root: home.appendingPathComponent("sessions", isDirectory: true))
                 )
-            )
+            case .claude:
+                // A distinct scan cache per slot: two concurrent scans sharing
+                // one cache file would let the later writer drop the earlier
+                // scan's freshly-parsed entries.
+                sources.append(
+                    ClaudeLocalSource(
+                        slot: account.slot,
+                        root: home.appendingPathComponent("projects", isDirectory: true),
+                        cacheFileURL: Self.cacheDirectory
+                            .appendingPathComponent("claude-local-scan-cache-\(account.id.prefix(8)).json")
+                    )
+                )
+            default:
+                continue
+            }
         }
         return sources
     }
@@ -402,26 +413,39 @@ enum Composition {
 
     /// Codex reports its plan inline with its quota, so it needs no source
     /// here; Claude's tier lives in local account metadata and needs its own.
-    /// The second Claude account reads its tier from the alternate config
-    /// directory's own account file, never falling back to the primary
-    /// account's — a wrong-but-plausible tier is worse than none.
+    /// An additional Claude account reads its tier from its own account file,
+    /// never falling back to the primary account's — a wrong-but-plausible
+    /// tier is worse than none.
     static func planSources() -> [PlanSource] {
         if isDemoMode {
-            return [DemoPlanSource(), DemoPlanSource(provider: .claudeAlt, tier: .max20x)]
+            return [
+                DemoPlanSource(),
+                DemoPlanSource(slot: Self.demoSlot(.claude), tier: .max20x)
+            ]
         }
         var sources: [PlanSource] = [ClaudePlanSource()]
-        if let claudeAltConfig = slotHomes.claudeAltConfig {
+        for account in managedAccounts() where account.provider == .claude {
+            guard let home = ManagedAccountPaths.home(for: account) else { continue }
             sources.append(
-                ClaudePlanSource(provider: .claudeAlt, fileURL: claudeAltConfig.appendingPathComponent(".claude.json"))
+                ClaudePlanSource(slot: account.slot, fileURL: home.appendingPathComponent(".claude.json"))
             )
         }
         return sources
     }
 
-    /// Alternate-account homes, resolved once per launch. Composition-root
-    /// state: sources, the coordinator, and Settings all read the same
-    /// resolution rather than re-reading the environment.
-    static let slotHomes: AccountSlots.Resolved = isDemoMode
-        ? .none
-        : AccountSlots.resolve()
+    /// The configured additional accounts, read straight from defaults:
+    /// composition runs before a `Preferences` instance exists, and the
+    /// headless CLI has none at all.
+    static func managedAccounts() -> [ManagedAccount] {
+        guard let data = UserDefaults.standard.data(forKey: PrefKey.managedAccounts),
+              let accounts = try? JSONDecoder().decode([ManagedAccount].self, from: data)
+        else { return [] }
+        return accounts
+    }
+
+    /// The demo's synthetic second account per tool. Fixed id so demo state
+    /// stays stable across launches of the same run.
+    static func demoSlot(_ provider: Provider) -> ProviderSlot {
+        ProviderSlot(provider: provider, slotID: "demo-second", label: "Second account")
+    }
 }

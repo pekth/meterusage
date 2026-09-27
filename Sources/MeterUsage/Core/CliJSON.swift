@@ -36,9 +36,9 @@ enum CliMode {
     /// Scans one activity source down to its most recent observable burn.
     /// A source that cannot be read contributes nothing — no burn evidence,
     /// no pace claims for that provider.
-    private static func scanBurn(_ source: LocalActivitySource) async -> (Provider, Date?) {
+    private static func scanBurn(_ source: LocalActivitySource) async -> (ProviderSlot, Date?) {
         let at = (try? await source.scan()).flatMap { BurnRecency.lastBurn(of: $0.sessions) }
-        return (source.provider, at)
+        return (source.slot, at)
     }
 
     /// Polls every configured quota source concurrently and builds the report.
@@ -51,31 +51,31 @@ enum CliMode {
     static func run() async -> LimitsReport {
         let sources = Composition.quotaSources()
         let activitySources = Composition.activitySources()
-        var loaded: [Provider: Loaded<ProviderQuota>] = [:]
-        var lastBurn: [Provider: Date] = [:]
-        await withTaskGroup(of: (Provider, Loaded<ProviderQuota>).self) { group in
+        var loaded: [ProviderSlot: Loaded<ProviderQuota>] = [:]
+        var lastBurn: [ProviderSlot: Date] = [:]
+        await withTaskGroup(of: (ProviderSlot, Loaded<ProviderQuota>).self) { group in
             for source in sources {
                 group.addTask {
                     await Self.fetchOne(source)
                 }
             }
-            for await (provider, result) in group {
-                loaded[provider] = result
+            for await (slot, result) in group {
+                loaded[slot] = result
             }
         }
-        await withTaskGroup(of: (Provider, Date?).self) { group in
+        await withTaskGroup(of: (ProviderSlot, Date?).self) { group in
             for source in activitySources {
                 group.addTask {
                     await Self.scanBurn(source)
                 }
             }
-            for await (provider, at) in group {
+            for await (slot, at) in group {
                 if let at {
-                    lastBurn[provider] = at
+                    lastBurn[slot] = at
                 }
             }
         }
-        let order = sources.map(\.provider)
+        let order = sources.map(\.slot)
         return LimitsReporter.build(
             quotas: loaded,
             order: order,
@@ -87,18 +87,18 @@ enum CliMode {
     /// One source poll, collapsed to the same `Loaded` shape the coordinator
     /// stores, with a timeout guard so a wedged CLI subprocess cannot hang a
     /// calling script.
-    static func fetchOne(_ source: QuotaSource) async -> (Provider, Loaded<ProviderQuota>) {
+    static func fetchOne(_ source: QuotaSource) async -> (ProviderSlot, Loaded<ProviderQuota>) {
         do {
             let quota = try await withTimeout(sourceTimeout) {
                 try await source.fetchQuota()
             }
-            return (source.provider, .value(quota))
+            return (source.slot, .value(quota))
         } catch let reason as SourceUnavailable {
-            return (source.provider, .missing(reason))
+            return (source.slot, .missing(reason))
         } catch {
             // Deliberately opaque, matching the coordinator's rule: raw errors
             // can echo URLs, headers, or account hints.
-            return (source.provider, .missing(.failed(source.provider)))
+            return (source.slot, .missing(.failed(source.slot.provider)))
         }
     }
 }

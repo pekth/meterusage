@@ -36,18 +36,19 @@ import Foundation
 // explicit privacy review — do not casually add a key here to unblock
 // something else.
 public struct ClaudePlanSource: PlanSource {
-    public let provider: Provider
+    public let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
 
     /// Path to `~/.claude.json`. Injectable so tests never read the real
-    /// file — they point this at a fixture instead. A second-account slot
-    /// passes both the alternate provider case and the alternate config
-    /// directory's own `.claude.json` (see `AccountSlots`), so its tier is
-    /// read from that account's file and never falls back to the primary
-    /// account's — a wrong-but-plausible tier would be worse than none.
+    /// file — they point this at a fixture instead. An additional-account
+    /// slot passes both its own slot and its config directory's own
+    /// `.claude.json` (see `ManagedAccount`), so its tier is read from that
+    /// account's file and never falls back to the primary account's — a
+    /// wrong-but-plausible tier would be worse than none.
     private let fileURL: URL
 
-    public init(provider: Provider = .claude, fileURL: URL? = nil) {
-        self.provider = provider
+    public init(slot: ProviderSlot = .primary(.claude), fileURL: URL? = nil) {
+        self.slot = slot
         self.fileURL = fileURL ?? HomeDirectory.real.appendingPathComponent(".claude.json")
     }
 

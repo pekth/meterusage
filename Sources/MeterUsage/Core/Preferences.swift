@@ -20,12 +20,10 @@ enum PrefKey {
     static let refreshInterval = "refreshIntervalSeconds"
     static let showClaude = "showProviderClaude"
     static let showCodex = "showProviderCodex"
-    /// Second-account slots. These toggle an *additional* account of a tool
-    /// whose data lives under a separately-configured config directory (see
-    /// `AccountSlots`); they default off so a single-account install renders
-    /// exactly as before.
-    static let showCodexAlt = "showProviderCodexAlt"
-    static let showClaudeAlt = "showProviderClaudeAlt"
+    /// User-configured additional accounts (Claude, Codex). Encoded
+    /// `[ManagedAccount]` JSON data; empty/absent means "no additional
+    /// accounts", which is the single-account default install.
+    static let managedAccounts = "managedAccounts"
     static let showAntigravity = "showProviderAntigravity"
     static let showGrok = "showProviderGrok"
     static let showOpenCodeGo = "showProviderOpenCodeGo"
@@ -35,8 +33,6 @@ enum PrefKey {
     static let showGemini = "showProviderGemini"
     static let menuBarClaude = "menuBarProviderClaude"
     static let menuBarCodex = "menuBarProviderCodex"
-    static let menuBarCodexAlt = "menuBarProviderCodexAlt"
-    static let menuBarClaudeAlt = "menuBarProviderClaudeAlt"
     static let menuBarAntigravity = "menuBarProviderAntigravity"
     static let menuBarGrok = "menuBarProviderGrok"
     static let menuBarOpenCodeGo = "menuBarProviderOpenCodeGo"
@@ -138,6 +134,11 @@ final class Preferences: ObservableObject {
     @Published private(set) var showActivityTelemetry: Bool = true
     @Published private(set) var showDailyActivityChart: Bool = true
     @Published private(set) var showSideNotchResetButton: Bool = true
+    /// Additional, user-configured accounts per tool. Unbounded on purpose:
+    /// a user with three Codex logins adds three rows and the app meters
+    /// each. Sources are built from this list at launch (see `Composition`),
+    /// so edits apply after relaunch.
+    @Published private(set) var managedAccounts: [ManagedAccount] = []
 
     private let defaults: UserDefaults
     private var observer: NSObjectProtocol?
@@ -154,8 +155,6 @@ final class Preferences: ObservableObject {
             // normal use.
             PrefKey.showClaude: false,
             PrefKey.showCodex: true,
-            PrefKey.showCodexAlt: false,
-            PrefKey.showClaudeAlt: false,
             PrefKey.showAntigravity: false,
             PrefKey.showGrok: false,
             PrefKey.showOpenCodeGo: true,
@@ -167,8 +166,6 @@ final class Preferences: ObservableObject {
             // down to the ones they glance at.
             PrefKey.menuBarClaude: true,
             PrefKey.menuBarCodex: true,
-            PrefKey.menuBarCodexAlt: true,
-            PrefKey.menuBarClaudeAlt: true,
             PrefKey.menuBarAntigravity: true,
             PrefKey.menuBarGrok: true,
             PrefKey.menuBarOpenCodeGo: true,
@@ -216,13 +213,11 @@ final class Preferences: ObservableObject {
 
         var providers = Set<Provider>()
         if defaults.bool(forKey: PrefKey.showCodex) { providers.insert(.codex) }
-        if defaults.bool(forKey: PrefKey.showCodexAlt) { providers.insert(.codexAlt) }
         if defaults.bool(forKey: PrefKey.showAntigravity) { providers.insert(.antigravity) }
         if defaults.bool(forKey: PrefKey.showGrok) { providers.insert(.grok) }
         if defaults.bool(forKey: PrefKey.showOpenCodeGo) { providers.insert(.openCodeGo) }
         if defaults.bool(forKey: PrefKey.showOpenRouter) { providers.insert(.openRouter) }
         if defaults.bool(forKey: PrefKey.showClaude) { providers.insert(.claude) }
-        if defaults.bool(forKey: PrefKey.showClaudeAlt) { providers.insert(.claudeAlt) }
         if defaults.bool(forKey: PrefKey.showCursor) { providers.insert(.cursor) }
         if defaults.bool(forKey: PrefKey.showCopilot) { providers.insert(.copilot) }
         if defaults.bool(forKey: PrefKey.showGemini) { providers.insert(.gemini) }
@@ -230,13 +225,11 @@ final class Preferences: ObservableObject {
 
         var menuBar = Set<Provider>()
         if defaults.bool(forKey: PrefKey.menuBarCodex) { menuBar.insert(.codex) }
-        if defaults.bool(forKey: PrefKey.menuBarCodexAlt) { menuBar.insert(.codexAlt) }
         if defaults.bool(forKey: PrefKey.menuBarAntigravity) { menuBar.insert(.antigravity) }
         if defaults.bool(forKey: PrefKey.menuBarGrok) { menuBar.insert(.grok) }
         if defaults.bool(forKey: PrefKey.menuBarOpenCodeGo) { menuBar.insert(.openCodeGo) }
         if defaults.bool(forKey: PrefKey.menuBarOpenRouter) { menuBar.insert(.openRouter) }
         if defaults.bool(forKey: PrefKey.menuBarClaude) { menuBar.insert(.claude) }
-        if defaults.bool(forKey: PrefKey.menuBarClaudeAlt) { menuBar.insert(.claudeAlt) }
         if defaults.bool(forKey: PrefKey.menuBarCursor) { menuBar.insert(.cursor) }
         if defaults.bool(forKey: PrefKey.menuBarCopilot) { menuBar.insert(.copilot) }
         if defaults.bool(forKey: PrefKey.menuBarGemini) { menuBar.insert(.gemini) }
@@ -280,6 +273,48 @@ final class Preferences: ObservableObject {
 
         let sideNotchReset = defaults.object(forKey: PrefKey.showSideNotchResetButton) == nil ? true : defaults.bool(forKey: PrefKey.showSideNotchResetButton)
         if sideNotchReset != showSideNotchResetButton { showSideNotchResetButton = sideNotchReset }
+
+        // Managed accounts: absent key means "no additional accounts", the
+        // everyday single-account case. A malformed payload degrades to the
+        // empty list rather than throwing away the rest of the settings.
+        let accounts: [ManagedAccount] = {
+            guard let data = defaults.data(forKey: PrefKey.managedAccounts),
+                  let decoded = try? JSONDecoder().decode([ManagedAccount].self, from: data)
+            else { return [] }
+            return decoded
+        }()
+        if accounts != managedAccounts { managedAccounts = accounts }
+    }
+
+    // MARK: Additional accounts
+
+    /// Adds one additional account. The list is the single source of truth
+    /// for which additional meters exist; composition reads it at launch.
+    func add(account: ManagedAccount) {
+        managedAccounts.append(account)
+        persistAccounts()
+    }
+
+    /// Replaces one account (label, path, or enabled flag changed). Identity
+    /// (`id`) never changes, so history and archive keys survive edits.
+    func update(account: ManagedAccount) {
+        guard let index = managedAccounts.firstIndex(where: { $0.id == account.id }) else { return }
+        managedAccounts[index] = account
+        persistAccounts()
+    }
+
+    /// Removes one additional account. Its readings simply stop; nothing is
+    /// deleted from the tool's own directory, and persisted history for the
+    /// removed slot key is left in place so re-adding the same directory
+    /// (same generated id) keeps its past. Unknown ids are a no-op.
+    func remove(accountID: String) {
+        managedAccounts.removeAll { $0.id == accountID }
+        persistAccounts()
+    }
+
+    private func persistAccounts() {
+        guard let data = try? JSONEncoder().encode(managedAccounts) else { return }
+        defaults.set(data, forKey: PrefKey.managedAccounts)
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }

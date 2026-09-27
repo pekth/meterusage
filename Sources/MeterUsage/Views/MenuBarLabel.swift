@@ -74,8 +74,9 @@ struct MenuBarLabel: View {
         .accessibilityLabel(coordinator.preferences.menuBarCompactEnabled ? "MeterUsage" : accessibilityText)
     }
 
-    /// The per-provider `[mark] percent` clusters, unchanged from the original
-    /// tray layout.
+    /// The per-slot `[mark] digit percent` clusters, unchanged from the
+    /// original tray layout for primary slots; additional accounts add a
+    /// small slot digit so two accounts of one tool stay tellable apart.
     private var trayClusters: some View {
         HStack(spacing: 4) {
             if clusters.isEmpty {
@@ -83,23 +84,19 @@ struct MenuBarLabel: View {
                     .font(.system(size: 11, weight: .medium).monospacedDigit())
                     .foregroundColor(MU.neutral)
             } else {
-                ForEach(clusters, id: \.provider) { cluster in
+                ForEach(Array(clusters.enumerated()), id: \.element.slot.key) { _, cluster in
                     HStack(spacing: 2) {
-                        ProviderMark(provider: cluster.provider, tint: cluster.markTint)
+                        ProviderMark(provider: cluster.slot.provider, tint: cluster.markTint)
                             .frame(width: 13, height: 13)
+                        if let digit = cluster.digit {
+                            Text(digit)
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(MU.textSecondary)
+                        }
                         if let percent = cluster.percent {
                             Text(percent)
                                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                                 .foregroundColor(cluster.numberTint)
-                        }
-                        // A second-account slot meters the same tool, so its
-                        // mark alone would be indistinguishable. The digit is
-                        // the slot number — the only account attribute that
-                        // exists in this app (see the privacy contract).
-                        if cluster.provider.isAltSlot, let digit = cluster.provider.altSlotDigit {
-                            Text(digit)
-                                .font(.system(size: 7, weight: .bold))
-                                .foregroundColor(MU.textSecondary)
                         }
                         if let eta = cluster.etaText {
                             Text(eta)
@@ -123,7 +120,10 @@ struct MenuBarLabel: View {
     // MARK: Clusters
 
     private struct Cluster {
-        let provider: Provider
+        let slot: ProviderSlot
+        /// The slot digit shown for additional accounts ("2", "3", …); nil
+        /// for primary slots.
+        let digit: String?
         let percent: String?
         let etaText: String?
         let isDeficit: Bool
@@ -134,20 +134,28 @@ struct MenuBarLabel: View {
     }
 
     private var clusters: [Cluster] {
-        coordinator.menuBarProviders.compactMap { provider in
-            let display = coordinator.displayQuota(for: provider)
-            let window = display.flatMap { provider.headlineWindow(from: $0.quota.windows) }
+        var familyCounts: [Provider: Int] = [:]
+        return coordinator.menuBarSlots.compactMap { slot in
+            // Additional accounts number from 2 within their tool, in the
+            // order their slots appear (stable display order).
+            if !slot.isPrimary {
+                familyCounts[slot.provider, default: 1] += 1
+            }
+            let digit = slot.isPrimary ? nil : String(familyCounts[slot.provider] ?? 2)
+
+            let display = coordinator.displayQuota(for: slot)
+            let window = display.flatMap { slot.provider.headlineWindow(from: $0.quota.windows) }
             let isStale = display?.isStale ?? false
 
-            let status = coordinator.status(for: provider)?.value
+            let status = coordinator.status(for: slot.provider)?.value
             let markTint: Color
             if let status {
-                markTint = Self.statusTint(status.severity, for: provider)
+                markTint = Self.statusTint(status.severity, for: slot.provider)
             } else {
                 // No status source for this provider (or the check has not
                 // come back yet): the mark keeps its identity colour. Headroom
                 // stays on the number, never on the mark.
-                markTint = providerColor(provider)
+                markTint = providerColor(slot.provider)
             }
 
             if let window {
@@ -157,14 +165,15 @@ struct MenuBarLabel: View {
                 // to the honest reset countdown (or no chip at all).
                 let pace = window.pace(now: coordinator.clock)?.effective(
                     lastBurn: BurnRecency.lastBurn(
-                        of: coordinator.activities[provider]?.value?.sessions ?? []),
+                        of: coordinator.activities[slot]?.value?.sessions ?? []),
                     now: coordinator.clock)
                 let showAmbient = pace?.shouldShowAmbientETA(resetsAt: window.resetsAt, now: coordinator.clock) ?? false
                 let eta = showAmbient ? pace?.etaText(resetsAt: window.resetsAt, now: coordinator.clock, short: true) : nil
                 let isDeficit = pace?.status.isDeficit ?? false
 
                 return Cluster(
-                    provider: provider,
+                    slot: slot,
+                    digit: digit,
                     percent: Fmt.percent(window.usedPercent),
                     etaText: eta,
                     isDeficit: isDeficit,
@@ -178,7 +187,8 @@ struct MenuBarLabel: View {
             // degraded and outages in their band tint, unknown in neutral.
             if let status, status.severity != .operational {
                 return Cluster(
-                    provider: provider,
+                    slot: slot,
+                    digit: digit,
                     percent: nil,
                     etaText: nil,
                     isDeficit: false,
@@ -218,9 +228,9 @@ struct MenuBarLabel: View {
         if clusters.isEmpty { return "Usage unavailable" }
         return clusters.map { cluster in
             guard let percent = cluster.percent else {
-                return "\(cluster.provider.displayName) unavailable"
+                return "\(cluster.slot.displayName) unavailable"
             }
-            return "\(cluster.provider.displayName) \(percent) used\(cluster.isStale ? ", last known" : "")"
+            return "\(cluster.slot.displayName) \(percent) used\(cluster.isStale ? ", last known" : "")"
         }
         .joined(separator: ", ")
     }
@@ -271,12 +281,10 @@ struct ProviderMark: View {
 
     var body: some View {
         Group {
-            // Alternate-account slots group with their base provider: the
-            // mark names the tool; the slot digit beside it names the account.
             switch provider {
-            case .codex, .codexAlt, .grok, .openCodeGo, .antigravity:
+            case .codex, .grok, .openCodeGo, .antigravity:
                 bundledMark(named: Self.resourceName(for: provider))
-            case .claude, .claudeAlt:
+            case .claude:
                 ClaudeMascotShape()
                     .fill(tint, style: FillStyle(eoFill: true))
             case .openRouter, .cursor, .copilot, .gemini:
@@ -314,32 +322,30 @@ struct ProviderMark: View {
 
     /// Bundle resource name (without extension) for providers that ship a logo
     /// asset; `nil` would mean "no logo" but callers guard by provider first.
-    /// Alternate-account slots bundle their base provider's asset (same tool,
-    /// second account) so the tray and cards keep one glyph per tool.
     private static func resourceName(for provider: Provider) -> String {
         switch provider {
-        case .codex, .codexAlt: return "codex-logo"
-        case .grok:             return "grok-logo"
-        case .openCodeGo:       return "opencode-logo"
-        case .antigravity:      return "antigravity-logo"
-        case .openRouter, .claude, .claudeAlt, .cursor, .copilot, .gemini: return ""
+        case .codex:      return "codex-logo"
+        case .grok:       return "grok-logo"
+        case .openCodeGo: return "opencode-logo"
+        case .antigravity:return "antigravity-logo"
+        case .openRouter, .claude, .cursor, .copilot, .gemini: return ""
         }
     }
 
     static func symbol(for provider: Provider) -> String {
         switch provider {
-        case .codex, .codexAlt: return "sparkle"
-        case .antigravity:      return "sparkles"
-        case .grok:             return "eye"
+        case .codex:      return "sparkle"
+        case .antigravity:return "sparkles"
+        case .grok:       return "eye"
         // A real SF Symbol name: an invalid name renders as nothing, which
         // silently blanked this provider's mark wherever no bundled logo
         // exists (e.g. a bare debug binary).
-        case .openCodeGo:       return "arrow.up.left.and.arrow.down.right"
-        case .openRouter:       return "arrow.triangle.branch"
-        case .claude, .claudeAlt: return "sparkles"
-        case .cursor:           return "cursorarrow.rays"
-        case .copilot:          return "terminal"
-        case .gemini:           return "diamond"
+        case .openCodeGo: return "arrow.up.left.and.arrow.down.right"
+        case .openRouter: return "arrow.triangle.branch"
+        case .claude:     return "sparkles"
+        case .cursor:     return "cursorarrow.rays"
+        case .copilot:    return "terminal"
+        case .gemini:     return "diamond"
         }
     }
 }

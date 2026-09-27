@@ -13,16 +13,14 @@ import AppKit
 struct SettingsView: View {
 
     @ObservedObject var coordinator: AppCoordinator
+    /// Observed so the second-accounts card re-renders when the managed
+    /// account list changes (add, remove, edit). The coordinator republishes
+    /// the per-provider toggles; the list itself lives on `Preferences`.
+    @ObservedObject var preferences: Preferences
 
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval: Double = Preferences.defaultRefreshInterval
     @AppStorage(PrefKey.showClaude) private var showClaude: Bool = false
     @AppStorage(PrefKey.showCodex) private var showCodex: Bool = true
-    @AppStorage(PrefKey.showCodexAlt) private var showCodexAlt: Bool = false
-    @AppStorage(PrefKey.showClaudeAlt) private var showClaudeAlt: Bool = false
-    // Second-account config directories. Empty means "not configured"; the
-    // same keys AccountSlots resolves (environment still wins over these).
-    @AppStorage(AccountSlots.codexAltHomeKey) private var codexAltHomePath: String = ""
-    @AppStorage(AccountSlots.claudeAltConfigKey) private var claudeAltHomePath: String = ""
     @AppStorage(PrefKey.showAntigravity) private var showAntigravity: Bool = false
     @AppStorage(PrefKey.showGrok) private var showGrok: Bool = false
     @AppStorage(PrefKey.showOpenCodeGo) private var showOpenCodeGo: Bool = true
@@ -32,8 +30,6 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showGemini) private var showGemini: Bool = true
     @AppStorage(PrefKey.menuBarClaude) private var menuBarClaude: Bool = true
     @AppStorage(PrefKey.menuBarCodex) private var menuBarCodex: Bool = true
-    @AppStorage(PrefKey.menuBarCodexAlt) private var menuBarCodexAlt: Bool = true
-    @AppStorage(PrefKey.menuBarClaudeAlt) private var menuBarClaudeAlt: Bool = true
     @AppStorage(PrefKey.menuBarAntigravity) private var menuBarAntigravity: Bool = true
     @AppStorage(PrefKey.menuBarGrok) private var menuBarGrok: Bool = true
     @AppStorage(PrefKey.menuBarOpenCodeGo) private var menuBarOpenCodeGo: Bool = true
@@ -92,19 +88,6 @@ struct SettingsView: View {
                         menuBarIsOn: $menuBarCodex
                     )
                     Divider().overlay(MU.hairline)
-                    // Second-account rows always show with their directory
-                    // field, so the feature is discoverable before anything
-                    // is configured. The card itself still appears only once
-                    // that directory exists (after a relaunch).
-                    AltAccountRow(
-                        provider: .codexAlt,
-                        subtitle: "Second CODEX home · quota and reset credits",
-                        pathPlaceholder: "~/.codex-alt",
-                        isOn: $showCodexAlt,
-                        menuBarIsOn: $menuBarCodexAlt,
-                        homePath: $codexAltHomePath
-                    )
-                    Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .antigravity,
                         subtitle: "Local sessions and messages",
@@ -140,15 +123,6 @@ struct SettingsView: View {
                         menuBarIsOn: $menuBarClaude
                     )
                     Divider().overlay(MU.hairline)
-                    AltAccountRow(
-                        provider: .claudeAlt,
-                        subtitle: "Second CLAUDE_CONFIG_DIR · plan and sessions",
-                        pathPlaceholder: "~/.claude-alt",
-                        isOn: $showClaudeAlt,
-                        menuBarIsOn: $menuBarClaudeAlt,
-                        homePath: $claudeAltHomePath
-                    )
-                    Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .cursor,
                         subtitle: "Local usage and requests",
@@ -173,6 +147,59 @@ struct SettingsView: View {
             }
 
             Group {
+                SectionHeader("Second accounts")
+                Card(padding: 10) {
+                    // Additional accounts of one tool, each its own meter row
+                    // everywhere in the app: its own quota windows, plan,
+                    // history, and alerts. The label is the user's own name
+                    // for the account and the path is that account's CLI
+                    // config directory — the app reads the same usage
+                    // surfaces there it reads for the primary account, and
+                    // never opens credential files. No account identifier is
+                    // read or displayed anywhere.
+                    if managedAccounts.isEmpty {
+                        Text("Two logins with the same tool? Add each one here and it gets its own meter.")
+                            .font(.muBody)
+                            .foregroundColor(MU.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        ForEach(managedAccounts) { account in
+                            ManagedAccountRow(
+                                account: accountBinding(for: account),
+                                supported: Provider.supportsAdditionalAccounts.contains(account.provider),
+                                onDelete: { preferences.remove(accountID: account.id) }
+                            )
+                            .padding(.vertical, 2)
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        ForEach(Provider.supportsAdditionalAccounts, id: \.self) { provider in
+                            Button {
+                                let count = managedAccounts.filter { $0.provider == provider }.count
+                                preferences.add(account: ManagedAccount(
+                                    provider: provider,
+                                    label: "Account \\(count + 2)",
+                                    path: ""
+                                ))
+                            } label: {
+                                Label("Add \\(provider.displayName) account", systemImage: "plus")
+                            }
+                            .controlSize(.small)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.top, 2)
+
+                    Divider().overlay(MU.hairline)
+                    Text("Point each row at that account's own config directory, sign the CLI in there, and relaunch MeterUsage. Removing a row stops metering that account; nothing in the directory is deleted.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Group {
                 SectionHeader("Accounts")
                 Card(padding: 10) {
                     // Whose readings these are. This app signs in nowhere: every
@@ -181,21 +208,22 @@ struct SettingsView: View {
                     // plan it reports. No address, no account id — a plan tier
                     // is context for the percentages, never an identity.
                     //
-                    // Only enabled providers are listed: a hidden provider is
-                    // not read at all, so showing its row would present a
-                    // credential that is currently doing nothing.
+                    // Only shown slots are listed: a hidden provider or a
+                    // removed second account is not read at all, so showing
+                    // its row would present a credential that is currently
+                    // doing nothing.
                     if visibleAccounts.isEmpty {
                         Text("All providers are hidden. Turn one on in Providers above.")
                             .font(.muBody)
                             .foregroundColor(MU.textSecondary)
                     } else {
-                        ForEach(Array(visibleAccounts.enumerated()), id: \.element) { index, provider in
+                        ForEach(Array(visibleAccounts.enumerated()), id: \.element.key) { index, slot in
                             if index > 0 {
                                 Divider().overlay(MU.hairline)
                             }
                             AccountRow(
-                                provider: provider,
-                                account: coordinator.account(for: provider),
+                                slot: slot,
+                                account: coordinator.account(for: slot),
                                 enabled: true
                             )
                         }
@@ -204,11 +232,6 @@ struct SettingsView: View {
                     Text("Switching a provider off above stops reading its credential entirely. It does not sign you out of that tool.")
                         .font(.muCaption)
                         .foregroundColor(MU.textTertiary)
-                    Divider().overlay(MU.hairline)
-                    Text("A second account appears once its directory exists: sign that CLI in under the directory you set above (for example CODEX_HOME=~/.codex-alt codex login), then relaunch MeterUsage.")
-                        .font(.muCaption)
-                        .foregroundColor(MU.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -367,24 +390,27 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: Second-account slots
+    // MARK: Second accounts
 
-    // Demo builds mount synthetic second-account rows, so the presence-based
-    // Accounts list shows them even though no real config directory exists.
-
-    private var codexAltPresent: Bool {
-        coordinator.isDemoMode || AccountSlots.isPresent(.codexAlt, homes: coordinator.slotHomes)
+    private var managedAccounts: [ManagedAccount] {
+        preferences.managedAccounts
     }
 
-    private var claudeAltPresent: Bool {
-        coordinator.isDemoMode || AccountSlots.isPresent(.claudeAlt, homes: coordinator.slotHomes)
+    /// A per-row binding: each edit writes the whole row back through
+    /// `Preferences.update`, which persists and republishes. Identity never
+    /// changes, so history and archive keys survive label and path edits.
+    private func accountBinding(for account: ManagedAccount) -> Binding<ManagedAccount> {
+        Binding(
+            get: { preferences.managedAccounts.first { $0.id == account.id } ?? account },
+            set: { preferences.update(account: $0) }
+        )
     }
 
-    private var visibleAccounts: [Provider] {
+    private var visibleAccounts: [ProviderSlot] {
         // The coordinator's visibility, not the raw preference: an
-        // alternate-account slot with no config directory is not an account,
+        // additional account with no config directory is not an account,
         // so it gets no row.
-        coordinator.visibleProviders
+        coordinator.visibleSlots
     }
 
     private static func intervalLabel(_ seconds: Double) -> String {
@@ -577,73 +603,44 @@ private struct ProviderRow: View {
     }
 }
 
-/// One second-account row: the same switch pair as `ProviderRow` plus a
-/// directory field, because an alternate account is *defined* by the config
-/// directory it points at. The field stores the raw string the user typed
-/// (usually tilde-relative); it never displays a resolved absolute path.
-private struct AltAccountRow: View {
-    let provider: Provider
-    let subtitle: String
-    let pathPlaceholder: String
-    @Binding var isOn: Bool
-    var menuBarIsOn: Binding<Bool>?
-    @Binding var homePath: String
-
-    @State private var hoveringTray = false
+/// One managed second-account row: a name for the account (display only),
+/// the config directory it meters, an enable switch, and a remove button.
+/// Both fields write through `Preferences` immediately; readings appear
+/// after the app relaunches, when composition builds that slot's sources.
+private struct ManagedAccountRow: View {
+    @Binding var account: ManagedAccount
+    /// Tools without per-account config directories don't mount extra slots;
+    /// a row for one reads as inert rather than broken.
+    let supported: Bool
+    let onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 8) {
-                ProviderMark(provider: provider, tint: providerColor(provider))
-                    .frame(width: 13, height: 13)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(provider.displayName)
-                        .font(.muBody)
-                        .foregroundColor(MU.text)
-                    Text(subtitle)
-                        .font(.muCaption)
-                        .foregroundColor(MU.textTertiary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 6)
-                if let menuBarIsOn {
-                    HStack(spacing: 4) {
-                        Text("Notch")
-                            .font(.muCaption)
-                            .foregroundColor(MU.textTertiary)
-                        Button {
-                            menuBarIsOn.wrappedValue.toggle()
-                        } label: {
-                            Image(systemName: "menubar.rectangle")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(
-                                    menuBarIsOn.wrappedValue
-                                        ? MU.calm
-                                        : (hoveringTray ? MU.textSecondary : MU.textTertiary.opacity(0.6))
-                                )
-                                .frame(width: 22, height: 20)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                        .fill(hoveringTray ? MU.well : Color.clear)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .help(menuBarIsOn.wrappedValue
-                              ? "Hide \(provider.displayName) from the side notch and menu bar"
-                              : "Show \(provider.displayName) in the side notch and menu bar")
-                        .onHover { hoveringTray = $0 }
-                    }
-                }
-                Toggle("Show \(provider.displayName)", isOn: $isOn)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-            }
-            TextField("Directory, e.g. \(pathPlaceholder)", text: $homePath, prompt: Text(pathPlaceholder))
+        HStack(alignment: .center, spacing: 8) {
+            ProviderMark(provider: account.provider, tint: providerColor(account.provider))
+                .frame(width: 13, height: 13)
+                .opacity(supported ? 1.0 : 0.4)
+            TextField("Name", text: $account.label, prompt: Text("Name"))
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.small)
-                .font(.muCaption)
-                .help("The config directory of the second account. Readings appear after MeterUsage relaunches.")
+                .frame(width: 74)
+                .disabled(!supported)
+            TextField("Directory", text: $account.path, prompt: Text(account.provider == .codex ? "~/.codex-alt" : "~/.claude-alt"))
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.small)
+                .disabled(!supported)
+                .help("That account's own CLI config directory. Readings appear after relaunch.")
+            Toggle("Enabled", isOn: $account.enabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .disabled(!supported)
+            Button(action: onDelete) {
+                Image(systemName: "minus.circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(MU.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .help("Remove this second account")
         }
         .accessibilityElement(children: .contain)
     }
@@ -653,15 +650,15 @@ private struct AltAccountRow: View {
 /// (when the provider reports one), and the tool holding the credential.
 /// Read-only — visibility lives in the Providers section above.
 private struct AccountRow: View {
-    let provider: Provider
+    let slot: ProviderSlot
     let account: AppCoordinator.ProviderAccount
     let enabled: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            ProviderMark(provider: provider, tint: providerColor(provider))
+            ProviderMark(provider: slot.provider, tint: providerColor(slot.provider))
                 .frame(width: 13, height: 13)
-            Text(provider.displayName)
+            Text(account.name)
                 .font(.muBody)
                 .foregroundColor(MU.text)
             if let plan = account.plan {
@@ -676,7 +673,7 @@ private struct AccountRow: View {
         // A hidden provider is not read at all, so its row steps back.
         .opacity(enabled ? 1.0 : 0.5)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(provider.displayName), \(account.plan ?? "plan unknown"), via \(account.via)")
+        .accessibilityLabel("\(account.name), \(account.plan ?? "plan unknown"), via \(account.via)")
     }
 }
 

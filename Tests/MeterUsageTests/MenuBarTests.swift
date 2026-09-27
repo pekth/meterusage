@@ -35,7 +35,7 @@ final class MenuBarTests: XCTestCase {
         let first = Preferences(defaults: defaults)
         let second = Preferences(defaults: defaults)
 
-        XCTAssertEqual(first.menuBarProviders, Set([.codex, .codexAlt, .antigravity, .openCodeGo, .openRouter, .claude, .claudeAlt, .cursor, .copilot, .gemini]))
+        XCTAssertEqual(first.menuBarProviders, Set([.codex, .antigravity, .openCodeGo, .openRouter, .claude, .cursor, .copilot, .gemini]))
         XCTAssertEqual(second.menuBarProviders, first.menuBarProviders)
         XCTAssertFalse(first.showsInMenuBar(.grok))
     }
@@ -49,7 +49,7 @@ final class MenuBarTests: XCTestCase {
         )
 
         XCTAssertFalse(
-            coordinator.menuBarProviders.contains(.openRouter),
+            coordinator.menuBarSlots.contains(.openRouter),
             "OpenRouter must not appear as a menu-bar cluster"
         )
     }
@@ -65,7 +65,7 @@ final class MenuBarTests: XCTestCase {
         )
 
         XCTAssertTrue(
-            coordinator.sideNotchProviders.contains(.openRouter),
+            coordinator.sideNotchSlots.contains(.openRouter),
             "OpenRouter must appear in the side notch when its toggle is on"
         )
     }

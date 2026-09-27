@@ -7,17 +7,18 @@ import Foundation
 /// auth entirely inside the `codex` subprocess (it manages its own login
 /// state) and keeps this type unit-testable without a real CLI installed.
 public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
-    public let provider: Provider
+    public let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
 
     private let client: JSONRPCClient
 
     /// One Codex account slot. The default is the primary account reading
-    /// the user's normal codex configuration; a second-account source is
-    /// built with a client whose `codexHome` points at the alternate home,
-    /// and with `provider: .codexAlt` so its readings land in their own
-    /// meter row rather than overwriting the primary account's.
-    public init(provider: Provider = .codex, client: JSONRPCClient = SubprocessJSONRPCClient()) {
-        self.provider = provider
+    /// the user's normal codex configuration; an additional-account source
+    /// is built with a client whose `codexHome` points at that account's
+    /// home, and with the account's own slot so its readings land in their
+    /// own meter row rather than overwriting the primary account's.
+    public init(slot: ProviderSlot = .primary(.codex), client: JSONRPCClient = SubprocessJSONRPCClient()) {
+        self.slot = slot
         self.client = client
     }
 
@@ -26,7 +27,7 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
         do {
             responseLine = try await client.requestCodexRateLimits()
         } catch let transportError as JSONRPCTransportError {
-            throw Self.map(transportError, provider: provider)
+            throw Self.map(transportError, provider: slot.provider)
         }
         // Anything else (a client implementation throwing something other
         // than JSONRPCTransportError) is a programmer error in the client,
@@ -39,17 +40,17 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
             // A response line that isn't even valid JSON-RPC is not a
             // provider error we understand well enough to name — fail
             // generically rather than guess.
-            throw SourceUnavailable.failed(provider)
+            throw SourceUnavailable.failed(slot.provider)
         }
 
         if let rpcError = envelope.error {
-            throw Self.map(rpcError, provider: provider)
+            throw Self.map(rpcError, provider: slot.provider)
         }
         guard let result = envelope.result, let rateLimits = result.rateLimits else {
-            throw SourceUnavailable.failed(provider)
+            throw SourceUnavailable.failed(slot.provider)
         }
         return Self.buildQuota(
-            provider: provider,
+            provider: slot.provider,
             from: rateLimits,
             additional: result.rateLimitsByLimitId,
             resets: result.rateLimitResetCredits
@@ -59,24 +60,24 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
     /// Redeems one provider-issued reset. The UI confirms this action before
     /// calling it; this source only reports whether the provider accepted it.
     public func consumeReset(creditID: String) async throws -> Bool {
-        guard !creditID.isEmpty else { throw SourceUnavailable.failed(provider) }
+        guard !creditID.isEmpty else { throw SourceUnavailable.failed(slot.provider) }
 
         let responseLine: Data
         do {
             responseLine = try await client.consumeCodexRateLimitReset(creditID: creditID)
         } catch let transportError as JSONRPCTransportError {
-            throw Self.map(transportError, provider: provider)
+            throw Self.map(transportError, provider: slot.provider)
         }
 
         let envelope: ConsumeRPCEnvelope
         do {
             envelope = try JSONDecoder().decode(ConsumeRPCEnvelope.self, from: responseLine)
         } catch {
-            throw SourceUnavailable.failed(provider)
+            throw SourceUnavailable.failed(slot.provider)
         }
 
         if let rpcError = envelope.error {
-            throw Self.map(rpcError, provider: provider)
+            throw Self.map(rpcError, provider: slot.provider)
         }
         return envelope.result?.outcome == "reset"
     }

@@ -56,17 +56,19 @@ enum DemoMode {
 /// distinguishes healthy from tight at all.
 struct DemoClaudeQuotaSource: QuotaSource {
     /// Defaults to the primary demo slot; demo composition mounts a second
-    /// instance on `.claudeAlt` so screenshots exercise multi-account rows.
-    let provider: Provider
+    /// instance on an additional slot so screenshots exercise multi-account
+    /// rows.
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
 
-    init(provider: Provider = .claude) {
-        self.provider = provider
+    init(slot: ProviderSlot = .primary(.claude)) {
+        self.slot = slot
     }
 
     func fetchQuota() async throws -> ProviderQuota {
         let now = Date()
         return ProviderQuota(
-            provider: provider,
+            provider: slot.provider,
             windows: [
                 // Comfortable. Renders green.
                 QuotaWindow(label: "5-hour", usedPercent: 34, resetsAt: now.addingTimeInterval(3.25 * 3600)),
@@ -90,17 +92,19 @@ struct DemoClaudeQuotaSource: QuotaSource {
 /// not to read as a crisis.
 struct DemoCodexQuotaSource: QuotaSource {
     /// Defaults to the primary demo slot; demo composition mounts a second
-    /// instance on `.codexAlt` so screenshots exercise multi-account rows.
-    let provider: Provider
+    /// instance on an additional slot so screenshots exercise multi-account
+    /// rows.
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
 
-    init(provider: Provider = .codex) {
-        self.provider = provider
+    init(slot: ProviderSlot = .primary(.codex)) {
+        self.slot = slot
     }
 
     func fetchQuota() async throws -> ProviderQuota {
         let now = Date()
         return ProviderQuota(
-            provider: provider,
+            provider: slot.provider,
             windows: [
                 QuotaWindow(label: "5-hour", usedPercent: 82, resetsAt: now.addingTimeInterval(1.75 * 3600)),
                 QuotaWindow(label: "Weekly", usedPercent: 72, resetsAt: now.addingTimeInterval(4.5 * 86_400))
@@ -282,10 +286,11 @@ struct DemoAntigravityQuotaSource: QuotaSource {
 /// different tier so the two accounts' rows don't read as one account
 /// rendered twice.
 struct DemoPlanSource: PlanSource {
-    let provider: Provider
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
 
-    init(provider: Provider = .claude, tier: PlanTier = .max5x) {
-        self.provider = provider
+    init(slot: ProviderSlot = .primary(.claude), tier: PlanTier = .max5x) {
+        self.slot = slot
         self.tier = tier
     }
 
@@ -515,16 +520,17 @@ struct DemoOpenRouterUsageSource: UsageSource {
 /// in the app for a future model with no published rate; the demo simply
 /// doesn't need to exercise them right now.
 struct DemoLocalActivitySource: LocalActivitySource {
-    let provider: Provider
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
 
-    init(provider: Provider = .claude) {
-        self.provider = provider
+    init(slot: ProviderSlot = .primary(.claude)) {
+        self.slot = slot
     }
 
     func scan() async throws -> LocalActivity {
         let now = Date()
         return LocalActivity(
-            provider: provider,
+            provider: slot.provider,
             sessions: DemoActivityData.sessions(now: now),
             daily: DemoActivityData.daily(now: now),
             scannedAt: now
@@ -537,10 +543,11 @@ struct DemoLocalActivitySource: LocalActivitySource {
 /// real source's will. The days reuse `DemoActivityData` but strip tokens and
 /// keep only the per-day session counts, matching Codex's count-based data.
 struct DemoCodexActivitySource: LocalActivitySource {
-    let provider: Provider
+    let slot: ProviderSlot
+    public var provider: Provider { slot.provider }
 
-    init(provider: Provider = .codex) {
-        self.provider = provider
+    init(slot: ProviderSlot = .primary(.codex)) {
+        self.slot = slot
     }
 
     func scan() async throws -> LocalActivity {
@@ -574,7 +581,7 @@ struct DemoCodexActivitySource: LocalActivitySource {
             dailyHistory: history
         )
         return LocalActivity(
-            provider: provider,
+            provider: slot.provider,
             sessions: [],
             daily: daily,
             scannedAt: now,
