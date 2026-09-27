@@ -837,13 +837,13 @@ final class SideNotchPanelTests: XCTestCase {
         let prefs = Preferences(defaults: defaults)
 
         let withoutConsumer = AppCoordinator(preferences: prefs)
-        XCTAssertFalse(withoutConsumer.canUseCodexReset)
+        XCTAssertFalse(withoutConsumer.canUseCodexReset())
 
         let withConsumer = AppCoordinator(
             preferences: prefs,
             resetConsumer: StubResetConsumer()
         )
-        XCTAssertTrue(withConsumer.canUseCodexReset)
+        XCTAssertTrue(withConsumer.canUseCodexReset())
     }
 
     @MainActor

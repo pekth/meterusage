@@ -25,6 +25,7 @@ Last verified: 2026-09-25
 - Providers tray icon in Settings (the small button beside the "Notch" caption) uses the `menubar.rectangle` symbol for both switch states; state is carried by tint. `menubar.rectangle.fill` is absent from the system symbol catalog (returns nil, renders as nothing), so a filled variant must be probed with `NSImage(systemSymbolName:)` before use.
 - `status.openai.com` runs on incident.io, which serves a Statuspage-compatible `components.json` but uses `full_outage` where Atlassian pages use `major_outage`. `StatusPageSource.severity(for:)` maps both to `.majorOutage`; an unmapped status degrades to `.unknown`, never to a false all-clear. Verified against the live feed on 2026-09-25 during an active Codex outage.
 - Provider mark tint is identity unless the service check diverges from healthy (`MenuBarLabel.statusTint(_:for:)`): operational keeps `providerColor`, degraded/outage repaint amber/red, unreadable goes neutral grey. Quota headroom tint stays on rings and percents only; the side notch, menu bar, and status rows share this rule per ADR 0002's mark semantics.
+- Second accounts (multi-account support, ADR 0005): `.codexAlt` / `.claudeAlt` provider slots are keyed by an alternate config directory resolved in `AccountSlots` (`Sources/MeterUsage/Services/DataSource.swift`) from `METERUSAGE_CODEX_ALT_HOME` / `METERUSAGE_CLAUDE_ALT_CONFIG` or the `meterusage.codexAltHome` / `meterusage.claudeAltConfig` defaults keys. A slot exists only when its directory exists; slots never merge with the primary account, keep per-slot durable history and archive keys, and are named by position only (no account identity is read). The JSON report lists them under `codexAlt` / `claudeAlt`.
 
 ## Verification gaps
 
@@ -41,6 +42,7 @@ Last verified: 2026-09-25
 - [`docs/PRIVACY.md`](PRIVACY.md): data-handling boundaries and enforcement claims.
 - [`docs/DEMO.md`](DEMO.md): synthetic demo mode.
 - [`docs/SIDE-NOTCH.md`](SIDE-NOTCH.md): side notch states, anchor and geometry invariants, interaction, and verification.
+- [`docs/adr/0005-multi-account-slots.md`](adr/0005-multi-account-slots.md): second-account slot decision.
 - [`docs/mockups/README.md`](mockups/README.md): Wave 1–3 concept mockups; provider marks stay.
 - [`docs/plans/feature-and-windows-pipeline.md`](plans/feature-and-windows-pipeline.md): macOS feature waves + Windows track.
 - [`Package.swift`](../Package.swift): package targets and platform requirement.

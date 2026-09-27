@@ -115,9 +115,10 @@ func severityColor(_ severity: Severity) -> Color {
 
 /// Provider identity colours. These are paired with names and never carry
 /// meaning by colour alone; quota severity still uses the separate green/amber/
-/// red headroom scale.
+/// red headroom scale. Alternate-account slots share their base provider's
+/// identity colour: the tool is the identity, the account is named in text.
 func providerColor(_ provider: Provider) -> Color {
-    switch provider {
+    switch provider.statusProvider {
     case .codex:      return MU.accent
     case .antigravity:return MU.antigravity
     case .grok:       return MU.grok
@@ -127,6 +128,7 @@ func providerColor(_ provider: Provider) -> Color {
     case .cursor:     return Color(red: 0.1, green: 0.7, blue: 0.9)
     case .copilot:    return Color(red: 0.4, green: 0.6, blue: 1.0)
     case .gemini:     return Color(red: 0.3, green: 0.5, blue: 0.95)
+    default:          return MU.neutral
     }
 }
 

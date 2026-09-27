@@ -56,10 +56,17 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
     /// generous headroom for a cold-started CLI without hanging the UI
     /// indefinitely if the process wedges.
     private let timeout: TimeInterval
+    /// Alternate Codex home directory. When `codexAltHome` is set, a
+    /// `CODEX_HOME` environment variable is passed to the child process, so
+    /// it reads a different login's auth/session state (see `AccountSlots`)
+    /// rather than the user's primary `~/.codex`. This stays entirely
+    /// inside the subprocess: meterusage still never reads any auth file.
+    public let codexHome: URL?
 
-    public init(clientVersion: String = "1.0", timeout: TimeInterval = 20) {
+    public init(clientVersion: String = "1.0", timeout: TimeInterval = 20, codexHome: URL? = nil) {
         self.clientVersion = clientVersion
         self.timeout = timeout
+        self.codexHome = codexHome
     }
 
     public func requestCodexRateLimits() async throws -> Data {
@@ -84,10 +91,11 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
         let binary = try Self.resolveCodexBinary()
         let clientVersion = self.clientVersion
         let timeout = self.timeout
+        let codexHome = self.codexHome
 
         return try await withThrowingTaskGroup(of: Data.self) { group in
             group.addTask {
-                try Self.runExchange(binary: binary, clientVersion: clientVersion, operation: operation)
+                try Self.runExchange(binary: binary, clientVersion: clientVersion, operation: operation, codexHome: codexHome)
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
@@ -127,7 +135,7 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
     /// Synchronous by design: this runs inside a `Task.addTask` closure that
     /// already has its own thread from the cooperative pool's blocking-work
     /// allowance, and the whole call is raced against a timeout task above.
-    private static func runExchange(binary: String, clientVersion: String, operation: Operation) throws -> Data {
+    private static func runExchange(binary: String, clientVersion: String, operation: Operation, codexHome: URL?) throws -> Data {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binary)
         process.arguments = ["app-server", "--stdio"]
@@ -145,6 +153,15 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
         ]
         let existingPath = env["PATH"] ?? "/usr/bin:/bin"
         env["PATH"] = (extraPaths + [existingPath]).joined(separator: ":")
+        // An alternate Codex home is how the child process reads the second
+        // account's login state. CODEX_HOME is the codex CLI's own supported
+        // per-account redirection; setting it is the whole per-account seam,
+        // and meterusage still never opens anything inside that directory.
+        // Left unset for the primary account so a CODEX_HOME the user
+        // exported before launching this app keeps steering the primary slot.
+        if let codexHome {
+            env["CODEX_HOME"] = codexHome.path
+        }
         process.environment = env
 
         let stdinPipe = Pipe()

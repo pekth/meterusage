@@ -35,7 +35,7 @@ final class MenuBarTests: XCTestCase {
         let first = Preferences(defaults: defaults)
         let second = Preferences(defaults: defaults)
 
-        XCTAssertEqual(first.menuBarProviders, Set([.codex, .antigravity, .openCodeGo, .openRouter, .claude, .cursor, .copilot, .gemini]))
+        XCTAssertEqual(first.menuBarProviders, Set([.codex, .codexAlt, .antigravity, .openCodeGo, .openRouter, .claude, .claudeAlt, .cursor, .copilot, .gemini]))
         XCTAssertEqual(second.menuBarProviders, first.menuBarProviders)
         XCTAssertFalse(first.showsInMenuBar(.grok))
     }

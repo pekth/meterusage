@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Second-account meters for Codex and Claude.** People who hold two accounts
+  with the same tool get a second, independent meter row instead of a merge —
+  two accounts' windows are two different budgets. A slot exists when its
+  alternate config directory exists on the machine: point
+  `METERUSAGE_CODEX_ALT_HOME` (a `CODEX_HOME`-equivalent) or
+  `METERUSAGE_CLAUDE_ALT_CONFIG` (a `CLAUDE_CONFIG_DIR`-equivalent) at the
+  second account's directory, or store the path under the
+  `meterusage.codexAltHome` / `meterusage.claudeAltConfig` defaults keys. The
+  Codex slot spawns its own `codex` subprocess with that home (the CLI
+  authenticates as that account; meterusage still never touches any auth
+  file); the Claude slot scans that account's own transcript tree, plan file,
+  and companion quota snapshot. Slot rows carry a "2" beside the mark in the
+  tray and side notch, and the `meterusage json` report lists the second
+  accounts under `codexAlt` / `claudeAlt` with their own windows, plan, and
+  reset credits. No account identifier is ever read or displayed — slots are
+  named by position, and each account's history, archive, and alerts are kept
+  separate.
+
 ## [0.2.37] - 2026-09-25
 
 ### Fixed

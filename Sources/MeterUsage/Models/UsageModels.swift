@@ -426,23 +426,78 @@ public struct ProviderQuota: Equatable, Sendable {
 
 public enum Provider: String, CaseIterable, Codable, Sendable {
     case codex
+    /// A second, separately-configured Codex account.
+    ///
+    /// Sources for this slot point at an alternate Codex home directory (see
+    /// `AccountSlots`), so its readings come from a different `codex` login
+    /// than the primary slot's. Everything downstream (coordinator maps,
+    /// archive, alerts, JSON report, tray) treats it as its own meter row —
+    /// never merged with `.codex`, because two accounts' percents are two
+    /// different budgets.
+    case codexAlt
     case antigravity
     case grok
     case openCodeGo
     case openRouter
     case claude
+    /// A second, separately-configured Claude Code account.
+    ///
+    /// Sources for this slot scan an alternate Claude projects tree (see
+    /// `AccountSlots`) and a per-account quota/plan snapshot, so readings
+    /// belong to a different Claude account than the primary `.claude` slot.
+    case claudeAlt
     case cursor
     case copilot
     case gemini
 
+    /// The provider this slot reads the same tool as, or `nil` for the
+    /// primary slot. An alternate case answers its own identity here and is
+    /// otherwise present-tense in every surface: "Claude second account" is a
+    /// distinct meter, not a footnote.
+    public var baseProvider: Provider? {
+        switch self {
+        case .codexAlt: return .codex
+        case .claudeAlt: return .claude
+        default: return nil
+        }
+    }
+
+    /// True for the second-account slots. These providers follow their base
+    /// provider for status pages, plan badges, and identity glyphs — see the
+    /// per-field resolution helpers below.
+    public var isAltSlot: Bool { baseProvider != nil }
+
+    /// The slot digit ("2") shown beside an alternate-account slot's mark.
+    /// `nil` for primary slots, which never carry a digit.
+    public var altSlotDigit: String? {
+        switch self {
+        case .codexAlt, .claudeAlt: return "2"
+        default: return nil
+        }
+    }
+
+    /// Service-health identity: an alternate-account slot shares its base
+    /// provider's service, so the status strip keeps one row per service.
+    public var statusProvider: Provider { baseProvider ?? self }
+
+    /// Identity glyph: the alternate-account slots reuse their base
+    /// provider's bundled mark so both account rows read as the same tool.
+    /// ADR 0002 keeps the marks themselves unchanged.
+    public var markProvider: Provider {
+        guard let base = baseProvider else { return self }
+        return base
+    }
+
     public var displayName: String {
         switch self {
         case .codex: return "Codex"
+        case .codexAlt: return "Codex second account"
         case .antigravity: return "Antigravity"
         case .grok: return "Grok"
         case .openCodeGo: return "OpenCode Go"
         case .openRouter: return "OpenRouter"
         case .claude: return "Claude"
+        case .claudeAlt: return "Claude second account"
         case .cursor: return "Cursor"
         case .copilot: return "Copilot CLI"
         case .gemini: return "Gemini CLI"
@@ -480,12 +535,12 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     ///   figure.
     public func headlineWindow(from windows: [QuotaWindow]) -> QuotaWindow? {
         switch self {
-        case .codex:
+        case .codex, .codexAlt:
             if let session = windows.first(where: { $0.isSessionWindow }) {
                 return session
             }
             return windows.count == 1 ? windows[0] : nil
-        case .claude:
+        case .claude, .claudeAlt:
             if let session = windows.first(where: { $0.isSessionWindow }) {
                 return session
             }
@@ -508,7 +563,9 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     public var sourceLabel: String {
         switch self {
         case .codex: return "Codex CLI"
+        case .codexAlt: return "Codex CLI · second account"
         case .claude: return "Claude Code"
+        case .claudeAlt: return "Claude Code · second account"
         case .antigravity: return "agy CLI"
         case .grok: return "Grok CLI"
         case .openCodeGo: return "OpenCode"
@@ -524,9 +581,9 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     /// than sending the user to a guessed or unrelated page.
     public var statusPageURL: URL? {
         switch self {
-        case .codex:
+        case .codex, .codexAlt:
             return URL(string: "https://status.openai.com/")
-        case .claude:
+        case .claude, .claudeAlt:
             return URL(string: "https://status.claude.com/")
         case .cursor:
             return URL(string: "https://status.cursor.com/")

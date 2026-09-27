@@ -7,11 +7,17 @@ import Foundation
 /// auth entirely inside the `codex` subprocess (it manages its own login
 /// state) and keeps this type unit-testable without a real CLI installed.
 public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
-    public let provider: Provider = .codex
+    public let provider: Provider
 
     private let client: JSONRPCClient
 
-    public init(client: JSONRPCClient = SubprocessJSONRPCClient()) {
+    /// One Codex account slot. The default is the primary account reading
+    /// the user's normal codex configuration; a second-account source is
+    /// built with a client whose `codexHome` points at the alternate home,
+    /// and with `provider: .codexAlt` so its readings land in their own
+    /// meter row rather than overwriting the primary account's.
+    public init(provider: Provider = .codex, client: JSONRPCClient = SubprocessJSONRPCClient()) {
+        self.provider = provider
         self.client = client
     }
 
@@ -20,7 +26,7 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
         do {
             responseLine = try await client.requestCodexRateLimits()
         } catch let transportError as JSONRPCTransportError {
-            throw Self.map(transportError)
+            throw Self.map(transportError, provider: provider)
         }
         // Anything else (a client implementation throwing something other
         // than JSONRPCTransportError) is a programmer error in the client,
@@ -33,16 +39,17 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
             // A response line that isn't even valid JSON-RPC is not a
             // provider error we understand well enough to name — fail
             // generically rather than guess.
-            throw SourceUnavailable.failed(.codex)
+            throw SourceUnavailable.failed(provider)
         }
 
         if let rpcError = envelope.error {
-            throw Self.map(rpcError)
+            throw Self.map(rpcError, provider: provider)
         }
         guard let result = envelope.result, let rateLimits = result.rateLimits else {
-            throw SourceUnavailable.failed(.codex)
+            throw SourceUnavailable.failed(provider)
         }
         return Self.buildQuota(
+            provider: provider,
             from: rateLimits,
             additional: result.rateLimitsByLimitId,
             resets: result.rateLimitResetCredits
@@ -52,24 +59,24 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
     /// Redeems one provider-issued reset. The UI confirms this action before
     /// calling it; this source only reports whether the provider accepted it.
     public func consumeReset(creditID: String) async throws -> Bool {
-        guard !creditID.isEmpty else { throw SourceUnavailable.failed(.codex) }
+        guard !creditID.isEmpty else { throw SourceUnavailable.failed(provider) }
 
         let responseLine: Data
         do {
             responseLine = try await client.consumeCodexRateLimitReset(creditID: creditID)
         } catch let transportError as JSONRPCTransportError {
-            throw Self.map(transportError)
+            throw Self.map(transportError, provider: provider)
         }
 
         let envelope: ConsumeRPCEnvelope
         do {
             envelope = try JSONDecoder().decode(ConsumeRPCEnvelope.self, from: responseLine)
         } catch {
-            throw SourceUnavailable.failed(.codex)
+            throw SourceUnavailable.failed(provider)
         }
 
         if let rpcError = envelope.error {
-            throw Self.map(rpcError)
+            throw Self.map(rpcError, provider: provider)
         }
         return envelope.result?.outcome == "reset"
     }
@@ -254,6 +261,7 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
     // MARK: - Parsing
 
     private static func buildQuota(
+        provider: Provider,
         from payload: RateLimitsPayload,
         additional: [String: RateLimitsPayload],
         resets: RateLimitResetCredits?
@@ -303,7 +311,7 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
             )
         } ?? []
         return ProviderQuota(
-            provider: .codex,
+            provider: provider,
             windows: baseWindows,
             groups: groups,
             credits: credits,
@@ -342,16 +350,16 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
 
     // MARK: - Error mapping
 
-    private static func map(_ transportError: JSONRPCTransportError) -> SourceUnavailable {
+    private static func map(_ transportError: JSONRPCTransportError, provider: Provider) -> SourceUnavailable {
         switch transportError {
         case .processNotFound:
             return .cliNotFound("codex")
         case .timeout, .processExited:
-            return .failed(.codex)
+            return .failed(provider)
         }
     }
 
-    private static func map(_ rpcError: RPCErrorPayload) -> SourceUnavailable {
+    private static func map(_ rpcError: RPCErrorPayload, provider: Provider) -> SourceUnavailable {
         let message = rpcError.message.lowercased()
         // codex-cli's exact wording for "not logged in" wasn't available to
         // confirm empirically on this machine (that requires a logged-out
@@ -360,7 +368,7 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
         // that doesn't match falls through to `.failed`, per the mapping
         // rule: never guess past what we can name confidently.
         if message.contains("not logged in") || message.contains("not authenticated") || message.contains("sign in") {
-            return .notSignedIn(.codex)
+            return .notSignedIn(provider)
         }
         // Verified: code -32603 with a message mentioning the backend is
         // unreachable is how a network-down `account/rateLimits/read` call
@@ -369,6 +377,6 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
             && (message.contains("reach") || message.contains("backend") || message.contains("network") || message.contains("connect")) {
             return .offline
         }
-        return .failed(.codex)
+        return .failed(provider)
     }
 }

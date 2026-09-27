@@ -10,3 +10,4 @@ This directory records decisions that affect repository work. Read an ADR before
 | [0002](0002-provider-marks-stay.md) | Keep existing provider logos/marks (`ProviderMark` + `Resources/*-logo.png`); do not redesign them in feature or cross-platform work. | Accepted |
 | [0003](0003-burn-attribution-scope.md) | Scope burn attribution to the last 7 days across all token-bearing providers, with per-provider aggregates that never count as long chats. | Accepted |
 | [0004](0004-side-notch-anchor-invariant.md) | Keep the side notch anchored by the strip's top-right corner, use whole-point frames, anchor content to the window top, and require captured frame evidence for layout or motion changes. | Accepted |
+| [0005](0005-multi-account-slots.md) | Model a second Claude/Codex account as its own provider slot keyed by an alternate config directory; never merge two accounts' windows and never read or display account identity. | Accepted |

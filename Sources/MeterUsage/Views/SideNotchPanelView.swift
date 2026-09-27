@@ -172,6 +172,10 @@ struct SideNotchPanelView: View {
     @State private var isHoveringPanel = false
     @State private var confirmingResetID: String?
     @State private var consumingResetID: String?
+    /// The slot a pending reset belongs to, so a card pinned open by a
+    /// confirmation keeps showing *that* account even after the pointer
+    /// leaves — with two Codex accounts, `.codex` would be the wrong card.
+    @State private var resetProvider: Provider?
     @State private var resetStatusMessage: String?
     @State private var resetErrorMessage: String?
     @State private var stripHeight: CGFloat = 0
@@ -196,7 +200,8 @@ struct SideNotchPanelView: View {
 
     /// True when a detail card is actively showing beside the strip.
     private var isCardShowing: Bool {
-        let activeHovered = hoveredProvider ?? ((confirmingResetID != nil || consumingResetID != nil) ? .codex : nil)
+        let activeHovered = hoveredProvider
+            ?? ((confirmingResetID != nil || consumingResetID != nil) ? (resetProvider ?? .codex) : nil)
         return !panel.isDragging && activeHovered != nil && entries.contains(where: { $0.provider == activeHovered })
     }
 
@@ -329,7 +334,8 @@ struct SideNotchPanelView: View {
     /// on drop.
     @ViewBuilder
     private var cardColumn: some View {
-        let activeHovered = hoveredProvider ?? ((confirmingResetID != nil || consumingResetID != nil) ? .codex : nil)
+        let activeHovered = hoveredProvider
+            ?? ((confirmingResetID != nil || consumingResetID != nil) ? (resetProvider ?? .codex) : nil)
         if !panel.isDragging,
            let hovered = activeHovered,
            entries.contains(where: { $0.provider == hovered }) {
@@ -531,7 +537,7 @@ struct SideNotchPanelView: View {
             // Service status badge for anything but operational. Unknown gets
             // its neutral badge rather than silence: an unreadable check is
             // information, not health.
-            if let status = coordinator.statuses[provider]?.value,
+            if let status = coordinator.status(for: provider)?.value,
                status.severity != .operational {
                 StatusBadge(severity: status.severity)
             }
@@ -603,12 +609,12 @@ struct SideNotchPanelView: View {
                 }
             }
 
-            // Usage limit resets (Codex)
+            // Usage limit resets (either Codex account slot)
             if showSideNotchResetButton,
-               provider == .codex,
+               provider.statusProvider == .codex,
                let quota,
                (quota.resetCreditCount ?? 0) > 0 || !quota.resetCredits.isEmpty {
-                resetCreditsSection(quota: quota)
+                resetCreditsSection(provider: provider, quota: quota)
             }
 
             // Activity Telemetry 2-column grid
@@ -997,7 +1003,7 @@ struct SideNotchPanelView: View {
     }
 
     private func windowDisplayTitle(for window: QuotaWindow, provider: Provider) -> String {
-        if provider == .codex && (window.label == "5-hour" || window.label.lowercased().contains("session")) {
+        if provider.statusProvider == .codex && (window.label == "5-hour" || window.label.lowercased().contains("session")) {
             return "Current session"
         }
         // A key spending limit stays a spending limit: only the legacy
@@ -1013,7 +1019,7 @@ struct SideNotchPanelView: View {
     // MARK: - Reset credits
 
     @ViewBuilder
-    private func resetCreditsSection(quota: ProviderQuota) -> some View {
+    private func resetCreditsSection(provider: Provider, quota: ProviderQuota) -> some View {
         let count = quota.resetCreditCount ?? quota.resetCredits.count
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
@@ -1090,7 +1096,7 @@ struct SideNotchPanelView: View {
                         } else if isConfirming {
                             HStack(spacing: 4) {
                                 Button {
-                                    executeReset(creditID: credit.id)
+                                    executeReset(creditID: credit.id, provider: provider)
                                 } label: {
                                     Text("Confirm")
                                         .font(.system(size: 10, weight: .semibold))
@@ -1118,6 +1124,7 @@ struct SideNotchPanelView: View {
                         } else if available {
                             Button {
                                 confirmingResetID = credit.id
+                                resetProvider = provider
                             } label: {
                                 Text("Use reset")
                                     .font(.system(size: 10, weight: .medium))
@@ -1130,7 +1137,7 @@ struct SideNotchPanelView: View {
                                     )
                             }
                             .buttonStyle(.plain)
-                            .disabled(consumingResetID != nil || !coordinator.canUseCodexReset)
+                            .disabled(consumingResetID != nil || !coordinator.canUseCodexReset(for: provider))
                         } else {
                             Text(statusLabel(for: credit))
                                 .font(.system(size: 9.5, weight: .regular))
@@ -1165,14 +1172,15 @@ struct SideNotchPanelView: View {
         return status.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
-    private func executeReset(creditID: String) {
+    private func executeReset(creditID: String, provider: Provider) {
         confirmingResetID = nil
         consumingResetID = creditID
+        resetProvider = provider
         resetErrorMessage = nil
         resetStatusMessage = nil
         Task { @MainActor in
             do {
-                try await coordinator.consumeCodexReset(creditID: creditID)
+                try await coordinator.consumeCodexReset(creditID: creditID, in: provider)
                 consumingResetID = nil
                 resetStatusMessage = "Reset applied ✓"
                 Task {
@@ -1353,7 +1361,10 @@ struct SideNotchPanelView: View {
             guard let window = provider.headlineWindow(from: windows)
             else { return nil }
             let markTint: Color
-            if let status = statuses[provider]?.value {
+            // Alternate-account slots resolve to the base service's check:
+            // one outage tints every account row of that service.
+            let status = statuses[provider] ?? statuses[provider.statusProvider]
+            if let status = status?.value {
                 markTint = MenuBarLabel.statusTint(status.severity, for: provider)
             } else {
                 // Headroom tints rings and percents only; the mark keeps the
@@ -1539,6 +1550,18 @@ private struct QuotaRing: View {
                 // A hit limit dims the glyph: the full orange ring already
                 // carries the state, and the mark steps back.
                 .opacity(fraction >= 1 ? 0.5 : 1.0)
+            // A second-account slot meters the same tool, so the mark alone
+            // would be indistinguishable from the primary account's ring.
+            // The digit is the slot number — the only account attribute that
+            // exists in this app (see the privacy contract).
+            if provider.isAltSlot {
+                Text("2")
+                    .font(.system(size: 6.5, weight: .bold))
+                    .foregroundColor(Notch.text)
+                    .frame(width: 9, height: 9)
+                    .background(Circle().fill(Notch.track))
+                    .offset(x: 10, y: 10)
+            }
         }
         .frame(width: 26, height: 26)
         // A ring that jumps reads as a glitch; one that sweeps reads as a

@@ -67,8 +67,12 @@ final class AppCoordinator: ObservableObject {
     // MARK: Sources
 
     private let quotaSources: [QuotaSource]
-    /// Optional because only Codex exposes an account-mutating reset action.
-    private let resetConsumer: QuotaResetConsumer?
+    /// Reset consumers per account slot. Optional because only Codex exposes
+    /// an account-mutating reset action, and per-slot because a second
+    /// Codex account's reset credits are redeemed against that account's own
+    /// subprocess (each slot's source holds its own client). A credit id can
+    /// only be redeemed by the slot whose quota reported it.
+    private let resetConsumers: [Provider: QuotaResetConsumer]
     /// Not `let`: clearing the cache replaces these instances (see
     /// `performCacheClear`), which is how a re-scan is made genuinely cold.
     private var activitySources: [LocalActivitySource]
@@ -83,6 +87,11 @@ final class AppCoordinator: ObservableObject {
     /// Optional quota-alert delivery. `nil` in tests and any build that does
     /// not want notifications; the coordinator never depends on it.
     var quotaAlertService: QuotaAlertService?
+    /// Resolved alternate-account homes. A slot only polls, renders, and
+    /// alerts when its own config directory exists — an alternate account is
+    /// a directory the user configured, not a guess. Injectable so tests can
+    /// point slots at fixture directories.
+    let slotHomes: AccountSlots.Resolved
     /// Optional update-availability checker. `nil` in demo builds (an update
     /// banner would spoil marketing screenshots) and tests. Its published
     /// state is forwarded to `objectWillChange` so the popover re-renders
@@ -144,17 +153,34 @@ final class AppCoordinator: ObservableObject {
         isDemoMode: Bool = false,
         quotaSources: [QuotaSource] = [],
         resetConsumer: QuotaResetConsumer? = nil,
+        resetConsumers: [Provider: QuotaResetConsumer] = [:],
         activitySources: [LocalActivitySource] = [],
         usageSources: [UsageSource] = [],
         statusSources: [StatusSource] = [],
         planSources: [PlanSource] = [],
         activitySourceFactory: (() -> [LocalActivitySource])? = nil,
-        quotaArchiveURL: URL? = nil
+        quotaArchiveURL: URL? = nil,
+        slotHomes: AccountSlots.Resolved = .none
     ) {
         self.preferences = preferences
         self.isDemoMode = isDemoMode
         self.quotaSources = quotaSources
-        self.resetConsumer = resetConsumer
+        // Reset consumers are derived from the quota sources themselves: a
+        // source that can both read and mutate its slot owns that slot's
+        // resets, so the map builds itself as slots come and go. The explicit
+        // single-consumer parameter stays for tests and simpler call sites;
+        // a derived entry wins when both exist for the same slot.
+        var consumers: [Provider: QuotaResetConsumer] = resetConsumers
+        for source in quotaSources {
+            if let consumer = source as? QuotaResetConsumer {
+                consumers[source.provider] = consumer
+            }
+        }
+        if let resetConsumer {
+            let slot = Self.resetConsumerSlot(of: resetConsumer, sources: quotaSources)
+            if consumers[slot] == nil { consumers[slot] = resetConsumer }
+        }
+        self.resetConsumers = consumers
         self.activitySources = activitySources
         self.activitySourceFactory = activitySourceFactory
         self.usageSources = usageSources
@@ -163,11 +189,23 @@ final class AppCoordinator: ObservableObject {
         let archiveURL = quotaArchiveURL ?? QuotaArchive.defaultURL
         self.quotaArchiveURL = archiveURL
         self.archivedQuotas = QuotaArchive.load(from: archiveURL)
+        self.slotHomes = slotHomes
     }
 
     // No `deinit`: one coordinator is created by the app delegate and lives for
     // the process lifetime, so there is nothing to tear down, and a nonisolated
     // `deinit` cannot touch main-actor state cleanly.
+
+    /// Which slot a reset consumer belongs to. A consumer that is itself a
+    /// quota source names its own slot; a bare stub (tests, demo) attaches to
+    /// the first Codex-family source, the only kind that can redeem resets.
+    private nonisolated static func resetConsumerSlot(
+        of consumer: QuotaResetConsumer,
+        sources: [QuotaSource]
+    ) -> Provider {
+        if let source = consumer as? QuotaSource { return source.provider }
+        return sources.first(where: { $0 is QuotaResetConsumer })?.provider ?? .codex
+    }
 
     // MARK: Lifecycle
 
@@ -333,19 +371,32 @@ final class AppCoordinator: ObservableObject {
         }
     }
 
-    /// Whether a Codex rate limit reset action is currently usable.
-    var canUseCodexReset: Bool {
-        resetConsumer != nil
+    /// Whether a Codex rate-limit reset action is currently usable for a
+    /// slot. Defaults to the primary account; a second Codex account is
+    /// redeemable only through its own source's subprocess.
+    func canUseCodexReset(for provider: Provider = .codex) -> Bool {
+        resetConsumers[provider] != nil
     }
 
     /// Performs the explicitly confirmed Codex reset and refreshes all data so
     /// the menu immediately reflects the provider's new limits and remaining
-    /// reset credits. A non-reset outcome is treated as unavailable rather than
-    /// presented as a successful mutation.
-    func consumeCodexReset(creditID: String) async throws {
-        guard let resetConsumer else { throw SourceUnavailable.failed(.codex) }
-        guard try await resetConsumer.consumeReset(creditID: creditID) else {
-            throw SourceUnavailable.failed(.codex)
+    /// reset credits. A non-reset outcome is treated as unavailable rather
+    /// than presented as a successful mutation.
+    ///
+    /// The reset is routed to the slot whose loaded quota reports the credit
+    /// id, so a second Codex account's credits are redeemed against that
+    /// account's own subprocess. When no loaded quota claims the id (credit
+    /// expired between sweeps), the requested slot's consumer is used, and a
+    /// single-account build keeps behaving exactly as before.
+    func consumeCodexReset(creditID: String, in provider: Provider = .codex) async throws {
+        let claimedProvider = quotas.first(where: { _, state in
+            state.value?.resetCredits.contains { $0.id == creditID } == true
+        })?.key ?? provider
+        guard let consumer = resetConsumers[claimedProvider] ?? resetConsumers[provider] else {
+            throw SourceUnavailable.failed(claimedProvider)
+        }
+        guard try await consumer.consumeReset(creditID: creditID) else {
+            throw SourceUnavailable.failed(claimedProvider)
         }
         refresh()
     }
@@ -358,17 +409,17 @@ final class AppCoordinator: ObservableObject {
         // the sweep costs as long as the slowest one, not their sum.
         let now = Date()
         await withTaskGroup(of: Void.self) { group in
-            for source in quotaSources where preferences.isEnabled(source.provider) {
+            for source in quotaSources where showsProvider(source.provider) {
                 if forceAll || !isBackedOff(kind: "quota", provider: source.provider, now: now) {
                     group.addTask { [weak self] in await self?.load(quota: source) }
                 }
             }
-            for source in activitySources where preferences.isEnabled(source.provider) {
+            for source in activitySources where showsProvider(source.provider) {
                 if forceAll || !isBackedOff(kind: "activity", provider: source.provider, now: now) {
                     group.addTask { [weak self] in await self?.load(activity: source) }
                 }
             }
-            for source in usageSources where preferences.isEnabled(source.provider) {
+            for source in usageSources where showsProvider(source.provider) {
                 if forceAll || !isBackedOff(kind: "usage", provider: source.provider, now: now) {
                     group.addTask { [weak self] in await self?.load(usage: source) }
                 }
@@ -380,7 +431,7 @@ final class AppCoordinator: ObservableObject {
                     group.addTask { [weak self] in await self?.load(status: source) }
                 }
             }
-            for source in planSources where preferences.isEnabled(source.provider) {
+            for source in planSources where showsProvider(source.provider) {
                 if forceAll || !isBackedOff(kind: "plan", provider: source.provider, now: now) {
                     group.addTask { [weak self] in await self?.load(plan: source) }
                 }
@@ -408,19 +459,19 @@ final class AppCoordinator: ObservableObject {
     private func performRefresh(providers: [Provider]) async {
         let wanted = Set(providers)
         await withTaskGroup(of: Void.self) { group in
-            for source in quotaSources where wanted.contains(source.provider) && preferences.isEnabled(source.provider) {
+            for source in quotaSources where wanted.contains(source.provider) && showsProvider(source.provider) {
                 group.addTask { [weak self] in await self?.load(quota: source) }
             }
-            for source in activitySources where wanted.contains(source.provider) && preferences.isEnabled(source.provider) {
+            for source in activitySources where wanted.contains(source.provider) && showsProvider(source.provider) {
                 group.addTask { [weak self] in await self?.load(activity: source) }
             }
-            for source in usageSources where wanted.contains(source.provider) && preferences.isEnabled(source.provider) {
+            for source in usageSources where wanted.contains(source.provider) && showsProvider(source.provider) {
                 group.addTask { [weak self] in await self?.load(usage: source) }
             }
             for source in statusSources where wanted.contains(source.provider) {
                 group.addTask { [weak self] in await self?.load(status: source) }
             }
-            for source in planSources where wanted.contains(source.provider) && preferences.isEnabled(source.provider) {
+            for source in planSources where wanted.contains(source.provider) && showsProvider(source.provider) {
                 group.addTask { [weak self] in await self?.load(plan: source) }
             }
         }
@@ -433,6 +484,13 @@ final class AppCoordinator: ObservableObject {
                 lastBurn: lastBurnByProvider,
                 now: clock))
         saveArchive()
+    }
+
+    /// Service health for a slot. Alternate-account slots resolve to their
+    /// base provider's check: the service is shared across accounts, and
+    //  only one status source exists per service.
+    func status(for provider: Provider) -> Loaded<ServiceStatus>? {
+        statuses[provider] ?? provider.baseProvider.flatMap { statuses[$0] }
     }
 
     /// The quota an ambient surface should render: the live reading when
@@ -649,9 +707,23 @@ final class AppCoordinator: ObservableObject {
 
     // MARK: Derived state
 
+    /// Whether a slot's sources should be polled and shown: the provider
+    /// toggle is on AND an alternate-account slot's config directory exists.
+    /// Service status is polled independently of both gates (see
+    /// `performRefresh`), so hiding an account never hides an outage.
+    /// Demo mode mounts synthetic rows for both accounts of the demoed
+    /// tools regardless of either gate — they exist to be screenshotted.
+    func showsProvider(_ provider: Provider) -> Bool {
+        if isDemoMode {
+            return provider.isAltSlot || preferences.isEnabled(provider)
+        }
+        return preferences.isEnabled(provider)
+            && AccountSlots.isPresent(provider, homes: slotHomes)
+    }
+
     /// Providers the user has switched on, in a stable display order.
     var visibleProviders: [Provider] {
-        Provider.allCases.filter { preferences.isEnabled($0) }
+        Provider.allCases.filter { showsProvider($0) }
     }
 
     var visibleQuotaProviders: [Provider] {

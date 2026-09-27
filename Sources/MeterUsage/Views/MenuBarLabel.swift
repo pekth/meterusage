@@ -92,6 +92,15 @@ struct MenuBarLabel: View {
                                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                                 .foregroundColor(cluster.numberTint)
                         }
+                        // A second-account slot meters the same tool, so its
+                        // mark alone would be indistinguishable. The digit is
+                        // the slot number — the only account attribute that
+                        // exists in this app (see the privacy contract).
+                        if cluster.provider.isAltSlot, let digit = cluster.provider.altSlotDigit {
+                            Text(digit)
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(MU.textSecondary)
+                        }
                         if let eta = cluster.etaText {
                             Text(eta)
                                 .font(.system(size: 9.5, weight: .semibold).monospacedDigit())
@@ -130,7 +139,7 @@ struct MenuBarLabel: View {
             let window = display.flatMap { provider.headlineWindow(from: $0.quota.windows) }
             let isStale = display?.isStale ?? false
 
-            let status = coordinator.statuses[provider]?.value
+            let status = coordinator.status(for: provider)?.value
             let markTint: Color
             if let status {
                 markTint = Self.statusTint(status.severity, for: provider)
@@ -262,10 +271,12 @@ struct ProviderMark: View {
 
     var body: some View {
         Group {
+            // Alternate-account slots group with their base provider: the
+            // mark names the tool; the slot digit beside it names the account.
             switch provider {
-            case .codex, .grok, .openCodeGo, .antigravity:
+            case .codex, .codexAlt, .grok, .openCodeGo, .antigravity:
                 bundledMark(named: Self.resourceName(for: provider))
-            case .claude:
+            case .claude, .claudeAlt:
                 ClaudeMascotShape()
                     .fill(tint, style: FillStyle(eoFill: true))
             case .openRouter, .cursor, .copilot, .gemini:
@@ -303,30 +314,32 @@ struct ProviderMark: View {
 
     /// Bundle resource name (without extension) for providers that ship a logo
     /// asset; `nil` would mean "no logo" but callers guard by provider first.
+    /// Alternate-account slots bundle their base provider's asset (same tool,
+    /// second account) so the tray and cards keep one glyph per tool.
     private static func resourceName(for provider: Provider) -> String {
         switch provider {
-        case .codex:      return "codex-logo"
-        case .grok:       return "grok-logo"
-        case .openCodeGo: return "opencode-logo"
-        case .antigravity:return "antigravity-logo"
-        case .openRouter, .claude, .cursor, .copilot, .gemini: return ""
+        case .codex, .codexAlt: return "codex-logo"
+        case .grok:             return "grok-logo"
+        case .openCodeGo:       return "opencode-logo"
+        case .antigravity:      return "antigravity-logo"
+        case .openRouter, .claude, .claudeAlt, .cursor, .copilot, .gemini: return ""
         }
     }
 
     static func symbol(for provider: Provider) -> String {
         switch provider {
-        case .codex:      return "sparkle"
-        case .antigravity:return "sparkles"
-        case .grok:       return "eye"
+        case .codex, .codexAlt: return "sparkle"
+        case .antigravity:      return "sparkles"
+        case .grok:             return "eye"
         // A real SF Symbol name: an invalid name renders as nothing, which
         // silently blanked this provider's mark wherever no bundled logo
         // exists (e.g. a bare debug binary).
-        case .openCodeGo: return "arrow.up.left.and.arrow.down.right"
-        case .openRouter: return "arrow.triangle.branch"
-        case .claude:     return "sparkles"
-        case .cursor:     return "cursorarrow.rays"
-        case .copilot:    return "terminal"
-        case .gemini:     return "diamond"
+        case .openCodeGo:       return "arrow.up.left.and.arrow.down.right"
+        case .openRouter:       return "arrow.triangle.branch"
+        case .claude, .claudeAlt: return "sparkles"
+        case .cursor:           return "cursorarrow.rays"
+        case .copilot:          return "terminal"
+        case .gemini:           return "diamond"
         }
     }
 }

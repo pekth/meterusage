@@ -95,7 +95,7 @@ import Foundation
 // the coarser single seven-day figure rather than being merged with it.
 public struct OptionalQuotaFileSource: QuotaSource {
 
-    public let provider: Provider = .claude
+    public let provider: Provider
 
     private let candidatePaths: [URL]
     // `FileManager` isn't marked `Sendable` upstream even though `.default`
@@ -103,9 +103,15 @@ public struct OptionalQuotaFileSource: QuotaSource {
     // known-safe gap instead of pretending it doesn't exist.
     private nonisolated(unsafe) let fileManager: FileManager
 
+    /// - Parameter provider: The account slot this instance meters. The
+    ///   default is the primary Claude account; a second-account instance
+    ///   passes `.claudeAlt` together with `candidatePaths` inside that
+    ///   account's own config directory (see `AccountSlots`), so the two
+    ///   accounts' quota readings never overwrite each other.
     /// - Parameter candidatePaths: Override for tests. Defaults to the two
     ///   real well-known locations under the user's real home directory.
-    public init(candidatePaths: [URL]? = nil, fileManager: FileManager = .default) {
+    public init(provider: Provider = .claude, candidatePaths: [URL]? = nil, fileManager: FileManager = .default) {
+        self.provider = provider
         if let candidatePaths {
             self.candidatePaths = candidatePaths
         } else {
@@ -276,7 +282,7 @@ public struct OptionalQuotaFileSource: QuotaSource {
         }
 
         return ProviderQuota(
-            provider: .claude,
+            provider: provider,
             windows: windows,
             credits: credits,
             planType: nil,

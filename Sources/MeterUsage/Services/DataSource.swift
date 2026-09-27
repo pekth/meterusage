@@ -58,6 +58,146 @@ public enum HomeDirectory {
     }
 }
 
+// MARK: - Alternate-account slots
+//
+// People who hold two accounts with the same tool get a second meter row per
+// tool slot (`.codexAlt`, `.claudeAlt`) rather than a merge, because two
+// accounts' windows are two different budgets. What makes a slot real is a
+// separately-configured CLI home directory on this Mac; `AccountSlots` is the
+// one place that resolution lives.
+//
+// Pure data — no source construction happens here — and injectable in tests.
+
+public enum AccountSlots {
+
+    /// UserDefaults key holding the absolute path of the alternate Codex home.
+    /// An environment variable of the same name is consulted first so a
+    /// launch wrapper can override the stored value.
+    public static let codexAltHomeKey = "meterusage.codexAltHome"
+    /// UserDefaults key holding the absolute path of the alternate Claude
+    /// config directory.
+    public static let claudeAltConfigKey = "meterusage.claudeAltConfig"
+
+    /// Where the alternate-account home paths come from. Injectable so tests
+    /// never depend on the process environment.
+    public protocol Environment: Sendable {
+        func string(forKey key: String) -> String?
+    }
+
+    /// The process environment: the app's own launch environment is inherited
+    /// by `make-app.sh` invocations and by the headless CLI.
+    public struct ProcessEnvironment: Environment {
+        public init() {}
+        public func string(forKey key: String) -> String? {
+            ProcessInfo.processInfo.environment[key]
+        }
+    }
+
+    /// UserDefaults-backed overlay. Injectable for tests. `UserDefaults` is
+    /// documented thread-safe; the unchecked conformance bridges the SDK's
+    /// missing `Sendable` annotation rather than implying any real risk.
+    public struct DefaultsEnvironment: @unchecked Sendable, Environment {
+        private let defaults: UserDefaults
+        public init(defaults: UserDefaults) { self.defaults = defaults }
+        public func string(forKey key: String) -> String? { defaults.string(forKey: key) }
+    }
+
+    /// The concrete alternate-account home directories this machine has.
+    public struct Resolved: Equatable, Sendable {
+        /// Alternate Codex home (`CODEX_HOME`-equivalent). `nil` when no
+        /// alternate Codex account is configured.
+        public let codexAltHome: URL?
+        /// Alternate Claude config directory (`CLAUDE_CONFIG_DIR`-equivalent).
+        /// `nil` when no alternate Claude account is configured.
+        public let claudeAltConfig: URL?
+
+        /// Convenience for tests/composition: both slots absent.
+        public static let none = Self(codexAltHome: nil, claudeAltConfig: nil)
+    }
+
+    /// Reads the raw string from the overlays and interprets it as a
+    /// directory path. Empty or whitespace-only strings, "~" as configured,
+    /// and missing values all resolve to nil — a stored-but-blank key is
+    /// "not configured", never a broken path.
+    static func resolve(
+        key: String,
+        overlays: [Environment],
+        home: URL
+    ) -> URL? {
+        for overlay in overlays {
+            guard let raw = overlay.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !raw.isEmpty else { continue }
+            if raw == "~" || raw.hasPrefix("~/") {
+                return home.appendingPathComponent(String(raw.dropFirst(2)))
+            }
+            return URL(fileURLWithPath: raw, isDirectory: true)
+        }
+        return nil
+    }
+
+    /// The resolved slot homes. Ordering matters: the process environment
+    /// wins over stored defaults, so `launchctl setenv` or a shell-launched
+    /// CLI run can override the persisted value without editing defaults.
+    public static func resolve(
+        codexKey: String = codexAltHomeKey,
+        claudeKey: String = claudeAltConfigKey,
+        overlays: [Environment] = [ProcessEnvironment(), DefaultsEnvironment(defaults: .standard)],
+        home: URL = HomeDirectory.real
+    ) -> Resolved {
+        Resolved(
+            codexAltHome: resolve(key: codexKey, overlays: overlays, home: home),
+            claudeAltConfig: resolve(key: claudeKey, overlays: overlays, home: home)
+        )
+    }
+
+    /// Whether the named slot has a home directory on this machine. Primary
+    /// slots are always present — their sources handle a missing default
+    /// installation by reporting "not signed in", which is information.
+    /// An alternate slot without its directory is not an account at all: it
+    /// must not poll, render, or alert.
+    public static func isPresent(
+        _ provider: Provider,
+        homes: Resolved,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        func dirExists(_ url: URL?) -> Bool {
+            guard let url else { return false }
+            var isDirectory: ObjCBool = false
+            return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                && isDirectory.boolValue
+        }
+        switch provider {
+        case .codexAlt: return dirExists(homes.codexAltHome)
+        case .claudeAlt: return dirExists(homes.claudeAltConfig)
+        default: return true
+        }
+    }
+
+    /// Tilde-relative display of a slot home (Settings rows only). The path
+    /// never enters caches, diagnostics, or the JSON report; this renders the
+    /// user's own configuration back to them, with the OS username reduced to
+    /// `~` exactly like any shell prompt.
+    public static func displayPath(
+        for provider: Provider,
+        homes: Resolved,
+        home: URL = HomeDirectory.real
+    ) -> String? {
+        let url: URL?
+        switch provider {
+        case .codexAlt: url = homes.codexAltHome
+        case .claudeAlt: url = homes.claudeAltConfig
+        default: url = nil
+        }
+        guard let url else { return nil }
+        let homePath = home.path
+        if url.path == homePath { return "~" }
+        if url.path.hasPrefix(homePath + "/") {
+            return "~" + url.path.dropFirst(homePath.count)
+        }
+        return url.path
+    }
+}
+
 // MARK: - Privacy
 
 /// Helpers that keep identifying data out of anything we display, cache, or log.

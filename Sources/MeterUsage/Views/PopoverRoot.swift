@@ -352,7 +352,10 @@ struct PopoverRoot: View {
                         plan: coordinator.plans[provider] ?? .idle,
                         now: coordinator.clock,
                         onUseReset: { creditID in
-                            try await coordinator.consumeCodexReset(creditID: creditID)
+                            // The slot is passed explicitly: with a second
+                            // Codex account mounted, a reset belongs to the
+                            // card it was confirmed on.
+                            try await coordinator.consumeCodexReset(creditID: creditID, in: provider)
                         },
                         // Codex and Claude render their weekly heatmaps inside
                         // their own quota cards so all of a provider's figures
@@ -360,7 +363,7 @@ struct PopoverRoot: View {
                         // ledger); Claude shades by tokens. Other providers
                         // pass nothing and render unchanged.
                         heatmapDaily: heatmapDaily(for: provider),
-                        heatmapIntensity: provider == .codex ? .sessions : .tokens,
+                        heatmapIntensity: provider.statusProvider == .codex ? .sessions : .tokens,
                         lastBurn: BurnRecency.lastBurn(
                             of: coordinator.activities[provider]?.value?.sessions ?? [])
                     )
@@ -376,9 +379,11 @@ struct PopoverRoot: View {
     }
 
     private func heatmapDaily(for provider: Provider) -> [DailyActivity] {
-        switch provider {
-        case .codex:  return coordinator.activities[.codex]?.value?.daily ?? []
-        case .claude: return coordinator.activities[.claude]?.value?.daily ?? []
+        // Each account slot carries its own daily history, so a second
+        // account's card shades its own activity.
+        switch provider.statusProvider {
+        case .codex:  return coordinator.activities[provider]?.value?.daily ?? []
+        case .claude: return coordinator.activities[provider]?.value?.daily ?? []
         default:      return []
         }
     }

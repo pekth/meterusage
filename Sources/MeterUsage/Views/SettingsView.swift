@@ -17,6 +17,8 @@ struct SettingsView: View {
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval: Double = Preferences.defaultRefreshInterval
     @AppStorage(PrefKey.showClaude) private var showClaude: Bool = false
     @AppStorage(PrefKey.showCodex) private var showCodex: Bool = true
+    @AppStorage(PrefKey.showCodexAlt) private var showCodexAlt: Bool = false
+    @AppStorage(PrefKey.showClaudeAlt) private var showClaudeAlt: Bool = false
     @AppStorage(PrefKey.showAntigravity) private var showAntigravity: Bool = false
     @AppStorage(PrefKey.showGrok) private var showGrok: Bool = false
     @AppStorage(PrefKey.showOpenCodeGo) private var showOpenCodeGo: Bool = true
@@ -26,6 +28,8 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showGemini) private var showGemini: Bool = true
     @AppStorage(PrefKey.menuBarClaude) private var menuBarClaude: Bool = true
     @AppStorage(PrefKey.menuBarCodex) private var menuBarCodex: Bool = true
+    @AppStorage(PrefKey.menuBarCodexAlt) private var menuBarCodexAlt: Bool = true
+    @AppStorage(PrefKey.menuBarClaudeAlt) private var menuBarClaudeAlt: Bool = true
     @AppStorage(PrefKey.menuBarAntigravity) private var menuBarAntigravity: Bool = true
     @AppStorage(PrefKey.menuBarGrok) private var menuBarGrok: Bool = true
     @AppStorage(PrefKey.menuBarOpenCodeGo) private var menuBarOpenCodeGo: Bool = true
@@ -83,6 +87,15 @@ struct SettingsView: View {
                         isOn: $showCodex,
                         menuBarIsOn: $menuBarCodex
                     )
+                    if codexAltPresent {
+                        Divider().overlay(MU.hairline)
+                        ProviderRow(
+                            provider: .codexAlt,
+                            subtitle: "Second Codex account · \(codexAltPath ?? "")",
+                            isOn: $showCodexAlt,
+                            menuBarIsOn: $menuBarCodexAlt
+                        )
+                    }
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .antigravity,
@@ -118,6 +131,15 @@ struct SettingsView: View {
                         isOn: $showClaude,
                         menuBarIsOn: $menuBarClaude
                     )
+                    if claudeAltPresent {
+                        Divider().overlay(MU.hairline)
+                        ProviderRow(
+                            provider: .claudeAlt,
+                            subtitle: "Second Claude account · \(claudeAltPath ?? "")",
+                            isOn: $showClaudeAlt,
+                            menuBarIsOn: $menuBarClaudeAlt
+                        )
+                    }
                     Divider().overlay(MU.hairline)
                     ProviderRow(
                         provider: .cursor,
@@ -174,6 +196,12 @@ struct SettingsView: View {
                     Text("Switching a provider off above stops reading its credential entirely. It does not sign you out of that tool.")
                         .font(.muCaption)
                         .foregroundColor(MU.textTertiary)
+                    if codexAltPresent || claudeAltPresent {
+                        Divider().overlay(MU.hairline)
+                        Text("A second account appears when its config directory exists — \(codexAltPresent ? AccountSlots.displayPath(for: .codexAlt, homes: coordinator.slotHomes) ?? "" : "")\(codexAltPresent && claudeAltPresent ? " · " : "")\(claudeAltPresent ? AccountSlots.displayPath(for: .claudeAlt, homes: coordinator.slotHomes) ?? "" : "").")
+                            .font(.muCaption)
+                            .foregroundColor(MU.textTertiary)
+                    }
                 }
             }
 
@@ -332,8 +360,32 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: Second-account slots
+
+    // Demo builds mount synthetic second-account rows, so their toggles show
+    // there even though no real config directory exists.
+
+    private var codexAltPresent: Bool {
+        coordinator.isDemoMode || AccountSlots.isPresent(.codexAlt, homes: coordinator.slotHomes)
+    }
+
+    private var claudeAltPresent: Bool {
+        coordinator.isDemoMode || AccountSlots.isPresent(.claudeAlt, homes: coordinator.slotHomes)
+    }
+
+    private var codexAltPath: String? {
+        AccountSlots.displayPath(for: .codexAlt, homes: coordinator.slotHomes)
+    }
+
+    private var claudeAltPath: String? {
+        AccountSlots.displayPath(for: .claudeAlt, homes: coordinator.slotHomes)
+    }
+
     private var visibleAccounts: [Provider] {
-        Provider.allCases.filter { coordinator.preferences.isEnabled($0) }
+        // The coordinator's visibility, not the raw preference: an
+        // alternate-account slot with no config directory is not an account,
+        // so it gets no row.
+        coordinator.visibleProviders
     }
 
     private static func intervalLabel(_ seconds: Double) -> String {

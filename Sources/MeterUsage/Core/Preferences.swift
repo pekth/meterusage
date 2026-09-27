@@ -20,6 +20,12 @@ enum PrefKey {
     static let refreshInterval = "refreshIntervalSeconds"
     static let showClaude = "showProviderClaude"
     static let showCodex = "showProviderCodex"
+    /// Second-account slots. These toggle an *additional* account of a tool
+    /// whose data lives under a separately-configured config directory (see
+    /// `AccountSlots`); they default off so a single-account install renders
+    /// exactly as before.
+    static let showCodexAlt = "showProviderCodexAlt"
+    static let showClaudeAlt = "showProviderClaudeAlt"
     static let showAntigravity = "showProviderAntigravity"
     static let showGrok = "showProviderGrok"
     static let showOpenCodeGo = "showProviderOpenCodeGo"
@@ -29,6 +35,8 @@ enum PrefKey {
     static let showGemini = "showProviderGemini"
     static let menuBarClaude = "menuBarProviderClaude"
     static let menuBarCodex = "menuBarProviderCodex"
+    static let menuBarCodexAlt = "menuBarProviderCodexAlt"
+    static let menuBarClaudeAlt = "menuBarProviderClaudeAlt"
     static let menuBarAntigravity = "menuBarProviderAntigravity"
     static let menuBarGrok = "menuBarProviderGrok"
     static let menuBarOpenCodeGo = "menuBarProviderOpenCodeGo"
@@ -146,6 +154,8 @@ final class Preferences: ObservableObject {
             // normal use.
             PrefKey.showClaude: false,
             PrefKey.showCodex: true,
+            PrefKey.showCodexAlt: false,
+            PrefKey.showClaudeAlt: false,
             PrefKey.showAntigravity: false,
             PrefKey.showGrok: false,
             PrefKey.showOpenCodeGo: true,
@@ -157,6 +167,8 @@ final class Preferences: ObservableObject {
             // down to the ones they glance at.
             PrefKey.menuBarClaude: true,
             PrefKey.menuBarCodex: true,
+            PrefKey.menuBarCodexAlt: true,
+            PrefKey.menuBarClaudeAlt: true,
             PrefKey.menuBarAntigravity: true,
             PrefKey.menuBarGrok: true,
             PrefKey.menuBarOpenCodeGo: true,
@@ -204,11 +216,13 @@ final class Preferences: ObservableObject {
 
         var providers = Set<Provider>()
         if defaults.bool(forKey: PrefKey.showCodex) { providers.insert(.codex) }
+        if defaults.bool(forKey: PrefKey.showCodexAlt) { providers.insert(.codexAlt) }
         if defaults.bool(forKey: PrefKey.showAntigravity) { providers.insert(.antigravity) }
         if defaults.bool(forKey: PrefKey.showGrok) { providers.insert(.grok) }
         if defaults.bool(forKey: PrefKey.showOpenCodeGo) { providers.insert(.openCodeGo) }
         if defaults.bool(forKey: PrefKey.showOpenRouter) { providers.insert(.openRouter) }
         if defaults.bool(forKey: PrefKey.showClaude) { providers.insert(.claude) }
+        if defaults.bool(forKey: PrefKey.showClaudeAlt) { providers.insert(.claudeAlt) }
         if defaults.bool(forKey: PrefKey.showCursor) { providers.insert(.cursor) }
         if defaults.bool(forKey: PrefKey.showCopilot) { providers.insert(.copilot) }
         if defaults.bool(forKey: PrefKey.showGemini) { providers.insert(.gemini) }
@@ -216,11 +230,13 @@ final class Preferences: ObservableObject {
 
         var menuBar = Set<Provider>()
         if defaults.bool(forKey: PrefKey.menuBarCodex) { menuBar.insert(.codex) }
+        if defaults.bool(forKey: PrefKey.menuBarCodexAlt) { menuBar.insert(.codexAlt) }
         if defaults.bool(forKey: PrefKey.menuBarAntigravity) { menuBar.insert(.antigravity) }
         if defaults.bool(forKey: PrefKey.menuBarGrok) { menuBar.insert(.grok) }
         if defaults.bool(forKey: PrefKey.menuBarOpenCodeGo) { menuBar.insert(.openCodeGo) }
         if defaults.bool(forKey: PrefKey.menuBarOpenRouter) { menuBar.insert(.openRouter) }
         if defaults.bool(forKey: PrefKey.menuBarClaude) { menuBar.insert(.claude) }
+        if defaults.bool(forKey: PrefKey.menuBarClaudeAlt) { menuBar.insert(.claudeAlt) }
         if defaults.bool(forKey: PrefKey.menuBarCursor) { menuBar.insert(.cursor) }
         if defaults.bool(forKey: PrefKey.menuBarCopilot) { menuBar.insert(.copilot) }
         if defaults.bool(forKey: PrefKey.menuBarGemini) { menuBar.insert(.gemini) }

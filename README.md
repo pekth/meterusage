@@ -22,6 +22,7 @@
 **meterusage** brings all your AI coding allowances, token burn rates, and rate-limit reset timers together into a clean macOS menu bar item and an interactive floating side-notch HUD.
 
 * **Broad Provider Coverage**: OpenAI Codex, Google Antigravity, Claude Code, OpenRouter, Grok, OpenCode Go, Cursor, GitHub Copilot CLI, and Google Gemini CLI.
+* **Second-Account Meters**: Hold two Codex or Claude Code accounts? Each one gets its own independent meter row — own quota windows, plan badge, history, and alerts — instead of a merged guess. See [Second accounts](#second-accounts).
 * **Ambient Time-to-Empty**: Live depletion velocity against reset deadlines (`~47m left at current pace` / `Paced to last until reset`) directly in the menu bar and side notch.
 * **Burn Attribution & Context Waste**: Token breakdown by project, model, and turns over the last 7 days across every token-bearing provider, plus cache-hit efficiency % and long-chat flags.
 * **Durable Daily History**: Local summary store surviving CLI transcript purges and session cleanup.
@@ -92,6 +93,8 @@ Toggle providers on or off, choose refresh cadence, and switch themes:
 
 <small>*Claude publishes no public quota API; meterusage reads an on-disk JSON snapshot if a local companion writes one (see [docs/COMPANION.md](docs/COMPANION.md) and [`Scripts/claude-companion.sh`](Scripts/claude-companion.sh)).</small>
 
+<small>Second accounts for Codex and Claude use the same mechanisms pointed at the alternate account's config directory (see [Second accounts](#second-accounts) and [docs/adr/0005](docs/adr/0005-multi-account-slots.md)).</small>
+
 ---
 
 ## 🚀 Key Features
@@ -107,6 +110,35 @@ Toggle providers on or off, choose refresh cadence, and switch themes:
 * **26-Week Activity Heatmaps** — GitHub-style activity matrix inside Codex and Claude cards with Day, Week, or Cumulative views, accompanied by 7-day sparklines.
 * **Opt-In Pacing Alerts** — Native macOS notifications when an active window crosses critical burn velocity or drops below 30 minutes to empty. Pace alerts fire only on a current burn; threshold alerts (80%/95%) remain state-based.
 * **Share screenshot**: The share button on each provider's usage card (side notch panel detail card) shares a sharp 2x image of the panel through macOS share services, or saves it for X and other apps.
+
+### Second accounts
+
+Two accounts with the same tool are two different budgets, so meterusage gives
+each one its own meter row — own quota windows, plan badge, session history,
+heatmap, alerts, and (for Codex) reset credits. Slots are named by position
+("Codex second account", a "2" beside the mark); no account identifier is ever
+read or displayed.
+
+A slot exists when its alternate config directory exists on this Mac. Point
+meterusage at the second account's directory either through the environment or
+a stored default, then relaunch the app:
+
+```sh
+# Codex: the alternate home is passed to the codex subprocess the same way
+# you would run the CLI for that account.
+launchctl setenv METERUSAGE_CODEX_ALT_HOME ~/.codex-alt
+# or: defaults write meterusage meterusage.codexAltHome ~/.codex-alt
+
+# Claude: the alternate config directory (CLAUDE_CONFIG_DIR-equivalent) holds
+# that account's projects/ transcripts, .claude.json plan tier, and any
+# companion quota snapshot.
+launchctl setenv METERUSAGE_CLAUDE_ALT_CONFIG ~/.claude-alt
+# or: defaults write meterusage meterusage.claudeAltConfig ~/.claude-alt
+```
+
+The environment wins over the stored default. Toggle the slots on or off in
+Settings → Providers; both accounts always stay under their own keys in the
+Agent Budget API (`codexAlt` / `claudeAlt`).
 
 ---
 

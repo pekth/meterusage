@@ -46,7 +46,9 @@ public struct StatusPageSource: StatusSource {
     }
 
     private static func defaultEndpoint(for provider: Provider) -> URL {
-        switch provider {
+        // Alternate-account slots share the base service's feed: service
+        // health is per service, not per account (see `Provider.statusProvider`).
+        switch provider.statusProvider {
         case .openRouter:
             return URL(string: "https://status.openrouter.ai/api/v2/components.json")!
         case .claude:
@@ -59,7 +61,7 @@ public struct StatusPageSource: StatusSource {
     }
 
     private static func componentFragments(for provider: Provider) -> [String] {
-        switch provider {
+        switch provider.statusProvider {
         case .openRouter:
             return ["api", "chat", "data"]
         case .claude:

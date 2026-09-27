@@ -101,7 +101,7 @@ struct QuotaSection: View {
     // MARK: Header
 
     private var showsRemaining: Bool {
-        provider == .codex || provider == .antigravity
+        provider.statusProvider == .codex || provider.statusProvider == .antigravity
     }
 
     private var header: some View {
@@ -259,7 +259,9 @@ struct QuotaSection: View {
     }
 
     private var providerHeatmapEnabled: Bool {
-        switch provider {
+        // Alternate-account slots share the family toggle: it governs the
+        // heatmap feature for the tool, not for one account.
+        switch provider.statusProvider {
         case .codex:  return showCodexHeatmap
         case .claude: return showClaudeHeatmap
         default:      return false
@@ -352,10 +354,10 @@ private struct WindowRow: View {
     @AppStorage(PrefKey.showPacingBurnRate) private var showPacingBurnRate: Bool = true
 
     private var showsRemaining: Bool {
-        provider == .codex || provider == .antigravity
+        provider.statusProvider == .codex || provider.statusProvider == .antigravity
     }
 
-    private var isCodex: Bool { provider == .codex }
+    private var isCodex: Bool { provider.statusProvider == .codex }
 
     private var tint: Color { headroomColor(window.usedPercent) }
 
