@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Pace displays stop hiding a deficit once the burn cools.** The quota bar,
+  side-notch banner and window rows, and the menu-bar ETA chip now report the
+  window's own pace, so a window ahead of the even-burn line keeps its
+  projected run-out — a weekly at 43% with 6 days left — instead of flipping to
+  "on pace" 30 minutes after the last local session. The present-tense
+  "burning fast" failover nudge, pace alerts, and `meterusage json` pacing stay
+  gated on a current burn, so the stale-nudge fix is unchanged.
+
 ## [0.2.38] - 2026-09-26
 
 ### Added

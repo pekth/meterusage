@@ -364,9 +364,7 @@ struct PopoverRoot: View {
                         // pass nothing and render unchanged. Each account
                         // slot shades its own activity.
                         heatmapDaily: heatmapDaily(for: slot),
-                        heatmapIntensity: slot.provider == .codex ? .sessions : .tokens,
-                        lastBurn: BurnRecency.lastBurn(
-                            of: coordinator.activities[slot]?.value?.sessions ?? [])
+                        heatmapIntensity: slot.provider == .codex ? .sessions : .tokens
                     )
                 }
             }

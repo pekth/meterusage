@@ -552,14 +552,12 @@ struct SideNotchPanelView: View {
                 StatusBadge(severity: status.severity)
             }
 
-            // Ambient Time-To-Empty banner. The effective pace demotes a
-            // deficit whose burn has gone quiet, so a stale window shows the
-            // reset countdown in the calm tint instead of a burn alarm.
+            // Ambient Time-To-Empty banner. It reports the window's own pace:
+            // a deficit empties before reset at that shape even when the burn
+            // has since gone quiet. Only the present-tense "burning fast"
+            // nudge and alerts are gated on burn recency.
             if let headline = slot.provider.headlineWindow(from: Self.effectiveWindows(for: slot.provider, quota: quota)),
-               let pace = headline.pace(now: coordinator.clock)?.effective(
-                    lastBurn: BurnRecency.lastBurn(
-                        of: coordinator.activities[slot]?.value?.sessions ?? []),
-                    now: coordinator.clock),
+               let pace = headline.pace(now: coordinator.clock),
                let etaText = pace.etaText(resetsAt: headline.resetsAt, now: coordinator.clock) {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -780,14 +778,11 @@ struct SideNotchPanelView: View {
 
     @ViewBuilder
     private func windowRow(window: QuotaWindow, quota: ProviderQuota?, provider: Provider, slot: ProviderSlot) -> some View {
-        // Effective pace: a deficit without a current burn reads as on-pace,
-        // never as a "burning fast" alarm for a burst that already cooled.
-        // Burn evidence is per account slot.
+        // The row reports the window's own pace: a deficit means the window
+        // is ahead of the even-burn line, and it carries the projected
+        // exhaustion even when the burst that caused it has gone quiet.
         let pace = showPacingBurnRate
-            ? window.pace(now: coordinator.clock)?.effective(
-                lastBurn: BurnRecency.lastBurn(
-                    of: coordinator.activities[slot]?.value?.sessions ?? []),
-                now: coordinator.clock)
+            ? window.pace(now: coordinator.clock)
             : nil
         let figure = Self.windowFigure(window: window, quota: quota, provider: provider)
         VStack(alignment: .leading, spacing: 4) {
@@ -1356,7 +1351,6 @@ struct SideNotchPanelView: View {
         quotas: [ProviderSlot: Loaded<ProviderQuota>],
         statuses: [Provider: Loaded<ServiceStatus>],
         archivedQuotas: [ProviderSlot: ProviderQuota] = [:],
-        lastBurn: [ProviderSlot: Date] = [:],
         now: Date = Date()
     ) -> [Entry] {
         // Additional accounts number from 2 within their tool, in stable
@@ -1378,12 +1372,9 @@ struct SideNotchPanelView: View {
                 // otherwise.
                 markTint = providerColor(slot.provider)
             }
-            // Effective pace: a deficit without a current burn is demoted to
-            // on-pace, so the strip never reports "burning fast" from a
-            // stale window and the ETA chip carries the honest reset
-            // countdown instead of a projected exhaustion that already ended.
-            // Burn evidence is per account slot.
-            let pace = window.pace(now: now)?.effective(lastBurn: lastBurn[slot], now: now)
+            // The strip reports the window's own pace: a deficit carries the
+            // projected exhaustion chip whatever the last burn recency.
+            let pace = window.pace(now: now)
             let showAmbient = pace?.shouldShowAmbientETA(resetsAt: window.resetsAt, now: now) ?? false
             let eta = showAmbient ? pace?.etaText(resetsAt: window.resetsAt, now: now, short: true) : nil
             let isDeficit = pace?.status.isDeficit ?? false
@@ -1414,7 +1405,6 @@ struct SideNotchPanelView: View {
             quotas: coordinator.quotas,
             statuses: coordinator.statuses,
             archivedQuotas: coordinator.archivedQuotas,
-            lastBurn: coordinator.lastBurnBySlot,
             now: coordinator.clock
         )
     }

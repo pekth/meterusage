@@ -35,10 +35,6 @@ struct QuotaSection: View {
     /// Codex has no token ledger and shades by sessions; token-bearing
     /// sources (Claude) shade by tokens.
     var heatmapIntensity: HeatmapView.Intensity = .tokens
-    /// The provider's most recent observable burn. Gates the pacing label:
-    /// a pace deficit without a current burn is the window's past, not a
-    /// present-tense "burning fast" (see `BurnRecency`).
-    var lastBurn: Date? = nil
 
     @State private var resetPrompt: ResetPrompt?
     @State private var consumingResetID: String?
@@ -54,8 +50,7 @@ struct QuotaSection: View {
         now: Date,
         onUseReset: ((String) async throws -> Void)? = nil,
         heatmapDaily: [DailyActivity] = [],
-        heatmapIntensity: HeatmapView.Intensity = .tokens,
-        lastBurn: Date? = nil
+        heatmapIntensity: HeatmapView.Intensity = .tokens
     ) {
         self.slot = slot
         self.state = state
@@ -64,7 +59,6 @@ struct QuotaSection: View {
         self.onUseReset = onUseReset
         self.heatmapDaily = heatmapDaily
         self.heatmapIntensity = heatmapIntensity
-        self.lastBurn = lastBurn
     }
 
     var body: some View {
@@ -222,7 +216,7 @@ struct QuotaSection: View {
                                     .foregroundColor(MU.text)
                             }
                             ForEach(Array(group.windows.enumerated()), id: \.offset) { _, window in
-                                WindowRow(provider: provider, window: window, now: now, lastBurn: lastBurn)
+                                WindowRow(provider: provider, window: window, now: now)
                             }
                         }
                     }
@@ -352,8 +346,6 @@ private struct WindowRow: View {
     let provider: Provider
     let window: QuotaWindow
     let now: Date
-    /// Gates the pacing label on burn recency (see `QuotaSection.lastBurn`).
-    let lastBurn: Date?
 
     @AppStorage(PrefKey.showPacingBurnRate) private var showPacingBurnRate: Bool = true
 
@@ -391,10 +383,12 @@ private struct WindowRow: View {
                         .foregroundColor(MU.textTertiary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
-                    // Effective pace: a deficit whose burn went quiet reads
-                    // as on-pace, so the label never calls an idle day
-                    // "burning fast".
-                    if showPacingBurnRate, let pace = window.pace(now: now)?.effective(lastBurn: lastBurn, now: now) {
+                    // The bar reports the window's pace as its shape: a
+                    // deficit means the window is ahead of where even burn
+                    // would put it, whatever the last burn recency. The
+                    // present-tense "burning fast" claim (and its nudge) is
+                    // what recency gates, not this figure.
+                    if showPacingBurnRate, let pace = window.pace(now: now) {
                         Text("·")
                             .font(.muCaption)
                             .foregroundColor(MU.textTertiary)
