@@ -250,6 +250,27 @@ final class SideNotchPanelTests: XCTestCase {
     // MARK: - Entries
 
     @MainActor
+    func testEntriesKeepWeeklyDeficitWithoutBurnEvidence() async throws {
+        // A fresh weekly window at 43% with 6d 13h left is far ahead of pace.
+        // The strip reports the deficit and its projected run-out even with no
+        // local session to prove a current burn — only the present-tense
+        // nudge and pace alerts gate on burn recency.
+        let coordinator = try await Self.coordinator(quotas: [
+            (Provider.codex, [("Weekly", 43.0, 6.0 * 86_400 + 13.0 * 3_600)]),
+        ])
+
+        let entries = SideNotchPanelView.entries(
+            menuBarSlots: coordinator.menuBarSlots,
+            quotas: coordinator.quotas,
+            statuses: coordinator.statuses
+        )
+
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertTrue(entries[0].isDeficit)
+        XCTAssertNotNil(entries[0].etaText)
+    }
+
+    @MainActor
     func testEntriesTakeHeadlineWindowInMenuBarOrder() async throws {
         let coordinator = try await Self.coordinator(quotas: [
             // Grok listed first in the fixtures but Codex must lead: ordering
