@@ -283,7 +283,7 @@ struct ProviderMark: View {
             switch provider {
             case .codex, .openAI, .grok, .openCodeGo, .antigravity:
                 bundledMark(named: Self.resourceName(for: provider))
-            case .claude:
+            case .claude, .anthropic:
                 ClaudeMascotShape()
                     .fill(tint, style: FillStyle(eoFill: true))
             case .openRouter, .cursor, .copilot, .gemini:
@@ -327,7 +327,7 @@ struct ProviderMark: View {
         case .grok:       return "grok-logo"
         case .openCodeGo: return "opencode-logo"
         case .antigravity:return "antigravity-logo"
-        case .openRouter, .claude, .cursor, .copilot, .gemini: return ""
+        case .openRouter, .claude, .anthropic, .cursor, .copilot, .gemini: return ""
         }
     }
 
@@ -341,7 +341,7 @@ struct ProviderMark: View {
         // exists (e.g. a bare debug binary).
         case .openCodeGo: return "arrow.up.left.and.arrow.down.right"
         case .openRouter: return "arrow.triangle.branch"
-        case .claude:     return "sparkles"
+        case .claude, .anthropic:     return "sparkles"
         case .cursor:     return "cursorarrow.rays"
         case .copilot:    return "terminal"
         case .gemini:     return "diamond"

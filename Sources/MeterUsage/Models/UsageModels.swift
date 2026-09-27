@@ -427,6 +427,7 @@ public struct ProviderQuota: Equatable, Sendable {
 public enum Provider: String, CaseIterable, Codable, Sendable {
     case codex
     case openAI
+    case anthropic
     case antigravity
     case grok
     case openCodeGo
@@ -440,6 +441,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
         switch self {
         case .codex: return "Codex"
         case .openAI: return "OpenAI API"
+        case .anthropic: return "Anthropic API"
         case .antigravity: return "Antigravity"
         case .grok: return "Grok"
         case .openCodeGo: return "OpenCode Go"
@@ -450,6 +452,9 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
         case .gemini: return "Gemini CLI"
         }
     }
+
+    /// Organization billing totals must stay separate from local coding activity.
+    public var isOrganizationAPI: Bool { self == .openAI || self == .anthropic }
 
     /// Tools that support additional, separately-configured accounts. Each
     /// additional account is a `ProviderSlot` on one of these providers,
@@ -492,7 +497,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
                 return session
             }
             return windows.count == 1 ? windows[0] : nil
-        case .openAI:
+        case .openAI, .anthropic:
             return nil
         case .claude:
             if let session = windows.first(where: { $0.isSessionWindow }) {
@@ -518,6 +523,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
         switch self {
         case .codex: return "Codex CLI"
         case .openAI: return "OpenAI Admin API"
+        case .anthropic: return "Anthropic Admin API"
         case .claude: return "Claude Code"
         case .antigravity: return "agy CLI"
         case .grok: return "Grok CLI"
@@ -536,7 +542,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
         switch self {
         case .codex, .openAI:
             return URL(string: "https://status.openai.com/")
-        case .claude:
+        case .claude, .anthropic:
             return URL(string: "https://status.claude.com/")
         case .cursor:
             return URL(string: "https://status.cursor.com/")

@@ -83,6 +83,7 @@ Toggle providers on or off, choose refresh cadence, and switch themes and the ac
 |---|:---:|:---:|:---:|:---:|---|
 | **Codex** | ✅ | ✅ | ✅ | ✅ | Local JSON-RPC via `codex app-server --stdio` |
 | **OpenAI API** | N/A | API totals | N/A | N/A | Organization Usage and Costs APIs; Admin key required |
+| **Anthropic API** | N/A | API totals | N/A | N/A | Organization Usage and Cost Admin APIs; Admin key required |
 | **Antigravity** | ✅ | ✅ | ✅ | — | CLI `/usage` & local conversation SQLite |
 | **Claude Code** | Optional* | ✅ | ✅* | ✅ | Local session JSONL streams (`limits[]` file optional) |
 | **OpenRouter** | ✅ | ✅ | ✅ | — | Public account API & `/api/v1/activity` telemetry |
@@ -141,6 +142,29 @@ and the local coding summary to avoid counting the same work twice. The quota
 JSON CLI does not include this usage-only provider.
 
 See [OpenAI's Usage and Costs example](https://developers.openai.com/cookbook/examples/completions_usage_api)
+and [the privacy boundary](docs/PRIVACY.md).
+
+### Anthropic API usage
+
+Enable **Settings → Providers → Anthropic API** to show reported organization
+spend and Messages API tokens for today and the last 30 UTC calendar days,
+including today. Token totals include uncached input, output, cache reads, and
+cache creation. Anthropic reports cost amounts in cents; meterusage converts
+them to USD. The cost report excludes Priority Tier charges and can lag.
+The API does not supply a total request count, so the card omits that count.
+
+The app reads `ANTHROPIC_ADMIN_KEY` from its process environment. Use a Console
+organization Admin key through your existing secure launcher, then launch the
+executable as described under [OpenAI API usage](#openai-api-usage). Individual
+accounts do not have Admin API access. Regular workspace keys and Claude
+subscription logins do not provide this access. meterusage has no key-entry
+field and does not save the key.
+
+This monitor appears in the popover's Usage card, separate from Claude Code
+activity and subscription quota. It has no quota ring, countdown, or pace
+alert, and does not contribute to local coding totals or the quota JSON CLI.
+Missing access, offline requests, and incomplete responses show an unavailable
+reading. See [Anthropic's Usage and Cost API guide](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
 and [the privacy boundary](docs/PRIVACY.md).
 
 ### Second accounts
