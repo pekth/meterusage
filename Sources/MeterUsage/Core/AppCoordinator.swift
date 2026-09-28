@@ -39,6 +39,7 @@ final class AppCoordinator: ObservableObject {
     @Published private(set) var activities: [ProviderSlot: Loaded<LocalActivity>] = [:]
     @Published private(set) var usages: [ProviderSlot: Loaded<ProviderUsage>] = [:]
     @Published private(set) var testingAPIProviders: Set<Provider> = []
+    @Published private(set) var apiConnectionErrors: [Provider: String] = [:]
     private let apiKeys: APIKeySession
     @Published private(set) var statuses: [Provider: Loaded<ServiceStatus>] = [:]
     /// Subscription tier per provider. Kept in its own map rather than folded
@@ -190,6 +191,7 @@ final class AppCoordinator: ObservableObject {
         self.activitySourceFactory = activitySourceFactory
         self.usageSources = usageSources
         self.apiKeys = apiKeys
+        self.apiConnectionErrors = apiKeys.restoreErrors
         self.statusSources = statusSources
         self.planSources = planSources
         let archiveURL = quotaArchiveURL ?? QuotaArchive.defaultURL
@@ -323,7 +325,43 @@ final class AppCoordinator: ObservableObject {
         guard provider.isOrganizationAPI, !isDemoMode,
               !testingAPIProviders.contains(provider),
               let source = usageSources.first(where: { $0.provider == provider }) else { return }
-        apiKeys.set(key, for: provider)
+        guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        do { try apiKeys.set(key, for: provider) }
+        catch {
+            apiConnectionErrors[provider] = APIKeySession.message(for: error)
+            return
+        }
+        apiConnectionErrors[provider] = nil
+        await testAPIConnection(source)
+    }
+
+    func disconnectAPI(_ provider: Provider) {
+        guard provider.isOrganizationAPI, !isDemoMode else { return }
+        do { try apiKeys.set(nil, for: provider) }
+        catch {
+            apiConnectionErrors[provider] = APIKeySession.message(for: error)
+            return
+        }
+        apiConnectionErrors[provider] = nil
+        testingAPIProviders.remove(provider)
+        usages[.primary(provider)] = .missing(.dataNotFound("API connection"))
+    }
+
+    func retrySavedAPIKey(_ provider: Provider) async {
+        guard provider.isOrganizationAPI, !isDemoMode,
+              !testingAPIProviders.contains(provider),
+              let source = usageSources.first(where: { $0.provider == provider }) else { return }
+        do { try apiKeys.restore(provider) }
+        catch {
+            apiConnectionErrors[provider] = APIKeySession.message(for: error)
+            return
+        }
+        apiConnectionErrors[provider] = nil
+        await testAPIConnection(source)
+    }
+
+    private func testAPIConnection(_ source: UsageSource) async {
+        let provider = source.provider
         let revision = apiKeys.revision(for: provider)
         usages[.primary(provider)] = .idle
         testingAPIProviders.insert(provider)
@@ -331,13 +369,6 @@ final class AppCoordinator: ObservableObject {
         guard apiKeys.revision(for: provider) == revision else { return }
         testingAPIProviders.remove(provider)
         clock = Date()
-    }
-
-    func disconnectAPI(_ provider: Provider) {
-        guard provider.isOrganizationAPI else { return }
-        apiKeys.set(nil, for: provider)
-        testingAPIProviders.remove(provider)
-        usages[.primary(provider)] = .missing(.dataNotFound("API connection"))
     }
 
     /// Kicks off a refresh, coalescing with one already in flight.

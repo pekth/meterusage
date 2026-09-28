@@ -29,7 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let preferences = Preferences()
-        let apiKeys = APIKeySession()
+        let apiKeys = Composition.isDemoMode
+            ? APIKeySession(environment: [:])
+            : APIKeySession(store: KeychainAPIKeyStore())
         let quotaSources = Composition.quotaSources()
         let coordinator = AppCoordinator(
             preferences: preferences,
