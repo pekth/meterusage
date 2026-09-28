@@ -43,9 +43,8 @@ extension LocalActivitySource {
     public var slot: ProviderSlot { .primary(provider) }
 }
 
-/// A local usage source for providers whose native history is not Claude's
-/// token transcript format. Sources may report sessions/messages only when
-/// token or cost data is unavailable.
+/// Aggregate usage from local history or a documented provider usage API.
+/// Sources may report counts only when token or cost data is unavailable.
 public protocol UsageSource: Sendable {
     /// The tool this source meters (see `QuotaSource.provider`).
     var provider: Provider { get }

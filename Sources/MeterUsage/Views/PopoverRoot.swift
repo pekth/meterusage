@@ -58,7 +58,8 @@ struct StripTotals {
                     .reduce(0) { $0 + $1.tokens.total }
             }
         }
-        for usage in usages {
+        // Organization-wide API usage can overlap local CLI activity.
+        for usage in usages where !usage.provider.isOrganizationAPI {
             if let t = usage.todayTokens { todayTokens += t.total }
             if let w = usage.weekTokens { weekTokens += w.total }
             if let c = usage.todayCostUSD { todayCost += c }

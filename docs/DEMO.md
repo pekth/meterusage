@@ -56,6 +56,8 @@ All demo data is invented and deterministic:
   - *Gemini Models*: Weekly limit (89% used, 11% left) and 5-hour limit (9% used, 91% left).
   - *Claude and GPT models*: Weekly limit (1% used, 99% left) and 5-hour limit (0% used, 100% left).
 - **OpenRouter**: Synthetic monthly dollar spending limit, account balance meter, and 30-day token telemetry.
+- **OpenAI API**: Synthetic organization spend and completion usage, visible after enabling OpenAI API in Settings. No Admin key or API request is used in demo mode.
+- **Anthropic API**: Synthetic organization spend and Messages API tokens, visible after enabling Anthropic API in Settings. No Admin key or API request is used in demo mode.
 - **Grok**: Weekly allowance window with countdown and session activity history.
 - **OpenCode Go**: 26 sessions, 492 messages, token volume totals, and estimated cost.
 - **Claude**: Optional companion-file quota windows and tokens-per-day heatmap.

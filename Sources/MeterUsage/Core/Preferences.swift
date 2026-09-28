@@ -20,6 +20,8 @@ enum PrefKey {
     static let refreshInterval = "refreshIntervalSeconds"
     static let showClaude = "showProviderClaude"
     static let showCodex = "showProviderCodex"
+    static let showOpenAI = "showProviderOpenAI"
+    static let showAnthropic = "showProviderAnthropic"
     /// User-configured additional accounts (Claude, Codex). Encoded
     /// `[ManagedAccount]` JSON data; empty/absent means "no additional
     /// accounts", which is the single-account default install.
@@ -33,6 +35,7 @@ enum PrefKey {
     static let showGemini = "showProviderGemini"
     static let menuBarClaude = "menuBarProviderClaude"
     static let menuBarCodex = "menuBarProviderCodex"
+    static let menuBarOpenAI = "menuBarProviderOpenAI"
     static let menuBarAntigravity = "menuBarProviderAntigravity"
     static let menuBarGrok = "menuBarProviderGrok"
     static let menuBarOpenCodeGo = "menuBarProviderOpenCodeGo"
@@ -155,6 +158,8 @@ final class Preferences: ObservableObject {
             // normal use.
             PrefKey.showClaude: false,
             PrefKey.showCodex: true,
+            PrefKey.showOpenAI: false,
+            PrefKey.showAnthropic: false,
             PrefKey.showAntigravity: false,
             PrefKey.showGrok: false,
             PrefKey.showOpenCodeGo: true,
@@ -166,6 +171,7 @@ final class Preferences: ObservableObject {
             // down to the ones they glance at.
             PrefKey.menuBarClaude: true,
             PrefKey.menuBarCodex: true,
+            PrefKey.menuBarOpenAI: true,
             PrefKey.menuBarAntigravity: true,
             PrefKey.menuBarGrok: true,
             PrefKey.menuBarOpenCodeGo: true,
@@ -213,6 +219,8 @@ final class Preferences: ObservableObject {
 
         var providers = Set<Provider>()
         if defaults.bool(forKey: PrefKey.showCodex) { providers.insert(.codex) }
+        if defaults.bool(forKey: PrefKey.showOpenAI) { providers.insert(.openAI) }
+        if defaults.bool(forKey: PrefKey.showAnthropic) { providers.insert(.anthropic) }
         if defaults.bool(forKey: PrefKey.showAntigravity) { providers.insert(.antigravity) }
         if defaults.bool(forKey: PrefKey.showGrok) { providers.insert(.grok) }
         if defaults.bool(forKey: PrefKey.showOpenCodeGo) { providers.insert(.openCodeGo) }
@@ -225,6 +233,7 @@ final class Preferences: ObservableObject {
 
         var menuBar = Set<Provider>()
         if defaults.bool(forKey: PrefKey.menuBarCodex) { menuBar.insert(.codex) }
+        if defaults.bool(forKey: PrefKey.menuBarOpenAI) { menuBar.insert(.openAI) }
         if defaults.bool(forKey: PrefKey.menuBarAntigravity) { menuBar.insert(.antigravity) }
         if defaults.bool(forKey: PrefKey.menuBarGrok) { menuBar.insert(.grok) }
         if defaults.bool(forKey: PrefKey.menuBarOpenCodeGo) { menuBar.insert(.openCodeGo) }

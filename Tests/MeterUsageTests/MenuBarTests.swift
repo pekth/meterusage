@@ -18,7 +18,7 @@ final class MenuBarTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let preferences = Preferences(defaults: defaults)
-        XCTAssertEqual(preferences.menuBarProviders, Set(Provider.allCases))
+        XCTAssertEqual(preferences.menuBarProviders, Set(Provider.allCases).subtracting([.anthropic]))
         XCTAssertTrue(preferences.showsInMenuBar(.codex))
         XCTAssertTrue(preferences.showsInMenuBar(.grok))
     }
@@ -35,7 +35,7 @@ final class MenuBarTests: XCTestCase {
         let first = Preferences(defaults: defaults)
         let second = Preferences(defaults: defaults)
 
-        XCTAssertEqual(first.menuBarProviders, Set([.codex, .antigravity, .openCodeGo, .openRouter, .claude, .cursor, .copilot, .gemini]))
+        XCTAssertEqual(first.menuBarProviders, Set([.codex, .openAI, .antigravity, .openCodeGo, .openRouter, .claude, .cursor, .copilot, .gemini]))
         XCTAssertEqual(second.menuBarProviders, first.menuBarProviders)
         XCTAssertFalse(first.showsInMenuBar(.grok))
     }
