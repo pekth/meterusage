@@ -9,6 +9,7 @@ struct APIConnectionControls: View {
 
     private var testing: Bool { coordinator.testingAPIProviders.contains(provider) }
     private var hasKey: Bool { coordinator.hasAPIKey(for: provider) }
+    private var connectionAction: APIConnectionAction { coordinator.apiConnectionAction(for: provider) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -36,7 +37,18 @@ struct APIConnectionControls: View {
                     }
                 } else {
                     HStack {
-                        Button(hasKey ? "Replace key" : "Connect") { editing = true }
+                        Button {
+                            switch connectionAction {
+                            case .restoreSavedConnection, .retrySavingKey:
+                                Task { await coordinator.retrySavedAPIKey(provider) }
+                            case .connect, .replaceKey:
+                                editing = true
+                            }
+                        } label: {
+                            Text(connectionAction == .restoreSavedConnection ? "Restore saved connection" :
+                                 connectionAction == .retrySavingKey ? "Retry saving key" :
+                                 connectionAction == .replaceKey ? "Replace key" : "Connect")
+                        }
                             .disabled(testing)
                         if hasKey || coordinator.apiConnectionErrors[provider] != nil {
                             Button("Disconnect") {
@@ -46,13 +58,16 @@ struct APIConnectionControls: View {
                         }
                     }
                 }
-                if coordinator.apiConnectionErrors[provider] != nil {
+                if coordinator.apiConnectionErrors[provider] != nil &&
+                    connectionAction != .restoreSavedConnection && connectionAction != .retrySavingKey {
                     Button("Retry saved key") {
                         Task { await coordinator.retrySavedAPIKey(provider) }
                     }
                     .disabled(testing)
                 }
-                Text("Keys entered here are saved in macOS Keychain across restarts and updates. Disconnect removes the saved key.")
+                Text(connectionAction == .retrySavingKey
+                     ? "This key is not saved yet. Keep MeterUsage open and retry saving it."
+                     : "Keys entered here are saved in macOS Keychain across restarts and updates. Disconnect removes the saved key.")
                     .foregroundColor(MU.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }

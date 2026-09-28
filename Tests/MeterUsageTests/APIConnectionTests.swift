@@ -118,17 +118,59 @@ final class APIConnectionTests: XCTestCase {
         await coordinator.connectAPI(.openAI, key: "fixture-replacement")
         XCTAssertEqual(calls, 2, "A failed save must not test a different or unsaved credential")
         XCTAssertNotNil(coordinator.apiConnectionErrors[.openAI])
+        XCTAssertEqual(coordinator.apiConnectionAction(for: .openAI), .retrySavingKey)
         XCTAssertFalse(coordinator.apiConnectionErrors[.openAI]!.contains("private-storage-error"))
+        XCTAssertFalse(coordinator.diagnosticsText().contains("fixture-replacement"))
+        XCTAssertTrue(keys.key(for: .openAI) == "fixture-original")
+        store.writeError = nil
+        await coordinator.retrySavedAPIKey(.openAI)
+        XCTAssertEqual(calls, 4, "Retry must test the retained replacement key after saving it")
+        XCTAssertEqual(coordinator.apiConnectionAction(for: .openAI), .replaceKey)
+        XCTAssertTrue(keys.key(for: .openAI) == "fixture-replacement")
+        store.writeError = NSError(domain: "private-storage-error", code: 1)
+        await coordinator.connectAPI(.openAI, key: "fixture-second-replacement")
+        XCTAssertEqual(coordinator.apiConnectionAction(for: .openAI), .retrySavingKey)
+        XCTAssertTrue(keys.key(for: .openAI) == "fixture-replacement")
         coordinator.disconnectAPI(.openAI)
         XCTAssertNotNil(coordinator.apiConnectionErrors[.openAI])
-        XCTAssertTrue(keys.key(for: .openAI) == "fixture-original")
-        XCTAssertTrue(store.values[.openAI] == "fixture-original")
-        XCTAssertEqual(keys.revision(for: .openAI), revision)
+        XCTAssertTrue(keys.key(for: .openAI) == "fixture-replacement")
+        XCTAssertTrue(store.values[.openAI] == "fixture-replacement")
+        XCTAssertEqual(keys.revision(for: .openAI), revision + 1)
         XCTAssertNotNil(coordinator.usages[.primary(.openAI)]?.value)
         store.writeError = nil
         coordinator.disconnectAPI(.openAI)
         XCTAssertNil(coordinator.apiConnectionErrors[.openAI])
+        XCTAssertEqual(coordinator.apiConnectionAction(for: .openAI), .connect)
         XCTAssertNil(APIKeySession(environment: [:], store: store).key(for: .openAI))
+    }
+
+    func testFailedInitialSaveRetainsKeyForRetryAndDisconnectForgetsIt() async throws {
+        let store = MemoryAPIKeyStore()
+        let keys = APIKeySession(environment: [:], store: store)
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ConnectionProtocol.self]
+        ConnectionProtocol.handler = { _ in 200 }
+        defer { ConnectionProtocol.handler = nil }
+        let coordinator = AppCoordinator(preferences: Preferences(), usageSources: [
+            OpenAIUsageSource(adminKey: { keys.key(for: .openAI) }, session: URLSession(configuration: config))
+        ], apiKeys: keys)
+
+        store.writeError = NSError(domain: "private-storage-error", code: 1)
+        await coordinator.connectAPI(.openAI, key: "fixture-initial")
+        XCTAssertEqual(coordinator.apiConnectionAction(for: .openAI), .retrySavingKey)
+        XCTAssertFalse(coordinator.diagnosticsText().contains("fixture-initial"))
+        XCTAssertNil(keys.key(for: .openAI))
+
+        coordinator.disconnectAPI(.openAI)
+        XCTAssertEqual(coordinator.apiConnectionAction(for: .openAI), .retrySavingKey)
+        store.writeError = nil
+        await coordinator.retrySavedAPIKey(.openAI)
+        XCTAssertEqual(coordinator.apiConnectionAction(for: .openAI), .replaceKey)
+        XCTAssertTrue(keys.key(for: .openAI) == "fixture-initial")
+
+        coordinator.disconnectAPI(.openAI)
+        XCTAssertEqual(coordinator.apiConnectionAction(for: .openAI), .connect)
+        XCTAssertNil(keys.key(for: .openAI))
     }
 
     func testDeniedReadCanRetrySavedKeyWithoutNewEntry() async throws {
@@ -153,6 +195,32 @@ final class APIConnectionTests: XCTestCase {
         XCTAssertNil(coordinator.apiConnectionErrors[.openAI])
         XCTAssertNotNil(coordinator.usages[.primary(.openAI)]?.value)
         XCTAssertTrue(coordinator.hasAPIKey(for: .openAI))
+    }
+
+    func testConnectionActionRecoversDeniedSavedKeysForBothProviders() async throws {
+        let store = MemoryAPIKeyStore()
+        store.values[.openAI] = "fixture-openai-saved"
+        store.values[.anthropic] = "fixture-anthropic-saved"
+        store.readError = NSError(domain: "private-read-error", code: 1)
+        let keys = APIKeySession(environment: [:], store: store)
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ConnectionProtocol.self]
+        ConnectionProtocol.handler = { _ in 200 }
+        defer { ConnectionProtocol.handler = nil }
+        let coordinator = AppCoordinator(preferences: Preferences(), usageSources: [
+            OpenAIUsageSource(adminKey: { keys.key(for: .openAI) }, session: URLSession(configuration: config)),
+            AnthropicUsageSource(adminKey: { keys.key(for: .anthropic) }, session: URLSession(configuration: config))
+        ], apiKeys: keys)
+
+        for provider in [Provider.openAI, .anthropic] {
+            XCTAssertEqual(coordinator.apiConnectionAction(for: provider), .restoreSavedConnection)
+            store.readError = nil
+            await coordinator.retrySavedAPIKey(provider)
+            XCTAssertEqual(coordinator.apiConnectionAction(for: provider), .replaceKey)
+            XCTAssertNotNil(coordinator.usages[.primary(provider)]?.value)
+            coordinator.disconnectAPI(provider)
+            XCTAssertEqual(coordinator.apiConnectionAction(for: provider), .connect)
+        }
     }
 
     func testEnvironmentFallbackIsNotPersistedAndDemoCannotMutateStore() async throws {

@@ -32,3 +32,9 @@ requirement. macOS may ask for access approval after an update. Do not weaken
 access controls to avoid this prompt. The old process has no supported export
 of its memory-only key, so the first upgrade requires one final entry in the
 app. Restarting does not revoke the provider's key.
+
+Recovery clarification: distinguish a missing key from a saved-key read error.
+An unreadable saved key offers Restore saved connection and never opens the
+entry field. A failed save retains the submitted value privately in memory
+and offers Retry saving key. Saving or explicit Disconnect clears that pending
+value. Keep the app open until saving succeeds; pending memory is not durable.
