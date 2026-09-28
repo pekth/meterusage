@@ -2,6 +2,13 @@ import Foundation
 import Combine
 import AppKit
 
+enum APIConnectionAction: Equatable {
+    case connect
+    case replaceKey
+    case restoreSavedConnection
+    case retrySavingKey
+}
+
 /// Outcome of one source poll: either data, or a reason there is none.
 ///
 /// Modelled explicitly rather than as `T?` because *why* a value is missing is
@@ -41,6 +48,8 @@ final class AppCoordinator: ObservableObject {
     @Published private(set) var testingAPIProviders: Set<Provider> = []
     @Published private(set) var apiConnectionErrors: [Provider: String] = [:]
     private let apiKeys: APIKeySession
+    private var apiKeyRestoreErrors: Set<Provider>
+    private var pendingAPIKeys: [Provider: String] = [:]
     @Published private(set) var statuses: [Provider: Loaded<ServiceStatus>] = [:]
     /// Subscription tier per provider. Kept in its own map rather than folded
     /// into `quotas` because a plan is read from a different place than the
@@ -192,6 +201,7 @@ final class AppCoordinator: ObservableObject {
         self.usageSources = usageSources
         self.apiKeys = apiKeys
         self.apiConnectionErrors = apiKeys.restoreErrors
+        self.apiKeyRestoreErrors = Set(apiKeys.restoreErrors.keys)
         self.statusSources = statusSources
         self.planSources = planSources
         let archiveURL = quotaArchiveURL ?? QuotaArchive.defaultURL
@@ -320,6 +330,13 @@ final class AppCoordinator: ObservableObject {
         apiKeys.key(for: provider) != nil
     }
 
+    func apiConnectionAction(for provider: Provider) -> APIConnectionAction {
+        if pendingAPIKeys[provider] != nil { return .retrySavingKey }
+        if hasAPIKey(for: provider) { return .replaceKey }
+        if apiKeyRestoreErrors.contains(provider) { return .restoreSavedConnection }
+        return .connect
+    }
+
     /// Test both reporting endpoints using the same source as scheduled refreshes.
     func connectAPI(_ provider: Provider, key: String) async {
         guard provider.isOrganizationAPI, !isDemoMode,
@@ -328,9 +345,12 @@ final class AppCoordinator: ObservableObject {
         guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         do { try apiKeys.set(key, for: provider) }
         catch {
+            pendingAPIKeys[provider] = key
             apiConnectionErrors[provider] = APIKeySession.message(for: error)
             return
         }
+        pendingAPIKeys.removeValue(forKey: provider)
+        apiKeyRestoreErrors.remove(provider)
         apiConnectionErrors[provider] = nil
         await testAPIConnection(source)
     }
@@ -343,6 +363,8 @@ final class AppCoordinator: ObservableObject {
             return
         }
         apiConnectionErrors[provider] = nil
+        pendingAPIKeys.removeValue(forKey: provider)
+        apiKeyRestoreErrors.remove(provider)
         testingAPIProviders.remove(provider)
         usages[.primary(provider)] = .missing(.dataNotFound("API connection"))
     }
@@ -351,11 +373,17 @@ final class AppCoordinator: ObservableObject {
         guard provider.isOrganizationAPI, !isDemoMode,
               !testingAPIProviders.contains(provider),
               let source = usageSources.first(where: { $0.provider == provider }) else { return }
+        if let pendingKey = pendingAPIKeys[provider] {
+            await connectAPI(provider, key: pendingKey)
+            return
+        }
         do { try apiKeys.restore(provider) }
         catch {
+            apiKeyRestoreErrors.insert(provider)
             apiConnectionErrors[provider] = APIKeySession.message(for: error)
             return
         }
+        apiKeyRestoreErrors.remove(provider)
         apiConnectionErrors[provider] = nil
         await testAPIConnection(source)
     }

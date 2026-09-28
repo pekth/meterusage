@@ -10,10 +10,27 @@ enum Provider: String { case openAI, anthropic
 
 @main
 struct KeychainSmoke {
+    private static let authorizationNeededStatuses: Set<OSStatus> = [
+        errSecAuthFailed,
+        errSecInteractionNotAllowed,
+        errSecUserCanceled,
+    ]
+
+    private static func metadata(for provider: Provider, service: String, keychain: SecKeychain) -> OSStatus {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                   kSecAttrService as String: service,
+                                   kSecAttrAccount as String: provider.rawValue,
+                                   kSecMatchSearchList as String: [keychain],
+                                   kSecReturnAttributes as String: true,
+                                   kSecMatchLimit as String: kSecMatchLimitOne]
+        var attributes: CFTypeRef?
+        return SecItemCopyMatching(query as CFDictionary, &attributes)
+    }
+
     static func main() throws {
         let args = CommandLine.arguments
         guard args.count == 3, args[1].hasPrefix("com.meterusage.tests.") else {
-            fatalError("Usage: keychain-smoke com.meterusage.tests.<unique-id> save|read|replace|remove|empty|update")
+            fatalError("Usage: keychain-smoke com.meterusage.tests.<unique-id> save|read|read-v1|locked|replace|remove|empty|update-v2")
         }
         // A denied read must return an error, never leave unattended tests at a password prompt.
         SecKeychainSetUserInteractionAllowed(false)
@@ -26,9 +43,15 @@ struct KeychainSmoke {
             precondition(SecKeychainCreate(path, UInt32(password.utf8.count), password, false, nil, &keychain) == errSecSuccess)
         } else {
             precondition(SecKeychainOpen(path, &keychain) == errSecSuccess)
-            precondition(SecKeychainUnlock(keychain, UInt32(password.utf8.count), password, true) == errSecSuccess)
+            if args[2] != "locked" {
+                let unlockStatus = SecKeychainUnlock(keychain, UInt32(password.utf8.count), password, true)
+                precondition(unlockStatus == errSecSuccess, "unlock status=\(unlockStatus)")
+            } else {
+                precondition(SecKeychainLock(keychain) == errSecSuccess)
+            }
         }
-        let store = KeychainAPIKeyStore(service: args[1], keychain: keychain)
+        let isolatedKeychain = keychain!
+        let store = KeychainAPIKeyStore(service: args[1], keychain: isolatedKeychain)
         let keys = APIKeySession(environment: [:], store: store)
         for provider in [Provider.openAI, .anthropic] {
             switch args[2] {
@@ -36,8 +59,18 @@ struct KeychainSmoke {
                 let existing = try store.read(provider)
                 precondition(existing == nil)
                 try keys.set("fixture-original", for: provider)
-            case "read":
+            case "read", "read-v1":
                 precondition(keys.key(for: provider) == "fixture-original")
+            case "locked":
+                precondition(keys.restoreErrors[provider] != nil)
+                do {
+                    _ = try store.read(provider)
+                    preconditionFailure("locked read unexpectedly succeeded")
+                } catch let error as APIKeyStoreError {
+                    precondition(Self.authorizationNeededStatuses.contains(error.status))
+                    print("\(provider.rawValue): locked read status=\(error.status) expected=true")
+                }
+                precondition(Self.metadata(for: provider, service: args[1], keychain: isolatedKeychain) == errSecSuccess)
             case "replace":
                 try keys.set("fixture-replacement", for: provider)
                 let replacement = try store.read(provider)
@@ -47,25 +80,25 @@ struct KeychainSmoke {
             case "empty":
                 let remaining = try store.read(provider)
                 precondition(remaining == nil)
-            case "update":
+            case "update-v2":
                 // A rebuilt ad-hoc binary can need approval, but its item must still exist.
-                let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                           kSecAttrService as String: args[1],
-                                           kSecAttrAccount as String: provider.rawValue,
-                                           kSecMatchSearchList as String: [keychain!],
-                                           kSecReturnAttributes as String: true]
-                var attributes: CFTypeRef?
-                precondition(SecItemCopyMatching(query as CFDictionary, &attributes) == errSecSuccess)
-                if keys.restoreErrors[provider] != nil {
-                    print("\(provider.rawValue): saved item retained; new binary requires Keychain authorization")
-                } else {
+                precondition(Self.metadata(for: provider, service: args[1], keychain: isolatedKeychain) == errSecSuccess)
+                do {
+                    _ = try store.read(provider)
+                    precondition(keys.restoreErrors[provider] == nil)
                     precondition(keys.key(for: provider) == "fixture-original")
                     print("\(provider.rawValue): saved item readable by rebuilt binary")
+                } catch let error as APIKeyStoreError {
+                    precondition(Self.authorizationNeededStatuses.contains(error.status))
+                    precondition(keys.restoreErrors[provider] != nil)
+                    print("\(provider.rawValue): saved item retained; authorization status=\(error.status) expected=true")
+                } catch {
+                    preconditionFailure("unexpected Keychain error")
                 }
             default: fatalError("Unknown smoke action")
             }
         }
-        if args[2] == "empty" { precondition(SecKeychainDelete(keychain) == errSecSuccess) }
+        if args[2] == "empty" { precondition(SecKeychainDelete(isolatedKeychain) == errSecSuccess) }
         print("PASS: \(args[2])")
     }
 }

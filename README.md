@@ -134,12 +134,14 @@ appear in preferences, plaintext files, logs, or diagnostics.
 
 macOS may ask you to allow Keychain access after an update, especially for
 ad-hoc signed builds. If access is denied, Settings shows an error and
-**Retry saved key** lets you try again without creating another provider key.
-Storage failures leave the existing connection intact.
+**Restore saved connection** retries access to that key without opening a
+new-key field. Updates do not require another API-key entry or a new key from
+your organization.
 
-When upgrading from the earlier session-only build, enter your existing key
-once in the new app. Restarting MeterUsage does not revoke a provider key;
-you only need to create another if you no longer have the original value.
+If saving an entered key fails, **Retry saving key** reuses the value held in
+memory. Keep the app open until saving succeeds. A failed replacement leaves
+the previous connection intact. Disconnect clears pending entry as well as
+the saved connection.
 
 For an existing secure launcher, `OPENAI_ADMIN_KEY` is also supported at
 launch when no saved key exists. Saved keys take precedence; launcher keys
