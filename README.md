@@ -127,13 +127,23 @@ in the masked field, and select **Test connection**. The test reads both usage
 and costs. A successful reading shows **Connected** and its update time.
 A regular project key or Codex subscription login does not provide this access.
 
-The entered key stays in memory until you disconnect or quit. It is never
-saved to preferences, files, or Keychain. **Disconnect** clears the key and
-the displayed reading. Reconnect after restarting the app. Closing Settings
-clears unfinished key entry.
+MeterUsage saves entered keys in your Mac's Keychain, so connections survive
+restarts and app updates. **Disconnect** removes the saved key and clears the
+displayed reading. Closing Settings clears unfinished key entry. Keys never
+appear in preferences, plaintext files, logs, or diagnostics.
+
+macOS may ask you to allow Keychain access after an update, especially for
+ad-hoc signed builds. If access is denied, Settings shows an error and
+**Retry saved key** lets you try again without creating another provider key.
+Storage failures leave the existing connection intact.
+
+When upgrading from the earlier session-only build, enter your existing key
+once in the new app. Restarting MeterUsage does not revoke a provider key;
+you only need to create another if you no longer have the original value.
 
 For an existing secure launcher, `OPENAI_ADMIN_KEY` is also supported at
-launch. Run the app executable from that environment:
+launch when no saved key exists. Saved keys take precedence; launcher keys
+are not copied into Keychain automatically. Run the app executable from that environment:
 
 ```sh
 /Applications/MeterUsage.app/Contents/MacOS/meterusage

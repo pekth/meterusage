@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Session-only setup. Never bind a secret to AppStorage or restore it into a field.
+/// Never bind a secret to AppStorage or restore a saved key into a field.
 struct APIConnectionControls: View {
     let provider: Provider
     @ObservedObject var coordinator: AppCoordinator
@@ -38,7 +38,7 @@ struct APIConnectionControls: View {
                     HStack {
                         Button(hasKey ? "Replace key" : "Connect") { editing = true }
                             .disabled(testing)
-                        if hasKey {
+                        if hasKey || coordinator.apiConnectionErrors[provider] != nil {
                             Button("Disconnect") {
                                 key = ""
                                 coordinator.disconnectAPI(provider)
@@ -46,7 +46,13 @@ struct APIConnectionControls: View {
                         }
                     }
                 }
-                Text("Key kept only until you quit. Usage is read directly from the provider.")
+                if coordinator.apiConnectionErrors[provider] != nil {
+                    Button("Retry saved key") {
+                        Task { await coordinator.retrySavedAPIKey(provider) }
+                    }
+                    .disabled(testing)
+                }
+                Text("Keys entered here are saved in macOS Keychain across restarts and updates. Disconnect removes the saved key.")
                     .foregroundColor(MU.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -61,7 +67,11 @@ struct APIConnectionControls: View {
 
     @ViewBuilder
     private var status: some View {
-        if testing {
+        if let error = coordinator.apiConnectionErrors[provider] {
+            Text(error)
+                .foregroundColor(MU.warn)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if testing {
             Text("Testing usage and cost access…")
         } else if !hasKey {
             Text("Not connected")

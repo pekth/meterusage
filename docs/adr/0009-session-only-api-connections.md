@@ -1,6 +1,6 @@
 # ADR 0009: API connections keep keys only for the app session
 
-- Status: Accepted
+- Status: Superseded by [ADR 0011](0011-persistent-api-connections.md) for credential storage
 - Date: 2026-09-27
 
 The environment-only setup in ADRs 0007 and 0008 leaves normal app launches
