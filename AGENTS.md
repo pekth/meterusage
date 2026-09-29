@@ -6,7 +6,9 @@ public repository.
 ## Project rules
 
 - Keep changes focused and explain user-visible behavior in the pull request.
-- Run `swift build` and `swift test` before submitting code changes.
+- Run `swift build` and `swift test` before submitting code changes. Swift is
+  macOS-only; when the current host is not macOS, run these on the Mac over SSH
+  (`ssh fleet-mac`, `zsh`). Do not claim Swift verification from a non-macOS host.
 - During release work, verify each requested state separately: tested source,
   built and signed bundle, installed and running app, Git tag, published GitHub
   Release, uploaded asset, and manual runtime checks. Do not infer one state
