@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Codex credit usage tracking in the quota card and side-notch hover card.
+  Each account keeps its own local total of observed balance decreases.
+  Settings → Pacing & Telemetry → Codex credit usage switches tracking on
+  or off. Off hides the credit row and pauses recording; re-enabling starts
+  a new balance comparison and keeps the recorded total. Balance increases
+  set a new baseline. This is sampled usage, not a billing ledger.
+
 ## [0.2.40] - 2026-09-29
 
 ### Added

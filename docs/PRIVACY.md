@@ -42,6 +42,27 @@ meterusage reads AI coding-assistant usage from your own machine. That means it 
 | Codex service health | Public, unauthenticated Statuspage JSON at `status.openai.com`, filtered to Codex, CLI, and login components. | Yes |
 | Claude service health | Public, unauthenticated Statuspage JSON at `status.claude.com`, filtered to Claude/API components. | Yes |
 
+### Codex credit usage tracking
+
+The tracker reuses the credit balance returned by `account/rateLimits/read`.
+It makes no extra request and reads no credentials. UserDefaults stores only
+the generated provider slot key, observed usage total, numeric balance
+baseline, and timestamps. Each account has its own record; account labels
+and config paths are excluded.
+
+Settings → Pacing & Telemetry → Codex credit usage is on by default. Turning
+it off hides the credit rows and pauses recording. Saved totals stay local;
+the next enabled reading starts a new comparison, so changes while off are
+excluded. Demo mode displays synthetic usage and never updates saved totals.
+Unreadable saved usage is preserved and credit recording stops.
+
+Observed use counts only decreases between sampled balances. A top-up can
+hide spending between polls, and expiry or account adjustments can also
+reduce the balance. This measure cannot identify which session used credits
+or reconstruct usage from before tracking began. Provider dashboards remain
+the billing source of record. After switching the login in a config directory,
+switch tracking off and on to start a new baseline.
+
 ### Optional Claude quota file (including Fable)
 
 Claude quota bars are a pure bonus. A companion tool must already have written a small JSON snapshot to disk; meterusage never prompts for it and never creates it. Implementation lives in `Sources/MeterUsage/Services/OptionalQuotaFileSource.swift`.

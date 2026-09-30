@@ -48,6 +48,8 @@ enum PrefKey {
     static let showHeatmap = "showHeatmap"
     static let showClaudeHeatmap = "showClaudeHeatmap"
     static let showCodexHeatmap = "showCodexHeatmap"
+    static let codexCreditTracking = "codexCreditTrackingEnabled"
+    static let codexCreditUsage = "codexCreditUsage"
     static let quotaAlerts = "quotaAlertsEnabled"
     static let sideNotchPanel = "sideNotchPanelEnabled"
     static let sideNotchPanelPinned = "sideNotchPanelPinned"
@@ -116,6 +118,8 @@ final class Preferences: ObservableObject {
     @Published private(set) var showHeatmap: Bool = true
     @Published private(set) var showClaudeHeatmap: Bool = true
     @Published private(set) var showCodexHeatmap: Bool = true
+    @Published private(set) var codexCreditTrackingEnabled: Bool = true
+    @Published private var creditTracker: CodexCreditTracker? = CodexCreditTracker()
     /// Opt-in quota threshold notifications. Off by default so the app never
     /// prompts for notification access until the user asks for the feature.
     @Published private(set) var quotaAlertsEnabled: Bool = false
@@ -183,6 +187,7 @@ final class Preferences: ObservableObject {
             PrefKey.showHeatmap: true,
             PrefKey.showClaudeHeatmap: true,
             PrefKey.showCodexHeatmap: true,
+            PrefKey.codexCreditTracking: true,
             PrefKey.quotaAlerts: false,
             PrefKey.sideNotchPanel: false,
             PrefKey.sideNotchPanelPinned: false,
@@ -255,6 +260,14 @@ final class Preferences: ObservableObject {
         let codexHeatmap = defaults.bool(forKey: PrefKey.showCodexHeatmap)
         if codexHeatmap != showCodexHeatmap { showCodexHeatmap = codexHeatmap }
 
+        if let data = defaults.data(forKey: PrefKey.codexCreditUsage) {
+            // Preserve unreadable saved usage instead of replacing it with zero.
+            creditTracker = try? JSONDecoder().decode(CodexCreditTracker.self, from: data)
+        }
+        let creditTracking = defaults.bool(forKey: PrefKey.codexCreditTracking)
+        if !creditTracking { pauseCodexCreditTracking() }
+        if creditTracking != codexCreditTrackingEnabled { codexCreditTrackingEnabled = creditTracking }
+
         let alerts = defaults.bool(forKey: PrefKey.quotaAlerts)
         if alerts != quotaAlertsEnabled { quotaAlertsEnabled = alerts }
 
@@ -292,6 +305,38 @@ final class Preferences: ObservableObject {
             return decoded
         }()
         if accounts != managedAccounts { managedAccounts = accounts }
+    }
+
+    // MARK: Codex credit tracking
+
+    func codexCreditUsage(for slot: ProviderSlot) -> CodexCreditUsage? {
+        guard codexCreditTrackingEnabled else { return nil }
+        return creditTracker?.accounts[slot.key]
+    }
+
+    func recordCodexCredits(_ quota: ProviderQuota, for slot: ProviderSlot) {
+        guard defaults.bool(forKey: PrefKey.codexCreditTracking), var tracker = creditTracker else { return }
+        tracker.record(quota.credits, for: slot, at: quota.capturedAt)
+        saveCreditTracker(tracker)
+    }
+
+    func setCodexCreditTracking(_ enabled: Bool) {
+        defaults.set(enabled, forKey: PrefKey.codexCreditTracking)
+        if !enabled { pauseCodexCreditTracking() }
+        codexCreditTrackingEnabled = enabled
+    }
+
+    private func pauseCodexCreditTracking() {
+        guard var tracker = creditTracker else { return }
+        tracker.pause()
+        saveCreditTracker(tracker)
+    }
+
+    private func saveCreditTracker(_ tracker: CodexCreditTracker) {
+        guard tracker != creditTracker,
+              let data = try? JSONEncoder().encode(tracker) else { return }
+        creditTracker = tracker
+        defaults.set(data, forKey: PrefKey.codexCreditUsage)
     }
 
     // MARK: Additional accounts

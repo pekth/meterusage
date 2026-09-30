@@ -346,6 +346,15 @@ struct SettingsView: View {
                 SectionHeader("Pacing & Telemetry")
                 Card(padding: 10) {
                     SettingToggle(
+                        title: "Codex credit usage",
+                        subtitle: "Track balance decreases locally. Off pauses tracking and hides credits.",
+                        isOn: Binding(
+                            get: { preferences.codexCreditTrackingEnabled },
+                            set: { preferences.setCodexCreditTracking($0) }
+                        )
+                    )
+                    Divider().overlay(MU.hairline)
+                    SettingToggle(
                         title: "Pacing & burn rate",
                         subtitle: "Show pacing status (well paced, burning fast) on quota limit bars.",
                         isOn: $showPacingBurnRate
