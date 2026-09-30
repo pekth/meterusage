@@ -81,7 +81,25 @@ GitHub Actions runs `swift build` and `swift test` on macOS 15 for pushes to
 `main` and pull requests. Repository owners must enable Actions under
 Settings > Actions > General for these checks to run.
 
-Run these checks before a pull request:
+### Candidate verification
+
+Before a code pull request, verify the candidate on macOS:
+
+1. From the intended checkout, record `git rev-parse --show-toplevel`,
+   `git rev-parse HEAD`, and `git status --short`. Match the revision to the
+   candidate being reviewed. A clean checkout of the base revision is not
+   proof of an uncommitted patch.
+2. If files were copied from another checkout, compare their relative paths
+   and SHA-256 hashes against a manifest made at the source checkout. Include
+   new test files and confirm intended deletions are absent. Run
+   `shasum -a 256 -c <manifest>` from the destination root before testing.
+   A missing or mismatched input blocks validation; correct the copy first.
+3. Run the commands below from that verified checkout. Record the exact test
+   command, any filter, the executed test count, and the failure count. A
+   successful exit with zero matching tests is not a pass. Check the relevant
+   suite's summary: a separate empty Swift Testing run does not erase a
+   nonzero XCTest result. For a new regression test, also show that it fails
+   on the old implementation and passes on the candidate.
 
 ```sh
 swift build
@@ -110,6 +128,31 @@ not move, and include the captures in the pull request. See
 [`docs/adr/0004`](docs/adr/0004-side-notch-anchor-invariant.md).
 
 See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
+
+### Verification record
+
+Before reporting completion, give every requested stage a status of
+`verified`, `failed`, `pending`, or `not performed`, with its evidence. Keep
+unrequested stages out of scope. Building does not authorize installation or
+publication, and `Scripts/make-app.sh` performs neither.
+
+| Requested stage | Required evidence |
+| --- | --- |
+| Source and tests | Candidate revision, dirty-file comparison when needed, test command, executed count, failure count, and log. Reconcile the source again if it changes after testing. |
+| Built bundle | Bundle identifier, version/build number, executable SHA-256, and signing verification result for the candidate bundle. |
+| Running app | Executable path and PID of the launched candidate, its bundle identity, demo or normal mode, and the actual interaction result. A process alone proves only launch. |
+| Installed app | Installed bundle identifier, version/build number, and executable hash matching the verified candidate; if launch was requested, confirm the running process uses that installed bundle. A separate preview does not prove the installed app changed. |
+| Native UI | Evidence from the affected interaction. Side-notch changes need the two provider captures described above. Record an explicit capture waiver as a waiver, never as a visual pass. |
+| Published release | Version and tag resolving to the verified source, a published GitHub Release, and a downloaded public asset whose SHA-256 matches the verified archive. Reconcile the changelog, README download information, and release notes with that version. |
+
+Keep full paths and operational logs private; use sanitized identifiers and
+repository-relative paths in public reports. A demo result covers synthetic
+data only. If the requested normal-mode interaction was not tested, mark it
+pending. See [`docs/DEMO.md`](docs/DEMO.md) for launch behavior.
+
+When the test host becomes unavailable, name the last verified stage and the
+next pending check. Resume from those results only if the candidate still
+matches. Do not describe a partial build, installation, or release as complete.
 
 ## Where to make changes
 
