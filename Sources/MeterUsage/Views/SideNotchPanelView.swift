@@ -722,7 +722,7 @@ struct SideNotchPanelView: View {
                             windowRow(window: window, quota: quota, provider: slot.provider, slot: slot)
                         }
                     }
-                } else if let quota, let credits = quota.credits {
+                } else if slot.provider != .codex, let quota, let credits = quota.credits {
                     fallbackCreditsSection(credits: credits, provider: slot.provider)
                 }
             }
@@ -733,6 +733,12 @@ struct SideNotchPanelView: View {
                let quota,
                (quota.resetCreditCount ?? 0) > 0 || !quota.resetCredits.isEmpty {
                 resetCreditsSection(slot: slot, quota: quota)
+            }
+
+            if slot.provider == .codex, preferences.codexCreditTrackingEnabled,
+               let credits = quota?.credits {
+                CreditsRow(provider: .codex, credits: credits,
+                           usage: coordinator.codexCreditUsage(for: slot))
             }
 
             // Activity Telemetry 2-column grid

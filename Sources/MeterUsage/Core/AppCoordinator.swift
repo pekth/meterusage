@@ -258,6 +258,11 @@ final class AppCoordinator: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        preferences.$codexCreditTrackingEnabled
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
         // Switching update checks off must clear any banner already on
         // screen, not merely stop future checks.
         preferences.$updateCheckEnabled
@@ -515,6 +520,15 @@ final class AppCoordinator: ObservableObject {
         QuotaArchive.save(archivedQuotas, to: quotaArchiveURL)
     }
 
+    func codexCreditUsage(for slot: ProviderSlot) -> CodexCreditUsage? {
+        guard slot.provider == .codex, preferences.codexCreditTrackingEnabled else { return nil }
+        if isDemoMode {
+            return CodexCreditUsage(usedCredits: 12.4,
+                                    since: clock.addingTimeInterval(-86_400), capturedAt: clock)
+        }
+        return preferences.codexCreditUsage(for: slot)
+    }
+
     /// Most recent observable burn per provider. Feeds the pace-honesty gate:
     /// alerts and the machine report may only claim "burning fast" while the
     /// provider burned inside the quiet period (see `BurnRecency`).
@@ -557,6 +571,7 @@ final class AppCoordinator: ObservableObject {
         let result: Loaded<ProviderQuota>
         do {
             let quota = try await source.fetchQuota()
+            if !isDemoMode { preferences.recordCodexCredits(quota, for: source.slot) }
             result = .value(quota)
             archivedQuotas[source.slot] = quota
         } catch {

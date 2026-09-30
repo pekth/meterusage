@@ -35,6 +35,7 @@ struct QuotaSection: View {
     /// Codex has no token ledger and shades by sessions; token-bearing
     /// sources (Claude) shade by tokens.
     var heatmapIntensity: HeatmapView.Intensity = .tokens
+    var creditUsage: CodexCreditUsage?
 
     @State private var resetPrompt: ResetPrompt?
     @State private var consumingResetID: String?
@@ -42,6 +43,7 @@ struct QuotaSection: View {
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
     @AppStorage(PrefKey.showClaudeHeatmap) private var showClaudeHeatmap: Bool = true
     @AppStorage(PrefKey.showCodexHeatmap) private var showCodexHeatmap: Bool = true
+    @AppStorage(PrefKey.codexCreditTracking) private var codexCreditTracking: Bool = true
 
     init(
         slot: ProviderSlot,
@@ -50,7 +52,8 @@ struct QuotaSection: View {
         now: Date,
         onUseReset: ((String) async throws -> Void)? = nil,
         heatmapDaily: [DailyActivity] = [],
-        heatmapIntensity: HeatmapView.Intensity = .tokens
+        heatmapIntensity: HeatmapView.Intensity = .tokens,
+        creditUsage: CodexCreditUsage? = nil
     ) {
         self.slot = slot
         self.state = state
@@ -59,6 +62,7 @@ struct QuotaSection: View {
         self.onUseReset = onUseReset
         self.heatmapDaily = heatmapDaily
         self.heatmapIntensity = heatmapIntensity
+        self.creditUsage = creditUsage
     }
 
     var body: some View {
@@ -203,7 +207,8 @@ struct QuotaSection: View {
                 : quota.groups
 
             let hasResetCredits = (quota.resetCreditCount ?? 0) > 0 || !quota.resetCredits.isEmpty
-            if groups.isEmpty && quota.credits == nil && !hasResetCredits {
+            let showsCredits = provider != .codex || codexCreditTracking
+            if groups.isEmpty && (!showsCredits || quota.credits == nil) && !hasResetCredits {
                 InfoState(message: SourceUnavailable.noData.userFacingMessage,
                           hint: "Usage appears once you've made some requests.")
             } else {
@@ -230,8 +235,8 @@ struct QuotaSection: View {
                             onRequestUse: { resetPrompt = ResetPrompt(kind: .confirmation($0)) }
                         )
                     }
-                    if let credits = quota.credits {
-                        CreditsRow(provider: provider, credits: credits)
+                    if showsCredits, let credits = quota.credits {
+                        CreditsRow(provider: provider, credits: credits, usage: creditUsage)
                     }
                 }
                 .transition(.opacity)
@@ -556,9 +561,10 @@ private struct ResetCreditsSection: View {
 /// Shows the remaining balance first. When a provider also reports spend and a
 /// limit, those appear as a secondary detail and a meter so "how much is left"
 /// never gets replaced by "how much was spent".
-private struct CreditsRow: View {
+struct CreditsRow: View {
     let provider: Provider
     let credits: CreditBalance
+    var usage: CodexCreditUsage? = nil
 
     private var balanceColor: Color {
         if let usedPercent {
@@ -599,13 +605,35 @@ private struct CreditsRow: View {
                         .lineLimit(1)
                 }
             }
+            if credits.unit == .credits, !credits.unlimited, credits.hasCredits,
+               let dollars = credits.dollarBalance {
+                HStack {
+                    Spacer(minLength: 0)
+                    Text("≈ \(Fmt.usd(dollars)) available")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                }
+            }
             if let usedPercent {
                 MeterBar(fraction: usedPercent / 100, tint: tint)
+            }
+            if let usage {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Observed use")
+                    Spacer(minLength: 4)
+                    Text("\(Fmt.credits(usage.usedCredits)) credits")
+                        .monospacedDigit()
+                }
+                .font(.muCaption)
+                .foregroundColor(MU.textSecondary)
+                Text("Since \(usage.since.formatted(date: .abbreviated, time: .omitted))")
+                    .font(.muCaption)
+                    .foregroundColor(MU.textTertiary)
             }
         }
         .help(caption)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Credits: \(balanceLabel). \(spendDetail ?? "") \(caption)")
+        .accessibilityLabel("Credits: \(balanceLabel). \(spendDetail ?? "") \(usage.map { "Observed use: \(Fmt.credits($0.usedCredits)) credits." } ?? "") \(caption)")
     }
 
     private var balanceLabel: String {
@@ -613,11 +641,7 @@ private struct CreditsRow: View {
         if !credits.hasCredits { return "None" }
         switch credits.unit {
         case .credits:
-            let raw = "\(Fmt.credits(credits.balance)) credits"
-            if let dollars = credits.dollarBalance {
-                return "\(raw) · ≈ \(Fmt.usd(dollars)) available"
-            }
-            return "\(raw) available"
+            return "\(Fmt.credits(credits.balance)) credits"
         case .dollars:
             return "\(Fmt.usd(credits.balance)) available"
         }
@@ -641,7 +665,7 @@ private struct CreditsRow: View {
     /// comment on this file and on `OptionalQuotaFileSource`).
     private var caption: String {
         if credits.unit == .credits, credits.dollarBalance != nil {
-            return "Codex display conversion: 2,500 credits equals $100."
+            return "Codex display conversion: 2,500 credits equals $100. Observed use counts balance decreases between refreshes; top-ups can hide use and expired credits can lower the balance."
         }
         return "Available balance is shown first; spend and a limit appear when the provider reports them."
     }

@@ -10,6 +10,7 @@ Last verified: 2026-09-29
 
 ## Product and source facts
 
+- The Codex credit tracker counts observed decreases in provider-reported credit balances per `ProviderSlot.key`. Settings → Pacing & Telemetry → Codex credit usage controls recording and the credit rows in the quota and side-notch hover cards. Tracking is on by default. Off retains totals and clears comparison baselines; re-enabling excludes changes during the pause. Balance increases set a new baseline. Totals, numeric baselines, and timestamps persist locally in UserDefaults; demo mode shows synthetic usage and never records it. ADR 0007 defines the limits of this sampled measure. Final build and native visual acceptance must be verified separately.
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
 - The app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure.
 - Provider data sources are implemented under `Sources/MeterUsage/Services/`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
