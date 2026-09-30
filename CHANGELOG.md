@@ -8,6 +8,18 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Codex sessions now show an estimated cost.** The local Codex source reads
+  each rollout's model from its `turn_context` event and prices the session's
+  tokens against a new OpenAI/Codex row in the pricing table, so the burn
+  attribution and cost figures include Codex instead of a hardcoded `$0`. The
+  table covers the GPT-6 family (GPT-6.1 Sol, GPT-6 Sol, GPT-6 Luna, GPT-6
+  Astra) plus the still-supported GPT-5.6 Sol/Terra/Luna and `gpt-5.3-codex`,
+  using the published Standard list prices. Codex's cache model is applied as
+  published: cached input is billed at the model's cached rate (GPT-6.1 Sol's
+  new 5% tier), and Codex charges nothing for cache writes, so cache writes
+  are free here. A session whose model cannot be read still prices, flagged at
+  the current Codex default tier, rather than silently reporting zero. Pricing
+  remains a local estimate — see `docs/PRIVACY.md`.
 - **Accent colour themes.** Settings → Appearance now offers an accent palette
   (Blue, Violet, Teal, Amber, Rose, Graphite). It recolours the app accent and
   the primary provider's (Codex's) mark across the popover, the menu bar, and
@@ -17,6 +29,15 @@ follows [Semantic Versioning](https://semver.org/).
 - **Dark surfaces are dark grey, not black.** The popover backdrop and cards and
   the side notch body and hover card now use dark greys, so the app reads as one
   object instead of a black slab.
+
+### Changed
+
+- **Pricing table refreshed to the current rates.** Claude rows now use the
+  published Opus 5.5 (`$4` / `$20`) and Sonnet 5.5 (`$2` / `$10`) list prices,
+  with cache reads and writes derived from the same 0.1x / 1.25x multipliers;
+  Fable and Haiku are unchanged. The verification stamp moved to `2026-09`.
+  One rate still covers a whole Claude family, so an older generation is
+  estimated at the current generation's price.
 
 ## [0.2.39] - 2026-09-27
 
