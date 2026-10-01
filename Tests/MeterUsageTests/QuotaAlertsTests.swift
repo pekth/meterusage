@@ -112,8 +112,8 @@ final class QuotaAlertsTests: XCTestCase {
     // MARK: - Pricing snapshot
 
     func testPricingSnapshotLabel() {
-        XCTAssertEqual(Pricing.snapshotYearMonth, "2026-07")
-        XCTAssertEqual(Pricing.snapshotLabel, "Jul 2026")
+        XCTAssertEqual(Pricing.snapshotYearMonth, "2026-09")
+        XCTAssertEqual(Pricing.snapshotLabel, "Sep 2026")
     }
 
     // MARK: - Sparkline model

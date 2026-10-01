@@ -391,16 +391,26 @@ final class SideNotchPanelTests: XCTestCase {
     }
 
     func testNotchBandThresholdsMatchHeadroomScale() {
-        // The notch hues differ from the popover, but the thresholds must
-        // not: severity can never disagree between the two surfaces.
+        // The notch shares the popover's headroom scale exactly: same hues
+        // (`headroomColor`) and same thresholds. A 75% window must read the
+        // same amber band on both surfaces, so the notch bands at 80/95 like
+        // the popover rather than its former private 50/80/100.
         XCTAssertEqual(NotchBand.band(usedPercent: 0), .plenty)
-        XCTAssertEqual(NotchBand.band(usedPercent: 49.9), .plenty)
-        XCTAssertEqual(NotchBand.band(usedPercent: 50), .gettingClose)
-        XCTAssertEqual(NotchBand.band(usedPercent: 79.9), .gettingClose)
-        XCTAssertEqual(NotchBand.band(usedPercent: 80), .nearlyOut)
+        XCTAssertEqual(NotchBand.band(usedPercent: 79.9), .plenty)
+        XCTAssertEqual(NotchBand.band(usedPercent: 80), .gettingClose)
+        XCTAssertEqual(NotchBand.band(usedPercent: 94.9), .gettingClose)
+        XCTAssertEqual(NotchBand.band(usedPercent: 95), .nearlyOut)
         XCTAssertEqual(NotchBand.band(usedPercent: 99.9), .nearlyOut)
         XCTAssertEqual(NotchBand.band(usedPercent: 100), .atLimit)
         XCTAssertEqual(NotchBand.band(usedPercent: 140), .atLimit)
+    }
+
+    func testNotchRingTintMatchesHeadroomColor() {
+        // The ring band and the popover percent must be the same colour for
+        // the same reading, or the two surfaces disagree in front of the user.
+        XCTAssertEqual(Notch.color(usedPercent: 75), headroomColor(75))
+        XCTAssertEqual(Notch.color(usedPercent: 88), headroomColor(88))
+        XCTAssertEqual(Notch.color(usedPercent: 99), headroomColor(99))
     }
 
     @MainActor

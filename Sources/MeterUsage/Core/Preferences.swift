@@ -41,6 +41,9 @@ enum PrefKey {
     static let menuBarCopilot = "menuBarProviderCopilot"
     static let menuBarGemini = "menuBarProviderGemini"
     static let theme = "appearanceTheme"
+    /// Accent palette shared by the popover, the menu-bar tray, and the side
+    /// notch. See `AccentTheme`.
+    static let accentTheme = "accentTheme"
     static let launchAtLogin = "launchAtLogin"
     static let showHeatmap = "showHeatmap"
     static let showClaudeHeatmap = "showClaudeHeatmap"
@@ -109,6 +112,7 @@ final class Preferences: ObservableObject {
     /// Which enabled providers also appear as clusters in the menu bar.
     @Published private(set) var menuBarProviders: Set<Provider> = Set(Provider.allCases)
     @Published private(set) var theme: AppTheme = .system
+    @Published private(set) var accentTheme: AccentTheme = .blue
     @Published private(set) var showHeatmap: Bool = true
     @Published private(set) var showClaudeHeatmap: Bool = true
     @Published private(set) var showCodexHeatmap: Bool = true
@@ -174,6 +178,7 @@ final class Preferences: ObservableObject {
             PrefKey.menuBarCopilot: true,
             PrefKey.menuBarGemini: true,
             PrefKey.theme: AppTheme.system.rawValue,
+            PrefKey.accentTheme: AccentTheme.blue.rawValue,
             PrefKey.launchAtLogin: false,
             PrefKey.showHeatmap: true,
             PrefKey.showClaudeHeatmap: true,
@@ -237,6 +242,9 @@ final class Preferences: ObservableObject {
 
         let newTheme = AppTheme(rawValue: defaults.string(forKey: PrefKey.theme) ?? "") ?? .system
         if newTheme != theme { theme = newTheme }
+
+        let newAccent = AccentTheme(rawValue: defaults.string(forKey: PrefKey.accentTheme) ?? "") ?? .blue
+        if newAccent != accentTheme { accentTheme = newAccent }
 
         let heatmap = defaults.bool(forKey: PrefKey.showHeatmap)
         if heatmap != showHeatmap { showHeatmap = heatmap }
@@ -315,6 +323,19 @@ final class Preferences: ObservableObject {
     private func persistAccounts() {
         guard let data = try? JSONEncoder().encode(managedAccounts) else { return }
         defaults.set(data, forKey: PrefKey.managedAccounts)
+    }
+
+    // MARK: Appearance
+
+    /// Applies an accent palette. Writes through immediately so `MU.accent` —
+    /// which resolves from the stored value at draw time — is current before
+    /// the published change repaints, then publishes so every observing
+    /// surface re-renders. The Settings swatches call this instead of writing
+    /// `@AppStorage` directly, so the accent does not depend on the
+    /// `UserDefaults.didChangeNotification` round-trip.
+    func setAccentTheme(_ theme: AccentTheme) {
+        defaults.set(theme.rawValue, forKey: PrefKey.accentTheme)
+        if theme != accentTheme { accentTheme = theme }
     }
 
     func isEnabled(_ provider: Provider) -> Bool { enabledProviders.contains(provider) }

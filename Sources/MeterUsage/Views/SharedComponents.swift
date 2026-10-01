@@ -31,25 +31,93 @@ private func rgb(_ r: Int, _ g: Int, _ b: Int, _ a: CGFloat = 1) -> NSColor {
     NSColor(srgbRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: a)
 }
 
+/// App-wide accent palettes.
+///
+/// The accent is the app's primary colour. It tints the popover's heatmaps,
+/// sparkline, and accent text, and it is the primary provider's (Codex's)
+/// identity colour — so one choice reaches the popover, the menu bar, and the
+/// side notch together. Only the accent moves: quota headroom (green/amber/red)
+/// and every other provider's identity colour stay fixed.
+enum AccentTheme: String, CaseIterable, Identifiable {
+    case blue, violet, teal, amber, rose, graphite
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .blue:     return "Blue"
+        case .violet:   return "Violet"
+        case .teal:     return "Teal"
+        case .amber:    return "Amber"
+        case .rose:     return "Rose"
+        case .graphite: return "Graphite"
+        }
+    }
+
+    var light: NSColor {
+        switch self {
+        case .blue:     return rgb(0, 102, 204)
+        case .violet:   return rgb(124, 58, 237)
+        case .teal:     return rgb(13, 148, 136)
+        case .amber:    return rgb(180, 83, 9)
+        case .rose:     return rgb(190, 24, 93)
+        case .graphite: return rgb(72, 72, 78)
+        }
+    }
+
+    var dark: NSColor {
+        switch self {
+        case .blue:     return rgb(10, 132, 255)
+        case .violet:   return rgb(167, 139, 250)
+        case .teal:     return rgb(45, 212, 191)
+        case .amber:    return rgb(251, 191, 36)
+        case .rose:     return rgb(251, 113, 133)
+        case .graphite: return rgb(174, 174, 178)
+        }
+    }
+
+    /// The theme's accent as an appearance-reactive SwiftUI colour.
+    ///
+    /// Cached per theme so repeated reads hand back one stable `Color`. The
+    /// accent previously lived as a single `static let`, and callers rely on
+    /// that identity (for example `MenuBarLabel.statusTint(.operational, …) ==
+    /// providerColor(.codex)`); a fresh dynamic colour per read would also
+    /// churn SwiftUI's diff on every render.
+    var color: Color {
+        if let cached = Self.cache[self] { return cached }
+        let color = dynamicColor(light: light, dark: dark)
+        Self.cache[self] = color
+        return color
+    }
+
+    private static var cache: [AccentTheme: Color] = [:]
+
+    /// The stored selection. Read without a `Preferences` instance so every
+    /// surface resolves the same accent the Settings picker writes.
+    static var stored: AccentTheme {
+        AccentTheme(rawValue: UserDefaults.standard.string(forKey: PrefKey.accentTheme) ?? "") ?? .blue
+    }
+}
+
 enum MU {
 
     // Surfaces ------------------------------------------------------------
     //
-    // Fixed hardware blacks, matching the side notch (pure-black body,
-    // near-black card): the popover and settings read as one object with the
-    // strip in every appearance the theme setting allows. Light variants stay
-    // adaptive — the menu-bar tray shares these values and must survive a
-    // light menu bar.
+    // The dark variants are dark greys, not black: the side notch body and its
+    // hover card share the same greys, so the popover, settings, and strip read
+    // as one object rather than a black slab beside a grey window. Light
+    // variants stay adaptive — the menu-bar tray shares these values and must
+    // survive a light menu bar.
 
     /// Popover backdrop. Deliberately not `windowBackgroundColor`: the popover
     /// already vibrancy-blurs, so a near-transparent wash reads cleaner.
-    static let canvas = dynamicColor(light: rgb(250, 250, 252), dark: rgb(0, 0, 0))
+    static let canvas = dynamicColor(light: rgb(250, 250, 252), dark: rgb(28, 28, 30))
 
     /// Raised card fill.
-    static let surface = dynamicColor(light: rgb(255, 255, 255), dark: rgb(10, 10, 12))
+    static let surface = dynamicColor(light: rgb(255, 255, 255), dark: rgb(38, 38, 41))
 
     /// Recessed fill, used for meter tracks and heatmap empty cells.
-    static let well = dynamicColor(light: rgb(236, 236, 241), dark: rgb(41, 41, 46))
+    static let well = dynamicColor(light: rgb(236, 236, 241), dark: rgb(52, 52, 56))
 
     static let hairline = dynamicColor(light: rgb(0, 0, 0, 0.08), dark: rgb(255, 255, 255, 0.10))
 
@@ -75,8 +143,13 @@ enum MU {
     static let surplus = good
 
     // Provider accents ----------------------------------------------------
+    //
+    // `accent` doubles as the primary provider's (Codex's) identity colour, so
+    // it follows the user's accent-theme choice and every surface that shows
+    // it — popover, menu bar, side notch — recolours together. The remaining
+    // provider identities are fixed.
 
-    static let accent = dynamicColor(light: rgb(0, 102, 204), dark: rgb(10, 132, 255))
+    static var accent: Color { AccentTheme.stored.color }
     static let calm = dynamicColor(light: rgb(194, 94, 0), dark: rgb(217, 119, 6))
     static let grok = dynamicColor(light: rgb(30, 30, 34), dark: rgb(235, 235, 240))
     static let openCodeGo = dynamicColor(light: rgb(15, 118, 110), dark: rgb(45, 212, 191))

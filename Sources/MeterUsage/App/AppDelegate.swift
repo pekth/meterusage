@@ -70,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let host = NSHostingView(
             rootView: MenuBarLabel(
                 coordinator: coordinator,
+                preferences: coordinator.preferences,
                 onWidthChange: { [weak item] width in
                     guard let item else { return }
                     let pixels = ceil(width)

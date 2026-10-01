@@ -259,6 +259,41 @@ struct SettingsView: View {
                         .fixedSize()
                     }
                     Divider().overlay(MU.hairline)
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("Accent")
+                            .font(.muBody)
+                            .foregroundColor(MU.text)
+                        Spacer(minLength: 6)
+                        HStack(spacing: 9) {
+                            ForEach(AccentTheme.allCases) { option in
+                                let isSelected = option == preferences.accentTheme
+                                Button {
+                                    preferences.setAccentTheme(option)
+                                } label: {
+                                    Circle()
+                                        .fill(option.color)
+                                        .frame(width: 15, height: 15)
+                                        .overlay(
+                                            Circle().strokeBorder(MU.hairline, lineWidth: 1)
+                                        )
+                                        .overlay(
+                                            Circle()
+                                                .strokeBorder(MU.text, lineWidth: 1.5)
+                                                .padding(-3)
+                                                .opacity(isSelected ? 1 : 0)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .help(option.displayName)
+                                .accessibilityLabel(option.displayName)
+                                .accessibilityValue(isSelected ? "selected" : "not selected")
+                            }
+                        }
+                    }
+                    Text("Tints the popover, menu bar, and side notch.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                    Divider().overlay(MU.hairline)
                     SettingToggle(
                         title: "Side notch panel",
                         subtitle: "Floating usage rings. Hover a ring for details; drag the strip anywhere.",

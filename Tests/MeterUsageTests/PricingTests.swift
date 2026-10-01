@@ -120,17 +120,17 @@ final class PricingTests: XCTestCase {
     }
 
     func testExactCostForOpusTier() {
-        // input $5/Mtok, output $25/Mtok.
+        // input $4/Mtok, output $20/Mtok (Opus 5.5).
         let tokens = TokenTotals(input: 2_000_000, output: 500_000)
-        let estimate = Pricing.estimate(model: "claude-opus-4-8", tokens: tokens)
-        XCTAssertEqual(estimate.costUSD, 2 * 5 + 0.5 * 25, accuracy: 0.0001) // 22.5
+        let estimate = Pricing.estimate(model: "claude-opus-5-5", tokens: tokens)
+        XCTAssertEqual(estimate.costUSD, 2 * 4 + 0.5 * 20, accuracy: 0.0001) // 18.0
     }
 
     func testExactCostForSonnetTier() {
-        // input $3/Mtok, output $15/Mtok.
+        // input $2/Mtok, output $10/Mtok (Sonnet 5.5).
         let tokens = TokenTotals(input: 2_000_000, output: 500_000)
-        let estimate = Pricing.estimate(model: "claude-sonnet-5", tokens: tokens)
-        XCTAssertEqual(estimate.costUSD, 2 * 3 + 0.5 * 15, accuracy: 0.0001) // 13.5
+        let estimate = Pricing.estimate(model: "claude-sonnet-5-5", tokens: tokens)
+        XCTAssertEqual(estimate.costUSD, 2 * 2 + 0.5 * 10, accuracy: 0.0001) // 9.0
     }
 
     func testExactCostForHaikuTier() {
@@ -142,7 +142,7 @@ final class PricingTests: XCTestCase {
 
     /// Cache rates are derived from documented multipliers rather than a
     /// published per-model table: read = 0.1x input, write = 1.25x input
-    /// (default 5-minute TTL). Pin the relationship for one tier (Sonnet)
+    /// (default 5-minute TTL). Pin the relationship for one tier (Sonnet 5.5)
     /// so a future edit that changes the multiplier — or that hardcodes a
     /// wrong absolute cache rate — fails loudly.
     func testCacheRatesAreDerivedFromInputMultiplierForSonnet() {
@@ -151,8 +151,50 @@ final class PricingTests: XCTestCase {
         XCTAssertEqual(rate.cacheWritePerMTok, rate.inputPerMTok * 1.25, accuracy: 0.0001)
         // And pinned to the exact published input rate, so this test can't
         // pass by drifting alongside a stale input number too.
-        XCTAssertEqual(rate.inputPerMTok, 3, accuracy: 0.0001)
-        XCTAssertEqual(rate.cacheReadPerMTok, 0.3, accuracy: 0.0001)
-        XCTAssertEqual(rate.cacheWritePerMTok, 3.75, accuracy: 0.0001)
+        XCTAssertEqual(rate.inputPerMTok, 2, accuracy: 0.0001)
+        XCTAssertEqual(rate.cacheReadPerMTok, 0.2, accuracy: 0.0001)
+        XCTAssertEqual(rate.cacheWritePerMTok, 2.5, accuracy: 0.0001)
+    }
+
+    // MARK: - OpenAI / Codex families
+
+    /// GPT-6.1 Sol is the current Codex default and the "new cache" model:
+    /// cached input is 5% of input, and Codex charges nothing for cache writes.
+    func testSol61RatesIncludingFivePercentCacheRead() {
+        let (rate, isFallback) = Pricing.rate(forModel: "gpt-6.1-sol")
+        XCTAssertFalse(isFallback)
+        XCTAssertEqual(rate.inputPerMTok, 2, accuracy: 0.0001)
+        XCTAssertEqual(rate.outputPerMTok, 10, accuracy: 0.0001)
+        XCTAssertEqual(rate.cacheReadPerMTok, 0.10, accuracy: 0.0001)
+        XCTAssertEqual(rate.cacheReadPerMTok, rate.inputPerMTok * 0.05, accuracy: 0.0001)
+        XCTAssertEqual(rate.cacheWritePerMTok, 0, accuracy: 0.0001, "Codex does not charge for cache writes")
+        XCTAssertEqual(Pricing.availability(forModel: "gpt-6.1-sol"), .priced)
+    }
+
+    /// Version-specific matching: "gpt-5.6-sol" contains the substring
+    /// "6-sol", so it must be checked before the GPT-6 Sol row or it would
+    /// silently borrow the newer, cheaper rate.
+    func testOlderSolVersionsKeepTheirOwnRates() {
+        XCTAssertEqual(Pricing.rate(forModel: "gpt-5.6-sol").rate.outputPerMTok, 20, accuracy: 0.0001)
+        XCTAssertEqual(Pricing.rate(forModel: "gpt-6-sol").rate.outputPerMTok, 10, accuracy: 0.0001)
+        XCTAssertEqual(Pricing.rate(forModel: "gpt-6-sol").rate.cacheReadPerMTok, 0.20, accuracy: 0.0001)
+    }
+
+    /// Reasoning tokens are billed as output, and the Codex cache-write rate is
+    /// zero, so a session with reasoning and cache writes prices on input,
+    /// output, and cached read only.
+    func testSol61ChargesReasoningAsOutputAndIgnoresCacheWrites() {
+        let tokens = TokenTotals(input: 1_000_000, output: 1_000_000, reasoning: 1_000_000, cacheRead: 1_000_000, cacheWrite: 1_000_000)
+        let estimate = Pricing.estimate(model: "gpt-6.1-sol", tokens: tokens)
+        // input 2 + output 10 + reasoning 10 + cached read 0.10 + cache write 0 = 22.10
+        XCTAssertEqual(estimate.costUSD, 22.10, accuracy: 0.0001)
+    }
+
+    func testBareCodexIdIsFlaggedAndPricedNotZero() {
+        let tokens = TokenTotals(input: 1_000_000, output: 1_000_000)
+        let estimate = Pricing.estimate(model: "codex", tokens: tokens)
+        XCTAssertEqual(estimate.availability, .unrecognizedFallback)
+        XCTAssertTrue(estimate.isFallback)
+        XCTAssertGreaterThan(estimate.costUSD, 0)
     }
 }

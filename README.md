@@ -67,7 +67,7 @@ Click the menu bar mark anytime to inspect full rate-limit details, multi-window
 <sub>Screenshots show the app in demo mode (`METERUSAGE_DEMO=1`) — all numbers and names are synthetic.</sub>
 
 ### Settings: Accounts & Providers
-Toggle providers on or off, choose refresh cadence, and switch themes:
+Toggle providers on or off, choose refresh cadence, and switch themes and the accent colour:
 
 <p align="center">
   <img src="docs/images/settings-accounts.png" alt="Settings accounts list with provider connections and appearance theme" width="270">
@@ -108,6 +108,7 @@ Toggle providers on or off, choose refresh cadence, and switch themes:
 * **Cross-Provider Headroom Failover** — Instant suggestions when a provider is burning fast or near exhaustion, identifying which alternative model has headroom available. "Burning fast" requires a current burn; a window that is merely near its limit says so in its own words.
 * **Agent Budget API** — Run `meterusage json` to export machine-readable quota telemetry, burn velocity, pacing status, and seconds-to-empty for autonomous AI agents. Pacing in the report is gated on burn recency, matching the failover nudge and pace alerts.
 * **26-Week Activity Heatmaps** — GitHub-style activity matrix inside Codex and Claude cards with Day, Week, or Cumulative views, accompanied by 7-day sparklines.
+* **Accent Colour Themes** — Pick an accent palette (Blue, Violet, Teal, Amber, Rose, Graphite) in Settings → Appearance. It recolours the app accent and the primary provider's mark across the popover, menu bar, and side notch; quota headroom and the other provider identities stay fixed.
 * **Opt-In Pacing Alerts** — Native macOS notifications when an active window crosses critical burn velocity or drops below 30 minutes to empty. Pace alerts fire only on a current burn; threshold alerts (80%/95%) remain state-based.
 * **Share screenshot**: The share button on each provider's usage card (side notch panel detail card) shares a sharp 2x image of the panel through macOS share services, or saves it for X and other apps.
 

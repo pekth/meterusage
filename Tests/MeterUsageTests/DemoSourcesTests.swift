@@ -207,8 +207,10 @@ final class DemoSourcesTests: XCTestCase {
         XCTAssertGreaterThan(tokens, 10_000_000)
         XCTAssertLessThan(tokens, 200_000_000)
 
-        // Low hundreds of dollars.
-        XCTAssertGreaterThan(activity.totalCostUSD, 100)
+        // Tens to low hundreds of dollars. The 2026-09 rate refresh lowered
+        // Opus and Sonnet list prices, so this fixed synthetic token volume
+        // now estimates lower than it did on the previous table.
+        XCTAssertGreaterThan(activity.totalCostUSD, 50)
         XCTAssertLessThan(activity.totalCostUSD, 400)
     }
 

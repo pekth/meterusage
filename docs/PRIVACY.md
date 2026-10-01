@@ -61,7 +61,7 @@ The consequence is honest rather than hidden: Codex shows real live quota, inclu
 
 ## Cost figures are estimates
 
-Costs are computed locally from token counts against a rate table in `Sources/MeterUsage/Services/Pricing.swift`. Published rates change, and the table can drift. Treat every cost in this app as an approximation for awareness — never as a billing figure. Your provider's dashboard is the only source of truth for what you owe.
+Costs are computed locally from token counts against a rate table in `Sources/MeterUsage/Services/Pricing.swift`. That table covers Claude list rates and OpenAI/Codex Standard list rates (the GPT-6 and GPT-5.6 families and `gpt-5.3-codex`); Codex sessions are priced using the model recorded in the local rollout, and cache writes are free because Codex does not charge for them. Published rates change, and the table can drift. Treat every cost in this app as an approximation for awareness — never as a billing figure. Your provider's dashboard is the only source of truth for what you owe.
 
 ## What leaves your machine
 

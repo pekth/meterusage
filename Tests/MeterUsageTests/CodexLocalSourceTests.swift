@@ -21,8 +21,9 @@ final class CodexLocalSourceTests: XCTestCase {
     }
 
     /// Writes a Codex-shaped rollout file whose first line carries the given
-    /// session start timestamp and working directory, optionally ending with
-    /// a cumulative `token_count` event.
+    /// session start timestamp and working directory, optionally followed by a
+    /// `turn_context` event naming the model and a cumulative `token_count`
+    /// event.
     @discardableResult
     private func writeRollout(
         _ root: URL,
@@ -30,7 +31,8 @@ final class CodexLocalSourceTests: XCTestCase {
         timestamp: String,
         cwd: String? = nil,
         tokens: (input: Int, cached: Int, output: Int, reasoning: Int)? = nil,
-        threadSource: String? = nil
+        threadSource: String? = nil,
+        model: String? = nil
     ) throws -> URL {
         let dir = root
             .appendingPathComponent("2026", isDirectory: true)
@@ -46,6 +48,9 @@ final class CodexLocalSourceTests: XCTestCase {
         }
         let payload = payloadParts.isEmpty ? "" : #","payload":{\#(payloadParts.joined(separator: ","))}"#
         var lines = #"{"timestamp":"\#(timestamp)","type":"session_meta"\#(payload)}"#
+        if let model {
+            lines += "\n" + #"{"timestamp":"\#(timestamp)","type":"turn_context","payload":{"model":"\#(model)"}}"#
+        }
         if let tokens {
             lines += "\n" + #"{"timestamp":"\#(timestamp)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":\#(tokens.input),"cached_input_tokens":\#(tokens.cached),"output_tokens":\#(tokens.output),"reasoning_output_tokens":\#(tokens.reasoning),"total_tokens":\#(tokens.input + tokens.output)}}}}"#
         }
@@ -126,6 +131,62 @@ final class CodexLocalSourceTests: XCTestCase {
         XCTAssertEqual(day10.tokens.total, 15)
     }
 
+    /// The session's model lives in the rollout's `turn_context` event, not in
+    /// `session_meta` or `token_count`. The source reads it and prices the
+    /// session's tokens against it: GPT-6.1 Sol is $2 input, $10 output
+    /// (reasoning billed as output), $0.10 cached read, no cache-write charge.
+    /// input 100k, output 1.5k, reasoning 500, cache read 900k ->
+    /// 0.1*2 + (1500+500)/1e6*10 + 0.9*0.10 = 0.2 + 0.02 + 0.09 = 0.31.
+    func testScanReadsModelAndPricesSession() async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeRollout(
+            root,
+            name: "rollout-2026-08-11T12-00-00-a",
+            timestamp: "2026-08-11T12:00:00.000Z",
+            tokens: (input: 1_000_000, cached: 900_000, output: 2_000, reasoning: 500),
+            model: "gpt-6.1-sol"
+        )
+
+        let activity = try await CodexLocalSource(root: root).scan()
+        let session = try XCTUnwrap(activity.sessions.first)
+        XCTAssertEqual(session.model, "gpt-6.1-sol")
+        XCTAssertEqual(session.estimatedCostUSD, 0.31, accuracy: 0.0001)
+
+        let day11 = try XCTUnwrap(activity.daily.first { $0.day == Self.day(2026, 8, 11) })
+        XCTAssertEqual(day11.estimatedCostUSD, 0.31, accuracy: 0.0001)
+    }
+
+    /// A session whose rollout carries no `turn_context` still prices — via the
+    /// "codex" placeholder, which `Pricing` flags as an unrecognised-model
+    /// guess — instead of reporting zero cost.
+    func testSessionWithoutModelStillPricesAtCodexFallback() async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeRollout(
+            root,
+            name: "rollout-2026-08-11T12-00-00-a",
+            timestamp: "2026-08-11T12:00:00.000Z",
+            tokens: (input: 1_000_000, cached: 0, output: 1_000, reasoning: 0)
+        )
+
+        let activity = try await CodexLocalSource(root: root).scan()
+        let session = try XCTUnwrap(activity.sessions.first)
+        XCTAssertEqual(session.model, "codex")
+        XCTAssertGreaterThan(session.estimatedCostUSD, 0, "an unreadable model must not price as zero")
+    }
+
+    func testParseTurnContextModelReadsModelAndIgnoresOtherLines() {
+        let withModel = Data(#"{"timestamp":"2026-08-11T12:00:00.000Z","type":"turn_context","payload":{"cwd":"/x","model":"gpt-6-luna"}}"#.utf8)
+        XCTAssertEqual(CodexLocalSource.parseTurnContextModel(withModel), "gpt-6-luna")
+
+        let noModel = Data(#"{"type":"turn_context","payload":{"cwd":"/x"}}"#.utf8)
+        XCTAssertNil(CodexLocalSource.parseTurnContextModel(noModel))
+
+        let otherEvent = Data(#"{"type":"event_msg","payload":{"type":"token_count","info":{}}}"#.utf8)
+        XCTAssertNil(CodexLocalSource.parseTurnContextModel(otherEvent))
+    }
+
     /// The final events after the last `token_count` can be large (tool
     /// output), so the backward search must keep reading earlier chunks until
     /// it finds the ledger instead of stopping at the first megabyte.
@@ -149,6 +210,32 @@ final class CodexLocalSourceTests: XCTestCase {
 
         let activity = try await CodexLocalSource(root: root).scan()
         XCTAssertEqual(try XCTUnwrap(activity.sessions.first).tokens.total, 550)
+    }
+
+    /// The model can sit more than one chunk before the final `token_count`
+    /// when the last turn wrote a lot of output. The model search must keep
+    /// reading earlier chunks rather than giving up after the ledger's chunk.
+    func testModelSearchReadsBackwardPastLargeInterveningEvent() async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = try writeRollout(
+            root,
+            name: "rollout-2026-08-11T12-00-00-a",
+            timestamp: "2026-08-11T12:00:00.000Z",
+            tokens: (input: 500, cached: 100, output: 50, reasoning: 10),
+            model: "gpt-6-luna"
+        )
+        var lines = try String(contentsOf: url, encoding: .utf8)
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .map(String.init)
+        // Splice a multi-megabyte event between the turn_context and the
+        // token_count so the model lands in an earlier chunk than the ledger.
+        lines.insert(String(repeating: "x", count: 3 << 20), at: lines.count - 1)
+        try Data((lines.joined(separator: "\n") + "\n").utf8).write(to: url)
+
+        let ledger = try XCTUnwrap(CodexLocalSource.lastTokenLedger(for: url))
+        XCTAssertEqual(ledger.model, "gpt-6-luna")
+        XCTAssertEqual(ledger.tokens.total, 550)
     }
 
     /// A token_count event with an empty ledger (info present but zeroed) is

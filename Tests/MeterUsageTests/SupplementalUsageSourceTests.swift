@@ -33,6 +33,7 @@ final class SupplementalUsageSourceTests: XCTestCase {
         XCTAssertFalse(preferences.isEnabled(.claude))
         XCTAssertFalse(preferences.isEnabled(.antigravity))
         XCTAssertFalse(preferences.isEnabled(.grok))
+        XCTAssertEqual(preferences.accentTheme, .blue)
     }
 
     @MainActor
@@ -49,6 +50,7 @@ final class SupplementalUsageSourceTests: XCTestCase {
         defaults.set(false, forKey: PrefKey.showOpenCodeGo)
         defaults.set(true, forKey: PrefKey.showOpenRouter)
         defaults.set(AppTheme.dark.rawValue, forKey: PrefKey.theme)
+        defaults.set(AccentTheme.violet.rawValue, forKey: PrefKey.accentTheme)
         defaults.set(true, forKey: PrefKey.launchAtLogin)
 
         let first = Preferences(defaults: defaults)
@@ -58,6 +60,8 @@ final class SupplementalUsageSourceTests: XCTestCase {
         XCTAssertEqual(second.refreshInterval, 300)
         XCTAssertEqual(first.theme, .dark)
         XCTAssertEqual(second.theme, .dark)
+        XCTAssertEqual(first.accentTheme, .violet)
+        XCTAssertEqual(second.accentTheme, .violet)
         XCTAssertEqual(first.enabledProviders, Set([.claude, .antigravity, .openRouter]))
         XCTAssertEqual(second.enabledProviders, first.enabledProviders)
         XCTAssertTrue(defaults.bool(forKey: PrefKey.launchAtLogin))

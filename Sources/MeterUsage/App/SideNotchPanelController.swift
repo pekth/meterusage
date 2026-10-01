@@ -202,8 +202,16 @@ final class SideNotchPanelController: ObservableObject {
         )
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        // The notch carries its own black body in every appearance, so it
-        // casts no shadow of its own — same call as the reference design.
+        // The notch is a dark object in every appearance: it now shares the
+        // app's own headroom scale (`MU.good`/`MU.warn`/`MU.alert`) rather than
+        // a private palette, and those tokens pick their light or dark variant
+        // from the appearance. Forcing dark here is what makes the shared
+        // scale resolve to its high-contrast variants on the dark chrome, so a
+        // 75% window reads the same amber here as in the popover and never
+        // renders the dim light-mode green on a dark strip.
+        panel.appearance = NSAppearance(named: .darkAqua)
+        // The chrome carries its own colour, so the panel casts no shadow of
+        // its own — same call as the reference design.
         panel.hasShadow = false
         panel.level = .statusBar
         // Drag anywhere on the strip or the expanded card. The content is
@@ -223,6 +231,7 @@ final class SideNotchPanelController: ObservableObject {
             rootView: SideNotchPanelView(
                 coordinator: coordinator,
                 panel: self,
+                preferences: coordinator.preferences,
                 onSizeChange: { [weak self, weak panel] size in
                     guard let self, let panel else { return }
                     self.contentSize = size
