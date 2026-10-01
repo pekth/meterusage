@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- Clarify that this package requires macOS for build and test checks. Replace
+  the private SSH alias in public agent guidance with a generic macOS SSH route.
+
 ## [0.2.40] - 2026-09-29
 
 ### Added
