@@ -53,3 +53,10 @@ Last verified: 2026-09-29
 - [`CHANGELOG.md`](../CHANGELOG.md): repository release-note history.
 - [`AGENTS.md`](../AGENTS.md): public-safe repository operating and knowledge-maintenance rules.
 - [`docs/adr/README.md`](adr/README.md): decision index.
+
+## CI workflow maintenance
+
+- [ci.yml](../.github/workflows/ci.yml) uses full-SHA v7 pins for `actions/checkout`. Application language versions and explicit cache settings are preserved.
+- Obsolete runs for the same pull request or branch are cancelled. Existing timeout caps are preserved.
+
+Reviewed base: `a393b0bfa8d4fbc0ef533a42eb92c32a236c943e`. Source checks do not prove runtime, deployment or device behavior.
