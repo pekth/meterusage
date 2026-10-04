@@ -434,6 +434,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
     case cursor
     case copilot
     case gemini
+    case muse
 
     public var displayName: String {
         switch self {
@@ -446,6 +447,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
         case .cursor: return "Cursor"
         case .copilot: return "Copilot CLI"
         case .gemini: return "Gemini CLI"
+        case .muse: return "Muse CLI"
         }
     }
 
@@ -502,7 +504,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
             return windows.max(by: { $0.usedPercent < $1.usedPercent })
         case .antigravity:
             return windows.max(by: { $0.usedPercent < $1.usedPercent })
-        case .cursor, .copilot, .gemini:
+        case .cursor, .copilot, .gemini, .muse:
             if windows.count == 1 { return windows[0] }
             return windows.first(where: { $0.isSessionWindow }) ?? windows.max(by: { $0.usedPercent < $1.usedPercent })
         }
@@ -521,6 +523,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
         case .cursor: return "Cursor"
         case .copilot: return "Copilot CLI"
         case .gemini: return "Gemini CLI"
+        case .muse: return "Muse CLI"
         }
     }
 
@@ -537,7 +540,7 @@ public enum Provider: String, CaseIterable, Codable, Sendable {
             return URL(string: "https://status.cursor.com/")
         case .copilot:
             return URL(string: "https://www.githubstatus.com/")
-        case .antigravity, .grok, .openCodeGo, .openRouter, .gemini:
+        case .antigravity, .grok, .openCodeGo, .openRouter, .gemini, .muse:
             return nil
         }
     }
@@ -597,6 +600,7 @@ public struct ProviderSlot: Hashable, Comparable, Sendable, Identifiable {
     public static let cursor = ProviderSlot(provider: .cursor)
     public static let copilot = ProviderSlot(provider: .copilot)
     public static let gemini = ProviderSlot(provider: .gemini)
+    public static let muse = ProviderSlot(provider: .muse)
 
     public var isPrimary: Bool { slotID.isEmpty }
 

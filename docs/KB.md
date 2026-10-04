@@ -1,12 +1,13 @@
 # Project knowledge
 
-Last verified: 2026-09-29
+Last verified: 2026-10-03
 
 ## Repository state
 
 - Default branch: `main`.
-- Reviewed source revision: `1c4f169`.
+- Reviewed base revision: `79a6cc9`; Muse support is documented by this change.
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
+- `scripts/documentation.py --check` validates required documentation files and ADR index coverage. `--write` adds missing ADR rows and preserves existing descriptions; it does not validate prose claims or all Markdown links.
 
 ## Product and source facts
 
@@ -14,6 +15,7 @@ Last verified: 2026-09-29
 - The app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure. Its AppKit and SwiftUI imports require macOS for package build and test checks; Swift itself supports other platforms. `AGENTS.md` describes a generic macOS SSH route for Linux development without private host aliases.
 - Provider data sources are implemented under `Sources/MeterUsage/Services/`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
 - Antigravity quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
+- Muse CLI is an opt-in local usage provider (`MuseUsageSource`), mounted in live and demo composition. It reads native `session.jsonl` logs under the absolute `XDG_DATA_HOME` data root or `~/.local/share/muse`, counts each readable native session once, and counts only run-started and assistant-message-committed events as messages. Duplicate sequence numbers, task-start events, retained frames, and malformed lines add no messages. Today buckets sessions by their last recognized log timestamp and includes their retained message totals. Quota, tokens, cost, service status, and the quota-only JSON report are not supplied for Muse. See ADR 0007.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
 - `CHANGELOG.md` records version 0.2.40 as the latest repository release entry, dated 2026-09-29: accent colour themes, Codex cost estimates read from the rollout's `turn_context` model, and a 2026-09 pricing-table refresh (OpenAI/Codex rates plus current Claude prices). This follows 0.2.39's pace-display fix and 0.2.38's multi-account meters for Codex and Claude (ADR 0005–0006). This is repository release-note state, not proof of a published release.
 - `CONTRIBUTING.md` requires focused changes, synthetic fixtures, and `swift build`, `swift test`, and `Scripts/make-app.sh` before a code pull request.

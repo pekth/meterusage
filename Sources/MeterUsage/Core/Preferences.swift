@@ -31,6 +31,7 @@ enum PrefKey {
     static let showCursor = "showProviderCursor"
     static let showCopilot = "showProviderCopilot"
     static let showGemini = "showProviderGemini"
+    static let showMuse = "showProviderMuse"
     static let menuBarClaude = "menuBarProviderClaude"
     static let menuBarCodex = "menuBarProviderCodex"
     static let menuBarAntigravity = "menuBarProviderAntigravity"
@@ -40,6 +41,7 @@ enum PrefKey {
     static let menuBarCursor = "menuBarProviderCursor"
     static let menuBarCopilot = "menuBarProviderCopilot"
     static let menuBarGemini = "menuBarProviderGemini"
+    static let menuBarMuse = "menuBarProviderMuse"
     static let theme = "appearanceTheme"
     /// Accent palette shared by the popover, the menu-bar tray, and the side
     /// notch. See `AccentTheme`.
@@ -166,6 +168,7 @@ final class Preferences: ObservableObject {
             PrefKey.showCursor: false,
             PrefKey.showCopilot: false,
             PrefKey.showGemini: false,
+            PrefKey.showMuse: false,
             // Every provider shows in the menu bar until the user trims the set
             // down to the ones they glance at.
             PrefKey.menuBarClaude: true,
@@ -177,6 +180,7 @@ final class Preferences: ObservableObject {
             PrefKey.menuBarCursor: true,
             PrefKey.menuBarCopilot: true,
             PrefKey.menuBarGemini: true,
+            PrefKey.menuBarMuse: true,
             PrefKey.theme: AppTheme.system.rawValue,
             PrefKey.accentTheme: AccentTheme.blue.rawValue,
             PrefKey.launchAtLogin: false,
@@ -226,6 +230,7 @@ final class Preferences: ObservableObject {
         if defaults.bool(forKey: PrefKey.showCursor) { providers.insert(.cursor) }
         if defaults.bool(forKey: PrefKey.showCopilot) { providers.insert(.copilot) }
         if defaults.bool(forKey: PrefKey.showGemini) { providers.insert(.gemini) }
+        if defaults.bool(forKey: PrefKey.showMuse) { providers.insert(.muse) }
         if providers != enabledProviders { enabledProviders = providers }
 
         var menuBar = Set<Provider>()
@@ -238,6 +243,7 @@ final class Preferences: ObservableObject {
         if defaults.bool(forKey: PrefKey.menuBarCursor) { menuBar.insert(.cursor) }
         if defaults.bool(forKey: PrefKey.menuBarCopilot) { menuBar.insert(.copilot) }
         if defaults.bool(forKey: PrefKey.menuBarGemini) { menuBar.insert(.gemini) }
+        if defaults.bool(forKey: PrefKey.menuBarMuse) { menuBar.insert(.muse) }
         if menuBar != menuBarProviders { menuBarProviders = menuBar }
 
         let newTheme = AppTheme(rawValue: defaults.string(forKey: PrefKey.theme) ?? "") ?? .system

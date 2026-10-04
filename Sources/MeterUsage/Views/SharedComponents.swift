@@ -201,6 +201,7 @@ func providerColor(_ provider: Provider) -> Color {
     case .cursor:     return Color(red: 0.1, green: 0.7, blue: 0.9)
     case .copilot:    return Color(red: 0.4, green: 0.6, blue: 1.0)
     case .gemini:     return Color(red: 0.3, green: 0.5, blue: 0.95)
+    case .muse:       return Color(red: 0.4, green: 0.65, blue: 1.0)
     default:          return MU.neutral
     }
 }

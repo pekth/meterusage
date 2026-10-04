@@ -28,6 +28,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.showCursor) private var showCursor: Bool = true
     @AppStorage(PrefKey.showCopilot) private var showCopilot: Bool = true
     @AppStorage(PrefKey.showGemini) private var showGemini: Bool = true
+    @AppStorage(PrefKey.showMuse) private var showMuse: Bool = false
     @AppStorage(PrefKey.menuBarClaude) private var menuBarClaude: Bool = true
     @AppStorage(PrefKey.menuBarCodex) private var menuBarCodex: Bool = true
     @AppStorage(PrefKey.menuBarAntigravity) private var menuBarAntigravity: Bool = true
@@ -37,6 +38,7 @@ struct SettingsView: View {
     @AppStorage(PrefKey.menuBarCursor) private var menuBarCursor: Bool = true
     @AppStorage(PrefKey.menuBarCopilot) private var menuBarCopilot: Bool = true
     @AppStorage(PrefKey.menuBarGemini) private var menuBarGemini: Bool = true
+    @AppStorage(PrefKey.menuBarMuse) private var menuBarMuse: Bool = true
     @AppStorage(PrefKey.theme) private var theme: String = AppTheme.system.rawValue
     @AppStorage(PrefKey.launchAtLogin) private var launchAtLogin: Bool = false
     @AppStorage(PrefKey.showHeatmap) private var showHeatmap: Bool = true
@@ -142,6 +144,13 @@ struct SettingsView: View {
                         subtitle: "CLI local usage",
                         isOn: $showGemini,
                         menuBarIsOn: $menuBarGemini
+                    )
+                    Divider().overlay(MU.hairline)
+                    ProviderRow(
+                        provider: .muse,
+                        subtitle: "Local sessions and messages",
+                        isOn: $showMuse,
+                        menuBarIsOn: $menuBarMuse
                     )
                 }
             }

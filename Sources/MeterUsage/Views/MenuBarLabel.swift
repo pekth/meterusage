@@ -286,7 +286,7 @@ struct ProviderMark: View {
             case .claude:
                 ClaudeMascotShape()
                     .fill(tint, style: FillStyle(eoFill: true))
-            case .openRouter, .cursor, .copilot, .gemini:
+            case .openRouter, .cursor, .copilot, .gemini, .muse:
                 Image(systemName: Self.symbol(for: provider))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(tint)
@@ -327,7 +327,7 @@ struct ProviderMark: View {
         case .grok:       return "grok-logo"
         case .openCodeGo: return "opencode-logo"
         case .antigravity:return "antigravity-logo"
-        case .openRouter, .claude, .cursor, .copilot, .gemini: return ""
+        case .openRouter, .claude, .cursor, .copilot, .gemini, .muse: return ""
         }
     }
 
@@ -345,6 +345,7 @@ struct ProviderMark: View {
         case .cursor:     return "cursorarrow.rays"
         case .copilot:    return "terminal"
         case .gemini:     return "diamond"
+        case .muse:       return "m.circle"
         }
     }
 }

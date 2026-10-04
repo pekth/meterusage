@@ -21,7 +21,7 @@
 
 **meterusage** brings all your AI coding allowances, token burn rates, and rate-limit reset timers together into a clean macOS menu bar item and an interactive floating side-notch HUD.
 
-* **Broad Provider Coverage**: OpenAI Codex, Google Antigravity, Claude Code, OpenRouter, Grok, OpenCode Go, Cursor, GitHub Copilot CLI, and Google Gemini CLI.
+* **Broad Provider Coverage**: OpenAI Codex, Google Antigravity, Claude Code, OpenRouter, Grok, OpenCode Go, Cursor, GitHub Copilot CLI, Google Gemini CLI, and Muse CLI.
 * **Second-Account Meters**: Hold two Codex or Claude Code accounts? Each one gets its own independent meter row — own quota windows, plan badge, history, and alerts — instead of a merged guess. See [Second accounts](#second-accounts).
 * **Ambient Time-to-Empty**: Live depletion velocity against reset deadlines (`~47m left at current pace` / `Paced to last until reset`) directly in the menu bar and side notch.
 * **Burn Attribution & Context Waste**: Token breakdown by project, model, and turns over the last 7 days across every token-bearing provider, plus cache-hit efficiency % and long-chat flags.
@@ -90,6 +90,16 @@ Toggle providers on or off, choose refresh cadence, and switch themes and the ac
 | **Cursor** | ✅ | ✅ | ✅ | — | Local sqlite state & token usage cache |
 | **Copilot CLI** | ✅ | ✅ | ✅ | — | Local GitHub CLI auth token & token telemetry |
 | **Gemini CLI** | ✅ | ✅ | ✅ | — | Local Gemini CLI session state |
+| **Muse CLI** | — | Sessions and messages | — | — | Local native `session.jsonl` logs |
+
+Enable **Muse CLI** in Settings → Providers to show its local usage card.
+The reader uses `$XDG_DATA_HOME/muse/sessions/` when `XDG_DATA_HOME` is an
+absolute path, otherwise `~/.local/share/muse/sessions/`. It counts retained
+sessions and user/assistant messages from Muse Code 1.4 native logs. Today
+includes sessions with log activity since local midnight and their retained
+message totals. It does not read prompts, message text, or credentials. Quota,
+token totals, and cost are unavailable; Muse is absent from the quota-only
+`meterusage json` report and has no percentage in the menu bar.
 
 <small>*Claude publishes no public quota API; meterusage reads an on-disk JSON snapshot if a local companion writes one (see [docs/COMPANION.md](docs/COMPANION.md) and [`Scripts/claude-companion.sh`](Scripts/claude-companion.sh)).</small>
 
@@ -169,7 +179,7 @@ open /Applications/MeterUsage.app
 ### Requirements
 * macOS 13 Ventura or later
 * Xcode Command Line Tools (`xcode-select --install`)
-* Any of your installed CLI tools (`codex`, `agy`, `opencode`, `grok`, `cursor`, `copilot`, `gemini`, or Claude Code)
+* Any of your installed CLI tools (`codex`, `agy`, `opencode`, `grok`, `cursor`, `copilot`, `gemini`, `muse`, or Claude Code)
 
 ### Build & Run
 ```sh

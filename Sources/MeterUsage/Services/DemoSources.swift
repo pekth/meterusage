@@ -740,3 +740,16 @@ struct DemoRandom {
         return range.lowerBound + Int(next() % span)
     }
 }
+
+/// Synthetic Muse session history, with no invented quota or token economics.
+struct DemoMuseUsageSource: UsageSource {
+    let provider: Provider = .muse
+
+    func fetchUsage() async throws -> ProviderUsage {
+        ProviderUsage(
+            provider: .muse, sessionCount: 12, messageCount: 78,
+            todaySessionCount: 3, todayMessageCount: 18,
+            capturedAt: Date().addingTimeInterval(-120)
+        )
+    }
+}
