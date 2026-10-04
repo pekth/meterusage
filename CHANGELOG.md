@@ -10,6 +10,14 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- Opt-in Muse CLI usage in Settings and the dashboard. Counts local sessions
+  and user/assistant messages from native session logs without reading content
+  or credentials. Quota, tokens, and cost remain unavailable.
+- A Python documentation validator checks required files and ADR index entries.
+  `--write` adds missing ADR rows without replacing existing descriptions.
+
 ### Changed
 
 - Clarify that this package requires macOS for build and test checks. Replace

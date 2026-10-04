@@ -131,6 +131,13 @@ screenshots must not require a live login.
 Update `README.md` or the relevant document under `docs/` when a feature changes
 setup, provider behavior, privacy boundaries, or user-visible output.
 
+Run `python3 scripts/documentation.py --write` after adding an ADR, then run
+`python3 scripts/documentation.py --check` before delivery. The validator checks
+that README, changelog, KB, and ADR index exist and contain text, and that every
+numbered ADR has one index row pointing to an existing record. It preserves
+existing index descriptions. It does not validate documentation claims or all
+Markdown links.
+
 For fixture data, use `testuser` or `example` in paths and invent all other
 values. Do not copy real transcripts, API responses, account identifiers, or
 credentials into tests, screenshots, issues, or pull requests.

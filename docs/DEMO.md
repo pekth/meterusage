@@ -59,6 +59,8 @@ All demo data is invented and deterministic:
 - **Grok**: Weekly allowance window with countdown and session activity history.
 - **OpenCode Go**: 26 sessions, 492 messages, token volume totals, and estimated cost.
 - **Claude**: Optional companion-file quota windows and tokens-per-day heatmap.
+- **Muse CLI**: 12 sessions and 78 user/assistant messages, including 3 sessions
+  and 18 messages today. No synthetic quota, token totals, or cost are supplied.
 - **26-Week Heatmaps**: 26-week activity matrices for Codex (sessions) and Claude (tokens) with interactive daily, weekly, and cumulative views.
 
 Percentages span calm green and amber warning bands so screenshots demonstrate color headroom scales clearly without alarmist red styling. Reset countdowns are calculated relative to launch time so screenshots remain natural.
