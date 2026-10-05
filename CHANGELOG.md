@@ -19,10 +19,6 @@ follows [Semantic Versioning](https://semver.org/).
   growth supplies the burn rate and ETA. Baselines survive relaunch and restart
   when the quota cycle changes or usage decreases.
 
-### Changed
-
-- Clarify that this package requires macOS for build and test checks. Replace
-  the private SSH alias in public agent guidance with a generic macOS SSH route.
 
 ## [0.2.40] - 2026-09-29
 
