@@ -82,6 +82,8 @@ Toggle providers on or off, choose refresh cadence, and switch themes and the ac
 | Provider | Live Cloud Quota | Local Activity & Tokens | Reset Countdowns | 26-Week Heatmap | Source Mechanism |
 |---|:---:|:---:|:---:|:---:|---|
 | **Codex** | ✅ | ✅ | ✅ | ✅ | Local JSON-RPC via `codex app-server --stdio` |
+| **OpenAI API** | N/A | API totals | N/A | N/A | Organization Usage and Costs APIs; Admin key required |
+| **Anthropic API** | N/A | API totals | N/A | N/A | Organization Usage and Cost Admin APIs; Admin key required |
 | **Antigravity** | ✅ | ✅ | ✅ | — | CLI `/usage` & local conversation SQLite |
 | **Claude Code** | Optional* | ✅ | ✅* | ✅ | Local session JSONL streams (`limits[]` file optional) |
 | **OpenRouter** | ✅ | ✅ | ✅ | — | Public account API & `/api/v1/activity` telemetry |
@@ -111,6 +113,93 @@ Toggle providers on or off, choose refresh cadence, and switch themes and the ac
 * **Accent Colour Themes** — Pick an accent palette (Blue, Violet, Teal, Amber, Rose, Graphite) in Settings → Appearance. It recolours the app accent and the primary provider's mark across the popover, menu bar, and side notch; quota headroom and the other provider identities stay fixed.
 * **Opt-In Pacing Alerts** — Native macOS notifications when an active window crosses critical burn velocity or drops below 30 minutes to empty. Pace alerts fire only on a current burn; threshold alerts (80%/95%) remain state-based.
 * **Share screenshot**: The share button on each provider's usage card (side notch panel detail card) shares a sharp 2x image of the panel through macOS share services, or saves it for X and other apps.
+
+### OpenAI API usage
+
+Enable **Settings → Providers → OpenAI API** to show organization spend and
+completion tokens and requests for today and the last 30 calendar days,
+including today. Day boundaries use UTC. Spend comes from OpenAI's Costs API;
+it is not calculated from the app's price table. Token totals cover the
+completions usage endpoint, not every OpenAI product. Reporting can lag.
+
+Select **Connect** below the provider toggle, enter an
+[organization Admin key](https://platform.openai.com/settings/organization/admin-keys)
+in the masked field, and select **Test connection**. The test reads both usage
+and costs. A successful reading shows **Connected** and its update time.
+A regular project key or Codex subscription login does not provide this access.
+
+MeterUsage saves entered keys in your Mac's Keychain, so connections survive
+restarts and app updates. **Disconnect** removes the saved key and clears the
+displayed reading. Closing Settings clears unfinished key entry. Keys never
+appear in preferences, plaintext files, logs, or diagnostics.
+
+macOS may ask you to allow Keychain access after an update, especially for
+ad-hoc signed builds. If access is denied, Settings shows an error and
+**Restore saved connection** retries access to that key without opening a
+new-key field. Updates do not require another API-key entry or a new key from
+your organization.
+
+If saving an entered key fails, **Retry saving key** reuses the value held in
+memory. Keep the app open until saving succeeds. A failed replacement leaves
+the previous connection intact. Disconnect clears pending entry as well as
+the saved connection.
+
+For an existing secure launcher, `OPENAI_ADMIN_KEY` is also supported at
+launch when no saved key exists. Saved keys take precedence; launcher keys
+are not copied into Keychain automatically. Run the app executable from that environment:
+
+```sh
+/Applications/MeterUsage.app/Contents/MacOS/meterusage
+```
+
+Finder launches do not inherit terminal variables. Quit any running copy first.
+Missing access, offline requests, and incomplete responses show an unavailable
+reading. Disconnect also suppresses a launcher-provided key for the rest of
+that app session.
+
+This monitor appears in the popover's Usage card and the side notch. Enable
+the side notch in Settings and use **Notch** beside OpenAI API to show or hide
+its entry. The strip shows reported spend for the last 30 UTC calendar days.
+Hover its mark for today's and 30-day spend, completion tokens, requests, and
+the reading's update time. Missing access shows **N/A**, with connection
+guidance in the detail card. No quota percentage, reset countdown, or pace
+alert is inferred from spend. Organization usage stays separate from Codex limits
+and the local coding summary to avoid counting the same work twice. The quota
+JSON CLI does not include this usage-only provider.
+
+See [OpenAI's Usage and Costs example](https://developers.openai.com/cookbook/examples/completions_usage_api)
+and [the privacy boundary](docs/PRIVACY.md).
+
+### Anthropic API usage
+
+Enable **Settings → Providers → Anthropic API** to show reported organization
+spend and Messages API tokens for today and the last 30 UTC calendar days,
+including today. Token totals include uncached input, output, cache reads, and
+cache creation. Anthropic reports cost amounts in cents; meterusage converts
+them to USD. The cost report excludes Priority Tier charges and can lag.
+The API does not supply a total request count, so the card omits that count.
+
+Select **Connect**, enter a Console organization Admin key in the masked field,
+and select **Test connection**. Key handling and Disconnect work as described
+under [OpenAI API usage](#openai-api-usage). `ANTHROPIC_ADMIN_KEY` is also
+supported through an existing secure launcher. Workspace keys and Claude
+subscription logins do not provide this access. Anthropic also documents organization-level keys and
+`org:admin` OAuth credentials; this app provides key entry, with no OAuth login.
+
+**Individual Anthropic accounts cannot connect this monitor.** Anthropic's
+[Admin API documentation](https://platform.claude.com/docs/en/manage-claude/admin-api)
+states that the Admin API is unavailable for individual accounts. An Admin
+role alone does not establish an eligible organization account. If your account
+is individual, use the [Claude Console usage page](https://platform.claude.com/usage)
+to check usage. MeterUsage cannot sync that account's history through this API.
+A missing Admin keys page does not, by itself, confirm the account type.
+
+This monitor appears in the popover's Usage card, separate from Claude Code
+activity and subscription quota. It has no quota ring, countdown, or pace
+alert, and does not contribute to local coding totals or the quota JSON CLI.
+Missing access, offline requests, and incomplete responses show an unavailable
+reading. See [Anthropic's Usage and Cost API guide](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
+and [the privacy boundary](docs/PRIVACY.md).
 
 ### Second accounts
 

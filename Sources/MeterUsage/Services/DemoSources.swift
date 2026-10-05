@@ -1,5 +1,42 @@
 import Foundation
 
+/// Synthetic Anthropic API totals; no Claude Code account is consulted.
+struct DemoAnthropicUsageSource: UsageSource {
+    let provider: Provider = .anthropic
+
+    func fetchUsage() async throws -> ProviderUsage {
+        let today = TokenTotals(input: 8_000, output: 2_000, cacheRead: 6_000, cacheWrite: 4_000)
+        let total = TokenTotals(input: 120_000, output: 30_000, cacheRead: 90_000, cacheWrite: 60_000)
+        return ProviderUsage(
+            provider: .anthropic, sessionCount: 0, messageCount: 0,
+            tokens: total, estimatedCostUSD: 18.75, todayTokens: today, todayCostUSD: 1.25,
+            usageWindows: [
+                UsageWindow(label: "Today (UTC)", sessionCount: 0, messageCount: 0, tokens: today, estimatedCostUSD: 1.25),
+                UsageWindow(label: "last 30d", sessionCount: 0, messageCount: 0, tokens: total, estimatedCostUSD: 18.75)
+            ], capturedAt: Date()
+        )
+    }
+}
+
+/// Synthetic API usage, separate from the Codex subscription fixture.
+struct DemoOpenAIUsageSource: UsageSource {
+    let provider: Provider = .openAI
+
+    func fetchUsage() async throws -> ProviderUsage {
+        let today = TokenTotals(input: 12_000, output: 3_000, cacheRead: 5_000)
+        let total = TokenTotals(input: 180_000, output: 45_000, cacheRead: 75_000)
+        return ProviderUsage(
+            provider: .openAI, sessionCount: 0, messageCount: 900,
+            tokens: total, estimatedCostUSD: 12.50, todayMessageCount: 60,
+            todayTokens: today, weekTokens: today, todayCostUSD: 0.80,
+            usageWindows: [
+                UsageWindow(label: "Today (UTC)", sessionCount: 0, messageCount: 60, tokens: today, estimatedCostUSD: 0.80),
+                UsageWindow(label: "last 30d", sessionCount: 0, messageCount: 900, tokens: total, estimatedCostUSD: 12.50)
+            ], capturedAt: Date()
+        )
+    }
+}
+
 // MARK: - Demo mode
 //
 // Demo mode swaps the *data sources* and nothing else. The real views, the real

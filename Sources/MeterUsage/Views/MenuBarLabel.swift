@@ -281,9 +281,9 @@ struct ProviderMark: View {
     var body: some View {
         Group {
             switch provider {
-            case .codex, .grok, .openCodeGo, .antigravity:
+            case .codex, .openAI, .grok, .openCodeGo, .antigravity:
                 bundledMark(named: Self.resourceName(for: provider))
-            case .claude:
+            case .claude, .anthropic:
                 ClaudeMascotShape()
                     .fill(tint, style: FillStyle(eoFill: true))
             case .openRouter, .cursor, .copilot, .gemini:
@@ -323,17 +323,17 @@ struct ProviderMark: View {
     /// asset; `nil` would mean "no logo" but callers guard by provider first.
     private static func resourceName(for provider: Provider) -> String {
         switch provider {
-        case .codex:      return "codex-logo"
+        case .codex, .openAI: return "codex-logo"
         case .grok:       return "grok-logo"
         case .openCodeGo: return "opencode-logo"
         case .antigravity:return "antigravity-logo"
-        case .openRouter, .claude, .cursor, .copilot, .gemini: return ""
+        case .openRouter, .claude, .anthropic, .cursor, .copilot, .gemini: return ""
         }
     }
 
     static func symbol(for provider: Provider) -> String {
         switch provider {
-        case .codex:      return "sparkle"
+        case .codex, .openAI: return "sparkle"
         case .antigravity:return "sparkles"
         case .grok:       return "eye"
         // A real SF Symbol name: an invalid name renders as nothing, which
@@ -341,7 +341,7 @@ struct ProviderMark: View {
         // exists (e.g. a bare debug binary).
         case .openCodeGo: return "arrow.up.left.and.arrow.down.right"
         case .openRouter: return "arrow.triangle.branch"
-        case .claude:     return "sparkles"
+        case .claude, .anthropic:     return "sparkles"
         case .cursor:     return "cursorarrow.rays"
         case .copilot:    return "terminal"
         case .gemini:     return "diamond"

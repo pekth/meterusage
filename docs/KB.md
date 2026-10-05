@@ -1,11 +1,11 @@
 # Project knowledge
 
-Last verified: 2026-09-29
+Last verified: 2026-10-04
 
 ## Repository state
 
 - Default branch: `main`.
-- Reviewed source revision: `1c4f169`.
+- Reviewed source revision: `79a6cc9`, plus the API usage changes documented here.
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
@@ -30,7 +30,18 @@ Last verified: 2026-09-29
 - Side notch chrome is derived per theme in `SideNotchPanelView` by an HSV mix pinned to the popover surface's Rec. 709 relative luminance (`blendTinted`), so every accent renders at the same perceived brightness as the window beside it. The notch bands and hues delegate to the shared `headroomColor`/`MU` scale (80/95 thresholds), and the panel window forces `darkAqua` so those tokens resolve their dark variants on the strip.
 - Second accounts (multi-account support, ADR 0005): `.codexAlt` / `.claudeAlt` provider slots are keyed by an alternate config directory resolved in `AccountSlots` (`Sources/MeterUsage/Services/DataSource.swift`) from `METERUSAGE_CODEX_ALT_HOME` / `METERUSAGE_CLAUDE_ALT_CONFIG` or the `meterusage.codexAltHome` / `meterusage.claudeAltConfig` defaults keys, which are editable in Settings → Providers. A slot exists only when its directory exists; slots never merge with the primary account, keep per-slot durable history and archive keys, and are named by position only (no account identity is read). The JSON report lists them under `codexAlt` / `claudeAlt`.
 
+- OpenAI API monitoring is opt-in and separate from Codex. `OpenAIUsageSource` reads organization completion usage and USD costs for today and the last 30 UTC calendar days using an explicitly supplied Admin key. The popover and side-notch card show reported spend and completion tokens/requests. The notch strip shows 30-day spend, or N/A when unavailable; its Settings Notch control persists across launches. It does not supply quota rings, menu-bar clusters, the quota JSON CLI, or local coding/burn totals. See [ADR 0007](adr/0007-openai-api-usage.md), [ADR 0010](adr/0010-openai-side-notch.md), and the README setup instructions.
+- Anthropic API monitoring is opt-in and separate from Claude Code. `AnthropicUsageSource` reads organization Messages API tokens and reported spend using an explicitly configured organization key, for the same UTC day windows. It converts decimal cents to USD, includes all reported cache-token categories, and omits request counts because the endpoint does not supply them. Reported costs exclude Priority Tier charges. Organization usage does not supply quota rings or contribute to local coding/burn totals. See [ADR 0008](adr/0008-anthropic-api-usage.md) and the README setup instructions.
+- Both API providers have Connect and Test connection controls in Settings. Keys entered in Settings persist in MeterUsage-owned macOS Keychain items across restarts and updates. Disconnect deletes the saved key, clears the reading, and rejects in-flight results. Storage errors are visible in Settings; unreadable saved keys offer Restore saved connection instead of key entry. Failed saves preserve the entered value in memory for Retry saving key, while failed saves/deletes preserve the current connection. Ad-hoc updates may require Keychain access approval. Saved keys take precedence over explicit launcher environment keys, which remain session-only. Demo mode and normal tests never access production Keychain items. See [ADR 0011](adr/0011-persistent-api-connections.md), which supersedes the storage decision in ADR 0009.
+- Saved-key recovery checks that a read error still needs recovery before
+  restoring a key. Successful Disconnect clears that state, so a queued restore
+  cannot reconnect with a launcher key. `APIConnectionTests` covers the denied
+  launch read, queued restore, and Disconnect sequence for both API providers.
+- Anthropic's Admin API excludes individual accounts. Those users can view usage in Claude Console, but MeterUsage cannot sync their history through the reporting API. An organization Admin role alone does not establish an eligible account type. See the README's Anthropic setup section and its official documentation link.
+
 ## Verification gaps
+
+
 
 - Repository files do not prove current provider authentication, quota freshness, network responses, local machine state, app installation, signed-bundle state, GitHub Release state, or runtime UI behavior.
 - Treat cost figures as estimates. `README.md` identifies provider dashboards as the billing source of record.

@@ -609,7 +609,7 @@ final class SideNotchPanelTests: XCTestCase {
         )
         XCTAssertEqual(entries.count, 1)
         XCTAssertEqual(entries[0].slot, ProviderSlot.primary(.openRouter))
-        XCTAssertEqual(entries[0].usedPercent, 32.2, accuracy: 0.01)
+        XCTAssertEqual(entries[0].usedPercent ?? -1, 32.2, accuracy: 0.01)
 
         // Case 2: OpenRouter with an explicit key limit window
         let keyWindowQuota = ProviderQuota(
@@ -1049,13 +1049,113 @@ final class SideNotchPanelTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testOpenAIEntryShowsSpendWithoutQuotaAndKeepsMissingDistinctFromZero() async throws {
+        let slot = ProviderSlot.primary(.openAI)
+        let demo = try await DemoOpenAIUsageSource().fetchUsage()
+        let zero = ProviderUsage(provider: .openAI, sessionCount: 0, messageCount: 0,
+                                 estimatedCostUSD: 0, capturedAt: Date())
+        let adjustment = ProviderUsage(provider: .openAI, sessionCount: 0, messageCount: 0,
+                                       estimatedCostUSD: -1.25, capturedAt: Date())
+        let states: [(Loaded<ProviderUsage>, String)] = [
+            (.idle, "N/A"), (.missing(.offline), "N/A"),
+            (.missing(.dataNotFound("OpenAI Admin API key")), "N/A"),
+            (.value(demo), Fmt.usd(12.50)), (.value(zero), Fmt.usd(0)),
+            (.value(adjustment), Fmt.usd(-1.25))
+        ]
+        for (state, text) in states {
+            let entries = SideNotchPanelView.entries(
+                menuBarSlots: [slot], quotas: [:], statuses: [:], usages: [slot: state]
+            )
+            XCTAssertEqual(entries.count, 1)
+            let entry = try XCTUnwrap(entries.first)
+            XCTAssertEqual(entry.primaryText, text)
+            XCTAssertNil(entry.usedPercent)
+            XCTAssertNil(entry.fraction)
+            XCTAssertNil(entry.resetsAt)
+            XCTAssertNil(entry.etaText)
+            XCTAssertFalse(entry.isDeficit)
+            XCTAssertFalse(entry.isStale)
+            XCTAssertTrue(entry.accessibilityText.contains(state.value == nil ? "unavailable" : "last 30 days (UTC)"))
+        }
+    }
+
+    @MainActor
+    func testQuotaStripReadingKeepsGlyphSizeUnderChangingHeightProposals() throws {
+        let entry = SideNotchPanelView.Entry(
+            slot: .codex, usedPercent: 83, fraction: 0.83,
+            ringTint: .orange, markTint: .white, resetsAt: nil, isStale: false
+        )
+        var originalGlyphSize: NSSize?
+        for height: CGFloat in [14, 9, 6, 14] {
+            let host = NSHostingView(rootView: SideNotchPanelView.stripReading(for: entry)
+                .frame(width: 32, height: height)
+                .frame(width: 44, height: 28))
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 44, height: 28),
+                                  styleMask: .borderless, backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.contentView = host
+            defer { window.contentView = nil; window.close() }
+            host.layoutSubtreeIfNeeded()
+            let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: bitmap)
+            var minX = bitmap.pixelsWide, maxX = -1
+            var minY = bitmap.pixelsHigh, maxY = -1
+            for y in 0..<bitmap.pixelsHigh {
+                for x in 0..<bitmap.pixelsWide {
+                    if let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                       color.alphaComponent > 0.3, color.redComponent > 0.8 {
+                        minX = min(minX, x); maxX = max(maxX, x)
+                        minY = min(minY, y); maxY = max(maxY, y)
+                    }
+                }
+            }
+            XCTAssertGreaterThanOrEqual(maxX, minX, "percentage glyphs must render")
+            let size = NSSize(width: maxX - minX + 1, height: maxY - minY + 1)
+            if let originalGlyphSize {
+                XCTAssertEqual(size, originalGlyphSize, "unchanged percentage must not zoom with layout height")
+            } else { originalGlyphSize = size }
+        }
+    }
+
+    @MainActor
+    func testRenderedOpenAIAndQuotaDetailCards() async throws {
+        let coordinator = try await Self.coordinator(
+            quotas: [(.codex, [("Session", 40, 3600), ("Weekly", 60, 86400)])],
+            usageSources: [DemoOpenAIUsageSource()]
+        )
+        let windowsBefore = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let controller = SideNotchPanelController(coordinator: coordinator)
+        let panel = try XCTUnwrap(NSApplication.shared.windows.first { !windowsBefore.contains(ObjectIdentifier($0)) })
+        defer { panel.contentView = nil; panel.close() }
+        let view = try XCTUnwrap(panel.contentView as? NSHostingView<SideNotchPanelView>).rootView
+        let captureDir = FileManager.default.temporaryDirectory.appendingPathComponent("meterusage-notch-fixtures")
+        try FileManager.default.createDirectory(at: captureDir, withIntermediateDirectories: true)
+        for provider in [Provider.openAI, .codex] {
+            let host = NSHostingView(rootView: view.detailCard(for: .primary(provider)))
+            host.appearance = NSAppearance(named: .darkAqua)
+            panel.contentView = host
+            panel.setContentSize(host.fittingSize)
+            host.layoutSubtreeIfNeeded()
+            XCTAssertEqual(host.bounds.width, SideNotchPanelLayout.cardWidth)
+            XCTAssertGreaterThan(host.bounds.height, 100)
+            let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: bitmap)
+            let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            try png.write(to: captureDir.appendingPathComponent("\(provider.rawValue).png"))
+        }
+    }
+
     // MARK: - Helpers
 
     /// Builds a coordinator with stub quota sources and lets one refresh sweep
     /// run to completion. Same pattern as `MenuBarTests`.
     @MainActor
     private static func coordinator(
-        quotas: [(Provider, [(String, Double, TimeInterval?)])]
+        quotas: [(Provider, [(String, Double, TimeInterval?)])],
+        usageSources: [UsageSource] = []
     ) async throws -> AppCoordinator {
         let suiteName = "MeterUsageTests-" + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -1063,6 +1163,7 @@ final class SideNotchPanelTests: XCTestCase {
         defaults.set(true, forKey: PrefKey.showClaude)
         defaults.set(true, forKey: PrefKey.showAntigravity)
         defaults.set(true, forKey: PrefKey.showGrok)
+        defaults.set(usageSources.contains { $0.provider == .openAI }, forKey: PrefKey.showOpenAI)
 
         let preferences = Preferences(defaults: defaults)
         let coordinator = AppCoordinator(
@@ -1075,6 +1176,7 @@ final class SideNotchPanelTests: XCTestCase {
                     }
                 )
             },
+            usageSources: usageSources,
             // Never touch the real archive: a remembered reading on the
             // developer's own machine must not leak into fixture assertions.
             quotaArchiveURL: FileManager.default.temporaryDirectory
