@@ -407,14 +407,16 @@ final class AppCoordinator: ObservableObject {
         let previous = quotas[claimedSlot]?.value ?? archivedQuotas[claimedSlot]
             ?? ProviderQuota(provider: claimedSlot.provider, windows: [], capturedAt: resetAt)
         archivedQuotas[claimedSlot] = applyingResetPacing(to: previous, previous: nil,
-                                                        since: resetAt, capturedAt: nil)
+                                                        since: resetAt, capturedAt: nil,
+                                                        redeemedCreditID: creditID)
         quotas[claimedSlot] = .missing(.noData)
         saveArchive()
         refresh()
     }
 
     private func applyingResetPacing(to quota: ProviderQuota, previous: ProviderQuota?,
-                                    since: Date, capturedAt: Date?) -> ProviderQuota {
+                                    since: Date, capturedAt: Date?,
+                                    redeemedCreditID: String? = nil) -> ProviderQuota {
         func windows(_ current: [QuotaWindow], _ prior: [QuotaWindow]) -> [QuotaWindow] {
             current.map { window in
                 window.recordingResetSample(previous: prior.first { $0.label == window.label },
@@ -427,8 +429,9 @@ final class AppCoordinator: ObservableObject {
                 QuotaGroup(id: group.id, title: group.title,
                            windows: windows(group.windows, previous?.groups.first { $0.id == group.id }?.windows ?? []))
             },
-            credits: quota.credits, resetCreditCount: quota.resetCreditCount,
-            resetCredits: quota.resetCredits, planType: quota.planType,
+            credits: quota.credits,
+            resetCreditCount: quota.resetCreditCount.map { redeemedCreditID == nil ? $0 : max(0, $0 - 1) },
+            resetCredits: quota.resetCredits.filter { $0.id != redeemedCreditID }, planType: quota.planType,
             resetPacingSince: since, capturedAt: quota.capturedAt)
     }
 

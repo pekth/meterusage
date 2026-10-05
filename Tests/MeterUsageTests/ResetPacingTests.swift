@@ -226,9 +226,13 @@ final class ResetPacingTests: XCTestCase {
         XCTAssertEqual(offline.quota.windows[0].usedPercent, old.windows[0].usedPercent)
         XCTAssertNil(offline.quota.windows[0].pacingBaseline?.capturedAt)
         XCTAssertNil(offline.quota.windows[0].pace())
+        XCTAssertEqual(offline.quota.resetCreditCount, 0)
+        XCTAssertFalse(offline.quota.resetCredits.contains { $0.id == source.creditID })
         let relaunched = AppCoordinator(preferences: Preferences(defaults: defaults),
                                         quotaSources: [source], quotaArchiveURL: url)
         XCTAssertTrue(try XCTUnwrap(relaunched.displayQuota(for: .codex)).isStale)
+        XCTAssertEqual(relaunched.archivedQuotas[.codex]?.resetCreditCount, 0)
+        XCTAssertFalse(relaunched.archivedQuotas[.codex]?.resetCredits.contains { $0.id == source.creditID } ?? true)
         await source.setOffline(false)
         // A stale successful response is not a post-reset sample.
         await source.sample(80, at: old.capturedAt)
