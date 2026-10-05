@@ -10,6 +10,15 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- Remove a redeemed Codex reset credit from the archived snapshot immediately,
+  so offline refreshes and relaunches cannot offer it again.
+- After a successful Codex "Use reset", discard the account's old pacing
+  estimate. The first fresh quota reading starts a baseline; later usage
+  growth supplies the burn rate and ETA. Baselines survive relaunch and restart
+  when the quota cycle changes or usage decreases.
+
 ### Changed
 
 - Clarify that this package requires macOS for build and test checks. Replace

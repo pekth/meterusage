@@ -102,6 +102,13 @@ The supplemental sources apply the same boundary by construction: Antigravity re
 
 ## How this is enforced
 
+The local quota archive stores the displayed quota windows and groups,
+balances, plan and reset-credit metadata, and capture times. After a manual
+Codex reset, it also stores the reset time and numeric quota observations used
+for pacing. These observations contain percentages and timestamps. The archive
+contains no authentication material, prompts, or provider account identity.
+Restored readings are displayed as dated, stale data.
+
 Stated policy is not a control. These are:
 
 - **Tests** assert that no `SessionSummary` contains a path separator or the substring `Users`, and that parsed quota carries no hostname or installation id.

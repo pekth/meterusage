@@ -4,8 +4,7 @@ import Foundation
 //
 // Persists the last good quota reading per provider so a cold start that
 // cannot reach an endpoint opens on dated numbers instead of a blank ring.
-// Only what the UI already displays is stored — window labels, percents, and
-// reset times. No credential, token, account id, or prompt text ever enters
+// Only display metadata and reset pacing samples are stored. No credential, token, account id, or prompt text ever enters
 // this file (sources never produce such values; see UsageModels).
 //
 // Restored readings are always stale-by-construction: callers must render
@@ -34,14 +33,14 @@ enum QuotaArchive {
         /// The account label at capture time, so a restored reading can keep
         /// naming its account. Display-only; identity is provider + slotID.
         var label: String?
-        var windows: [Window]
+        var windows: [QuotaWindow]
+        var groups: [QuotaGroup]?
+        var credits: CreditBalance?
+        var resetCreditCount: Int?
+        var resetCredits: [QuotaResetCredit]?
+        var planType: String?
+        var resetPacingSince: Date?
         var capturedAt: Date
-    }
-
-    private struct Window: Codable {
-        var label: String
-        var usedPercent: Double
-        var resetsAt: Date?
     }
 
     /// Best-effort load. Any failure — missing file, malformed JSON, unknown
@@ -60,9 +59,13 @@ enum QuotaArchive {
             )
             out[slot] = ProviderQuota(
                 provider: entry.provider,
-                windows: entry.windows.map {
-                    QuotaWindow(label: $0.label, usedPercent: $0.usedPercent, resetsAt: $0.resetsAt)
-                },
+                windows: entry.windows,
+                groups: entry.groups ?? [],
+                credits: entry.credits,
+                resetCreditCount: entry.resetCreditCount,
+                resetCredits: entry.resetCredits ?? [],
+                planType: entry.planType,
+                resetPacingSince: entry.resetPacingSince,
                 capturedAt: entry.capturedAt
             )
         }
@@ -77,9 +80,13 @@ enum QuotaArchive {
                 provider: slot.provider,
                 slotID: slot.isPrimary ? nil : slot.slotID,
                 label: slot.label.isEmpty ? nil : slot.label,
-                windows: quota.windows.map {
-                    Window(label: $0.label, usedPercent: $0.usedPercent, resetsAt: $0.resetsAt)
-                },
+                windows: quota.windows,
+                groups: quota.groups.isEmpty ? nil : quota.groups,
+                credits: quota.credits,
+                resetCreditCount: quota.resetCreditCount,
+                resetCredits: quota.resetCredits.isEmpty ? nil : quota.resetCredits,
+                planType: quota.planType,
+                resetPacingSince: quota.resetPacingSince,
                 capturedAt: quota.capturedAt
             )
         }

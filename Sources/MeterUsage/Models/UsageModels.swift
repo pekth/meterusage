@@ -193,8 +193,22 @@ public enum BurnRecency {
     }
 }
 
+/// Samples used only after an accepted manual quota reset. A nil capture time
+/// means the next fresh reading must establish the baseline.
+public struct QuotaPacingBaseline: Equatable, Sendable, Codable {
+    public let usedPercent: Double
+    public let capturedAt: Date?
+    public let observedAt: Date?
+
+    public init(usedPercent: Double, capturedAt: Date? = nil, observedAt: Date? = nil) {
+        self.usedPercent = usedPercent
+        self.capturedAt = capturedAt
+        self.observedAt = observedAt
+    }
+}
+
 /// A single rate-limit window reported by a provider.
-public struct QuotaWindow: Equatable, Sendable {
+public struct QuotaWindow: Equatable, Sendable, Codable {
     /// Human label for the window, e.g. "5-hour", "Weekly".
     public let label: String
     /// Percent of the window consumed, 0...100.
@@ -205,11 +219,15 @@ public struct QuotaWindow: Equatable, Sendable {
     /// Window duration in minutes, if known (e.g. 300 for 5-hour, 10080 for weekly).
     public let windowDurationMins: Int?
 
-    public init(label: String, usedPercent: Double, resetsAt: Date? = nil, windowDurationMins: Int? = nil) {
+    public let pacingBaseline: QuotaPacingBaseline?
+
+    public init(label: String, usedPercent: Double, resetsAt: Date? = nil, windowDurationMins: Int? = nil,
+                pacingBaseline: QuotaPacingBaseline? = nil) {
         self.label = label
         self.usedPercent = usedPercent.muClamped(to: 0...100)
         self.resetsAt = resetsAt
         self.windowDurationMins = windowDurationMins
+        self.pacingBaseline = pacingBaseline
     }
 
     /// Effective window duration in minutes, derived from `windowDurationMins`
@@ -239,6 +257,26 @@ public struct QuotaWindow: Equatable, Sendable {
         guard let resetsAt, resetsAt > now,
               let durationMins = effectiveDurationMins, durationMins > 0 else {
             return nil
+        }
+        if let baseline = pacingBaseline {
+            guard let start = baseline.capturedAt, let observed = baseline.observedAt,
+                  observed > start, observed <= now, usedPercent > baseline.usedPercent,
+                  resetsAt > observed, resetsAt > start else { return nil }
+            let elapsed = observed.timeIntervalSince(start)
+            let delta = usedPercent - baseline.usedPercent
+            let rate = delta / elapsed
+            let budgetRate = (100 - baseline.usedPercent) / resetsAt.timeIntervalSince(start)
+            guard budgetRate > 0 else { return nil }
+            let expected = budgetRate * elapsed
+            let deficit = delta - expected
+            let exhaustion = observed.addingTimeInterval((100 - usedPercent) / rate)
+            let status: QuotaPaceStatus = abs(deficit) <= 2 ? .onPace
+                : deficit > 2 ? .deficit(deficit) : .surplus(-deficit)
+            return QuotaPace(
+                usedPercent: usedPercent, remainingPercent: 100 - usedPercent,
+                elapsedPercent: expected, deficitPercent: deficit, burnRate: rate / budgetRate,
+                projectedExhaustion: usedPercent < 100 && exhaustion < resetsAt ? exhaustion : nil,
+                status: status)
         }
         let durationSecs = Double(durationMins) * 60.0
         let windowStart = resetsAt.addingTimeInterval(-durationSecs)
@@ -286,6 +324,27 @@ public struct QuotaWindow: Equatable, Sendable {
         )
     }
 
+    func recordingResetSample(previous: QuotaWindow?, capturedAt: Date?) -> QuotaWindow {
+        let baseline: QuotaPacingBaseline
+        if let capturedAt {
+            if let previous, previous.label == label,
+               previous.resetsAt == resetsAt,
+               previous.effectiveDurationMins == effectiveDurationMins,
+               usedPercent >= previous.usedPercent,
+               let prior = previous.pacingBaseline, prior.capturedAt != nil {
+                baseline = QuotaPacingBaseline(usedPercent: prior.usedPercent,
+                                              capturedAt: prior.capturedAt, observedAt: capturedAt)
+            } else {
+                baseline = QuotaPacingBaseline(usedPercent: usedPercent,
+                                              capturedAt: capturedAt, observedAt: capturedAt)
+            }
+        } else {
+            baseline = QuotaPacingBaseline(usedPercent: usedPercent)
+        }
+        return QuotaWindow(label: label, usedPercent: usedPercent, resetsAt: resetsAt,
+                           windowDurationMins: windowDurationMins, pacingBaseline: baseline)
+    }
+
     public func paceETA(now: Date = Date(), short: Bool = false) -> String? {
         guard let p = pace(now: now) else { return nil }
         return p.etaText(resetsAt: resetsAt, now: now, short: short)
@@ -311,7 +370,7 @@ public struct QuotaWindow: Equatable, Sendable {
 
 /// A named group of quota windows, such as the general account allowance or a
 /// model-specific allowance.
-public struct QuotaGroup: Equatable, Sendable {
+public struct QuotaGroup: Equatable, Sendable, Codable {
     public let id: String
     public let title: String
     public let windows: [QuotaWindow]
@@ -325,7 +384,7 @@ public struct QuotaGroup: Equatable, Sendable {
 
 /// An earned usage-limit reset returned by Codex. The app displays it and only
 /// redeems it after the user explicitly confirms the action.
-public struct QuotaResetCredit: Equatable, Sendable, Identifiable {
+public struct QuotaResetCredit: Equatable, Sendable, Codable, Identifiable {
     public let id: String
     public let title: String
     public let status: String?
@@ -340,7 +399,7 @@ public struct QuotaResetCredit: Equatable, Sendable, Identifiable {
 }
 
 /// Unit used by a provider's balance display.
-public enum CreditUnit: Equatable, Sendable {
+public enum CreditUnit: Equatable, Sendable, Codable {
     case credits
     case dollars
 }
@@ -355,7 +414,7 @@ public enum CodexCreditConversion {
 }
 
 /// Prepaid credit balance, where a provider exposes one.
-public struct CreditBalance: Equatable, Sendable {
+public struct CreditBalance: Equatable, Sendable, Codable {
     public let balance: Double
     public let hasCredits: Bool
     public let unlimited: Bool
@@ -398,6 +457,8 @@ public struct ProviderQuota: Equatable, Sendable {
     public let groups: [QuotaGroup]
     public let credits: CreditBalance?
     public let resetCreditCount: Int?
+    /// Accepted manual reset boundary for this slot; absent for ordinary pacing.
+    public let resetPacingSince: Date?
     public let resetCredits: [QuotaResetCredit]
     /// Plan name if the provider reports one, e.g. "plus". Never an account id.
     public let planType: String?
@@ -411,6 +472,7 @@ public struct ProviderQuota: Equatable, Sendable {
         resetCreditCount: Int? = nil,
         resetCredits: [QuotaResetCredit] = [],
         planType: String? = nil,
+        resetPacingSince: Date? = nil,
         capturedAt: Date
     ) {
         self.provider = provider
@@ -420,6 +482,7 @@ public struct ProviderQuota: Equatable, Sendable {
         self.resetCreditCount = resetCreditCount
         self.resetCredits = resetCredits
         self.planType = planType
+        self.resetPacingSince = resetPacingSince
         self.capturedAt = capturedAt
     }
 }
