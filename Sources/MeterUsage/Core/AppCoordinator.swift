@@ -403,7 +403,33 @@ final class AppCoordinator: ObservableObject {
         guard try await consumer.consumeReset(creditID: creditID) else {
             throw SourceUnavailable.failed(claimedSlot.provider)
         }
+        let resetAt = Date()
+        let previous = quotas[claimedSlot]?.value ?? archivedQuotas[claimedSlot]
+            ?? ProviderQuota(provider: claimedSlot.provider, windows: [], capturedAt: resetAt)
+        archivedQuotas[claimedSlot] = applyingResetPacing(to: previous, previous: nil,
+                                                        since: resetAt, capturedAt: nil)
+        quotas[claimedSlot] = .missing(.noData)
+        saveArchive()
         refresh()
+    }
+
+    private func applyingResetPacing(to quota: ProviderQuota, previous: ProviderQuota?,
+                                    since: Date, capturedAt: Date?) -> ProviderQuota {
+        func windows(_ current: [QuotaWindow], _ prior: [QuotaWindow]) -> [QuotaWindow] {
+            current.map { window in
+                window.recordingResetSample(previous: prior.first { $0.label == window.label },
+                                            capturedAt: capturedAt)
+            }
+        }
+        return ProviderQuota(
+            provider: quota.provider, windows: windows(quota.windows, previous?.windows ?? []),
+            groups: quota.groups.map { group in
+                QuotaGroup(id: group.id, title: group.title,
+                           windows: windows(group.windows, previous?.groups.first { $0.id == group.id }?.windows ?? []))
+            },
+            credits: quota.credits, resetCreditCount: quota.resetCreditCount,
+            resetCredits: quota.resetCredits, planType: quota.planType,
+            resetPacingSince: since, capturedAt: quota.capturedAt)
     }
 
     private func performRefresh(forceAll: Bool) async {
@@ -554,12 +580,23 @@ final class AppCoordinator: ObservableObject {
     }
 
     private func load(quota source: QuotaSource) async {
+        let resetAtStart = archivedQuotas[source.slot]?.resetPacingSince
         let result: Loaded<ProviderQuota>
         do {
-            let quota = try await source.fetchQuota()
+            var quota = try await source.fetchQuota()
+            let previous = archivedQuotas[source.slot]
+            // A read started before redemption cannot restore or seed pacing.
+            guard previous?.resetPacingSince == resetAtStart else { return }
+            if let resetAt = previous?.resetPacingSince {
+                guard quota.capturedAt > resetAt,
+                      quota.capturedAt > (previous?.capturedAt ?? resetAt) else { return }
+                quota = applyingResetPacing(to: quota, previous: previous,
+                                           since: resetAt, capturedAt: quota.capturedAt)
+            }
             result = .value(quota)
             archivedQuotas[source.slot] = quota
         } catch {
+            guard archivedQuotas[source.slot]?.resetPacingSince == resetAtStart else { return }
             result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
         quotas[source.slot] = result
