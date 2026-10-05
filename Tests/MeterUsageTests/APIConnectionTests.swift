@@ -223,6 +223,40 @@ final class APIConnectionTests: XCTestCase {
         }
     }
 
+    func testDisconnectInvalidatesQueuedSavedKeyRecoveryForBothProviders() async throws {
+        for provider in [Provider.openAI, .anthropic] {
+            let store = MemoryAPIKeyStore()
+            store.values[provider] = "fixture-saved"
+            store.readError = NSError(domain: "private-read-error", code: 1)
+            let keys = APIKeySession(environment: ["OPENAI_ADMIN_KEY": "fixture-env",
+                                                   "ANTHROPIC_ADMIN_KEY": "fixture-env"], store: store)
+            let config = URLSessionConfiguration.ephemeral
+            config.protocolClasses = [ConnectionProtocol.self]
+            let session = URLSession(configuration: config)
+            var calls = 0
+            ConnectionProtocol.handler = { _ in calls += 1; return 200 }
+            defer { ConnectionProtocol.handler = nil }
+            let coordinator = AppCoordinator(preferences: Preferences(), usageSources: [
+                OpenAIUsageSource(adminKey: { keys.key(for: .openAI) }, session: session),
+                AnthropicUsageSource(adminKey: { keys.key(for: .anthropic) }, session: session)
+            ], apiKeys: keys)
+
+            XCTAssertEqual(coordinator.apiConnectionAction(for: provider), .restoreSavedConnection)
+            store.readError = nil
+            let restoring = Task { await coordinator.retrySavedAPIKey(provider) }
+            coordinator.disconnectAPI(provider)
+            await restoring.value
+
+            XCTAssertNil(keys.key(for: provider), "Queued recovery must not reconnect using the launcher key")
+            XCTAssertNil(store.values[provider])
+            XCTAssertEqual(calls, 0, "Disconnect must invalidate the queued reporting request")
+            XCTAssertEqual(coordinator.apiConnectionAction(for: provider), .connect)
+            XCTAssertEqual(coordinator.usages[.primary(provider)]?.unavailable, .dataNotFound("API connection"))
+            XCTAssertNil(coordinator.apiConnectionErrors[provider])
+            XCTAssertFalse(coordinator.testingAPIProviders.contains(provider))
+        }
+    }
+
     func testEnvironmentFallbackIsNotPersistedAndDemoCannotMutateStore() async throws {
         let store = MemoryAPIKeyStore()
         let keys = APIKeySession(environment: ["OPENAI_ADMIN_KEY": "fixture-env"], store: store)

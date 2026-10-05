@@ -10,10 +10,17 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- Disconnect cancels queued saved-key recovery for OpenAI and Anthropic API
+  connections, so a pending restore cannot reconnect with a launcher key.
+
 ### Changed
 
 - Clarify that this package requires macOS for build and test checks. Replace
   the private SSH alias in public agent guidance with a generic macOS SSH route.
+- Preserve accent-themed notch rings and Codex pricing details when combining
+  them with API spend displays and saved connections.
 
 ## [0.2.40] - 2026-09-29
 

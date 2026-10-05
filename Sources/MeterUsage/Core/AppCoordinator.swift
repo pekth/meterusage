@@ -377,6 +377,7 @@ final class AppCoordinator: ObservableObject {
             await connectAPI(provider, key: pendingKey)
             return
         }
+        guard apiKeyRestoreErrors.contains(provider) else { return }
         do { try apiKeys.restore(provider) }
         catch {
             apiKeyRestoreErrors.insert(provider)
