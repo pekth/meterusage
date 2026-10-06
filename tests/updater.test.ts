@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vite-plus/test";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { Updater, parseRelease, newer, verifyDigest, stageUpdate, releaseEndpoint } from "../src/main/updater";
@@ -8,7 +8,7 @@ import { launchConfiguration } from "../src/main/launch";
 import { Preferences } from "../src/main/preferences";
 const bytes = Buffer.from("synthetic update bytes"), digest = "sha256:" + createHash("sha256").update(bytes).digest("hex");
 const payload = (url = "https://github.com/pekth/meterusage/releases/download/v0.2.42/MeterUsage-0.2.42.zip", hash = digest) => JSON.stringify({ tag_name: "v0.2.42", assets: [{ name: "MeterUsage-0.2.42.zip", browser_download_url: url, digest: hash }] });
-const roots: string[] = []; const temp = () => { const p = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(p); return p; };
+const roots: string[] = []; const temp = () => { const p = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(p); return p; };
 afterEach(() => roots.splice(0).forEach(p => rmSync(p, { recursive: true, force: true })));
 describe("verified explicit updates", () => {
   it("accepts the existing ZIP contract and rejects wrong repository, missing digest and changed bytes", () => {

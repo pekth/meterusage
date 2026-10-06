@@ -75,16 +75,19 @@ Percentages span calm green and amber warning bands so screenshots demonstrate c
 After `pnpm build`, run the candidate JSON path without a tray or window:
 
 ```sh
-node dist/main/cli.cjs json --demo --candidate-profile /tmp/meterusage-cli-demo
+meterusage_demo_root="$(node -p 'require("node:fs").realpathSync(require("node:os").tmpdir())')"
+node dist/main/cli.cjs json --demo --candidate-profile "$meterusage_demo_root/meterusage-cli-demo"
 ```
 
 On macOS, launch the separate packaged candidate directly:
 
 ```sh
-./release/mac-arm64/MeterUsage.app/Contents/MacOS/meterusage --demo --candidate-profile /tmp/meterusage-native-demo
+./release/mac-arm64/MeterUsage.app/Contents/MacOS/meterusage --demo --candidate-profile /private/tmp/meterusage-native-demo
 ```
 
-The explicit profile must be empty on first use. Demo mode selects synthetic
+The explicit profile must be empty on first use and use a canonical path.
+Candidate mode rejects symlink aliases, including macOS `/tmp` and `/var`.
+Demo mode selects synthetic
 providers before composition and isolates all preferences, caches, history and
 Electron state. Relaunch with the same profile to test persistence. Live
 provider discovery, login-item changes and update installation are disabled.

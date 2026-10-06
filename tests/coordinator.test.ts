@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vite-plus/test";
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Coordinator, backoffDelay } from "../src/main/coordinator";
@@ -8,7 +8,7 @@ import { launchConfiguration } from "../src/main/launch";
 import { compose, type Source } from "../src/main/composition";
 import { primary, slotKey, quota, window, value, missing, tokens, Unavailable } from "../src/domain/models";
 import { AlertEvaluator } from "../src/domain/alerts";
-const roots: string[] = [], controllers: Coordinator[] = []; const temp = () => { const root = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(root); return root; };
+const roots: string[] = [], controllers: Coordinator[] = []; const temp = () => { const root = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(root); return root; };
 afterEach(() => { for (const c of controllers.splice(0)) c.stop(); for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true }); });
 const now = Date.parse("2026-10-06T12:00:00Z");
 async function setup(sources?: Source[], time = () => now) { const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch); const c = new Coordinator(launch, prefs, sources ?? compose(launch, prefs, { now: time }), time); controllers.push(c); return { c, root, prefs }; }

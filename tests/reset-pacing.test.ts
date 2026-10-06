@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vite-plus/test";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { quota, window, primary, type Quota } from "../src/domain/models";
@@ -9,7 +9,7 @@ import { Coordinator } from "../src/main/coordinator";
 import { Preferences } from "../src/main/preferences";
 import { launchConfiguration } from "../src/main/launch";
 const at = Date.parse("2026-10-06T12:00:00Z"), hour = 3600000;
-const roots: string[] = []; const temp = () => { const p = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(p); return p; };
+const roots: string[] = []; const temp = () => { const p = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(p); return p; };
 afterEach(() => { roots.splice(0).forEach(p => rmSync(p, { force: true, recursive: true })); });
 describe("ADR0008 observation parity with Swift ResetPacingTests", () => {
   it("rejects nonavailable credits before preparation and after a confirmation refresh", async () => {

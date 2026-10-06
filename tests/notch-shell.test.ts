@@ -6,12 +6,12 @@ import { quota, primary, window } from "../src/domain/models";
 import { launchConfiguration } from "../src/main/launch";
 import { Preferences } from "../src/main/preferences";
 import { Coordinator } from "../src/main/coordinator";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, realpathSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 const roots: string[] = [];
-const temp = () => { const p = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(p); return p; };
+const temp = () => { const p = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(p); return p; };
 afterEach(() => { vi.useRealTimers(); roots.splice(0).forEach(p => rmSync(p, { recursive: true, force: true })); });
 it("stops polling and reset actions when a configured account directory disappears", async () => {
   const root = temp(), directory = join(root, "mounted-account"); mkdirSync(directory);
@@ -102,5 +102,5 @@ it("keeps the builder bundle name and renames only the executable before signing
   let executable = "MeterUsage";
   const { renameExecutable } = require("../Scripts/electron/after-pack.cjs");
   renameExecutable(bundle, (_binary: string, args: string[]) => { expect(args).toEqual(["-c", "Set :CFBundleExecutable meterusage", join(bundle, "Contents/Info.plist")]); executable = "meterusage"; });
-  expect(executable).toBe("meterusage"); expect(readFileSync(join(bin, "meterusage"), "utf8")).toBe("synthetic executable"); expect(existsSync(join(bin, "MeterUsage"))).toBe(false);
+  expect(executable).toBe("meterusage"); expect(readFileSync(join(bin, "meterusage"), "utf8")).toBe("synthetic executable"); expect(readdirSync(bin)).toEqual(["meterusage"]);
 });

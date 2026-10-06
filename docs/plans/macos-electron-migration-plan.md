@@ -142,3 +142,16 @@ provide `scripts/documentation.py`. No Electron release,
 installation or cutover has occurred. Source-only draft delivery is allowed
 when its applicable checks and review pass; merge remains blocked by native
 parity.
+
+The first native candidate attempt passed symbol export, production bundling
+and TypeScript checking. Its fixtures passed 90 cases and failed 29: 28 used
+temporary-path aliases rejected by candidate isolation, and one assumed a
+case-sensitive filesystem. Canonical fixture roots and exact directory-entry
+checks now pass all 51 affected cases on Linux. Preserve the symlink guard;
+the corrected macOS fixture run remains pending.
+
+Packaging failed when the dependency collector resolved a broken pnpm
+launcher. Use a candidate-local PATH alias to the verified existing executable
+for the next bounded native diagnostic. No host configuration change is needed.
+There is no verified candidate ZIP, signature or native UI evidence from this
+attempt.

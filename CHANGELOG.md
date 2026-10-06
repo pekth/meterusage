@@ -25,6 +25,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Use canonical temporary paths in candidate fixtures and demo commands.
+  Check the packaged executable's exact directory-entry spelling on both
+  case-sensitive and case-insensitive filesystems. Preserve symlink rejection.
 - Remove unknown daily-history fields before saving or publishing renderer
   state, while preserving larger historic totals and account separation.
 - Keep readable sessions when a sibling disappears or cannot be opened.

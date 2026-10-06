@@ -129,24 +129,34 @@ pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm test
 pnpm build
-node dist/main/cli.cjs json --force --demo --candidate-profile /tmp/meterusage-cli-demo
+meterusage_demo_root="$(node -p 'require("node:fs").realpathSync(require("node:os").tmpdir())')"
+node dist/main/cli.cjs json --force --demo --candidate-profile "$meterusage_demo_root/meterusage-cli-demo"
 ```
 
 The candidate profile must be an empty test directory on first use. It may be
 reused for relaunch checks after the candidate creates its marker. All demo
 preferences, caches, history and Electron state stay in that profile.
+Use the canonical temporary root above. On macOS, `/tmp` and `/var` can be
+symlink aliases; candidate mode rejects paths that follow a symlink.
 
 On macOS, build and launch a separate candidate without installing it:
 
 ```sh
 pnpm package:mac
-./release/mac-arm64/MeterUsage.app/Contents/MacOS/meterusage --demo --candidate-profile /tmp/meterusage-native-demo
+./release/mac-arm64/MeterUsage.app/Contents/MacOS/meterusage --demo --candidate-profile /private/tmp/meterusage-native-demo
 ```
 
 `package:mac` exports the existing SF Symbol stand-ins, builds the app and
 packages an Apple silicon ZIP with publication disabled. It does not install
 or replace an app. Do not upload this candidate as the current public release.
 Windows packaging, CI, native testing and release remain paused.
+
+electron-builder resolves `pnpm` from PATH when collecting production
+dependencies. If an existing launcher incorrectly loads a standalone pnpm
+executable as JavaScript, verify the executable directly, then put a `pnpm`
+symlink to it in a separate candidate-local directory at the start of PATH.
+Keep host launchers and installed dependencies unchanged. This PATH correction
+still requires a new native packaging check.
 
 Changes live in `src/domain/` (shared calculations), `src/main/` (provider
 readers, persistence, coordination and native shell), `src/shared/` (IPC DTOs),

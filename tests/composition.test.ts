@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vite-plus/test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, symlinkSync, utimesSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, symlinkSync, utimesSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchConfiguration, type Launch } from "../src/main/launch";
@@ -7,7 +7,7 @@ import { Preferences, defaultsDomain } from "../src/main/preferences";
 import { compose, accountHome } from "../src/main/composition";
 import { jsonReport, runJSON } from "../src/main/cli";
 import { endpoints, type Command } from "../src/main/providers/transport";
-const roots: string[] = []; const temp = () => { const root = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(root); return root; };
+const roots: string[] = []; const temp = () => { const root = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(root); return root; };
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 const now = Date.parse("2026-10-06T12:00:00Z");
 const liveFixture = (home: string): Launch => ({ home, data: join(home, "app-data"), env: {}, demo: false, candidate: false });
