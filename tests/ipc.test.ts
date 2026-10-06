@@ -40,3 +40,8 @@ it("reports full shared-card height separately from bounded window resizing", ()
   expect(parseRequest({ action: "shareResize", height: 5000 }).action).toBe("shareResize");
   for (const raw of [{ action: "resize", height: 2500 }, { action: "shareResize", height: Infinity }, { action: "shareResize", height: 0 }, { action: "shareResize", height: 100, width: 250 }]) expect(() => parseRequest(raw)).toThrow();
 });
+
+it("allows only known public service-status pages, without a renderer-selected URL", () => {
+  expect(parseRequest({ action: "statusPage", provider: "claude" })).toEqual({ action: "statusPage", provider: "claude" });
+  for (const raw of [{ action: "statusPage", provider: "grok" }, { action: "statusPage", provider: "claude", url: "https://example.invalid" }, { action: "statusPage", provider: "https://example.invalid" }]) expect(() => parseRequest(raw)).toThrow();
+});

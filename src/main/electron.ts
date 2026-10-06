@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, nativeTheme, dialog, clipboard, Notification, ShareMenu, session, powerMonitor } from "electron";
+import { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, screen, nativeTheme, dialog, clipboard, Notification, ShareMenu, session, powerMonitor, shell } from "electron";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -10,7 +10,7 @@ import { Coordinator } from "./coordinator";
 import { NotchFold } from "./notch-fold";
 import { Updater } from "./updater";
 import { runJSON } from "./cli";
-import { channel, stateChannel, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
+import { channel, stateChannel, statusPages, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
 import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./ipc";
 import { providers, slotKey, headlineWindow } from "../domain/models";
 import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize } from "../domain/notch";
@@ -60,7 +60,7 @@ async function start() {
     });
     tray.setToolTip(entries.join("\n") || "MeterUsage");
   }
-  // Renderer requests never open external destinations or provider connections.
+  // Only fixed public status pages can open externally through main.
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => callback({ cancel: !details.url.startsWith("file://") && !details.url.startsWith("data:") }));
@@ -144,6 +144,9 @@ async function start() {
       case "state": return { ok: true, state: state(surface) };
       case "refresh": await coordinator.refresh(); break;
       case "settings": showSettings(); break;
+      case "statusPage":
+        if (surface !== "flyout") throw new Error("Invalid request");
+        await shell.openExternal(statusPages[r.provider]); break;
       case "close": source.hide(); break;
       case "quit": app.quit(); break;
       case "clearCache": await coordinator.clearCache(); break;

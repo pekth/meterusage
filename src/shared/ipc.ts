@@ -1,6 +1,7 @@
 import type { Snapshot } from "./state";
 import type { Provider } from "../domain/models";
 export const channel = "meterusage:request", stateChannel = "meterusage:state";
+export const statusPages = { codex: "https://status.openai.com/", claude: "https://status.claude.com/", cursor: "https://status.cursor.com/", copilot: "https://www.githubstatus.com/" };
 export type Surface = "flyout" | "settings" | "notch" | "tray" | "share";
 export interface SettingsState {
   values: Record<string, boolean | number | string>;
@@ -14,6 +15,7 @@ export interface ViewState {
 export type Request =
   | { action: "state" | "refresh" | "settings" | "close" | "quit" | "clearCache" | "copyDiagnostics" | "copyJSON" | "dragStart" | "dragEnd" | "notchContext" | "updateInstall" | "updateDismiss" }
   | { action: "share"; key: string }
+  | { action: "statusPage"; provider: keyof typeof statusPages }
   | { action: "setPreference"; key: string; value: boolean | number | string }
   | { action: "accountAdd"; provider: "codex" | "claude" }
   | { action: "accountUpdate"; id: string; label?: string; enabled?: boolean }

@@ -4,7 +4,7 @@ import type { PreferenceValue } from "./preferences";
 import type { Surface, SettingsState, ViewState } from "../shared/ipc";
 import { notchEntries } from "../domain/notch";
 import { providers } from "../domain/models";
-import { editableBooleans, providerKey, trayKey, type Request } from "../shared/ipc";
+import { editableBooleans, providerKey, trayKey, statusPages, type Request } from "../shared/ipc";
 const empty = new Set(["state", "refresh", "settings", "close", "quit", "clearCache", "copyDiagnostics", "copyJSON", "dragStart", "dragEnd", "notchContext", "updateInstall", "updateDismiss"]);
 const id = (v: unknown) => typeof v === "string" && /^[A-Za-z0-9-]{1,80}$/.test(v);
 const key = (v: unknown) => typeof v === "string" && providers.some(p => v === p || (v.startsWith(p + "#") && id(v.slice(p.length + 1))));
@@ -21,6 +21,7 @@ export function parseRequest(raw: unknown): Request {
       valid = typeof r.key === "string" && (boolKeys.has(r.key) ? typeof r.value === "boolean" : r.key === "refreshIntervalSeconds" ? typeof r.value === "number" && [30, 60, 120, 300, 900].includes(r.value) : r.key === "appearanceTheme" ? typeof r.value === "string" && ["system", "light", "dark"].includes(r.value) : r.key === "accentTheme" && typeof r.value === "string" && ["blue", "violet", "teal", "amber", "rose", "graphite"].includes(r.value));
       break;
     case "accountAdd": fields = ["provider"]; valid = r.provider === "codex" || r.provider === "claude"; break;
+    case "statusPage": fields = ["provider"]; valid = typeof r.provider === "string" && Object.hasOwn(statusPages, r.provider); break;
     case "accountUpdate": fields = ["id", ...("label" in r ? ["label"] : []), ...("enabled" in r ? ["enabled"] : [])]; valid = id(r.id) && fields.length > 1 && (!("label" in r) || string(r.label, 100)) && (!("enabled" in r) || typeof r.enabled === "boolean"); break;
     case "accountRemove": case "accountPath": fields = ["id"]; valid = id(r.id); break;
     case "reset": fields = ["key", "creditID"]; valid = key(r.key) && string(r.creditID, 200) && r.creditID !== ""; break;

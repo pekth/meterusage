@@ -25,6 +25,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Keep candidate service health visible when provider usage is hidden, with
+  buttons for the existing public status pages. Restore notch ambient ETA
+  from raw window pace and hide it when pacing is off.
 - Invalidate live readings and reset confirmations when a candidate account
   source changes. Reject late results and reset completion from the old source
   while keeping dated slot archives and durable history.

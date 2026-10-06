@@ -27,3 +27,4 @@
 .surface-share { width: 250px; background: transparent; }
 
 .surface-notch .detail-card, .surface-notch .strip { max-height: var(--notch-max-height); overflow-y: auto; }
+.notch-eta { font-size: 8px; line-height: 1.2; white-space: nowrap; border-radius: 5px; padding: 1px 2px; background: var(--well); }

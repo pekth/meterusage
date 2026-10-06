@@ -76,6 +76,10 @@ app documents. Source controls and tests do not replace native runtime proof.
 - Public unauthenticated status feeds at
   `https://status.openai.com/api/v2/components.json` and
   `https://status.claude.com/api/v2/components.json`.
+- An explicit service-status button opens the provider's existing public status
+  page in the default browser. Main selects a fixed Codex, Claude, Cursor or
+  Copilot URL; the renderer cannot supply a destination. No usage or account
+  data is added to that URL.
 - An unauthenticated GitHub latest-release check, at most hourly while enabled.
   It has no usage data or account identifier. GitHub sees the network address
   and User-Agent. Disable it in Settings. An explicit Install action downloads
