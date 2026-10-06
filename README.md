@@ -154,8 +154,20 @@ Tools, or Git. The Swift runtime it uses ships with macOS.
 3. Open `MeterUsage.app`. Releases are ad-hoc signed and are not notarized. If macOS blocks the first launch, right-click the app in Finder and choose **Open**, or use **Open Anyway** in System Settings → Privacy & Security.
 
 If a release has no app ZIP, use an earlier release that includes one or report
-the missing asset. Installing from GitHub's source archives requires a build
-and is not the normal installation path.
+the missing asset.
+
+### From a Git checkout (no Swift)
+
+If you already cloned this repository or downloaded its source archive, run:
+
+```sh
+./Scripts/make-app.sh
+```
+
+This downloads the verified prebuilt release to `dist/MeterUsage.app`. Drag
+that app to Applications and use the same first-launch steps above. It does
+not compile your checkout, install developer tools, or fall back to a source
+build when the download fails.
 
 ---
 
@@ -168,7 +180,7 @@ and is not the normal installation path.
 
 Swift and Xcode Command Line Tools are needed only to build from source.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for developer setup, build commands,
-and tests.
+and tests. Source builds require the explicit `--build-from-source` option.
 
 ### Agent Budget CLI
 To consume quota telemetry programmatically in scripts or agents:

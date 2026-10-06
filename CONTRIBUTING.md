@@ -3,7 +3,7 @@
 > ### ⚡ TL;DR
 > 1. Fork & clone the repo.
 > 2. Enable pre-commit hook: `git config core.hooksPath .githooks`
-> 3. Verify: `swift test` & `./Scripts/make-app.sh`
+> 3. Verify: `swift test` & `./Scripts/make-app.sh --build-from-source`
 > 4. Keep diffs focused, zero secrets or credentials, synthetic fixtures only.
 
 
@@ -86,8 +86,13 @@ Run these checks before a pull request:
 ```sh
 swift build
 swift test
-./Scripts/make-app.sh
+./Scripts/make-app.sh --build-from-source
 ```
+
+`make-app.sh` downloads a prebuilt release by default, without Swift. Always
+pass `--build-from-source` when validating your source changes. Test the script's
+download and failure paths with `bash Tests/Scripts/make-app-tests.sh`; those
+tests use synthetic tools and bundles without network or compiler access.
 
 Use demo mode to inspect the real UI without provider credentials:
 
@@ -151,7 +156,8 @@ positive.
 ## Generated assets
 
 Run `./Scripts/make-icon.sh` only when the icon design changes. The app bundle
-is assembled by `./Scripts/make-app.sh`. Build output under `dist/` is ignored
+is assembled from source by `./Scripts/make-app.sh --build-from-source`.
+Output under `dist/` is ignored
 and should not be force-added.
 
 ## Pull requests
