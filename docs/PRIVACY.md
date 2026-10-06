@@ -103,7 +103,9 @@ provider subprocess stderr are drained and not retained or forwarded.
 ## Local persistence
 
 Daily history and quota archive remain JSON under the app's existing support
-directory. History retains numeric daily summaries; the archive retains quota,
+directory. History reads and writes project only known record fields and the
+five numeric token counters before coordinator merge or renderer publication;
+unknown JSON fields are discarded. History retains numeric daily summaries; the archive retains quota,
 plan/credit/reset metadata and observation timestamps for reset-aware pacing.
 Restored quota is shown as dated last-known data. Unreadable durable history is
 preserved and further history writes are suspended until repair and relaunch.

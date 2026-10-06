@@ -1,5 +1,6 @@
-import { describe, it, expect, afterEach } from "vite-plus/test";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { describe, it, expect, afterEach, vi } from "vite-plus/test";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, statSync, createReadStream } from "node:fs";
+import { open, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { selectJSON } from "../src/main/select-json";
@@ -7,8 +8,10 @@ import { claudeTierSelection, parseClaudePlan, parseCodex, parseClaudeQuota, par
 import { ClaudeActivitySource, scanCodex, parseClaudeLine, claudeLineSelection, parseCodexTokenLine, opaqueID } from "../src/main/providers/activity";
 import { codexRPC, runCommand, httpTransport, endpoints } from "../src/main/providers/transport";
 const roots: string[] = [];
+vi.mock("node:fs", async original => { const fs = await original<typeof import("node:fs")>(); return { ...fs, statSync: vi.fn(fs.statSync), createReadStream: vi.fn(fs.createReadStream) }; });
+vi.mock("node:fs/promises", async original => { const fs = await original<typeof import("node:fs/promises")>(); return { ...fs, open: vi.fn(fs.open), readdir: vi.fn(fs.readdir) }; });
 const temp = () => { const root = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(root); return root; };
-afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
+afterEach(() => { vi.mocked(statSync).mockReset(); vi.mocked(createReadStream).mockReset(); vi.mocked(open).mockReset(); vi.mocked(readdir).mockReset(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 const fixture = (name: string) => readFileSync(join("Tests/MeterUsageTests/Fixtures", name), "utf8");
 const now = Date.parse("2026-10-06T12:00:00Z");
 describe("selective privacy boundary", () => {
@@ -79,6 +82,35 @@ describe("quota fixture parity", () => {
   });
 });
 describe("activity and account boundaries", () => {
+  it("keeps valid Claude sessions when siblings disappear or cannot be read", async () => {
+    const root = temp(), project = join(root, "-fixture-project"); mkdirSync(project);
+    const line = JSON.stringify({ type: "assistant", timestamp: new Date(now).toISOString(), message: { model: "fixture", usage: { output_tokens: 7 } } }) + "\n";
+    for (const name of ["valid", "gone", "unreadable", "vanished"]) writeFileSync(join(project, `${name}.jsonl`), line);
+    const stat = vi.mocked(statSync).getMockImplementation()!, stream = vi.mocked(createReadStream).getMockImplementation()!;
+    vi.mocked(statSync).mockImplementation(((path) => { if (String(path).endsWith("gone.jsonl")) throw Object.assign(new Error("fixture deletion"), { code: "ENOENT" }); return stat(path); }) as typeof statSync);
+    vi.mocked(createReadStream).mockImplementation((path, options) => { if (String(path).endsWith("unreadable.jsonl")) throw Object.assign(new Error("fixture permission"), { code: "EACCES" }); if (String(path).endsWith("vanished.jsonl")) rmSync(path); return stream(path, options); });
+    const a = await new ClaudeActivitySource(root).scan(now); expect(a.sessions).toHaveLength(1); expect(a.sessions[0].tokens.output).toBe(7); expect(a.daily[0].tokens.output).toBe(7);
+    const aborted = new AbortController(), cancellation = new Error("fixture cancellation"); vi.mocked(createReadStream).mockImplementation(() => { aborted.abort(cancellation); throw new Error("fixture cancelled during read"); });
+    await expect(new ClaudeActivitySource(root).scan(now, aborted.signal)).rejects.toBe(cancellation);
+    const listing = new AbortController(); vi.mocked(readdir).mockImplementation(async () => { listing.abort(cancellation); return []; });
+    await expect(new ClaudeActivitySource(root).scan(now, listing.signal)).rejects.toBe(cancellation);
+  });
+  it("uses Codex per-file metadata and ledger fallbacks without losing readable siblings", async () => {
+    const root = temp(), at = new Date(now).toISOString();
+    const line = [JSON.stringify({ timestamp: at, payload: { cwd: "/invented/project" } }), '{"type":"turn_context","payload":{"model":"gpt-5.4"}}', '{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":7}}}}', ""].join("\n");
+    for (const name of ["valid", "gone", "unreadable", "ledger-failure", "metadata-only"]) writeFileSync(join(root, `${name}.jsonl`), line);
+    const stat = vi.mocked(statSync).getMockImplementation()!, read = vi.mocked(open).getMockImplementation()!;
+    vi.mocked(statSync).mockImplementation(((path) => { if (String(path).endsWith("gone.jsonl") || String(path).endsWith("metadata-only.jsonl")) throw Object.assign(new Error("fixture deletion"), { code: "ENOENT" }); return stat(path); }) as typeof statSync);
+    const calls = new Map<string, number>();
+    vi.mocked(open).mockImplementation(async (path, flags, mode) => { const name = String(path), call = (calls.get(name) ?? 0) + 1; calls.set(name, call); if (name.endsWith("gone.jsonl") || name.endsWith("unreadable.jsonl") || (name.endsWith("ledger-failure.jsonl") && call > 1)) throw Object.assign(new Error("fixture read failure"), { code: "EACCES" }); return read(path, flags, mode); });
+    const a = await scanCodex(root, now); expect(a.sessions).toHaveLength(4); expect(a.sessions.find(s => s.id === opaqueID(join(root, "valid.jsonl")))?.tokens.input).toBe(7);
+    expect(a.sessions.find(s => s.id === opaqueID(join(root, "metadata-only.jsonl")))).toMatchObject({ startedAt: now, tokens: { input: 7 } });
+    expect(a.sessions.find(s => s.id === opaqueID(join(root, "ledger-failure.jsonl")))?.tokens.input).toBe(0); expect(a.daily.reduce((n, d) => n + d.tokens.input, 0)).toBe(14);
+    const aborted = new AbortController(), cancellation = new Error("fixture cancellation"); vi.mocked(open).mockImplementation(async () => { aborted.abort(cancellation); throw new Error("fixture cancelled during read"); });
+    await expect(scanCodex(root, now, aborted.signal)).rejects.toBe(cancellation);
+    const listing = new AbortController(); vi.mocked(readdir).mockImplementation(async () => { listing.abort(cancellation); return []; });
+    await expect(scanCodex(root, now, listing.signal)).rejects.toBe(cancellation);
+  });
   it("separates Claude accounts and reuses compatible sanitized scan cache", async () => {
     const root = temp(), primary = join(root, "primary"), alternate = join(root, "alternate");
     for (const [dir, count] of [[primary, 7], [alternate, 13]] as const) { mkdirSync(join(dir, "-synthetic-project"), { recursive: true }); writeFileSync(join(dir, "-synthetic-project", "session.jsonl"), JSON.stringify({ type: "assistant", timestamp: new Date(now).toISOString(), message: { model: "claude-sonnet-4-6", content: "DO_NOT_CACHE", usage: { output_tokens: count } } }) + "\n"); }

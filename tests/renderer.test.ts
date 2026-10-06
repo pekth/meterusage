@@ -44,6 +44,39 @@ it("shows unavailable reset status without a redemption action", () => {
   q.resetCredits[0].expiresAt = now; expect(renderApp(view)).not.toContain("Use reset"); expect(renderApp(view)).toContain("expired");
 });
 
+it("limits the reset visibility setting to the notch and shared detail, keeping flyout redemption", () => {
+  const view = state(), q = quota("codex", [w], now); q.resetCreditCount = 1; q.resetCredits = [{ id: "fixture-credit", title: "Reset", status: "available", expiresAt: now + 1000 }];
+  view.snapshot.quotas.codex = value(q); view.snapshot.notchSlots = [primary("codex")];
+  expect(renderApp(view)).toContain("Use reset"); expect(renderApp(view, "notch")).not.toContain("Use reset"); expect(renderApp(view, "share")).not.toContain("Use reset");
+  expect(renderApp(view, "settings")).toContain("Codex limit resets in the side notch");
+  view.snapshot.appearance.resetButton = true; expect(renderApp(view, "notch")).toContain("Use reset");
+});
+
+it("shows rolling cost shares before token shares and handles an empty 30-day reference", () => {
+  const view = state(); view.snapshot.slots = [primary("openCodeGo")]; view.snapshot.activities = {}; view.snapshot.quotas = {};
+  const usage = { provider: "openCodeGo" as const, sessionCount: 10, messageCount: 50, todaySessionCount: 1, todayMessageCount: 2, capturedAt: now,
+    usageWindows: [{ label: "last 24h", sessionCount: 1, messageCount: 2, tokens: tokens({ input: 200 }), estimatedCostUSD: 8 }, { label: "last 30d", sessionCount: 10, messageCount: 50, tokens: tokens({ input: 1000 }), estimatedCostUSD: 10 }] };
+  view.snapshot.usages.openCodeGo = value(usage);
+  const cost = renderApp(view); expect(cost).toContain("80%"); expect(cost).toContain('aria-valuenow="80"'); expect(cost).toContain("Share of last 30d usage"); expect(cost).toContain("200 tokens · 2 messages");
+  expect(cost).toContain("10 sessions · 50 messages · 1,000 tokens · ~$10.00");
+  usage.usageWindows[0].estimatedCostUSD = 20; expect(renderApp(view)).toContain('aria-valuenow="100"');
+  usage.usageWindows[1].estimatedCostUSD = 0;
+  const token = renderApp(view); expect(token).toContain("20%"); expect(token).toContain('aria-valuenow="20"'); expect(token).toContain("Share of last 30d tokens");
+  usage.usageWindows[1].tokens = tokens(); const zero = renderApp(view); expect(zero).toContain('aria-valuenow="0"'); expect(zero).not.toContain("NaN");
+  usage.usageWindows.pop(); expect(renderApp(view)).toContain('aria-valuenow="0"');
+});
+
+it("keeps the four Swift adaptive provider identities and semantic status overrides", () => {
+  const css = readFileSync("src/renderer/style.css", "utf8"), view = state(); view.snapshot.activities = {}; view.snapshot.quotas = {};
+  for (const [provider, variable, light, dark] of [["claude", "claude", "#c25e00", "#d97706"], ["antigravity", "antigravity", "#2563eb", "#60a5fa"], ["openCodeGo", "opencode", "#0f766e", "#2dd4bf"], ["openRouter", "openrouter", "#6d28d9", "#a78bfa"]] as const) {
+    view.snapshot.slots = [primary(provider)]; view.snapshot.statuses = {};
+    for (const theme of ["light", "dark", "system"]) { view.snapshot.appearance.theme = theme; expect(renderApp(view)).toContain(`var(--${variable})`); }
+    expect(css).toMatch(new RegExp(`\\.app \\{[^}]*--${variable}: ${light}`));
+    for (const theme of ["dark", "system"]) expect(css).toMatch(new RegExp(`\\.theme-${theme} \\{[^}]*--${variable}: ${dark}`));
+    view.snapshot.statuses[provider] = value({ provider, severity: "majorOutage", description: "Outage", checkedAt: now }); expect(renderApp(view)).toContain("var(--alert)"); expect(renderApp(view)).not.toContain(`var(--${variable})`);
+  }
+});
+
 it("shows count-only current-day usage and capture age without invented token totals", () => {
   const view = state(); view.snapshot.slots = [primary("grok")]; view.snapshot.quotas = {}; view.snapshot.activities = {};
   const usage = { provider: "grok" as const, sessionCount: 10, messageCount: 50, todaySessionCount: 1, todayMessageCount: 2, capturedAt: now - 3600000 };

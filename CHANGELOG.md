@@ -25,6 +25,14 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Remove unknown daily-history fields before saving or publishing renderer
+  state, while preserving larger historic totals and account separation.
+- Keep readable sessions when a sibling disappears or cannot be opened.
+  Preserve Codex metadata/ledger fallbacks and propagate scan cancellation.
+- Scope the reset-button setting to side-notch details and context menus;
+  retain flyout redemption with the same availability and confirmation checks.
+- Restore 30-day rolling cost/token share bars and the existing adaptive
+  Claude, Antigravity, OpenCode Go and OpenRouter identity colours.
 - Validate optional archive metadata and restore only known fields. Reject
   reset redemption unless the credit is reported available and unexpired,
   including after the confirmation dialog.

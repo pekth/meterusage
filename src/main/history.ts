@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { type Daily, type Quota, type Slot, type Tokens, tokens, totalTokens, slotKey, quota, window, providers } from "../domain/models";
+import { type Daily, type Quota, type Slot, type Tokens, totalTokens, slotKey, quota, window, providers } from "../domain/models";
 
 export function atomicJSON(path: string, value: unknown) {
   mkdirSync(dirname(path), { recursive: true });
@@ -10,6 +10,9 @@ export function atomicJSON(path: string, value: unknown) {
   renameSync(tmp, path);
 }
 interface StoredDaily { dayISO: string; tokens: Tokens; estimatedCostUSD: number; sessionCount: number; peakUsedPercent?: number }
+function storedRecord({ dayISO, tokens: { input, output, reasoning, cacheRead, cacheWrite }, estimatedCostUSD, sessionCount, peakUsedPercent }: StoredDaily): StoredDaily {
+  return { dayISO, tokens: { input, output, reasoning, cacheRead, cacheWrite }, estimatedCostUSD, sessionCount, ...(peakUsedPercent === undefined ? {} : { peakUsedPercent }) };
+}
 function validRecord(v: unknown): v is StoredDaily {
   if (!v || typeof v !== "object") return false;
   const r = v as StoredDaily;
@@ -22,7 +25,7 @@ export class HistoryStore {
     try {
       const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Object.values(parsed).every(v => Array.isArray(v) && v.every(validRecord))) throw new Error("Invalid history");
-      this.data = Object.assign(Object.create(null), parsed);
+      this.data = Object.assign(Object.create(null), Object.fromEntries(Object.entries(parsed as Record<string, StoredDaily[]>).map(([key, list]) => [key, list.map(storedRecord)])));
     } catch (e) { if ((e as NodeJS.ErrnoException).code !== "ENOENT") this.error = "loadFailed"; }
   }
   records(key: string): Daily[] {
@@ -33,7 +36,7 @@ export class HistoryStore {
     const byDay = new Map((this.data[key] ?? []).map(r => [r.dayISO, r]));
     for (const d of daily) {
       const dayISO = new Date(d.day).toISOString().slice(0, 10), prior = byDay.get(dayISO);
-      if (!prior || totalTokens(prior.tokens) <= totalTokens(d.tokens)) byDay.set(dayISO, { dayISO, tokens: tokens(d.tokens), estimatedCostUSD: d.estimatedCostUSD, sessionCount: d.sessionCount, ...(peakUsedPercent === undefined ? {} : { peakUsedPercent }) });
+      if (!prior || totalTokens(prior.tokens) <= totalTokens(d.tokens)) byDay.set(dayISO, storedRecord({ dayISO, tokens: d.tokens, estimatedCostUSD: d.estimatedCostUSD, sessionCount: d.sessionCount, peakUsedPercent }));
     }
     this.data[key] = [...byDay.values()].sort((a, b) => a.dayISO.localeCompare(b.dayISO));
     if (this.error === "loadFailed") return;

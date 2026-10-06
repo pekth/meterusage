@@ -13,6 +13,17 @@ afterEach(() => { for (const c of controllers.splice(0)) c.stop(); for (const ro
 const now = Date.parse("2026-10-06T12:00:00Z");
 async function setup(sources?: Source[], time = () => now) { const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch); const c = new Coordinator(launch, prefs, sources ?? compose(launch, prefs, { now: time }), time); controllers.push(c); return { c, root, prefs }; }
 describe("coordinator refresh journey", () => {
+  it("drops unknown history fields before durable merge, persistence and renderer publication", async () => {
+    const { c, root, prefs } = await setup([]), path = join(root, "durable-daily-history.json"); c.stop();
+    writeFileSync(path, JSON.stringify({ claude: [{ dayISO: "2026-10-06", tokens: { ...tokens({ input: 100 }), privatePayload: "OMIT_HISTORY_TOKEN_FIELD" }, estimatedCostUSD: 1, sessionCount: 2, peakUsedPercent: 70, unknown: "OMIT_HISTORY_RECORD_FIELD" }] }));
+    const source: Source = { slot: primary("claude"), activity: async () => ({ provider: "claude", scannedAt: now, sessions: [], daily: [{ day: now, tokens: tokens({ input: 10 }), estimatedCostUSD: 0, sessionCount: 1 }] }) };
+    const next = new Coordinator(c.launch, prefs, [source], () => now); controllers.push(next);
+    const published: string[] = []; next.subscribe(snapshot => published.push(JSON.stringify(snapshot))); await next.refresh();
+    const a = next.snapshot().activities.claude; expect(a.status).toBe("value");
+    if (a.status === "value") expect(a.value.daily[0].tokens).toEqual(tokens({ input: 100 }));
+    expect(published.join()).not.toContain("OMIT_HISTORY"); expect(readFileSync(path, "utf8")).not.toContain("OMIT_HISTORY");
+    expect(JSON.parse(readFileSync(path, "utf8")).claude[0].peakUsedPercent).toBe(70);
+  });
   it("classifies empty activity as no data, while retained durable days remain loaded", async () => {
     const { c } = await setup([{ slot: primary("claude"), activity: async () => ({ provider: "claude", scannedAt: now, sessions: [], daily: [] }) }]);
     await c.refresh(); expect(c.activities.claude).toMatchObject({ status: "missing", code: "noData" }); expect(c.diagnostics()).toContain("activity: unavailable (noData)");

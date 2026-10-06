@@ -17,7 +17,8 @@ export function opaqueID(raw: string): string {
 export const projectName = (raw: string, encoded = false) => displayText(encoded ? raw.split("-").filter(Boolean).at(-1) : basename(raw)) ?? "unknown";
 export async function filesIn(root: string, suffix: string, recursive = true, signal?: AbortSignal): Promise<string[]> {
   signal?.throwIfAborted();
-  let entries; try { entries = await readdir(root, { withFileTypes: true }); } catch { return []; }
+  let entries; try { entries = await readdir(root, { withFileTypes: true }); } catch { signal?.throwIfAborted(); return []; }
+  signal?.throwIfAborted();
   const out: string[] = [];
   for (const e of entries) {
     if (e.name.startsWith(".")) continue;
@@ -80,16 +81,18 @@ export class ClaudeActivitySource {
     const sessions: Session[] = [], daily = new Map<number, Daily>(); let dirty = false;
     for (const path of await filesIn(this.root, ".jsonl", true, signal)) {
       const relative = path.slice(this.root.length + 1).split("/"); if (relative.length !== 2) continue;
-      const stat = statSync(path), key = opaqueID(path), previous = this.cache[key];
-      signal?.throwIfAborted();
-      const parsed = previous?.mtime === stat.mtimeMs / 1000 && previous.size === stat.size ? previous.result : await parseClaudeFile(path, signal);
-      if (previous?.result !== parsed) { this.cache[key] = { mtime: stat.mtimeMs / 1000, size: stat.size, result: parsed }; dirty = true; }
-      if (!parsed.messageCount) continue;
-      sessions.push({ id: opaqueID(basename(path, ".jsonl")), projectName: projectName(relative[0], true), model: parsed.model ?? "unknown", tokens: parsed.tokens, estimatedCostUSD: parsed.totalCostUSD, startedAt: parsed.earliestTimestamp === undefined ? Date.parse("0001-01-01T00:00:00Z") : parsed.earliestTimestamp * 1000, lastActivityAt: stat.mtimeMs, messageCount: parsed.messageCount });
-      for (const { dayEpoch, bucket } of parsed.dailyBuckets) {
-        const d = dayEpoch * 1000, prior = daily.get(d) ?? { day: d, tokens: tokens(), estimatedCostUSD: 0, sessionCount: 0 };
-        daily.set(d, { day: d, tokens: addTokens(prior.tokens, bucket.tokens), estimatedCostUSD: prior.estimatedCostUSD + bucket.costUSD, sessionCount: prior.sessionCount + 1 });
-      }
+      try {
+        const stat = statSync(path), key = opaqueID(path), previous = this.cache[key];
+        signal?.throwIfAborted();
+        const parsed = previous?.mtime === stat.mtimeMs / 1000 && previous.size === stat.size ? previous.result : await parseClaudeFile(path, signal);
+        if (previous?.result !== parsed) { this.cache[key] = { mtime: stat.mtimeMs / 1000, size: stat.size, result: parsed }; dirty = true; }
+        if (!parsed.messageCount) continue;
+        sessions.push({ id: opaqueID(basename(path, ".jsonl")), projectName: projectName(relative[0], true), model: parsed.model ?? "unknown", tokens: parsed.tokens, estimatedCostUSD: parsed.totalCostUSD, startedAt: parsed.earliestTimestamp === undefined ? Date.parse("0001-01-01T00:00:00Z") : parsed.earliestTimestamp * 1000, lastActivityAt: stat.mtimeMs, messageCount: parsed.messageCount });
+        for (const { dayEpoch, bucket } of parsed.dailyBuckets) {
+          const d = dayEpoch * 1000, prior = daily.get(d) ?? { day: d, tokens: tokens(), estimatedCostUSD: 0, sessionCount: 0 };
+          daily.set(d, { day: d, tokens: addTokens(prior.tokens, bucket.tokens), estimatedCostUSD: prior.estimatedCostUSD + bucket.costUSD, sessionCount: prior.sessionCount + 1 });
+        }
+      } catch { signal?.throwIfAborted(); /* A failed session read does not discard its readable siblings. */ }
     }
     signal?.throwIfAborted();
     if (dirty && this.cacheFile) { try { atomicJSON(this.cacheFile, this.cache); } catch { /* A cache write failure does not hide live usage. */ } }
@@ -139,13 +142,22 @@ export async function scanCodex(root: string, now = Date.now(), signal?: AbortSi
   const sessions: Session[] = [], daily = new Map<number, Daily>();
   for (const path of paths) {
     signal?.throwIfAborted();
-    const stat = statSync(path), file = await open(path, "r"); let first: Record<string, unknown> = Object.create(null);
-    try { const b = Buffer.alloc(65536); const { bytesRead } = await file.read(b, 0, b.length, 0); const lineEnd = b.subarray(0, bytesRead).indexOf(10); if (lineEnd >= 0) { try { first = object(selectJSON(b.subarray(0, lineEnd).toString("utf8"), codexStartSelection)); } catch { /* mtime is the legacy fallback. */ } } } finally { await file.close(); }
-    const start = date(first.timestamp) ?? stat.mtimeMs, payload = object(first.payload), ledger = await codexLedger(path, signal), cost = estimate(ledger.model, ledger.tokens).costUSD;
-    sessions.push({ id: opaqueID(path), projectName: text(payload.cwd) ? projectName(text(payload.cwd)!) : "", model: ledger.model, tokens: ledger.tokens, estimatedCostUSD: cost, startedAt: start, lastActivityAt: stat.mtimeMs, messageCount: 0, isAutomation: payload.thread_source === "automation" });
+    let modified: number | undefined, first: Record<string, unknown> = Object.create(null);
+    try { modified = statSync(path).mtimeMs; } catch { signal?.throwIfAborted(); }
+    try {
+      const file = await open(path, "r");
+      try { const b = Buffer.alloc(65536); const { bytesRead } = await file.read(b, 0, b.length, 0); const lineEnd = b.subarray(0, bytesRead).indexOf(10); if (lineEnd >= 0) first = object(selectJSON(b.subarray(0, lineEnd).toString("utf8"), codexStartSelection)); } finally { await file.close(); }
+    } catch { signal?.throwIfAborted(); /* mtime is the legacy fallback. */ }
+    const start = date(first.timestamp) ?? modified; if (start === undefined) continue;
+    let ledger = { tokens: tokens(), model: "codex" };
+    try { ledger = await codexLedger(path, signal); } catch { signal?.throwIfAborted(); /* Swift retains dated sessions without a readable token ledger. */ }
+    const payload = object(first.payload), cost = estimate(ledger.model, ledger.tokens).costUSD;
+    sessions.push({ id: opaqueID(path), projectName: text(payload.cwd) ? projectName(text(payload.cwd)!) : "", model: ledger.model, tokens: ledger.tokens, estimatedCostUSD: cost, startedAt: start, lastActivityAt: modified, messageCount: 0, isAutomation: payload.thread_source === "automation" });
     const day = utcDay(start), prior = daily.get(day) ?? { day, tokens: tokens(), estimatedCostUSD: 0, sessionCount: 0 };
     daily.set(day, { day, tokens: addTokens(prior.tokens, ledger.tokens), estimatedCostUSD: prior.estimatedCostUSD + cost, sessionCount: prior.sessionCount + 1 });
   }
+  signal?.throwIfAborted();
+  if (!sessions.length) throw new Unavailable("noData");
   return makeActivity("codex", sessions, [...daily.values()], now);
 }
 function makeActivity(provider: Provider, sessions: Session[], daily: Daily[], now: number): Activity {

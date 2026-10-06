@@ -129,10 +129,12 @@ Independent plan review round 1 requested five revisions: typed UserDefaults com
 
 ### Current execution state
 
-S1 through S3 have executed synthetic fixture/typecheck proof. The current full
-TypeScript fixtures have passing proof for 113 tests; production renderer/main/separate
-preload bundling and bundled schema-1 demo comparison pass. Provider and shell
-source fixes, including archive/reset status and provider/display parity, have
+S1 through S3 have synthetic fixture and TypeScript-check proof. All 119
+current fixtures have matching passing execution receipts, including refreshed
+affected cases and retained unchanged cases. Production renderer, main and
+preload bundles build, and the rebuilt schema-1 demo matches the Swift oracle. Provider and shell
+source fixes, including history projection, per-session degradation, reset visibility,
+rolling shares, archive/reset status and provider/display parity, have
 passing regression checks; complete source review remains
 open. S4 native/T3-rendered proof and all S5 native acceptance remain open.
 S6 public documentation links and whitespace pass; the repository does not
