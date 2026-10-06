@@ -16,6 +16,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Verify the current Apple silicon Electron candidate with 128 macOS fixtures,
+  TypeScript checking, production bundles, extracted ZIP signature checks and
+  the native schema-1 demo CLI. The candidate is ad-hoc signed and unpublished;
+  native GUI acceptance and cutover remain open.
 - Replace the earlier React Native/Tauri Windows plan with the selected macOS
   Electron direction. Windows implementation, installers, CI, testing and
   release are paused until a test machine is available.

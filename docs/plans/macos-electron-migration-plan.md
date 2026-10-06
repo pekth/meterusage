@@ -135,8 +135,9 @@ affected cases and retained unchanged cases. Production renderer, main and
 preload bundles build, and the rebuilt schema-1 demo matches the Swift oracle. Provider and shell
 source fixes, including history projection, per-session degradation, reset visibility,
 rolling shares, archive/reset status and provider/display parity, have
-passing regression checks; complete source review remains
-open. S4 native/T3-rendered proof and all S5 native acceptance remain open.
+passing regression checks. Independent complete-diff review accepted source-only
+draft readiness at `193c2af42bd2a8641accbb3f7b5b333ba6cd9ac3`, and draft PR 52
+is open. S4 native/T3-rendered proof and S5 native GUI acceptance remain open.
 S6 public documentation links and whitespace pass; the repository does not
 provide `scripts/documentation.py`. No Electron release,
 installation or cutover has occurred. Source-only draft delivery is allowed
@@ -147,14 +148,25 @@ The first native candidate attempt passed symbol export, production bundling
 and TypeScript checking. Its fixtures passed 90 cases and failed 29: 28 used
 temporary-path aliases rejected by candidate isolation, and one assumed a
 case-sensitive filesystem. Canonical fixture roots and exact directory-entry
-checks now pass all 51 affected cases on Linux. Preserve the symlink guard;
-the corrected macOS fixture run remains pending.
+checks first passed all 51 affected cases on Linux. The current macOS run now
+passes all 128 fixtures, TypeScript checking and production bundling. The
+symlink guard is unchanged.
 
 Packaging failed when the dependency collector resolved a broken pnpm
-launcher. Use a candidate-local PATH alias to the verified existing executable
-for the next bounded native diagnostic. No host configuration change is needed.
-There is no verified candidate ZIP, signature or native UI evidence from this
-attempt.
+launcher. A temporary candidate-local PATH alias to the existing executable
+resolved that failure without host configuration changes. The command session
+was lost across an interrupted turn, so its exit code is unknown. Separate
+verification proves the resulting ZIP extracts, its arm64 bundle passes strict
+ad-hoc signature checks, and its native demo CLI exits successfully with stable
+schema-1 fields matching the Swift oracle. The comparison excludes
+`generated_at`, `resets_at`, `burn_rate`, `eta_seconds` and `eta_text`.
+
+The ZIP is 116,696,318 bytes, SHA-256
+`4ea7a6f297402958a52173696880f8183a05454c2e08966d71ebeaa69f52e634`,
+and the extracted bundle uses 290,148 KiB on disk. This artifact binds source
+`193c2af42bd2a8641accbb3f7b5b333ba6cd9ac3`. It is not notarized, installed
+or published. Native GUI journeys, two-height notch captures, idle RSS and
+cold/warm scan timing remain open.
 
 The next independent review found invalid dates in disposable Claude cache
 entries and shared provider parsing. Cache dates and costs now validate before
