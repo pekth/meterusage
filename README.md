@@ -28,8 +28,8 @@
 * **100% Private & Zero Setup**: No accounts to connect, no passwords entered. Reads already-authenticated local CLI sessions and local SQLite/JSON logs on your machine.
 * **Agent Budget API**: Machine-readable JSON CLI (`meterusage json`) exporting burn rates, pacing, and time-to-empty for autonomous AI agents.
 
-[Download the prebuilt app](https://github.com/pekth/meterusage/releases/latest),
-unzip the `MeterUsage-X.Y.Z.zip` asset, and drag `MeterUsage.app` to
+[Download MeterUsage 0.2.41 for Apple silicon](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip),
+unzip it, and drag `MeterUsage.app` to
 **Applications**. No Swift, Xcode, Command Line Tools, or Git is required.
 The current prebuilt release supports Apple silicon Macs with macOS 13 or later.
 See [installation](#download-and-installation) for first-launch steps.
@@ -149,7 +149,7 @@ meterusage is built from the ground up to respect developer privacy:
 Installing and running MeterUsage does not require Swift, Xcode, Command Line
 Tools, or Git. The Swift runtime it uses ships with macOS.
 
-1. Download the `MeterUsage-X.Y.Z.zip` app asset from [Latest Releases](https://github.com/pekth/meterusage/releases/latest). Choose the app ZIP, not GitHub's **Source code** archives. The current asset is for Apple silicon Macs (M1 or later) with macOS 13 or later.
+1. [Download MeterUsage 0.2.41 for Apple silicon](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip). This app ZIP is for Apple silicon Macs (M1 or later) with macOS 13 or later. Other versions are on [Releases](https://github.com/pekth/meterusage/releases). Choose the app ZIP, not GitHub's **Source code** archives.
 2. Unzip and drag `MeterUsage.app` to your `/Applications/` folder.
 3. Open `MeterUsage.app`. Releases are ad-hoc signed and are not notarized. If macOS blocks the first launch, right-click the app in Finder and choose **Open**, or use **Open Anyway** in System Settings → Privacy & Security.
 
@@ -164,24 +164,11 @@ and is not the normal installation path.
 * Apple silicon Mac with macOS 13 Ventura or later for the current prebuilt release.
 * A supported provider CLI or data source for the meters you want to use. Provider accounts are not required to install the app or run demo mode.
 
-### Build from source (contributors)
+### Contributing
 
-Only source builds and contribution require Swift and Xcode Command Line Tools
-(`xcode-select --install`). See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and
-validation. You can skip this section when installing the prebuilt app.
-
-```sh
-# Clone & build native app bundle
-git clone https://github.com/pekth/meterusage.git
-cd meterusage
-./Scripts/make-app.sh && open dist/
-
-# Run unit tests
-swift test
-
-# Launch in safe Demo Mode (synthetic data for showcase and testing)
-METERUSAGE_DEMO=1 open dist/MeterUsage.app --args --demo
-```
+Swift and Xcode Command Line Tools are needed only to build from source.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for developer setup, build commands,
+and tests.
 
 ### Agent Budget CLI
 To consume quota telemetry programmatically in scripts or agents:
