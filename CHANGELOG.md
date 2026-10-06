@@ -6,6 +6,23 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Add a macOS TypeScript/Electron/React migration candidate and headless
+  schema-1 JSON CLI, with synthetic provider, account, history, pacing and IPC
+  tests. Use pnpm, Vite+, Tailwind, Vitest and electron-builder. Retain Swift as
+  the behavior oracle until native acceptance passes. No Electron release or
+  installed-app replacement is included.
+
+### Changed
+
+- Replace the earlier React Native/Tauri Windows plan with the selected macOS
+  Electron direction. Windows implementation, installers, CI, testing and
+  release are paused until a test machine is available.
+- Correct privacy documentation for Codex token/model ledger reads, transient
+  project paths, existing Grok/OpenCode keys, managed accounts and hourly
+  update checks. Provider files and credentials stay in the main process.
+
 ### Fixed
 
 - `Scripts/make-app.sh` now downloads and verifies the prebuilt app by default,

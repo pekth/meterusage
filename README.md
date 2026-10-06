@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2013%2B-blue?style=flat-square" alt="Platform: macOS 13+">
-  <img src="https://img.shields.io/badge/privacy-100%25%20local%20%7C%20zero%20telemetry-brightgreen?style=flat-square" alt="Privacy: 100% local">
+  <img src="https://img.shields.io/badge/privacy-no%20telemetry-brightgreen?style=flat-square" alt="Privacy: no telemetry">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
 </p>
 
@@ -25,7 +25,7 @@
 * **Ambient Time-to-Empty**: Live depletion velocity against reset deadlines (`~47m left at current pace` / `Paced to last until reset`) directly in the menu bar and side notch.
 * **Burn Attribution & Context Waste**: Token breakdown by project, model, and turns over the last 7 days across every token-bearing provider, plus cache-hit efficiency % and long-chat flags.
 * **Durable Daily History**: Local summary store surviving CLI transcript purges and session cleanup.
-* **100% Private & Zero Setup**: No accounts to connect, no passwords entered. Reads already-authenticated local CLI sessions and local SQLite/JSON logs on your machine.
+* **Existing provider access**: No accounts to connect or passwords to enter. Uses existing provider CLIs, local SQLite/JSON stores and aggregate usage endpoints.
 * **Agent Budget API**: Machine-readable JSON CLI (`meterusage json`) exporting burn rates, pacing, and time-to-empty for autonomous AI agents.
 
 [Download MeterUsage 0.2.41 for Apple silicon](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip),
@@ -33,6 +33,27 @@ unzip it, and drag `MeterUsage.app` to
 **Applications**. No Swift, Xcode, Command Line Tools, or Git is required.
 The current prebuilt release supports Apple silicon Macs with macOS 13 or later.
 See [installation](#download-and-installation) for first-launch steps.
+
+---
+
+## macOS Electron migration candidate
+
+The macOS app and schema-1 JSON CLI are being ported to TypeScript, Electron
+and React. The candidate uses pnpm, Vite+, Tailwind, Vitest and electron-builder.
+The downloadable 0.2.41 app above remains the Swift release. The Electron
+candidate has not passed native macOS acceptance and is not a published release.
+
+Provider readers and credentials stay in the main process. The sandboxed
+renderer receives validated snapshots through a small IPC bridge. Existing
+history/archive JSON, preference keys, managed account IDs and provider marks
+remain compatibility targets. Windows implementation, installers, testing and
+release are paused until a test machine is available.
+
+See [the migration decision](docs/adr/0010-macos-typescript-electron.md),
+[contributor commands](CONTRIBUTING.md#typescript-electron-candidate), and
+[isolated demo testing](docs/DEMO.md#electron-candidate). Native tray, settings,
+notifications, login items, sharing, updater and two different-height notch
+captures are required before cutover.
 
 ---
 
@@ -87,9 +108,9 @@ Toggle providers on or off, choose refresh cadence, and switch themes and the ac
 | **OpenRouter** | ✅ | ✅ | ✅ | — | Public account API & `/api/v1/activity` telemetry |
 | **Grok** | ✅ | ✅ | ✅ | — | CLI auth bearer token & session summaries |
 | **OpenCode Go** | ✅ | ✅ | ✅ | — | Local `opencode db` read-only queries |
-| **Cursor** | ✅ | ✅ | ✅ | — | Local sqlite state & token usage cache |
-| **Copilot CLI** | ✅ | ✅ | ✅ | — | Local GitHub CLI auth token & token telemetry |
-| **Gemini CLI** | ✅ | ✅ | ✅ | — | Local Gemini CLI session state |
+| **Cursor** | Local snapshot | — | Snapshot-dependent | — | Existing local quota/usage JSON or presence check |
+| **Copilot CLI** | Local snapshot | — | Snapshot-dependent | — | Existing local quota/usage JSON or presence check |
+| **Gemini CLI** | Local snapshot | — | Snapshot-dependent | — | Existing local quota/usage JSON or presence check |
 
 <small>*Claude publishes no public quota API; meterusage reads an on-disk JSON snapshot if a local companion writes one (see [docs/COMPANION.md](docs/COMPANION.md) and [`Scripts/claude-companion.sh`](Scripts/claude-companion.sh)).</small>
 
@@ -126,7 +147,7 @@ appear once the directory exists. Removing a row stops metering that account;
 nothing in the directory is deleted.
 
 Slots are named by your own label ("Codex · Work", a digit beside the mark in
-the tray and notch); no account identifier is ever read or displayed. Each
+the tray and notch); no provider account identifier is read or displayed. Each
 account stays under its own keys in the Agent Budget API, which reports the
 label in an additive `account` field.
 
@@ -136,9 +157,9 @@ label in an additive `account` field.
 
 meterusage is built from the ground up to respect developer privacy:
 * **No Network Man-in-the-Middle**: Reuses the authenticated CLI sessions already on your Mac.
-* **No Prompts or Code Read**: Reads only numeric session metadata, token tallies, and timestamps. Project identifiers are strictly directory basenames. Never opens prompt contents, tool payloads, or file diffs.
+* **Selective local reads**: Selects numeric session metadata, token tallies, model names and timestamps. Project directories become basenames. Message content, tool payloads and file diffs are skipped.
 * **No Telemetry / Analytics**: Zero outgoing telemetry calls.
-* **Sandboxed & Inspectable**: Full privacy architecture documented in [docs/PRIVACY.md](docs/PRIVACY.md).
+* **Inspectable data boundary**: Full privacy architecture documented in [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ---
 

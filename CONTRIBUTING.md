@@ -12,9 +12,9 @@ pull request.
 
 ## Before you start
 
-meterusage is a macOS 13+ Swift menu-bar app. The package uses Swift tools
-version 5.9 and has no third-party package dependencies. Install Xcode Command
-Line Tools before building:
+The published app is a macOS 13+ Swift menu-bar app. A TypeScript/Electron
+candidate is under development; see the candidate commands below. The package uses Swift tools
+version 5.9 and has no third-party package dependencies. Swift source builds need Xcode Command Line Tools:
 
 ```sh
 xcode-select --install
@@ -63,7 +63,8 @@ git fetch upstream
 git rebase upstream/main
 ```
 
-Run the test commands again after a rebase.
+After a rebase, rerun checks affected by changed inputs and refresh independent
+review. Reuse matching checks for unchanged artifacts and inputs.
 
 ## Commit messages
 
@@ -115,6 +116,55 @@ not move, and include the captures in the pull request. See
 [`docs/adr/0004`](docs/adr/0004-side-notch-anchor-invariant.md).
 
 See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
+
+## TypeScript Electron candidate
+
+Use the Node and pnpm versions declared in `package.json`. Provider accounts
+are optional; synthetic tests and demo mode require no login. Shared checks
+can run on Linux. Packaging, system symbol export and native acceptance require
+macOS with the existing Swift and signing tools.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test
+pnpm build
+node dist/main/cli.cjs json --force --demo --candidate-profile /tmp/meterusage-cli-demo
+```
+
+The candidate profile must be an empty test directory on first use. It may be
+reused for relaunch checks after the candidate creates its marker. All demo
+preferences, caches, history and Electron state stay in that profile.
+
+On macOS, build and launch a separate candidate without installing it:
+
+```sh
+pnpm package:mac
+./release/mac-arm64/MeterUsage.app/Contents/MacOS/meterusage --demo --candidate-profile /tmp/meterusage-native-demo
+```
+
+`package:mac` exports the existing SF Symbol stand-ins, builds the app and
+packages an Apple silicon ZIP with publication disabled. It does not install
+or replace an app. Do not upload this candidate as the current public release.
+Windows packaging, CI, native testing and release remain paused.
+
+Changes live in `src/domain/` (shared calculations), `src/main/` (provider
+readers, persistence, coordination and native shell), `src/shared/` (IPC DTOs),
+`src/renderer/` (React UI) and `tests/` (synthetic fixtures). Provider paths,
+credentials and raw responses must stay out of renderer imports. Settings may
+show a reduced directory label chosen by the user.
+
+TypeScript tests and builds do not prove native parity. Before cutover, record
+candidate identity/digest/signature, headless JSON, launch and relaunch,
+settings/account isolation, offline failures, notification/login behavior,
+sharing and updater paths. Capture two different-height provider cards on
+macOS and confirm the top edge and strip stay fixed. Use only synthetic reset
+credits. Keep the published app and its data untouched during candidate QA.
+Retained Swift sources are the behavior oracle and rollback path. Run affected
+Swift checks when those inputs change; reuse matching receipts otherwise.
+
+See [ADR 0010](docs/adr/0010-macos-typescript-electron.md) and
+[the migration plan](docs/plans/macos-electron-migration-plan.md).
 
 ## Where to make changes
 

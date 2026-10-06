@@ -43,3 +43,12 @@ NO-LOOPS.md
 .handoff/
 build/
 .automation/
+
+# TypeScript / Electron candidate output
+node_modules/
+.vite-plus/
+release/
+coverage/
+
+# Generated from the existing macOS SF Symbol stand-ins.
+Resources/*-symbol.png

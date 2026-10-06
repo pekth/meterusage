@@ -68,4 +68,28 @@ Percentages span calm green and amber warning bands so screenshots demonstrate c
 - **Strict Activation**: The environment variable must be exactly `1`. Values like `true`, `yes`, or `0` remain off.
 - **Whole-App Integrity**: Evaluated once at composition root — the dashboard is never partially real and partially fake.
 - **Prominent Badge**: A **Demo** badge is displayed in the header to prevent any confusion with live telemetry.
-- **Zero Disk & Network Access**: Demo sources perform no network requests, touch no external disk files, and invoke no CLI commands.
+- **Synthetic sources**: Demo provider sources perform no network requests and invoke no provider CLI commands. The Electron candidate writes its own isolated preferences, history and cache files.
+
+## Electron candidate
+
+After `pnpm build`, run the candidate JSON path without a tray or window:
+
+```sh
+node dist/main/cli.cjs json --demo --candidate-profile /tmp/meterusage-cli-demo
+```
+
+On macOS, launch the separate packaged candidate directly:
+
+```sh
+./release/mac-arm64/MeterUsage.app/Contents/MacOS/meterusage --demo --candidate-profile /tmp/meterusage-native-demo
+```
+
+The explicit profile must be empty on first use. Demo mode selects synthetic
+providers before composition and isolates all preferences, caches, history and
+Electron state. Relaunch with the same profile to test persistence. Live
+provider discovery, login-item changes and update installation are disabled.
+Demo reset confirmation consumes only synthetic fixture credits. The original
+logo PNGs are reused; SF Symbol stand-ins are exported on macOS during packaging.
+
+Native candidate UI and two different-height notch captures remain required
+acceptance evidence. Swift screenshots above do not prove Electron rendering.

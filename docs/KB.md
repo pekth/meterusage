@@ -1,19 +1,19 @@
 # Project knowledge
 
-Last verified: 2026-09-29
+Last source review: 2026-10-06
 
 ## Repository state
 
 - Default branch: `main`.
-- Reviewed source revision: `1c4f169`.
+- Swift baseline revision: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. The Electron candidate is the accompanying migration change; native acceptance remains open.
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
 
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
-- The app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure. Its AppKit and SwiftUI imports require macOS for package build and test checks; Swift itself supports other platforms. `AGENTS.md` describes a generic macOS SSH route for Linux development without private host aliases.
+- The published app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure. Its AppKit and SwiftUI imports require macOS for package build and test checks; Swift itself supports other platforms. `AGENTS.md` describes a generic macOS SSH route for Linux development without private host aliases.
 - `README.md` links directly to the prebuilt v0.2.41 app ZIP as the default installation path. Installing and running it does not require Swift, Xcode, Command Line Tools, or Git; its Swift runtime ships with macOS. `Scripts/make-app.sh` also downloads that pinned release by default, checks its SHA-256 and code signature, and prepares `dist/MeterUsage.app` without compiling or installing developer tools. It copies and verifies the replacement in staging on the destination filesystem before replacing existing output, so copy or verification failures preserve the previous generated app. It rejects unsupported platforms and never falls back to a source build. Source builds require `--build-from-source` and are documented in `CONTRIBUTING.md`. The v0.2.41 asset targets Apple silicon and macOS 13 or later, is ad-hoc signed, and is not notarized. GitHub's source archives contain source and scripts, not an app bundle. ADR 0009 records the script's default.
-- Provider data sources are implemented under `Sources/MeterUsage/Services/`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
+- Swift provider data sources are implemented under `Sources/MeterUsage/Services/`; the candidate adapters live under `src/main/providers/` and `src/main/composition.ts`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
 - Antigravity quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
 - `Resources/Info.plist` and `CHANGELOG.md` record version 0.2.41, build 46, dated 2026-10-05. This release collects fresh quota observations after an accepted manual Codex reset, derives pacing and ETA from later usage growth, and removes the redeemed reset credit from archived quota data. The previous release was 0.2.40, which added accent colour themes, Codex cost estimates, and refreshed model prices. Repository version and release-note entries do not prove that a GitHub Release or its downloadable asset has been published.
@@ -30,10 +30,16 @@ Last verified: 2026-09-29
 - Provider mark tint is identity unless the service check diverges from healthy (`MenuBarLabel.statusTint(_:for:)`): operational keeps `providerColor`, degraded/outage repaint amber/red, unreadable goes neutral grey. Quota headroom tint stays on rings and percents only; the side notch, menu bar, and status rows share this rule per ADR 0002's mark semantics.
 - The app accent is user-selectable (`AccentTheme`, Settings → Appearance): Blue (default), Violet, Teal, Amber, Rose, and Graphite, persisted under `accentTheme`. `MU.accent` resolves the choice, so the popover heatmap, sparkline, accent text, and interactive control tint, the primary provider's (Codex's) mark, and the side notch chrome (body, card, ring disc/track) all recolour together. Headroom green/amber/red and every other provider identity stay fixed. Dark neutral surfaces are dark greys (popover canvas/surface/well and the notch body/card), not black.
 - Side notch chrome is derived per theme in `SideNotchPanelView` by an HSV mix pinned to the popover surface's Rec. 709 relative luminance (`blendTinted`), so every accent renders at the same perceived brightness as the window beside it. The notch bands and hues delegate to the shared `headroomColor`/`MU` scale (80/95 thresholds), and the panel window forces `darkAqua` so those tokens resolve their dark variants on the strip.
-- Second accounts (multi-account support, ADR 0005): `.codexAlt` / `.claudeAlt` provider slots are keyed by an alternate config directory resolved in `AccountSlots` (`Sources/MeterUsage/Services/DataSource.swift`) from `METERUSAGE_CODEX_ALT_HOME` / `METERUSAGE_CLAUDE_ALT_CONFIG` or the `meterusage.codexAltHome` / `meterusage.claudeAltConfig` defaults keys, which are editable in Settings → Providers. A slot exists only when its directory exists; slots never merge with the primary account, keep per-slot durable history and archive keys, and are named by position only (no account identity is read). The JSON report lists them under `codexAlt` / `claudeAlt`.
+- ADR 0006 replaces fixed alternate cases with a managed account list for Codex and Claude. Generated app IDs, provider, user label, directory and enabled state persist as JSON in UserDefaults Data. Primary keys retain their old form; additional history/archive keys use provider plus generated ID, and schema-1 reports add `account` labels. Rename preserves identity; remove stops metering without deleting provider files. No provider account identity is read for labels.
+- ADR 0010 selects macOS TypeScript/Electron/React with pnpm, Vite+, Tailwind, Vitest and electron-builder. Main owns provider files/keys, native actions and persistence; a separate sandbox-compatible preload exposes sender-validated IPC to React. The candidate keeps JSON/history/archive and known preference formats. Swift remains the oracle and rollback path. No server or remote control layer is added.
+- Windows implementation, installers, CI, testing and releases are paused until a test machine is available. The former RN/Tauri Windows-first plan is superseded; shared portable source does not establish Windows support.
+- Candidate checks use synthetic fixtures. Demo/candidate selection isolates preferences, history, caches and Electron state before composition. Live provider/key discovery, updater installation and login-item changes are disabled in demo. `pnpm package:mac` creates a separate candidate with publication disabled, using existing macOS tools.
+- Current source checks pass 87 TypeScript fixture tests, TypeScript checking and production bundling. The bundled headless demo preserves stable schema-1 fields against the Swift demo oracle. This is source/fixture evidence only, not native parity or a published Electron release.
+
 
 ## Verification gaps
 
+- The Electron candidate still needs native bundle identity/digest/signature, launch/relaunch, preferences round-trip, tray/notification/login/share/updater paths and two different-height notch captures. Source-only draft delivery cannot close migration or cutover.
 - Repository files do not prove current provider authentication, quota freshness, network responses, local machine state, app installation, signed-bundle state, GitHub Release state, or runtime UI behavior.
 - Treat cost figures as estimates. `README.md` identifies provider dashboards as the billing source of record.
 
@@ -47,9 +53,10 @@ Last verified: 2026-09-29
 - [`docs/PRIVACY.md`](PRIVACY.md): data-handling boundaries and enforcement claims.
 - [`docs/DEMO.md`](DEMO.md): synthetic demo mode.
 - [`docs/SIDE-NOTCH.md`](SIDE-NOTCH.md): side notch states, anchor and geometry invariants, interaction, and verification.
-- [`docs/adr/0005-multi-account-slots.md`](adr/0005-multi-account-slots.md): second-account slot decision.
+- [`docs/adr/0006-managed-account-list.md`](adr/0006-managed-account-list.md): current managed-account decision.
+- [`docs/adr/0010-macos-typescript-electron.md`](adr/0010-macos-typescript-electron.md): macOS migration and Windows hold.
 - [`docs/mockups/README.md`](mockups/README.md): Wave 1–3 concept mockups; provider marks stay.
-- [`docs/plans/feature-and-windows-pipeline.md`](plans/feature-and-windows-pipeline.md): macOS feature waves + Windows track.
+- [`docs/plans/feature-and-windows-pipeline.md`](plans/feature-and-windows-pipeline.md): superseded platform plan, current macOS direction and Windows hold.
 - [`Package.swift`](../Package.swift): package targets and platform requirement.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md): contribution and validation commands.
 - [`CHANGELOG.md`](../CHANGELOG.md): repository release-note history.
@@ -61,4 +68,4 @@ Last verified: 2026-09-29
 - [ci.yml](../.github/workflows/ci.yml) uses full-SHA v7 pins for `actions/checkout`. Application language versions and explicit cache settings are preserved.
 - Obsolete runs for the same pull request or branch are cancelled. Existing timeout caps are preserved.
 
-Reviewed base: `a393b0bfa8d4fbc0ef533a42eb92c32a236c943e`. Source checks do not prove runtime, deployment or device behavior.
+Reviewed Swift base: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. Source checks do not prove runtime, deployment or device behavior.
