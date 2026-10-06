@@ -25,6 +25,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Invalidate live readings and reset confirmations when a candidate account
+  source changes. Reject late results and reset completion from the old source
+  while keeping dated slot archives and durable history.
+- Measure shared cards at full height. Reject captures above 8,192 pixels with
+  an explicit error instead of exporting a cropped image.
 - Hide candidate accounts whose configured directory disappears. Bind sharing
   to the displayed card, hide forecasts when pacing is off, restore active-window
   burn detail and bound tall notch cards to the display work area.

@@ -22,6 +22,7 @@ export type Request =
   | { action: "reset"; key: string; creditID: string }
   | { action: "notchSelect"; key: string }
   | { action: "notchHover"; hovering: boolean }
+  | { action: "shareResize"; height: number }
   | { action: "resize"; height: number; width?: number };
 export type Reply = { ok: true; state?: ViewState } | { ok: false; error: string };
 export interface Bridge { request(request: Request): Promise<Reply>; subscribe(observer: (state: ViewState) => void): () => void }

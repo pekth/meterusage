@@ -64,6 +64,35 @@ describe("coordinator refresh journey", () => {
   });
 });
 describe("explicit per-account reset journey", () => {
+  it("discards every late reading from a replaced source, including failures and durable writes", async () => {
+    let hold = false, release!: () => void;
+    const paused = new Promise<void>(resolve => { release = resolve; }), slot = { provider: "codex" as const, slotID: "demo-second", label: "Account" }, key = slotKey(slot);
+    const old: Source = { slot, quota: async () => { if (hold) await paused; const q = quota("codex", [window("5-hour", hold ? 99 : 82)], now); q.resetCredits = [{ id: "old-credit", title: "Old reset" }]; return q; }, activity: async () => { if (hold) await paused; return { provider: "codex", scannedAt: now, sessions: [], daily: [{ day: now, tokens: tokens({ input: hold ? 100 : 5 }), sessionCount: 1, estimatedCostUSD: 0 }] }; }, usage: async () => { if (hold) await paused; throw new Unavailable("offline"); }, plan: async () => { if (hold) await paused; return "old-plan"; }, consumeReset: async () => true };
+    const { c } = await setup([old]); await c.refresh(); hold = true;
+    const pending = c.refresh(); await Promise.resolve();
+    c.sources = [{ slot, quota: async () => { throw new Unavailable("offline"); }, consumeReset: async () => true }];
+    const seen: number[] = []; c.subscribe(s => { const q = s.quotas[key]; if (q?.status === "value") seen.push(q.value.windows[0].usedPercent); });
+    release(); await pending;
+    expect(seen).toEqual([]); expect(c.quotas[key].status).toBe("missing");
+    expect(c.activities[key]).toBeUndefined(); expect(c.usages[key]).toBeUndefined(); expect(c.plans[key]).toBeUndefined();
+    expect(c.archived[key].windows[0].usedPercent).toBe(82); expect(c.history.records(key)[0].tokens.input).toBe(5);
+    expect(() => c.prepareReset(key, "old-credit")).toThrow("unavailable");
+  });
+  it("requires current-source readings after account replacement, while preserving dated history", async () => {
+    const slot = { provider: "codex" as const, slotID: "demo-second", label: "Account" }, key = slotKey(slot);
+    const oldQuota = quota("codex", [window("5-hour", 82)], now); oldQuota.resetCredits = [{ id: "old-credit", title: "Old reset" }];
+    const nextQuota = quota("codex", [window("5-hour", 7)], now); nextQuota.resetCredits = [{ id: "new-credit", title: "New reset" }];
+    const stable = { slot: primary("claude"), quota: async () => quota("claude", [window("5-hour", 34)], now) };
+    const old: Source = { slot, quota: async () => oldQuota, activity: async () => ({ provider: "codex", scannedAt: now, sessions: [], daily: [{ day: now, tokens: tokens({ input: 5 }), sessionCount: 1, estimatedCostUSD: 0 }] }), usage: async () => ({ provider: "codex", capturedAt: now, sessionCount: 1, messageCount: 2, todaySessionCount: 1, todayMessageCount: 2 }), plan: async () => "old-plan", consumeReset: async () => true };
+    const { c } = await setup([old, stable]); await c.refresh();
+    c.sources = [{ slot, quota: async () => nextQuota, consumeReset: async () => true }, stable];
+    for (const readings of [c.quotas, c.activities, c.usages, c.plans]) expect(readings[key]).toBeUndefined();
+    expect(c.quotas.claude.status).toBe("value"); expect(c.archived[key].windows[0].usedPercent).toBe(82); expect(c.history.records(key)[0].tokens.input).toBe(5);
+    expect(() => c.prepareReset(key, "old-credit")).toThrow("unavailable");
+    await c.refresh(); expect(c.quotas[key]).toMatchObject({ status: "value", value: { windows: [{ usedPercent: 7 }] } });
+    expect(() => c.prepareReset(key, "old-credit")).toThrow("unavailable");
+    const current = c.prepareReset(key, "new-credit"); c.cancelReset(current.token);
+  });
   it("cancellation and duplicate confirmation cannot consume and one accepted fixture changes only its account", async () => {
     let at = now; const { c } = await setup(undefined, () => at); await c.refresh();
     const key = "codex#demo-second", cancelled = c.prepareReset(key, "demo-reset-1"); c.cancelReset(cancelled.token); await expect(c.confirmReset(cancelled.token)).rejects.toThrow("expired");

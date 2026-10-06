@@ -63,6 +63,12 @@ it("exports at least two pixels per point on 1x and preserves higher backing sca
   expect(minimumShareSize(250, 351, 1)).toEqual({ width: 500, height: 702 });
   expect(minimumShareSize(250, 351, 3)).toEqual({ width: 750, height: 1053 });
 });
+it("captures tall cards in full and rejects oversized images without cropping", () => {
+  expect(minimumShareSize(250, 2500, 2)).toEqual({ width: 500, height: 5000 });
+  expect(minimumShareSize(250, 4096, 2)).toEqual({ width: 500, height: 8192 });
+  expect(() => minimumShareSize(250, 4097, 2)).toThrow("Card too tall to share");
+  expect(() => minimumShareSize(250, 3000, 3)).toThrow("Card too tall to share");
+});
 it("bounds oversized notch content to the work area without changing normal anchors", () => {
   const screen = { x: 0, y: 60, width: 1200, height: 800 }, anchor = { x: 700, y: 100 };
   for (const right of [true, false]) {

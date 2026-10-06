@@ -26,6 +26,7 @@ export function parseRequest(raw: unknown): Request {
     case "reset": fields = ["key", "creditID"]; valid = key(r.key) && string(r.creditID, 200) && r.creditID !== ""; break;
     case "notchSelect": case "share": fields = ["key"]; valid = key(r.key); break;
     case "notchHover": fields = ["hovering"]; valid = typeof r.hovering === "boolean"; break;
+    case "shareResize": fields = ["height"]; valid = typeof r.height === "number" && Number.isFinite(r.height) && r.height >= 20; break;
     case "resize": fields = ["height", ...("width" in r ? ["width"] : [])]; valid = typeof r.height === "number" && Number.isFinite(r.height) && r.height >= 20 && r.height <= 2000 && (!("width" in r) || typeof r.width === "number" && Number.isFinite(r.width) && r.width >= 1 && r.width <= 10000); break;
   }
   if (!valid || Object.keys(r).some(k => k !== "action" && !fields.includes(k)) || fields.some(k => !(k in r))) throw new Error("Invalid request");

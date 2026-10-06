@@ -123,7 +123,10 @@ export function App({ bridge }: { bridge: Bridge }) {
   useEffect(() => {
     const node = content.current; if (!node || !state || surface === "settings") return;
     let last = 0;
-    const observer = new ResizeObserver(() => { const height = Math.min(2000, Math.max(20, Math.ceil(node.scrollHeight))), width = surface === "tray" ? Math.ceil(node.scrollWidth) : undefined, size = width ?? height; if (size !== last) { last = size; void bridge.request({ action: "resize", height, ...(width === undefined ? {} : { width }) }); } }); observer.observe(node); return () => observer.disconnect();
+    const observer = new ResizeObserver(() => {
+      const height = Math.max(20, Math.ceil(node.scrollHeight)), width = surface === "tray" ? Math.ceil(node.scrollWidth) : undefined, size = width ?? height;
+      if (size !== last) { last = size; void bridge.request(surface === "share" ? { action: "shareResize", height } : { action: "resize", height: Math.min(2000, height), ...(width === undefined ? {} : { width }) }); }
+    }); observer.observe(node); return () => observer.disconnect();
   }, [bridge, !!state, surface]);
   const action = async (r: Request) => { setError(""); try { const reply = await bridge.request(r); if (!reply.ok) setError(reply.error); } catch { setError("Could not complete action"); } };
   if (!state) return <p className="empty" role="status">{error || "Loading usage…"}</p>;

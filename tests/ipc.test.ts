@@ -34,3 +34,9 @@ it("binds sharing to the displayed account key", () => {
   expect(parseRequest({ action: "share", key: "claude#fixture-account" })).toEqual({ action: "share", key: "claude#fixture-account" });
   for (const raw of [{ action: "share" }, { action: "share", key: "claude#../other" }, { action: "share", key: "claude", path: "/tmp" }]) expect(() => parseRequest(raw)).toThrow();
 });
+
+it("reports full shared-card height separately from bounded window resizing", () => {
+  expect(parseRequest({ action: "shareResize", height: 2500 })).toEqual({ action: "shareResize", height: 2500 });
+  expect(parseRequest({ action: "shareResize", height: 5000 }).action).toBe("shareResize");
+  for (const raw of [{ action: "resize", height: 2500 }, { action: "shareResize", height: Infinity }, { action: "shareResize", height: 0 }, { action: "shareResize", height: 100, width: 250 }]) expect(() => parseRequest(raw)).toThrow();
+});

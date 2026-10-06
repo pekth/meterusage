@@ -34,8 +34,23 @@ export class Coordinator {
   private controllers = new Set<AbortController>();
   private confirmations = new Map<string, { key: string; creditID: string; expires: number; source: Source }>();
   private resets = new Set<string>();
-  constructor(readonly launch: Launch, readonly preferences: Preferences, public sources: Source[], readonly now: () => number = Date.now, readonly notify: (alert: Alert) => void = () => {}) {
+  private currentSources: readonly Source[];
+  constructor(readonly launch: Launch, readonly preferences: Preferences, sources: Source[], readonly now: () => number = Date.now, readonly notify: (alert: Alert) => void = () => {}) {
+    this.currentSources = sources;
     this.history = new HistoryStore(join(launch.data, "durable-daily-history.json")); this.archived = readArchive(join(launch.data, "quota-archive.json"));
+  }
+  get sources(): readonly Source[] { return this.currentSources; }
+  set sources(next: readonly Source[]) {
+    for (const source of this.currentSources) if (!next.includes(source)) {
+      const key = slotKey(source.slot);
+      for (const readings of [this.quotas, this.activities, this.usages, this.plans]) delete readings[key];
+      for (const kind of ["quota", "activity", "usage", "plan"]) this.backoffs.delete(`${kind}-${key}`);
+      for (const [token, intent] of this.confirmations) if (intent.source === source) this.confirmations.delete(token);
+    }
+    // Durable slot history and dated archives survive directory/label edits.
+    this.currentSources = next;
+    if (this.inflight) this.pendingForced = true;
+    this.publish();
   }
   visible(source: Source) {
     const s = source.slot;
@@ -122,7 +137,7 @@ export class Coordinator {
     try { result = value(await Promise.race([read(controller.signal), aborted])); }
     catch (e) { result = missing(e, source.slot.provider); }
     finally { clearTimeout(timeout); this.controllers.delete(controller); }
-    if (this.stopped) return;
+    if (this.stopped || !this.sources.includes(source) || (kind !== "status" && !this.visible(source))) return;
     if (kind === "quota") {
       const previous = this.archived[key];
       if (previous?.resetPacingSince !== resetAtStart) return;
@@ -152,6 +167,7 @@ export class Coordinator {
     this.resets.add(intent.key);
     try {
       if (!await source.consumeReset(intent.creditID)) throw new Unavailable("failed", "Codex");
+      if (this.stopped || !this.sources.includes(source) || !this.visible(source)) throw new Error("Reset source replaced");
       const acceptedAt = this.now();
       const latest = this.quotas[intent.key];
       this.archived[intent.key] = resetPacing(latest?.status === "value" ? latest.value : this.archived[intent.key] ?? q.value, undefined, acceptedAt, undefined, intent.creditID);

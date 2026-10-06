@@ -45,7 +45,7 @@ async function start() {
   tray.setToolTip("MeterUsage");
   tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showFlyout() }, { label: "Settings…", click: () => showSettings() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
   tray.on("click", () => { const w = windows.get("flyout"); w?.isVisible() ? w.hide() : showFlyout(); });
-  let shareState: ViewState | undefined, shareHeight = 0, shareReady: ((image: Electron.NativeImage) => void) | undefined;
+  let shareState: ViewState | undefined, shareHeight = 0, shareReady: ((image: Electron.NativeImage) => void) | undefined, shareFailed: ((error: Error) => void) | undefined;
   const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
   const updater = new Updater(prefs, app.getVersion(), publish, undefined, release => {
     if (!launch.demo && Notification.isSupported()) new Notification({ title: "MeterUsage update available", body: `MeterUsage ${release.version} is ready to install.`, silent: true }).show();
@@ -139,7 +139,7 @@ async function start() {
     publish();
   }
   async function handle(r: Request, source: BrowserWindow, surface: Surface): Promise<Reply> {
-    if (["tray", "share"].includes(surface) && !["state", "resize"].includes(r.action)) throw new Error("Invalid request");
+    if (surface === "tray" && !["state", "resize"].includes(r.action) || surface === "share" && !["state", "shareResize"].includes(r.action)) throw new Error("Invalid request");
     switch (r.action) {
       case "state": return { ok: true, state: state(surface) };
       case "refresh": await coordinator.refresh(); break;
@@ -207,9 +207,13 @@ async function start() {
         break;
       case "resize":
         if (surface === "notch") { notchHeight = Math.ceil(r.height); placeNotch(); }
-        else if (surface === "share") { const size = minimumShareSize(cardWidth, r.height, 2); shareHeight = size.height; source.setSize(size.width, size.height, false); }
         else if (surface === "tray" && r.width !== undefined) { trayWidth = Math.ceil(r.width); source.setSize(trayWidth, 22, false); }
         else if (surface === "flyout") source.setSize(420, Math.min(Math.ceil(r.height), screen.getDisplayMatching(source.getBounds()).workArea.height));
+        break;
+      case "shareResize":
+        if (surface !== "share" || !shareReady) throw new Error("Invalid request");
+        try { const size = minimumShareSize(cardWidth, r.height, 2); shareHeight = size.height; source.setSize(size.width, size.height, false); }
+        catch (e) { shareFailed?.(new Error(e instanceof Error && e.message === "Card too tall to share" ? e.message : "Could not share snapshot")); }
         break;
       case "dragStart": if (surface === "notch") startDrag(); break;
       case "dragEnd": if (surface === "notch") finishDrag(); break;
@@ -221,8 +225,9 @@ async function start() {
           // Upsampling a 1x screen capture would not preserve sharp text.
           shareState = shareSnapshot(state(), r.key); shareHeight = 0;
           const image = await new Promise<Electron.NativeImage>((resolve, reject) => {
-            const timer = setTimeout(() => { shareReady = undefined; reject(new Error("Share render timed out")); }, 5000);
-            shareReady = image => { clearTimeout(timer); resolve(image); };
+            const timer = setTimeout(() => shareFailed?.(new Error("Share render timed out")), 5000);
+            shareReady = image => { clearTimeout(timer); shareReady = undefined; shareFailed = undefined; resolve(image); };
+            shareFailed = error => { clearTimeout(timer); shareReady = undefined; shareFailed = undefined; reject(error); };
             create("share");
           });
           windows.get("share")?.close(); shareState = undefined;
@@ -231,7 +236,7 @@ async function start() {
           // ShareMenu reports menu dismissal, not completion of the service.
           // Keep its file available until this app session ends.
           shareMenu = new ShareMenu({ filePaths: [path] }); shareMenu.popup({ window: source, callback: () => { sharing = false; folding.changed(); shareMenu = undefined; shareDirectory = undefined; } });
-        } catch { windows.get("share")?.close(); shareState = undefined; shareReady = undefined; sharing = false; folding.changed(); if (shareDirectory) rmSync(shareDirectory, { recursive: true, force: true }); shareDirectory = undefined; throw new Error("Could not share snapshot"); }
+        } catch (e) { shareFailed?.(new Error("Could not share snapshot")); windows.get("share")?.close(); shareState = undefined; shareReady = undefined; sharing = false; folding.changed(); if (shareDirectory) rmSync(shareDirectory, { recursive: true, force: true }); shareDirectory = undefined; throw new Error(e instanceof Error && e.message === "Card too tall to share" ? e.message : "Could not share snapshot"); }
         break;
       }
       case "updateDismiss": await updater.dismiss(); break;
@@ -250,7 +255,7 @@ async function start() {
     const source = BrowserWindow.fromWebContents(event.sender), surface = [...windows].find(([, w]) => w === source)?.[0];
     if (!source || !surface) return { ok: false, error: "Unknown window" };
     try { return await handle(parseRequest(raw), source, surface); }
-    catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot"].includes(e.message) ? e.message : "Could not complete action" }; }
+    catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share"].includes(e.message) ? e.message : "Could not complete action" }; }
   });
   coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
   screen.on("display-metrics-changed", () => { placeNotch(); publish(); }); screen.on("display-removed", () => { placeNotch(); publish(); });

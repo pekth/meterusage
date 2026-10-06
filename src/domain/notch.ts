@@ -31,5 +31,8 @@ export function notchEntries(s: Snapshot) {
 }
 export function minimumShareSize(width: number, height: number, nativeScale: number) {
   const scale = Math.max(2, nativeScale);
-  return { width: Math.ceil(width * scale), height: Math.ceil(height * scale) };
+  const size = { width: Math.ceil(width * scale), height: Math.ceil(height * scale) };
+  // Bound capture allocation. Never substitute a cropped image for a full card.
+  if (!Number.isFinite(size.height) || size.height > 8192) throw new Error("Card too tall to share");
+  return size;
 }

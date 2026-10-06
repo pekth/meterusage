@@ -97,5 +97,18 @@ describe("ADR0008 observation parity with Swift ResetPacingTests", () => {
       expect(callsA).toBe(0); expect(callsB).toBe(0); expect(c.archived.codex.resetCredits[0].id).toBe("A");
     } finally { c.stop(); }
   });
+  it("does not apply an old account's accepted reset to a replacement source", async () => {
+    const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch);
+    const old = quota("codex", [window("5-hour", 82)], at); old.resetCredits = [{ id: "old-credit", title: "Old reset" }];
+    const current = quota("codex", [window("5-hour", 7)], at + 1); current.resetCredits = [{ id: "current-credit", title: "Current reset" }];
+    let accept!: (result: boolean) => void;
+    const c = new Coordinator(launch, prefs, [{ slot: primary("codex"), quota: async () => old, consumeReset: async () => new Promise<boolean>(resolve => { accept = resolve; }) }], () => at + 1);
+    try {
+      await c.refresh(); const reset = c.confirmReset(c.prepareReset("codex", "old-credit").token);
+      c.sources = [{ slot: primary("codex"), quota: async () => current, consumeReset: async () => true }]; await c.refresh();
+      accept(true); await expect(reset).rejects.toThrow();
+      expect(c.quotas.codex).toEqual({ status: "value", value: current }); expect(c.archived.codex).toEqual(current);
+    } finally { c.stop(); }
+  });
 
 });
