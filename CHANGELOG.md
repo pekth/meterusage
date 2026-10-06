@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Make the prebuilt app download the default installation path. Clarify that
+  Swift and Xcode Command Line Tools are needed only to build from source,
+  identify the current Apple silicon asset, and distinguish the app ZIP from
+  GitHub's source archives.
 
 ## [0.2.41] - 2026-10-05
 

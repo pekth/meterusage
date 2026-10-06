@@ -10,7 +10,6 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2013%2B-blue?style=flat-square" alt="Platform: macOS 13+">
-  <img src="https://img.shields.io/badge/swift-5.10%2B-orange?style=flat-square" alt="Swift: 5.10+">
   <img src="https://img.shields.io/badge/privacy-100%25%20local%20%7C%20zero%20telemetry-brightgreen?style=flat-square" alt="Privacy: 100% local">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
 </p>
@@ -29,10 +28,11 @@
 * **100% Private & Zero Setup**: No accounts to connect, no passwords entered. Reads already-authenticated local CLI sessions and local SQLite/JSON logs on your machine.
 * **Agent Budget API**: Machine-readable JSON CLI (`meterusage json`) exporting burn rates, pacing, and time-to-empty for autonomous AI agents.
 
-```bash
-git clone https://github.com/pekth/meterusage.git && cd meterusage && ./Scripts/make-app.sh && open dist/
-```
-> Drag `MeterUsage.app` to **Applications**. That's it!
+[Download the prebuilt app](https://github.com/pekth/meterusage/releases/latest),
+unzip the `MeterUsage-X.Y.Z.zip` asset, and drag `MeterUsage.app` to
+**Applications**. No Swift, Xcode, Command Line Tools, or Git is required.
+The current prebuilt release supports Apple silicon Macs with macOS 13 or later.
+See [installation](#download-and-installation) for first-launch steps.
 
 ---
 
@@ -142,36 +142,34 @@ meterusage is built from the ground up to respect developer privacy:
 
 ---
 
-## 📦 Download & Installation
+## Download and installation
 
-### Option 1: Direct Download (Pre-built Release)
-1. Download the `MeterUsage-X.Y.Z.zip` asset for the current version from [Latest Releases](https://github.com/pekth/meterusage/releases/latest). If no asset is listed, build from source below.
+### Install the prebuilt app
+
+Installing and running MeterUsage does not require Swift, Xcode, Command Line
+Tools, or Git. The Swift runtime it uses ships with macOS.
+
+1. Download the `MeterUsage-X.Y.Z.zip` app asset from [Latest Releases](https://github.com/pekth/meterusage/releases/latest). Choose the app ZIP, not GitHub's **Source code** archives. The current asset is for Apple silicon Macs (M1 or later) with macOS 13 or later.
 2. Unzip and drag `MeterUsage.app` to your `/Applications/` folder.
-3. Since open-source builds are ad-hoc signed, strip macOS browser quarantine on first launch:
-   ```bash
-   xattr -cr /Applications/MeterUsage.app
-   ```
-   *(Or right-click `MeterUsage.app` in Finder and choose **Open**).*
+3. Open `MeterUsage.app`. Releases are ad-hoc signed and are not notarized. If macOS blocks the first launch, right-click the app in Finder and choose **Open**, or use **Open Anyway** in System Settings → Privacy & Security.
 
-### Option 2: Build From Source
-```bash
-git clone https://github.com/pekth/meterusage.git
-cd meterusage
-./Scripts/make-app.sh
-cp -R dist/MeterUsage.app /Applications/
-open /Applications/MeterUsage.app
-```
+If a release has no app ZIP, use an earlier release that includes one or report
+the missing asset. Installing from GitHub's source archives requires a build
+and is not the normal installation path.
 
 ---
 
-## 🛠️ Requirements & Building
+## Requirements
 
-### Requirements
-* macOS 13 Ventura or later
-* Xcode Command Line Tools (`xcode-select --install`)
-* Any of your installed CLI tools (`codex`, `agy`, `opencode`, `grok`, `cursor`, `copilot`, `gemini`, or Claude Code)
+* Apple silicon Mac with macOS 13 Ventura or later for the current prebuilt release.
+* A supported provider CLI or data source for the meters you want to use. Provider accounts are not required to install the app or run demo mode.
 
-### Build & Run
+### Build from source (contributors)
+
+Only source builds and contribution require Swift and Xcode Command Line Tools
+(`xcode-select --install`). See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and
+validation. You can skip this section when installing the prebuilt app.
+
 ```sh
 # Clone & build native app bundle
 git clone https://github.com/pekth/meterusage.git
