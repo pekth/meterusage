@@ -67,7 +67,7 @@ describe("explicit per-account reset journey", () => {
   it("discards every late reading from a replaced source, including failures and durable writes", async () => {
     let hold = false, release!: () => void;
     const paused = new Promise<void>(resolve => { release = resolve; }), slot = { provider: "codex" as const, slotID: "demo-second", label: "Account" }, key = slotKey(slot);
-    const old: Source = { slot, quota: async () => { if (hold) await paused; const q = quota("codex", [window("5-hour", hold ? 99 : 82)], now); q.resetCredits = [{ id: "old-credit", title: "Old reset" }]; return q; }, activity: async () => { if (hold) await paused; return { provider: "codex", scannedAt: now, sessions: [], daily: [{ day: now, tokens: tokens({ input: hold ? 100 : 5 }), sessionCount: 1, estimatedCostUSD: 0 }] }; }, usage: async () => { if (hold) await paused; throw new Unavailable("offline"); }, plan: async () => { if (hold) await paused; return "old-plan"; }, consumeReset: async () => true };
+    const old: Source = { slot, quota: async () => { if (hold) await paused; const q = quota("codex", [window("5-hour", hold ? 99 : 82)], now); q.resetCredits = [{ id: "old-credit", title: "Old reset", status: "available" }]; return q; }, activity: async () => { if (hold) await paused; return { provider: "codex", scannedAt: now, sessions: [], daily: [{ day: now, tokens: tokens({ input: hold ? 100 : 5 }), sessionCount: 1, estimatedCostUSD: 0 }] }; }, usage: async () => { if (hold) await paused; throw new Unavailable("offline"); }, plan: async () => { if (hold) await paused; return "old-plan"; }, consumeReset: async () => true };
     const { c } = await setup([old]); await c.refresh(); hold = true;
     const pending = c.refresh(); await Promise.resolve();
     c.sources = [{ slot, quota: async () => { throw new Unavailable("offline"); }, consumeReset: async () => true }];
@@ -80,8 +80,8 @@ describe("explicit per-account reset journey", () => {
   });
   it("requires current-source readings after account replacement, while preserving dated history", async () => {
     const slot = { provider: "codex" as const, slotID: "demo-second", label: "Account" }, key = slotKey(slot);
-    const oldQuota = quota("codex", [window("5-hour", 82)], now); oldQuota.resetCredits = [{ id: "old-credit", title: "Old reset" }];
-    const nextQuota = quota("codex", [window("5-hour", 7)], now); nextQuota.resetCredits = [{ id: "new-credit", title: "New reset" }];
+    const oldQuota = quota("codex", [window("5-hour", 82)], now); oldQuota.resetCredits = [{ id: "old-credit", title: "Old reset", status: "available" }];
+    const nextQuota = quota("codex", [window("5-hour", 7)], now); nextQuota.resetCredits = [{ id: "new-credit", title: "New reset", status: "available" }];
     const stable = { slot: primary("claude"), quota: async () => quota("claude", [window("5-hour", 34)], now) };
     const old: Source = { slot, quota: async () => oldQuota, activity: async () => ({ provider: "codex", scannedAt: now, sessions: [], daily: [{ day: now, tokens: tokens({ input: 5 }), sessionCount: 1, estimatedCostUSD: 0 }] }), usage: async () => ({ provider: "codex", capturedAt: now, sessionCount: 1, messageCount: 2, todaySessionCount: 1, todayMessageCount: 2 }), plan: async () => "old-plan", consumeReset: async () => true };
     const { c } = await setup([old, stable]); await c.refresh();
@@ -116,7 +116,7 @@ describe("alert edge and recency parity", () => {
     expect(evaluator.events([a], { codex: state(96) }, {}, now)).toEqual([]); evaluator.events([a], { codex: state(0) }, {}, now); expect(evaluator.events([a], { codex: state(82) }, {}, now)).toHaveLength(1);
   });
   it("requires current burn for pace warnings and deduplicates expiring credits", () => {
-    const a = primary("codex"), q = quota("codex", [window("5-hour", 65, now + 4 * 3600000, 300)], now); q.resetCredits = [{ id: "fixture", title: "Full reset", expiresAt: now + 3600000 }];
+    const a = primary("codex"), q = quota("codex", [window("5-hour", 65, now + 4 * 3600000, 300)], now); q.resetCredits = [{ id: "fixture", title: "Full reset", status: "available", expiresAt: now + 3600000 }];
     const evaluator = new AlertEvaluator(); expect(evaluator.events([a], { codex: value(q) }, {}, now).map(e => e.kind)).toEqual(["expiringCredit"]);
     expect(evaluator.events([a], { codex: value(q) }, { codex: now }, now).map(e => e.kind)).toContain("paceSoftWarning"); expect(evaluator.events([a], { codex: value(q) }, { codex: now }, now)).toEqual([]);
     expect(evaluator.events([a], { codex: missing(new Unavailable("offline"), "codex") }, {}, now)).toEqual([]);

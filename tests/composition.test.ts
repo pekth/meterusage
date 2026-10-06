@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vite-plus/test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, symlinkSync } from "node:fs";
+import { describe, it, expect, afterEach, vi } from "vite-plus/test";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, symlinkSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchConfiguration, type Launch } from "../src/main/launch";
@@ -75,6 +75,43 @@ describe("typed preferences and managed accounts", () => {
   });
 });
 describe("provider path and transport composition", () => {
+  it("prioritizes the primary Claude app-support companion without alternate-account fallback", async () => {
+    const root = temp(), alt = join(root, "alternate"), dir = join(root, "Library/Application Support/MeterUsage");
+    mkdirSync(alt); mkdirSync(dir, { recursive: true }); mkdirSync(join(root, ".claude"));
+    const companion = join(dir, "claude-usage.json");
+    writeFileSync(companion, '{"five_hour":{"used_percentage":25}}');
+    writeFileSync(join(root, ".claude/claudewatch-usage.json"), '{"five_hour":{"used_percentage":75}}');
+    writeFileSync(join(alt, "meterusage-usage.json"), '{"five_hour":{"used_percentage":10}}');
+    const launch = launchConfiguration([], {}, root), prefs = await Preferences.load(launch, async () => { throw new Error("absent"); });
+    prefs.values.managedAccounts = [{ id: "alternate", provider: "claude", label: "Alternate", path: alt, enabled: true }];
+    const sources = compose(launch, prefs, { now: () => now });
+    const primary = sources.find(s => s.slot.provider === "claude" && !s.slot.slotID)!;
+    expect((await primary.quota!()).windows[0].usedPercent).toBe(25);
+    expect((await sources.find(s => s.slot.slotID === "alternate")!.quota!()).windows[0].usedPercent).toBe(10);
+    writeFileSync(companion, 'invalid'); await expect(primary.quota!()).rejects.toThrow("No usage");
+  });
+  it("keeps Claude file capture age across polls and prefers explicit updated_at", async () => {
+    const root = temp(), path = join(root, ".claude/meterusage-usage.json"), old = now - 86400000;
+    mkdirSync(join(root, ".claude")); writeFileSync(path, '{"five_hour":{"used_percentage":0}}'); utimesSync(path, old / 1000, old / 1000);
+    let clock = now; const prefs = await Preferences.load(liveFixture(root), async () => { throw new Error("absent"); });
+    const source = compose(liveFixture(root), prefs, { now: () => clock }).find(s => s.slot.provider === "claude")!;
+    expect((await source.quota!()).capturedAt).toBe(old); clock += 60000; expect((await source.quota!()).capturedAt).toBe(old);
+    writeFileSync(path, JSON.stringify({ five_hour: { used_percentage: 0 }, updated_at: (old + 1000) / 1000 }));
+    expect((await source.quota!()).capturedAt).toBe(old + 1000);
+  });
+  it.each([0, 29000])("preserves required OpenRouter quota when optional credits stall (key delay %sms)", async keyDelay => {
+    const root = temp(), launch = { ...liveFixture(root), env: { OPENROUTER_API_KEY: "synthetic-key" } };
+    const prefs = await Preferences.load(launch, async () => { throw new Error("absent"); }); let cancelled = false;
+    const source = compose(launch, prefs, { now: () => now, http: async (url, _p, _key, signal) => {
+      if (url === endpoints.openRouterCredits) { signal?.addEventListener("abort", () => { cancelled = true; }); return new Promise<string>(() => {}); }
+      await new Promise(resolve => setTimeout(resolve, keyDelay)); return '{"data":{"usage":0,"limit":100}}';
+    } }).find(s => s.slot.provider === "openRouter")!;
+    vi.useFakeTimers();
+    try {
+      const report = jsonReport([source], now); await vi.advanceTimersByTimeAsync(30000);
+      const provider = (await report).providers[0]; expect(provider.status).toBe("ok"); expect(provider.windows[0].used_percent).toBe(0); expect(cancelled).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
   it("has all nine primary providers and never falls back from alternate Claude plan/quota", async () => {
     const root = temp(), alt = join(root, "alternate"); mkdirSync(alt); mkdirSync(join(root, ".claude")); writeFileSync(join(root, ".claude.json"), '{"oauthAccount":{"seatTier":"pro"}}'); writeFileSync(join(root, ".claude", "meterusage-usage.json"), '{"five_hour":{"used_percentage":75}}');
     const prefs = await Preferences.load(liveFixture(root), async () => { throw new Error("absent"); }); prefs.values.managedAccounts = [{ id: "alternate", provider: "claude", label: "Alternate", path: alt, enabled: true }];

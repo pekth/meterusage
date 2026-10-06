@@ -56,13 +56,28 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
   };
   const makeClaude = (slot: Slot, home: string, alternate = false): Source => {
     const activity = new ClaudeActivitySource(join(home, "projects"), join(launch.data, alternate ? `claude-local-scan-cache-${slot.slotID}.json` : "claude-local-scan-cache.json"));
-    return { slot, quota: async () => { const raw = firstFile((alternate ? ["meterusage-usage.json", "claudewatch-usage.json"] : ["claudewatch-usage.json", "meterusage-usage.json"]).map(p => join(home, p))); if (!raw) throw new Unavailable("noData"); try { return parseClaudeQuota(raw, now()); } catch { throw new Unavailable("noData"); } }, activity: async signal => activity.scan(now(), signal), plan: async () => { const raw = read(alternate ? join(home, ".claude.json") : join(launch.home, ".claude.json")); if (!raw) throw new Unavailable("noData"); try { return parseClaudePlan(raw); } catch { throw new Unavailable("noData"); } } };
+    return { slot, quota: async () => {
+      const paths = alternate ? [join(home, "meterusage-usage.json"), join(home, "claudewatch-usage.json")] : [join(launch.data, "claude-usage.json"), join(home, "claudewatch-usage.json"), join(home, "meterusage-usage.json")];
+      const path = paths.find(existsSync), raw = path && read(path); if (!raw) throw new Unavailable("noData");
+      let capturedAt = now(); try { capturedAt = statSync(path!).mtimeMs; } catch { /* Swift falls back to polling time only when file metadata is unavailable. */ }
+      try { return parseClaudeQuota(raw, capturedAt); } catch { throw new Unavailable("noData"); }
+    }, activity: async signal => activity.scan(now(), signal), plan: async () => { const raw = read(alternate ? join(home, ".claude.json") : join(launch.home, ".claude.json")); if (!raw) throw new Unavailable("noData"); try { return parseClaudePlan(raw); } catch { throw new Unavailable("noData"); } } };
   };
   const codex = makeCodex(primary("codex")), claude = makeClaude(primary("claude"), join(launch.home, ".claude"));
   codex.status = async signal => parseStatus("codex", await http(endpoints.codexStatus, "codex", undefined, signal), now());
   claude.status = async signal => parseStatus("claude", await http(endpoints.claudeStatus, "claude", undefined, signal), now());
   const sources: Source[] = [codex, {
-    slot: primary("openRouter"), quota: async signal => { const key = openRouterKey(launch); if (!key) throw new Unavailable("dataNotFound", "OpenRouter API key"); const raw = await http(endpoints.openRouterKey, "openRouter", key, signal), supplement = await http(endpoints.openRouterCredits, "openRouter", key, signal).catch(() => undefined); return parseOpenRouter(raw, supplement, now()); },
+    slot: primary("openRouter"), quota: async signal => {
+      const key = openRouterKey(launch); if (!key) throw new Unavailable("dataNotFound", "OpenRouter API key");
+      // Start the optional deadline with the required request, inside its 30s budget.
+      const controller = new AbortController(), creditsSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const aborted = new Promise<undefined>(resolve => { if (creditsSignal.aborted) resolve(undefined); else creditsSignal.addEventListener("abort", () => resolve(undefined), { once: true }); });
+      try {
+        const [raw, supplement] = await Promise.all([http(endpoints.openRouterKey, "openRouter", key, signal), Promise.race([http(endpoints.openRouterCredits, "openRouter", key, creditsSignal).catch(() => undefined), aborted])]);
+        return parseOpenRouter(raw, supplement, now());
+      } finally { clearTimeout(timeout); controller.abort(); }
+    },
     usage: async signal => { const key = openRouterKey(launch, true); if (!key) throw new Unavailable("dataNotFound", "OpenRouter Management Key"); return openRouterUsage(await http(endpoints.openRouterActivity, "openRouter", key, signal), now()); },
   }, {
     slot: primary("openCodeGo"), quota: async signal => { const key = openCodeKey(launch); if (!key) throw new Unavailable("dataNotFound", "OpenCode Go API key"); return parseOpenCode(await http(endpoints.openCodeGo, "openCodeGo", key, signal), now()); },

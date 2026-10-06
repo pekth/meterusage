@@ -18,7 +18,7 @@ it("stops polling and reset actions when a configured account directory disappea
   const launch = launchConfiguration(["--demo", "--candidate-profile", temp()], {}), prefs = await Preferences.load(launch);
   await prefs.set("managedAccounts", [{ id: "mounted", provider: "codex", label: "Mounted", path: directory, enabled: true }]);
   const slot = { ...primary("codex"), slotID: "mounted" }, q = quota("codex", [window("5-hour", 10)]);
-  q.resetCredits = [{ id: "fixture-credit", title: "Fixture reset" }];
+  q.resetCredits = [{ id: "fixture-credit", title: "Fixture reset", status: "available" }];
   let reads = 0, consumes = 0;
   const source = { slot, quota: async () => { reads++; return q; }, consumeReset: async () => { consumes++; return true; } };
   const c = new Coordinator(launch, prefs, [source]);

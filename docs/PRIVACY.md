@@ -27,6 +27,11 @@ disabled directory is not polled. An additional Claude source never falls back
 to the primary account's plan or companion file. Codex subprocesses receive the
 selected `CODEX_HOME`; MeterUsage does not open Codex `auth.json`.
 
+Primary Claude quota checks `Library/Application Support/MeterUsage/claude-usage.json`
+before its two `.claude` companion files. The selected file's modification time
+supplies capture age when the payload omits `updated_at`; polling does not make
+an old reading fresh.
+
 MeterUsage does not open Claude `.credentials.json` or macOS Keychain items.
 Grok, OpenCode Go and OpenRouter are explicit existing-key readers. Keys stay
 in main-process memory and request headers; they are not displayed, logged,

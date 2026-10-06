@@ -13,6 +13,7 @@ export const accountSlot = (a: ManagedAccount): Slot => ({ provider: a.provider,
 export interface QuotaWindow { label: string; usedPercent: number; resetsAt?: number; windowDurationMins?: number; pacingBaseline?: { usedPercent: number; capturedAt?: number; observedAt?: number } }
 export interface QuotaGroup { id: string; title: string; windows: QuotaWindow[] }
 export interface ResetCredit { id: string; title: string; status?: string; expiresAt?: number }
+export const resetCreditAvailable = (credit: ResetCredit, now: number) => credit.status?.toLowerCase() === "available" && (credit.expiresAt === undefined || credit.expiresAt > now);
 export interface Credits {
   balance: number; hasCredits: boolean; unlimited: boolean; unit: "credits" | "dollars";
   usedDollars?: number; limitDollars?: number; dollarBalance?: number;
@@ -61,6 +62,7 @@ export interface Telemetry {
   dailyHistory: { day: number; tokens: number; sessionCount: number }[];
 }
 export type Severity = "operational" | "unknown" | "degraded" | "partialOutage" | "majorOutage";
+export const severityNames: Record<Severity, string> = { operational: "Operational", unknown: "Unknown", degraded: "Degraded", partialOutage: "Partial outage", majorOutage: "Major outage" };
 export interface ServiceStatus { provider: Provider; severity: Severity; description: string; checkedAt: number }
 export type MissingCode = "cliNotFound" | "notSignedIn" | "offline" | "failed" | "noData" | "dataNotFound";
 export class Unavailable extends Error {

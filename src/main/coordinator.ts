@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { readdir, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { type Loaded, type Quota, type Activity, type Usage, type ServiceStatus, type Slot, type Provider, providers, primary, slotKey, lastBurn, totalTokens, utcDay, value, missing, Unavailable } from "../domain/models";
+import { type Loaded, type Quota, type Activity, type Usage, type ServiceStatus, type Slot, type Provider, providers, primary, slotKey, lastBurn, totalTokens, utcDay, value, missing, Unavailable, resetCreditAvailable } from "../domain/models";
 import { AlertEvaluator, type Alert } from "../domain/alerts";
 import { telemetry } from "../domain/telemetry";
 import { resetPacing } from "../domain/pacing";
@@ -153,7 +153,7 @@ export class Coordinator {
   }
   prepareReset(key: string, creditID: string): { token: string; account: string; title: string } {
     const source = this.sources.find(s => slotKey(s.slot) === key && this.visible(s)), q = this.quotas[key], credit = q?.status === "value" ? q.value.resetCredits.find(c => c.id === creditID) : undefined;
-    if (!source?.consumeReset || !credit || (credit.expiresAt !== undefined && credit.expiresAt <= this.now())) throw new Error("Reset credit unavailable");
+    if (!source?.consumeReset || !credit || !resetCreditAvailable(credit, this.now())) throw new Error("Reset credit unavailable");
     for (const [token, prior] of this.confirmations) if (prior.key === key || prior.expires <= this.now()) this.confirmations.delete(token);
     const token = randomUUID(); this.confirmations.set(token, { key, creditID, expires: this.now() + 60000, source });
     return { token, account: source.slot.label || "Codex", title: credit.title };
@@ -163,7 +163,7 @@ export class Coordinator {
     const intent = this.confirmations.get(token); this.confirmations.delete(token);
     if (!intent || intent.expires <= this.now() || this.resets.has(intent.key)) throw new Error("Reset confirmation expired");
     const source = this.sources.find(s => slotKey(s.slot) === intent.key && this.visible(s)); const q = this.quotas[intent.key];
-    if (source !== intent.source || !source?.consumeReset || q?.status !== "value" || !q.value.resetCredits.some(c => c.id === intent.creditID && (c.expiresAt === undefined || c.expiresAt > this.now()))) throw new Error("Reset credit unavailable");
+    if (source !== intent.source || !source?.consumeReset || q?.status !== "value" || !q.value.resetCredits.some(c => c.id === intent.creditID && resetCreditAvailable(c, this.now()))) throw new Error("Reset credit unavailable");
     this.resets.add(intent.key);
     try {
       if (!await source.consumeReset(intent.creditID)) throw new Unavailable("failed", "Codex");

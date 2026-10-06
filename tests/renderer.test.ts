@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { App, Meter, ProviderCard } from "../src/renderer/app";
 import { tokens, primary, quota, value, window } from "../src/domain/models";
 import type { ViewState } from "../src/shared/ipc";
+import { trayTooltip } from "../src/domain/overview";
+import { readFileSync } from "node:fs";
 
 vi.mock("react", async importOriginal => {
   const actual = await importOriginal<typeof import("react")>();
@@ -29,6 +31,43 @@ it("hides forecasts when pacing is disabled and retains the reported reset time"
   const render = (pacing: boolean) => renderToStaticMarkup(createElement(Meter, { w, now, pacing }));
   expect(render(true)).toContain("left");
   expect(render(false)).not.toContain("left"); expect(render(false)).toContain("Resets ");
+});
+
+it("shows unavailable reset status without a redemption action", () => {
+  const view = state(), q = quota("codex", [], now); q.resetCreditCount = 1; view.snapshot.appearance.resetButton = true;
+  view.snapshot.quotas.codex = value(q);
+  for (const status of ["consumed", "revoked", undefined]) {
+    q.resetCredits = [{ id: "c", title: "Reset", status }];
+    const markup = renderApp(view); expect(markup).not.toContain("Use reset"); expect(markup).toContain(status ?? "Status not reported");
+  }
+  q.resetCredits = [{ id: "c", title: "Reset", status: "AVAILABLE", expiresAt: now + 1000 }]; expect(renderApp(view)).toContain("Use reset");
+  q.resetCredits[0].expiresAt = now; expect(renderApp(view)).not.toContain("Use reset"); expect(renderApp(view)).toContain("expired");
+});
+
+it("shows count-only current-day usage and capture age without invented token totals", () => {
+  const view = state(); view.snapshot.slots = [primary("grok")]; view.snapshot.quotas = {}; view.snapshot.activities = {};
+  const usage = { provider: "grok" as const, sessionCount: 10, messageCount: 50, todaySessionCount: 1, todayMessageCount: 2, capturedAt: now - 3600000 };
+  view.snapshot.usages.grok = value(usage);
+  const markup = renderApp(view); expect(markup).toContain("Today: 1 session · 2 messages · updated 1h ago"); expect(markup).not.toContain("Measured tokens");
+  view.snapshot.usages.grok = value({ ...usage, todaySessionCount: 0, todayMessageCount: 0 }); expect(renderApp(view)).toContain("Updated 1h ago · token totals unavailable");
+  view.snapshot.usages.grok = value({ ...usage, todaySessionCount: 0, todayMessageCount: 0, tokens: tokens() }); expect(renderApp(view)).toContain("measured token totals");
+});
+
+it("keeps textual tray outage, reset countdown, dated age and last refresh", () => {
+  const s = state().snapshot, account = { ...primary("codex"), slotID: "work", label: "Work" };
+  s.traySlots = [account, primary("grok")]; s.quotas = {}; s.archived = { "codex#work": quota("codex", [window("5-hour", 0, now + 3600000)], now - 7200000) };
+  s.statuses.grok = value({ provider: "grok", severity: "majorOutage", description: "Fixture outage", checkedAt: now }); s.lastRefreshedAt = now - 60000;
+  expect(trayTooltip(s)).toBe("Codex · Work: 0% used · resets in 1h · last reading 2h ago\nGrok: Major outage\nUpdated 1m ago");
+  s.statuses.grok = value({ provider: "grok", severity: "unknown", description: "Unavailable", checkedAt: now }); expect(trayTooltip(s)).toContain("Grok: Unknown");
+  s.traySlots = []; s.lastRefreshedAt = undefined; expect(trayTooltip(s)).toBe("No usage data yet");
+});
+
+it("uses adaptive Grok identity contrast while status overrides remain semantic", () => {
+  const view = state(); view.snapshot.slots = [primary("grok")]; view.snapshot.quotas = {}; view.snapshot.activities = {};
+  for (const theme of ["light", "dark", "system"]) { view.snapshot.appearance.theme = theme; expect(renderApp(view)).toContain("background:var(--grok)"); }
+  const css = readFileSync("src/renderer/style.css", "utf8");
+  expect(css).toMatch(/\.app \{[^}]*--grok: #1e1e22/); expect(css).toMatch(/\.theme-dark \{[^}]*--grok: #ebebf0/); expect(css).toMatch(/\.theme-system \{[^}]*--grok: #ebebf0/);
+  view.snapshot.statuses.grok = value({ provider: "grok", severity: "majorOutage", description: "Outage", checkedAt: now }); expect(renderApp(view)).toContain("background:var(--alert)");
 });
 
 it("shows active-window burn metrics with window scope, distinct from recent sessions", () => {

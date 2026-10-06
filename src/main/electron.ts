@@ -12,8 +12,9 @@ import { Updater } from "./updater";
 import { runJSON } from "./cli";
 import { channel, stateChannel, statusPages, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
 import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./ipc";
-import { providers, slotKey, headlineWindow } from "../domain/models";
+import { providers, slotKey } from "../domain/models";
 import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize } from "../domain/notch";
+import { trayTooltip } from "../domain/overview";
 
 const args = process.argv.slice(1), launch = launchConfiguration(args);
 // Isolation is selected before Electron creates a session or any source reads.
@@ -54,11 +55,7 @@ async function start() {
   function publish() {
     const s = state();
     for (const [surface, w] of windows) if (!w.isDestroyed()) w.webContents.send(stateChannel, surface === "settings" || surface === "share" ? state(surface) : s);
-    const entries = s.snapshot.traySlots.map(slot => {
-      const key = slotKey(slot), q = s.snapshot.quotas[key], fresh = q?.status === "value", reading = fresh ? q.value : s.snapshot.archived[key], w = reading && headlineWindow(slot.provider, reading.windows);
-      return `${slot.label || slot.provider} ${w ? `${Math.round(w.usedPercent)}%${fresh ? "" : " stale"}` : "unavailable"}`;
-    });
-    tray.setToolTip(entries.join("\n") || "MeterUsage");
+    tray.setToolTip(trayTooltip(s.snapshot));
   }
   // Only fixed public status pages can open externally through main.
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));

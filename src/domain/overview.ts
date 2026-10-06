@@ -1,5 +1,24 @@
-import { type Activity, type Usage, type Slot, type Quota, type Loaded, type Session, type Daily, totalTokens, activeUntil, localDay, shiftDay, utcDay, weekStart, slotKey, slotName, headlineWindow, lastBurn } from "./models";
-import { burnActive, pace } from "./pacing";
+import { type Activity, type Usage, type Slot, type Quota, type Loaded, type Session, type Daily, totalTokens, activeUntil, localDay, shiftDay, utcDay, weekStart, slotKey, slotName, headlineWindow, lastBurn, severityNames } from "./models";
+import { burnActive, pace, formatETA } from "./pacing";
+import type { Snapshot } from "../shared/state";
+
+export function trayTooltip(s: Snapshot): string {
+  const entries = s.traySlots.flatMap(slot => {
+    const key = slotKey(slot), q = s.quotas[key], fresh = q?.status === "value", reading = fresh ? q.value : s.archived[key], w = reading && headlineWindow(slot.provider, reading.windows);
+    const parts: string[] = [];
+    if (w) {
+      parts.push(`${Math.round(w.usedPercent)}% used`);
+      if (w.resetsAt !== undefined && w.resetsAt > s.clock) parts.push(`resets in ${formatETA((w.resetsAt - s.clock) / 1000, true)}`);
+      if (!fresh) parts.push(`last reading ${formatETA((s.clock - reading!.capturedAt) / 1000, true)} ago`);
+    }
+    const status = s.statuses[slot.provider];
+    if (status?.status === "value" && status.value.severity !== "operational") parts.push(severityNames[status.value.severity]);
+    return parts.length ? [`${slotName(slot)}: ${parts.join(" · ")}`] : [];
+  });
+  if (!entries.length) entries.push("No usage data yet");
+  if (s.lastRefreshedAt !== undefined) entries.push(`Updated ${formatETA((s.clock - s.lastRefreshedAt) / 1000, true)} ago`);
+  return entries.join("\n");
+}
 
 // Swift StripTotals uses overlapping session instants for local today, and
 // UTC day buckets for the seven-day history. Those boundaries differ.

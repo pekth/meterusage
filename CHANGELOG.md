@@ -25,6 +25,14 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Validate optional archive metadata and restore only known fields. Reject
+  reset redemption unless the credit is reported available and unexpired,
+  including after the confirmation dialog.
+- Restore the primary Claude companion-file order and file modification time
+  fallback. Keep valid required quota when optional OpenRouter credits stall
+  or additional Codex model limits are malformed.
+- Show today's usage counts and reading age, restore textual tray outage/reset
+  summaries, and adapt the existing Grok mark tint to light and dark appearance.
 - Keep candidate service health visible when provider usage is hidden, with
   buttons for the existing public status pages. Restore notch ambient ETA
   from raw window pace and hide it when pacing is off.

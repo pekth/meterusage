@@ -12,6 +12,20 @@ const at = Date.parse("2026-10-06T12:00:00Z"), hour = 3600000;
 const roots: string[] = []; const temp = () => { const p = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(p); return p; };
 afterEach(() => { roots.splice(0).forEach(p => rmSync(p, { force: true, recursive: true })); });
 describe("ADR0008 observation parity with Swift ResetPacingTests", () => {
+  it("rejects nonavailable credits before preparation and after a confirmation refresh", async () => {
+    const launch = launchConfiguration(["--demo", "--candidate-profile", temp()], {}), prefs = await Preferences.load(launch);
+    let status: string | undefined = "available", consumes = 0;
+    const c = new Coordinator(launch, prefs, [{ slot: primary("codex"), quota: async () => ({ ...quota("codex", [], at), resetCredits: [{ id: "A", title: "Reset", status }] }), consumeReset: async () => { consumes++; return true; } }], () => at);
+    try {
+      for (const unavailable of ["consumed", "revoked", "expired", undefined]) {
+        status = "available"; await c.refresh(); const intent = c.prepareReset("codex", "A");
+        status = unavailable; await c.refresh();
+        expect(() => c.prepareReset("codex", "A")).toThrow("unavailable");
+        await expect(c.confirmReset(intent.token)).rejects.toThrow("unavailable");
+      }
+      expect(consumes).toBe(0);
+    } finally { c.stop(); }
+  });
   it("has no forecast for the first/unchanged reading and projects from measured growth", () => {
     const first = resetSample(window("Weekly", 5, at + 7 * 24 * hour, 10080), undefined, at);
     expect(pace(first, at)).toBeUndefined();
@@ -34,7 +48,7 @@ describe("ADR0008 observation parity with Swift ResetPacingTests", () => {
     const q = quota("codex", [window("Weekly", 5, at + 7 * 24 * hour, 10080)], at);
     q.groups = [{ id: "general", title: "General", windows: q.windows }, { id: "model", title: "Model", windows: [window("Weekly", 15, q.windows[0].resetsAt, 10080)] }];
     q.credits = { balance: 0, hasCredits: false, unlimited: false, unit: "credits", dollarBalance: 0 };
-    q.resetCredits = [{ id: "fixture-credit", title: "Full reset", expiresAt: at + hour }]; q.resetCreditCount = 1; q.planType = "plus";
+    q.resetCredits = [{ id: "fixture-credit", title: "Full reset", status: "available", expiresAt: at + hour }]; q.resetCreditCount = 1; q.planType = "plus";
     const first = resetPacing(q, undefined, at - 1, at);
     const later = resetPacing({ ...q, capturedAt: at + hour, windows: [window("Weekly", 25, q.windows[0].resetsAt, 10080)], groups: [q.groups[0], { ...q.groups[1], windows: [window("Weekly", 35, q.windows[0].resetsAt, 10080)] }] }, first, at - 1, at + hour);
     const path = join(temp(), "quota-archive.json"), slot = { ...primary("codex"), slotID: "fixture-account", label: "Work" };
@@ -46,7 +60,7 @@ describe("ADR0008 observation parity with Swift ResetPacingTests", () => {
   it("rejects in-flight pre-reset quota and failed reset preserves the estimate", async () => {
     let clock = at, held: ((q: Quota) => void) | undefined, hold = false, accepted = true;
     const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch);
-    const make = () => { const q = quota("codex", [window("Weekly", 25, at + 6 * 24 * hour)], clock); q.resetCreditCount = 1; q.resetCredits = [{ id: "credit", title: "Full reset" }]; return q; };
+    const make = () => { const q = quota("codex", [window("Weekly", 25, at + 6 * 24 * hour)], clock); q.resetCreditCount = 1; q.resetCredits = [{ id: "credit", title: "Full reset", status: "available" }]; return q; };
     const c = new Coordinator(launch, prefs, [{ slot: primary("codex"), quota: async () => hold ? new Promise<Quota>(resolve => { held = resolve; }) : make(), consumeReset: async () => accepted }], () => clock);
     try {
       await c.refresh(); const before = structuredClone(c.quotas.codex);
@@ -63,7 +77,7 @@ describe("ADR0008 observation parity with Swift ResetPacingTests", () => {
     const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch);
     const c = new Coordinator(launch, prefs, [{ slot: primary("codex"), quota: async () => {
       if (offline) throw new Error("offline fixture");
-      const q = quota("codex", [window("Weekly", 25)], clock); q.resetCredits = ids.map(id => ({ id, title: "Full reset" })); q.resetCreditCount = ids.length; return q;
+      const q = quota("codex", [window("Weekly", 25)], clock); q.resetCredits = ids.map(id => ({ id, title: "Full reset", status: "available" })); q.resetCreditCount = ids.length; return q;
     }, consumeReset: async () => new Promise<boolean>(resolve => { accept = resolve; }) }], () => clock);
     try {
       await c.refresh(); const reset = c.confirmReset(c.prepareReset("codex", "A").token);
@@ -75,7 +89,7 @@ describe("ADR0008 observation parity with Swift ResetPacingTests", () => {
   it("persists retained account archives immediately on acceptance before refresh can finish", async () => {
     let clock = at, redeemed = false;
     const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch);
-    const q = quota("codex", [], at); q.resetCredits = [{ id: "A", title: "Full reset" }];
+    const q = quota("codex", [], at); q.resetCredits = [{ id: "A", title: "Full reset", status: "available" }];
     const c = new Coordinator(launch, prefs, [{ slot: primary("codex"), quota: async () => redeemed ? new Promise<Quota>(() => {}) : q, consumeReset: async () => { redeemed = true; return true; } }], () => clock);
     try {
       await c.refresh(); c.archived["claude#retained-account"] = quota("claude", [window("5-hour", 25)], at); clock++;
@@ -86,7 +100,7 @@ describe("ADR0008 observation parity with Swift ResetPacingTests", () => {
   });
   it("rejects a confirmation when its account source has been replaced", async () => {
     const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch);
-    const q = quota("codex", [], at); q.resetCredits = [{ id: "A", title: "Full reset" }];
+    const q = quota("codex", [], at); q.resetCredits = [{ id: "A", title: "Full reset", status: "available" }];
     let callsA = 0, callsB = 0;
     const a = { slot: primary("codex"), quota: async () => q, consumeReset: async () => { callsA++; return true; } };
     const c = new Coordinator(launch, prefs, [a], () => at);
@@ -99,8 +113,8 @@ describe("ADR0008 observation parity with Swift ResetPacingTests", () => {
   });
   it("does not apply an old account's accepted reset to a replacement source", async () => {
     const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch);
-    const old = quota("codex", [window("5-hour", 82)], at); old.resetCredits = [{ id: "old-credit", title: "Old reset" }];
-    const current = quota("codex", [window("5-hour", 7)], at + 1); current.resetCredits = [{ id: "current-credit", title: "Current reset" }];
+    const old = quota("codex", [window("5-hour", 82)], at); old.resetCredits = [{ id: "old-credit", title: "Old reset", status: "available" }];
+    const current = quota("codex", [window("5-hour", 7)], at + 1); current.resetCredits = [{ id: "current-credit", title: "Current reset", status: "available" }];
     let accept!: (result: boolean) => void;
     const c = new Coordinator(launch, prefs, [{ slot: primary("codex"), quota: async () => old, consumeReset: async () => new Promise<boolean>(resolve => { accept = resolve; }) }], () => at + 1);
     try {

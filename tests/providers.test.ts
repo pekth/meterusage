@@ -31,6 +31,10 @@ describe("selective privacy boundary", () => {
   });
 });
 describe("quota fixture parity", () => {
+  it("keeps valid base Codex quota when optional model windows are malformed", () => {
+    const q = parseCodex(JSON.stringify({ result: { rateLimits: { primary: { usedPercent: 0, windowDurationMins: 300 } }, rateLimitsByLimitId: { broken: { primary: {} }, valid: { limitName: "Valid model", secondary: { usedPercent: 30, windowDurationMins: 10080 } } } } }), now);
+    expect(q.windows[0].usedPercent).toBe(0); expect(q.groups.map(g => g.id)).toEqual(["codex"]);
+  });
   it("uses the Swift Codex fixture and classifies duration, not window position", () => {
     const q = parseCodex(fixture("codex_ratelimits.json"), now);
     expect(q.windows.map(w => w.label)).toEqual(["Weekly"]); expect(q.windows[0].usedPercent).toBe(42);

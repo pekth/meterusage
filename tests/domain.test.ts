@@ -84,6 +84,20 @@ describe("Swift LimitsReport and account-identity parity", () => {
 describe("Swift durable history/archive compatibility", () => {
   function withFile(fn: (path: string) => void) { const root = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); try { fn(join(root, "history.json")); } finally { rmSync(root, { recursive: true, force: true }); } }
   const daily = (input: number): Daily[] => [{ day: now, tokens: tokens({ input }), estimatedCostUSD: .01, sessionCount: 1 }];
+  it("rejects invalid optional archive metadata and drops unknown fields", () => withFile(path => {
+    const q = quota("codex", [window("5-hour", 0)], now);
+    q.groups = [{ id: "model", title: "Model", windows: q.windows }];
+    q.resetCredits = [{ id: "credit", title: "Full reset", status: "available" }];
+    q.credits = { balance: 0, unit: "credits", hasCredits: false, unlimited: false };
+    saveArchive(path, [{ slot: primary("codex"), quota: q }]);
+    const entry = JSON.parse(readFileSync(path, "utf8"))[0];
+    for (const change of [{ planType: {} }, { slotID: {} }, { label: [] }, { resetCreditCount: "1" }, { resetCreditCount: 1.5 }, { groups: [{ ...entry.groups[0], title: {} }] }, { groups: [{ ...entry.groups[0], id: [] }] }, { resetCredits: [{ id: {}, title: "Reset" }] }, { resetCredits: [{ id: "c", title: {} }] }, { resetCredits: [{ id: "c", title: "Reset", status: {} }] }, { windows: [{ label: "5-hour", usedPercent: 0, windowDurationMins: {} }] }, { windows: [{ label: "5-hour", usedPercent: 0, windowDurationMins: 1.5 }] }]) {
+      writeFileSync(path, JSON.stringify([{ ...entry, ...change }])); expect(readArchive(path)).toEqual({});
+    }
+    writeFileSync(path, JSON.stringify([{ ...entry, planType: null, credits: { ...entry.credits, unknown: "do-not-forward" }, resetCredits: [{ ...entry.resetCredits[0], unknown: "do-not-forward" }] }]));
+    const restored = readArchive(path).codex;
+    expect(restored).toEqual(q); expect(JSON.stringify(restored)).not.toContain("do-not-forward");
+  }));
   it("loads the Swift daily format, preserves larger purged records and isolates accounts", () => withFile(path => {
     writeFileSync(path, JSON.stringify({ codex: [{ dayISO: "2026-10-06", tokens: tokens({ input: 100 }), estimatedCostUSD: .01, sessionCount: 1 }] }));
     const s = new HistoryStore(path); s.record("codex", daily(50)); s.record("codex#synthetic", daily(20));

@@ -41,15 +41,37 @@ export class HistoryStore {
   }
 }
 const swiftEpoch = Date.UTC(2001, 0, 1);
-const fromDate = (v: unknown) => v === undefined ? undefined : typeof v === "number" && Number.isFinite(v) ? swiftEpoch + v * 1000 : (() => { throw new Error("Invalid archive date"); })();
+const fromDate = (v: unknown) => v == null ? undefined : typeof v === "number" && Number.isFinite(v) && Math.abs(swiftEpoch + v * 1000) <= 8640000000000000 ? swiftEpoch + v * 1000 : (() => { throw new Error("Invalid archive date"); })();
 const toDate = (v: number | undefined) => v === undefined ? undefined : (v - swiftEpoch) / 1000;
-function decodeWindow(raw: any): import("../domain/models").QuotaWindow {
+function archiveObject(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid archive object");
+  return raw as Record<string, unknown>;
+}
+function archiveString(raw: unknown): string | undefined {
+  if (raw == null) return;
+  if (typeof raw !== "string") throw new Error("Invalid archive string");
+  return raw;
+}
+function archiveNumber(raw: unknown): number | undefined {
+  if (raw == null) return;
+  if (typeof raw !== "number" || !Number.isFinite(raw)) throw new Error("Invalid archive number");
+  return raw;
+}
+function archiveInteger(raw: unknown): number | undefined {
+  const value = archiveNumber(raw);
+  if (value !== undefined && !Number.isSafeInteger(value)) throw new Error("Invalid archive integer");
+  return value;
+}
+function decodeWindow(value: unknown): import("../domain/models").QuotaWindow {
+  const raw = archiveObject(value);
   if (typeof raw.label !== "string") throw new Error("Invalid archive window");
-  const w = window(raw.label, raw.usedPercent, fromDate(raw.resetsAt), raw.windowDurationMins);
-  if (raw.pacingBaseline) {
-    const b = raw.pacingBaseline;
-    if (!Number.isFinite(b.usedPercent)) throw new Error("Invalid archive baseline");
-    w.pacingBaseline = { usedPercent: b.usedPercent, capturedAt: fromDate(b.capturedAt), observedAt: fromDate(b.observedAt) };
+  const used = archiveNumber(raw.usedPercent);
+  if (used === undefined) throw new Error("Invalid archive window");
+  const w = window(raw.label, used, fromDate(raw.resetsAt), archiveInteger(raw.windowDurationMins));
+  if (raw.pacingBaseline != null) {
+    const b = archiveObject(raw.pacingBaseline), usedPercent = archiveNumber(b.usedPercent);
+    if (usedPercent === undefined) throw new Error("Invalid archive baseline");
+    w.pacingBaseline = { usedPercent, capturedAt: fromDate(b.capturedAt), observedAt: fromDate(b.observedAt) };
   }
   return w;
 }
@@ -61,19 +83,29 @@ export function readArchive(path: string): Record<string, Quota> {
     const entries = JSON.parse(readFileSync(path, "utf8"));
     if (!Array.isArray(entries)) return {};
     const result: Record<string, Quota> = Object.create(null);
-    for (const e of entries) {
-      if (!providers.includes(e.provider) || !Number.isFinite(e.capturedAt) || !Array.isArray(e.windows)) return {};
-      const slot: Slot = { provider: e.provider, slotID: e.slotID ?? "", label: e.label ?? "" };
-      const q = quota(e.provider, e.windows.map(decodeWindow), fromDate(e.capturedAt));
-      q.groups = (e.groups ?? []).map((g: any) => ({ id: g.id, title: g.title, windows: g.windows.map(decodeWindow) }));
-      if (e.credits) {
-        const cases = e.credits.unit && typeof e.credits.unit === "object" && !Array.isArray(e.credits.unit) ? Object.keys(e.credits.unit) : [];
-        const unit = cases.length === 1 && ["credits", "dollars"].includes(cases[0]) ? cases[0] : undefined;
-        if (!unit || !e.credits.unit[unit] || typeof e.credits.unit[unit] !== "object" || Array.isArray(e.credits.unit[unit]) || !Number.isFinite(e.credits.balance) || typeof e.credits.hasCredits !== "boolean" || typeof e.credits.unlimited !== "boolean" || ["usedDollars", "limitDollars", "dollarBalance"].some(k => e.credits[k] != null && !Number.isFinite(e.credits[k]))) throw new Error("Invalid archive credit");
-        q.credits = { ...e.credits, unit };
+    for (const entry of entries) {
+      const e = archiveObject(entry), provider = providers.find(p => p === e.provider);
+      if (!provider || typeof e.capturedAt !== "number" || !Number.isFinite(e.capturedAt) || !Array.isArray(e.windows)) return {};
+      const slot: Slot = { provider, slotID: archiveString(e.slotID) ?? "", label: archiveString(e.label) ?? "" };
+      const q = quota(provider, e.windows.map(decodeWindow), fromDate(e.capturedAt));
+      if (e.groups != null) {
+        if (!Array.isArray(e.groups)) throw new Error("Invalid archive groups");
+        q.groups = e.groups.map(value => { const g = archiveObject(value); if (typeof g.id !== "string" || typeof g.title !== "string" || !Array.isArray(g.windows)) throw new Error("Invalid archive group"); return { id: g.id, title: g.title, windows: g.windows.map(decodeWindow) }; });
       }
-      q.resetCreditCount = e.resetCreditCount; q.planType = e.planType; q.resetPacingSince = fromDate(e.resetPacingSince);
-      q.resetCredits = (e.resetCredits ?? []).map((c: any) => ({ ...c, expiresAt: fromDate(c.expiresAt) }));
+      if (e.credits != null) {
+        const c = archiveObject(e.credits), units = archiveObject(c.unit), cases = Object.keys(units);
+        const unit = cases.length === 1 && ["credits", "dollars"].includes(cases[0]) ? cases[0] : undefined;
+        const balance = archiveNumber(c.balance);
+        if (!unit || balance === undefined || typeof c.hasCredits !== "boolean" || typeof c.unlimited !== "boolean") throw new Error("Invalid archive credit");
+        archiveObject(units[unit]);
+        q.credits = { balance, unit: unit as "credits" | "dollars", hasCredits: c.hasCredits, unlimited: c.unlimited, usedDollars: archiveNumber(c.usedDollars), limitDollars: archiveNumber(c.limitDollars), dollarBalance: archiveNumber(c.dollarBalance) };
+      }
+      q.resetCreditCount = archiveInteger(e.resetCreditCount);
+      q.planType = archiveString(e.planType); q.resetPacingSince = fromDate(e.resetPacingSince);
+      if (e.resetCredits != null) {
+        if (!Array.isArray(e.resetCredits)) throw new Error("Invalid archive resets");
+        q.resetCredits = e.resetCredits.map(value => { const c = archiveObject(value); if (typeof c.id !== "string" || typeof c.title !== "string") throw new Error("Invalid archive reset"); return { id: c.id, title: c.title, status: archiveString(c.status), expiresAt: fromDate(c.expiresAt) }; });
+      }
       result[slotKey(slot)] = q;
     }
     return result;

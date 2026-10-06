@@ -37,11 +37,14 @@ export function parseCodex(s: string, now = Date.now()): Quota {
   const q = quota("codex", windows(limits), now), baseID = displayText(limits.limitId) ?? "codex";
   q.planType = displayText(limits.planType);
   if (q.windows.length) q.groups.push({ id: baseID, title: "General usage limits", windows: q.windows });
-  for (const [key, payload] of Object.entries(object(result.rateLimitsByLimitId)).sort(([a], [b]) => a.localeCompare(b))) {
-    const extra = object(payload), id = displayText(extra.limitId) ?? displayText(key);
-    if (!id || id === baseID || key === baseID) continue;
-    const ws = windows(extra); if (ws.length) q.groups.push({ id, title: displayText(extra.limitName) ?? id, windows: ws });
-  }
+  try {
+    const extras = Object.entries(object(result.rateLimitsByLimitId)).sort(([a], [b]) => a.localeCompare(b)).flatMap(([key, payload]) => {
+      const extra = object(payload), id = displayText(extra.limitId) ?? displayText(key);
+      if (!id || id === baseID || key === baseID) return [];
+      const ws = windows(extra); return ws.length ? [{ id, title: displayText(extra.limitName) ?? id, windows: ws }] : [];
+    });
+    q.groups.push(...extras);
+  } catch { /* Swift discards malformed optional additional limits, retaining base quota. */ }
   const c = object(limits.credits), balance = number(c.balance);
   if (balance !== undefined && typeof c.hasCredits === "boolean" && typeof c.unlimited === "boolean") q.credits = { balance, hasCredits: c.hasCredits, unlimited: c.unlimited, unit: "credits", dollarBalance: balance / 25 };
   const reset = object(result.rateLimitResetCredits), count = number(reset.availableCount);
