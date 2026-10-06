@@ -11,7 +11,7 @@ export function displayText(v: unknown): string | undefined {
 export function date(v: unknown): number | undefined {
   const n = number(v);
   const d = n === undefined ? typeof v === "string" ? Date.parse(v) : NaN : n > 100000000000 ? n : n * 1000;
-  return Number.isFinite(d) ? d : undefined;
+  return Number.isFinite(new Date(d).getTime()) ? d : undefined;
 }
 export const json = (s: string): Record<string, unknown> => object(JSON.parse(s));
 const array = (v: unknown): unknown[] => Array.isArray(v) ? v : [];

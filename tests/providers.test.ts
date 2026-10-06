@@ -4,9 +4,12 @@ import { open, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { selectJSON } from "../src/main/select-json";
-import { claudeTierSelection, parseClaudePlan, parseCodex, parseClaudeQuota, parseOpenRouter, parseOpenCode, parseGrok, parseLocalQuota, parseAntigravity, parseStatus } from "../src/main/providers/parsers";
+import { claudeTierSelection, date, parseClaudePlan, parseCodex, parseClaudeQuota, parseOpenRouter, parseOpenCode, parseGrok, parseLocalQuota, parseAntigravity, parseStatus } from "../src/main/providers/parsers";
 import { ClaudeActivitySource, scanCodex, parseClaudeLine, claudeLineSelection, parseCodexTokenLine, opaqueID } from "../src/main/providers/activity";
 import { codexRPC, runCommand, httpTransport, endpoints } from "../src/main/providers/transport";
+import { HistoryStore } from "../src/main/history";
+import { jsonReport } from "../src/main/cli";
+import { primary } from "../src/domain/models";
 const roots: string[] = [];
 vi.mock("node:fs", async original => { const fs = await original<typeof import("node:fs")>(); return { ...fs, statSync: vi.fn(fs.statSync), createReadStream: vi.fn(fs.createReadStream) }; });
 vi.mock("node:fs/promises", async original => { const fs = await original<typeof import("node:fs/promises")>(); return { ...fs, open: vi.fn(fs.open), readdir: vi.fn(fs.readdir) }; });
@@ -34,6 +37,15 @@ describe("selective privacy boundary", () => {
   });
 });
 describe("quota fixture parity", () => {
+  it.each([1e20, -1e20, 8640000000000001, "1e999"])("keeps the JSON report usable when optional provider dates are invalid (%s)", async invalid => {
+    const codex = parseCodex(JSON.stringify({ result: { rateLimits: { primary: { usedPercent: 0, windowDurationMins: 300, resetsAt: invalid } }, rateLimitResetCredits: { availableCount: 1, credits: [{ id: "synthetic", title: "Reset", status: "available", expiresAt: invalid }] } } }), now);
+    const claude = parseClaudeQuota(JSON.stringify({ five_hour: { used_percentage: 42, resets_at: invalid }, updated_at: invalid }), now);
+    expect(codex.windows[0].resetsAt).toBeUndefined(); expect(codex.resetCredits[0].expiresAt).toBeUndefined(); expect(claude.capturedAt).toBe(now);
+    const report = await jsonReport([{ slot: primary("codex"), quota: async () => codex }, { slot: primary("claude"), quota: async () => claude }], now);
+    expect(JSON.parse(JSON.stringify(report)).providers.map((p: { status: string }) => p.status)).toEqual(["ok", "ok"]);
+    expect(date(8640000000000000)).toBe(8640000000000000); expect(date(-8640000000000)).toBe(-8640000000000000);
+    expect(date("2030-01-01T00:00:00Z")).toBe(1893456000000); expect(date(1893456000)).toBe(1893456000000);
+  });
   it("keeps valid base Codex quota when optional model windows are malformed", () => {
     const q = parseCodex(JSON.stringify({ result: { rateLimits: { primary: { usedPercent: 0, windowDurationMins: 300 } }, rateLimitsByLimitId: { broken: { primary: {} }, valid: { limitName: "Valid model", secondary: { usedPercent: 30, windowDurationMins: 10080 } } } } }), now);
     expect(q.windows[0].usedPercent).toBe(0); expect(q.groups.map(g => g.id)).toEqual(["codex"]);
@@ -82,6 +94,19 @@ describe("quota fixture parity", () => {
   });
 });
 describe("activity and account boundaries", () => {
+  it.each([["dayEpoch", "1e999"], ["dayEpoch", "1e20"], ["dayEpoch", "-1e20"], ["costUSD", "1e999"], ["earliestTimestamp", "1e20"]])("rescans corrupt Claude cache %s=%s before durable history", async (field, literal) => {
+    const root = temp(), project = join(root, "-synthetic-project"), cache = join(root, "cache.json"); mkdirSync(project);
+    const path = join(project, "session.jsonl");
+    writeFileSync(path, JSON.stringify({ type: "assistant", timestamp: new Date(now).toISOString(), message: { model: "claude-sonnet-4-6", usage: { output_tokens: 7 } } }) + "\n");
+    const original = await new ClaudeActivitySource(root, cache).scan(now), entries = JSON.parse(readFileSync(cache, "utf8")), parsed = entries[opaqueID(path)].result;
+    parsed.tokens.output = 777; parsed.dailyBuckets[0].bucket.tokens.output = 777;
+    const target = field === "earliestTimestamp" ? parsed : field === "costUSD" ? parsed.dailyBuckets[0].bucket : parsed.dailyBuckets[0];
+    target[field] = "CORRUPT_NUMBER"; writeFileSync(cache, JSON.stringify(entries).replace('"CORRUPT_NUMBER"', literal));
+    const activity = await new ClaudeActivitySource(root, cache).scan(now);
+    expect(activity.sessions).toEqual(original.sessions); expect(activity.daily).toEqual(original.daily);
+    const history = new HistoryStore(join(root, "history.json")); expect(() => history.record("claude", activity.daily)).not.toThrow();
+    expect(history.records("claude")[0].tokens.output).toBe(7); expect(readFileSync(cache, "utf8")).not.toContain("777");
+  });
   it("keeps valid Claude sessions when siblings disappear or cannot be read", async () => {
     const root = temp(), project = join(root, "-fixture-project"); mkdirSync(project);
     const line = JSON.stringify({ type: "assistant", timestamp: new Date(now).toISOString(), message: { model: "fixture", usage: { output_tokens: 7 } } }) + "\n";

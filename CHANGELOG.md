@@ -25,6 +25,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Rescan corrupt Claude cache entries with non-finite costs or unsupported
+  dates. Ignore unsupported optional provider timestamps before JSON output.
 - Use canonical temporary paths in candidate fixtures and demo commands.
   Check the packaged executable's exact directory-entry spelling on both
   case-sensitive and case-insensitive filesystems. Preserve symlink rejection.

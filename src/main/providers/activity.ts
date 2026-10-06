@@ -59,10 +59,11 @@ async function parseClaudeFile(path: string, signal?: AbortSignal): Promise<Clau
 function cacheParsed(v: unknown): ClaudeParsed | undefined {
   const r = object(v), t = object(r.tokens);
   if (![t.input, t.output, t.cacheRead, t.cacheWrite, r.totalCostUSD, r.messageCount].every(n => typeof n === "number" && Number.isFinite(n)) || !Array.isArray(r.dailyBuckets)) return;
+  if (r.earliestTimestamp != null && (typeof r.earliestTimestamp !== "number" || !Number.isFinite(new Date(r.earliestTimestamp * 1000).getTime()))) return;
   const buckets: ClaudeParsed["dailyBuckets"] = [];
   for (const raw of r.dailyBuckets) {
     const e = object(raw), b = object(e.bucket), tok = object(b.tokens);
-    if (typeof e.dayEpoch !== "number" || typeof b.costUSD !== "number" || ![tok.input, tok.output, tok.cacheRead, tok.cacheWrite].every(n => typeof n === "number" && Number.isFinite(n))) return;
+    if (typeof e.dayEpoch !== "number" || !Number.isFinite(new Date(e.dayEpoch * 1000).getTime()) || typeof b.costUSD !== "number" || !Number.isFinite(b.costUSD) || ![tok.input, tok.output, tok.cacheRead, tok.cacheWrite].every(n => typeof n === "number" && Number.isFinite(n))) return;
     buckets.push({ dayEpoch: e.dayEpoch, bucket: { tokens: tokens({ input: tok.input as number, output: tok.output as number, reasoning: number(tok.reasoning) ?? 0, cacheRead: tok.cacheRead as number, cacheWrite: tok.cacheWrite as number }), costUSD: b.costUSD } });
   }
   return { tokens: tokens({ input: t.input as number, output: t.output as number, reasoning: number(t.reasoning) ?? 0, cacheRead: t.cacheRead as number, cacheWrite: t.cacheWrite as number }), totalCostUSD: r.totalCostUSD as number, messageCount: r.messageCount as number, model: displayText(r.model), earliestTimestamp: number(r.earliestTimestamp), dailyBuckets: buckets };

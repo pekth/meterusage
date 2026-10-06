@@ -129,7 +129,7 @@ Independent plan review round 1 requested five revisions: typed UserDefaults com
 
 ### Current execution state
 
-S1 through S3 have synthetic fixture and TypeScript-check proof. All 119
+S1 through S3 have synthetic fixture and TypeScript-check proof. All 128
 current fixtures have matching passing execution receipts, including refreshed
 affected cases and retained unchanged cases. Production renderer, main and
 preload bundles build, and the rebuilt schema-1 demo matches the Swift oracle. Provider and shell
@@ -155,3 +155,11 @@ launcher. Use a candidate-local PATH alias to the verified existing executable
 for the next bounded native diagnostic. No host configuration change is needed.
 There is no verified candidate ZIP, signature or native UI evidence from this
 attempt.
+
+The next independent review found invalid dates in disposable Claude cache
+entries and shared provider parsing. Cache dates and costs now validate before
+reuse; bad entries rescan the transcript. Shared parsing rejects unsupported
+timestamps before report serialization. Eight new regression cases failed
+before correction; all nine new cases and 54 affected existing cases now pass.
+These checks exercise cache-to-history and provider-to-JSON paths. Source
+checking and rebuilt bundles pass; native gates remain open.
