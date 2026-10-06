@@ -5,7 +5,7 @@ export const stripWidth = 44, cardWidth = 250;
 // Coordinates here use Electron's top-left origin. Persistence converts the
 // saved AppKit top-right corner at the native boundary.
 export function notchFrame(anchor: { x: number; y: number }, size: { width: number; height: number }, cardOnRight: boolean, screen: Rect): Rect {
-  const width = Math.ceil(size.width), height = Math.ceil(size.height);
+  const width = Math.ceil(size.width), height = Math.min(Math.ceil(size.height), Math.floor(screen.height));
   const x = cardOnRight ? anchor.x - stripWidth : anchor.x - width;
   return { x: Math.round(Math.min(Math.max(x, screen.x), Math.max(screen.x + screen.width - width, screen.x))), y: Math.round(Math.min(Math.max(anchor.y, screen.y), Math.max(screen.y + screen.height - height, screen.y))), width, height };
 }

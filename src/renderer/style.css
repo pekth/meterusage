@@ -25,3 +25,5 @@
 .folded-pill span { width: 8px; height: 8px; border-radius: 50%; }
 
 .surface-share { width: 250px; background: transparent; }
+
+.surface-notch .detail-card, .surface-notch .strip { max-height: var(--notch-max-height); overflow-y: auto; }

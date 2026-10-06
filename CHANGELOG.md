@@ -25,6 +25,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Hide candidate accounts whose configured directory disappears. Bind sharing
+  to the displayed card, hide forecasts when pacing is off, restore active-window
+  burn detail and bound tall notch cards to the display work area.
+
 - `Scripts/make-app.sh` now downloads and verifies the prebuilt app by default,
   so installation from a Git checkout does not need Swift. Source builds require
   `--build-from-source`. Failed downloads or verification never trigger compilation.

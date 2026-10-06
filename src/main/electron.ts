@@ -11,7 +11,7 @@ import { NotchFold } from "./notch-fold";
 import { Updater } from "./updater";
 import { runJSON } from "./cli";
 import { channel, stateChannel, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
-import { parseRequest, trustedSender, projectSettings } from "./ipc";
+import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./ipc";
 import { providers, slotKey, headlineWindow } from "../domain/models";
 import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize } from "../domain/notch";
 
@@ -46,7 +46,7 @@ async function start() {
   tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showFlyout() }, { label: "Settings…", click: () => showSettings() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
   tray.on("click", () => { const w = windows.get("flyout"); w?.isVisible() ? w.hide() : showFlyout(); });
   let shareState: ViewState | undefined, shareHeight = 0, shareReady: ((image: Electron.NativeImage) => void) | undefined;
-  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
+  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
   const updater = new Updater(prefs, app.getVersion(), publish, undefined, release => {
     if (!launch.demo && Notification.isSupported()) new Notification({ title: "MeterUsage update available", body: `MeterUsage ${release.version} is ready to install.`, silent: true }).show();
   });
@@ -219,7 +219,7 @@ async function start() {
         try {
           // Render the same card at 2x zoom in an isolated hidden window.
           // Upsampling a 1x screen capture would not preserve sharp text.
-          shareState = state(); shareHeight = 0;
+          shareState = shareSnapshot(state(), r.key); shareHeight = 0;
           const image = await new Promise<Electron.NativeImage>((resolve, reject) => {
             const timer = setTimeout(() => { shareReady = undefined; reject(new Error("Share render timed out")); }, 5000);
             shareReady = image => { clearTimeout(timer); resolve(image); };

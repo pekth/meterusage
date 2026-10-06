@@ -34,7 +34,8 @@ Last source review: 2026-10-06
 - ADR 0010 selects macOS TypeScript/Electron/React with pnpm, Vite+, Tailwind, Vitest and electron-builder. Main owns provider files/keys, native actions and persistence; a separate sandbox-compatible preload exposes sender-validated IPC to React. The candidate keeps JSON/history/archive and known preference formats. Swift remains the oracle and rollback path. No server or remote control layer is added.
 - Windows implementation, installers, CI, testing and releases are paused until a test machine is available. The former RN/Tauri Windows-first plan is superseded; shared portable source does not establish Windows support.
 - Candidate checks use synthetic fixtures. Demo/candidate selection isolates preferences, history, caches and Electron state before composition. Live provider/key discovery, updater installation and login-item changes are disabled in demo. `pnpm package:mac` creates a separate candidate with publication disabled, using existing macOS tools.
-- Current source checks pass 87 TypeScript fixture tests, TypeScript checking and production bundling. The bundled headless demo preserves stable schema-1 fields against the Swift demo oracle. This is source/fixture evidence only, not native parity or a published Electron release.
+- Candidate account visibility rechecks directory presence. Sharing freezes the displayed account key. Pacing-off hides forecasts; notch details reuse window-scoped burn metrics and have a bounded scroller. These contracts have synthetic/static-markup proof; native UI acceptance remains open.
+- Current source checks pass 93 TypeScript fixture tests, TypeScript checking and production bundling. The bundled headless demo preserves stable schema-1 fields against the Swift demo oracle. This is source/fixture evidence only, not native parity or a published Electron release.
 
 
 ## Verification gaps

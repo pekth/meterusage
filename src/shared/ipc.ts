@@ -8,11 +8,12 @@ export interface SettingsState {
 }
 export interface ViewState {
   snapshot: Snapshot; settings: SettingsState; systemDark: boolean;
-  notch: { expanded: boolean; cardOnRight: boolean; selected: string; dragging: boolean };
+  notch: { expanded: boolean; cardOnRight: boolean; selected: string; dragging: boolean; maxHeight?: number };
   update?: { version: string; state: "idle" | "downloading" | "installing" | "failed" };
 }
 export type Request =
-  | { action: "state" | "refresh" | "settings" | "close" | "quit" | "clearCache" | "copyDiagnostics" | "copyJSON" | "share" | "dragStart" | "dragEnd" | "notchContext" | "updateInstall" | "updateDismiss" }
+  | { action: "state" | "refresh" | "settings" | "close" | "quit" | "clearCache" | "copyDiagnostics" | "copyJSON" | "dragStart" | "dragEnd" | "notchContext" | "updateInstall" | "updateDismiss" }
+  | { action: "share"; key: string }
   | { action: "setPreference"; key: string; value: boolean | number | string }
   | { action: "accountAdd"; provider: "codex" | "claude" }
   | { action: "accountUpdate"; id: string; label?: string; enabled?: boolean }

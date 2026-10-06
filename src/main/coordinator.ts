@@ -8,7 +8,7 @@ import { resetPacing } from "../domain/pacing";
 import { type Snapshot } from "../shared/state";
 import { Preferences, trayPreference } from "./preferences";
 import { type Launch } from "./launch";
-import { type Source, compose } from "./composition";
+import { type Source, compose, accountHome } from "./composition";
 import { HistoryStore, readArchive, saveArchive } from "./history";
 import { limitsReport, canonicalJSON } from "../domain/report";
 type Kind = "quota" | "activity" | "usage" | "plan" | "status";
@@ -41,7 +41,7 @@ export class Coordinator {
     const s = source.slot;
     if (!s.slotID) return this.preferences.enabled(s.provider);
     if (this.launch.demo && s.slotID === "demo-second") return true;
-    return this.preferences.accounts.some(a => a.id === s.slotID && a.provider === s.provider && a.enabled);
+    return this.preferences.accounts.some(a => a.id === s.slotID && a.provider === s.provider && a.enabled && accountHome(a, this.launch.home) !== undefined);
   }
   get slots(): Slot[] {
     const byKey = new Map(this.sources.filter(s => this.visible(s)).map(s => [slotKey(s.slot), s.slot]));

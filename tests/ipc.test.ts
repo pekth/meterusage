@@ -29,3 +29,8 @@ it("projects configured directories to Settings only", () => {
   }
   expect(projectSettings({}, accounts, "/invented/home", "settings").accounts[0].pathLabel).toBe("~/config-directory");
 });
+
+it("binds sharing to the displayed account key", () => {
+  expect(parseRequest({ action: "share", key: "claude#fixture-account" })).toEqual({ action: "share", key: "claude#fixture-account" });
+  for (const raw of [{ action: "share" }, { action: "share", key: "claude#../other" }, { action: "share", key: "claude", path: "/tmp" }]) expect(() => parseRequest(raw)).toThrow();
+});

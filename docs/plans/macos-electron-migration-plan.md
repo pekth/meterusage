@@ -130,11 +130,12 @@ Independent plan review round 1 requested five revisions: typed UserDefaults com
 ### Current execution state
 
 S1 through S3 have executed synthetic fixture/typecheck proof. The current full
-TypeScript suite has 87 passing tests; production renderer/main/separate
+TypeScript suite has 93 passing tests; production renderer/main/separate
 preload bundling and bundled schema-1 demo comparison pass. Provider and shell
 source fixes have passing regression checks; complete source review remains
-open. S4 native/T3-rendered proof and all S5 native
-acceptance remain open. S6 public documentation links and whitespace pass; the repository does not provide scripts/documentation.py. No Electron release,
+open. S4 native/T3-rendered proof and all S5 native acceptance remain open.
+S6 public documentation links and whitespace pass; the repository does not
+provide `scripts/documentation.py`. No Electron release,
 installation or cutover has occurred. Source-only draft delivery is allowed
 when its applicable checks and review pass; merge remains blocked by native
 parity.

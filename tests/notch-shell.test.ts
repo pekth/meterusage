@@ -1,6 +1,7 @@
 import { it, expect, afterEach, vi } from "vite-plus/test";
 import { NotchFold } from "../src/main/notch-fold";
-import { effectiveWindows, notchEntries, minimumShareSize } from "../src/domain/notch";
+import { effectiveWindows, notchEntries, minimumShareSize, notchFrame } from "../src/domain/notch";
+import { shareSnapshot } from "../src/main/ipc";
 import { quota, primary, window } from "../src/domain/models";
 import { launchConfiguration } from "../src/main/launch";
 import { Preferences } from "../src/main/preferences";
@@ -12,6 +13,25 @@ import { createRequire } from "node:module";
 const roots: string[] = [];
 const temp = () => { const p = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(p); return p; };
 afterEach(() => { vi.useRealTimers(); roots.splice(0).forEach(p => rmSync(p, { recursive: true, force: true })); });
+it("stops polling and reset actions when a configured account directory disappears", async () => {
+  const root = temp(), directory = join(root, "mounted-account"); mkdirSync(directory);
+  const launch = launchConfiguration(["--demo", "--candidate-profile", temp()], {}), prefs = await Preferences.load(launch);
+  await prefs.set("managedAccounts", [{ id: "mounted", provider: "codex", label: "Mounted", path: directory, enabled: true }]);
+  const slot = { ...primary("codex"), slotID: "mounted" }, q = quota("codex", [window("5-hour", 10)]);
+  q.resetCredits = [{ id: "fixture-credit", title: "Fixture reset" }];
+  let reads = 0, consumes = 0;
+  const source = { slot, quota: async () => { reads++; return q; }, consumeReset: async () => { consumes++; return true; } };
+  const c = new Coordinator(launch, prefs, [source]);
+  try {
+    await c.refresh(); expect(c.visible(source)).toBe(true);
+    const intent = c.prepareReset("codex#mounted", "fixture-credit"), before = reads;
+    rmSync(directory, { recursive: true });
+    expect(c.visible(source)).toBe(false); expect(c.slots).toEqual([]);
+    await c.refresh(); expect(reads).toBe(before);
+    expect(() => c.prepareReset("codex#mounted", "fixture-credit")).toThrow("unavailable");
+    await expect(c.confirmReset(intent.token)).rejects.toThrow("unavailable"); expect(consumes).toBe(0);
+  } finally { c.stop(); }
+});
 it("rechecks pinning at fold time and resumes folding after an action", () => {
   vi.useFakeTimers(); let pinned = false, busy = false, folds = 0;
   const f = new NotchFold(() => pinned || busy, () => folds++);
@@ -42,6 +62,28 @@ it("keeps family account digits and labels distinct and marks archive readings s
 it("exports at least two pixels per point on 1x and preserves higher backing scale", () => {
   expect(minimumShareSize(250, 351, 1)).toEqual({ width: 500, height: 702 });
   expect(minimumShareSize(250, 351, 3)).toEqual({ width: 750, height: 1053 });
+});
+it("bounds oversized notch content to the work area without changing normal anchors", () => {
+  const screen = { x: 0, y: 60, width: 1200, height: 800 }, anchor = { x: 700, y: 100 };
+  for (const right of [true, false]) {
+    const frame = notchFrame(anchor, { width: 294, height: 1200 }, right, screen);
+    expect(frame.height).toBe(800); expect(frame.y).toBe(60); expect(frame.y + frame.height).toBe(860);
+    const short = notchFrame(anchor, { width: 294, height: 200 }, right, screen), taller = notchFrame(anchor, { width: 294, height: 350 }, right, screen);
+    expect(short.y).toBe(100); expect(taller.y).toBe(100); expect(short.x).toBe(taller.x);
+  }
+});
+it("freezes the displayed fallback card for sharing and rejects a removed card", async () => {
+  const launch = launchConfiguration(["--demo", "--candidate-profile", temp()], {}), prefs = await Preferences.load(launch);
+  await prefs.set("showProviderClaude", true);
+  const c = new Coordinator(launch, prefs, [{ slot: primary("claude"), quota: async () => quota("claude", [window("5-hour", 42)]) }]);
+  try {
+    await c.refresh();
+    const state = { snapshot: c.snapshot(), settings: { values: {}, accounts: [] }, systemDark: true, notch: { expanded: true, cardOnRight: false, selected: "codex", dragging: false } };
+    const frozen = shareSnapshot(state, "claude"); expect(frozen.notch.selected).toBe("claude");
+    state.snapshot.quotas.claude = { status: "missing", code: "offline", reason: "Offline" }; state.notch.selected = "codex";
+    expect(frozen.snapshot.quotas.claude.status).toBe("value"); expect(frozen.notch.selected).toBe("claude");
+    expect(() => shareSnapshot(state, "codex")).toThrow("unavailable");
+  } finally { c.stop(); }
 });
 it("keeps the builder bundle name and renames only the executable before signing", async () => {
   const require = createRequire(import.meta.url), builderRequire = createRequire(require.resolve("electron-builder"));
