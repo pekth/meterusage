@@ -16,7 +16,8 @@ app and prepare `dist/MeterUsage.app`. Require `--build-from-source` to compile
 the checkout. Preserve source builds for contributor validation.
 
 Pin the public release version and SHA-256 together in the script. Verify the
-download and code signature before replacing generated output. Use macOS tools
+download and code signature, then copy and verify the bundle in staging on the
+destination filesystem before replacing generated output. Use macOS tools
 without a package manager, credentials, or developer-tool installation. Reject
 unsupported platforms and report download or verification failures without a
 compiler fallback.
@@ -29,8 +30,9 @@ exercise the default preparation path again.
 
 Test default preparation with Swift unavailable, explicit source selection,
 invalid arguments, unsupported platforms, and failed download, checksum,
-bundle, or signature checks. Download and verification failures must preserve
-existing generated output. Run these synthetic cases through `swift test` as
+bundle, signature, or destination-copy checks. Download, copy, and verification
+failures must preserve existing generated output and remove staging files.
+Run these synthetic cases through `swift test` as
 well as the standalone shell test.
 Also download the real pinned asset on macOS, verify its prepared bundle, and
 execute its synthetic demo JSON path without compiler access.

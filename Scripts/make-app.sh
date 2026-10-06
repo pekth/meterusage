@@ -47,7 +47,8 @@ if [ "$#" -eq 0 ]; then
     RELEASE_SHA256="b759aad8a410050ee9190a8848426ea2fa3d6600be7ade16b6abbd417bfefdb6"
     RELEASE_URL="https://github.com/pekth/meterusage/releases/download/v${RELEASE_VERSION}/MeterUsage-${RELEASE_VERSION}.zip"
     TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/meterusage-download.XXXXXX")"
-    trap 'rm -rf "${TEMP_DIR}"' EXIT
+    STAGING_DIR=""
+    trap 'rm -rf "${TEMP_DIR}" "${STAGING_DIR:-}"' EXIT
     ARCHIVE="${TEMP_DIR}/MeterUsage.zip"
     DOWNLOADED_APP="${TEMP_DIR}/unpacked/${APP_NAME}.app"
 
@@ -62,11 +63,14 @@ if [ "$#" -eq 0 ]; then
     }
     codesign --verify --deep --strict "${DOWNLOADED_APP}"
 
-    # Replace generated output only after validating the downloaded bundle.
+    # Finish copying and verifying on the destination filesystem first.
     mkdir -p "${DIST_DIR}"
+    STAGING_DIR="$(mktemp -d "${DIST_DIR}/.meterusage-stage.XXXXXX")"
+    STAGED_APP="${STAGING_DIR}/${APP_NAME}.app"
+    ditto "${DOWNLOADED_APP}" "${STAGED_APP}"
+    codesign --verify --deep --strict "${STAGED_APP}"
     rm -rf "${APP_DIR}"
-    ditto "${DOWNLOADED_APP}" "${APP_DIR}"
-    codesign --verify --deep --strict "${APP_DIR}"
+    mv "${STAGED_APP}" "${APP_DIR}"
     echo "Prepared ${APP_DIR}. Drag it to Applications to install."
     echo "First launch: right-click > Open, or allow it in System Settings > Privacy & Security."
     exit 0
