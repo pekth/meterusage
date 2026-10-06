@@ -13,3 +13,4 @@ This directory records decisions that affect repository work. Read an ADR before
 | [0005](0005-multi-account-slots.md) | Model a second Claude/Codex account as its own provider slot keyed by an alternate config directory; never merge two accounts' windows and never read or display account identity. | Accepted; slot mechanism amended by [0006](0006-managed-account-list.md) |
 | [0006](0006-managed-account-list.md) | Additional accounts are a managed, unbounded Settings list; `ProviderSlot` (provider + generated id, label display-only) keys every metered surface, with primary-slot persistence formats unchanged. | Accepted |
 | [0008](0008-reset-aware-quota-pacing.md) | ADR 0008: Collect fresh quota observations after a manual reset | Accepted |
+| [0009](0009-prebuilt-bundle-default.md) | Download and verify the prebuilt app by default; compile only with `--build-from-source`. | Accepted |

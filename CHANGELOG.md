@@ -8,6 +8,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `Scripts/make-app.sh` now downloads and verifies the prebuilt app by default,
+  so installation from a Git checkout does not need Swift. Source builds require
+  `--build-from-source`. Failed downloads or verification never trigger compilation.
+  Copy and verify the replacement in staging so a failed copy or signature check
+  preserves the existing generated app.
 - Make the prebuilt app download the default installation path. Clarify that
   Swift and Xcode Command Line Tools are needed only to build from source,
   link directly to the current Apple silicon app ZIP, and keep build commands

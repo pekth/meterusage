@@ -3,6 +3,20 @@
 Use this file with [`CONTRIBUTING.md`](CONTRIBUTING.md) when working on the
 public repository.
 
+## Installing for users
+
+- When asked to install MeterUsage, use the prebuilt app ZIP described in
+  [`README.md`](README.md). From a Git checkout or source archive, run
+  `./Scripts/make-app.sh` to download and verify it in `dist/MeterUsage.app`,
+  then install that bundle within the user's requested scope.
+- Installation does not require Swift or Xcode Command Line Tools. Reserve
+  `swift build`, `swift test`, and `--build-from-source` for an explicit source
+  build or contribution task. Do not install developer tools for app installation.
+- If the prebuilt download, checksum, signature, or platform check fails,
+  report that error. Do not fall back to compiling the app.
+- Verify the installed bundle and running app separately. Preparing a bundle
+  in `dist/` is not proof of installation or launch.
+
 ## Project rules
 
 - Keep changes focused and explain user-visible behavior in the pull request.

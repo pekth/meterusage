@@ -65,6 +65,17 @@ Costs are computed locally from token counts against a rate table in `Sources/Me
 
 ## What leaves your machine
 
+### Installation downloads
+
+`Scripts/make-app.sh` downloads a pinned public release ZIP from GitHub by
+default. It sends no credentials, account data, or local source files. The
+script checks the recorded SHA-256 and the app's code signature before replacing
+generated output in `dist/`, and deletes its temporary download on exit. It does
+not read provider stores or install developer tools. Source compilation is a
+separate, explicit `--build-from-source` mode.
+
+### App requests
+
 Outbound requests or subprocess-backed provider checks, all of which you can verify in the source:
 
 1. The `codex` CLI subprocess contacts OpenAI's backend to read your rate limits. This is the same call the CLI makes for itself.
