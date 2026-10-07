@@ -166,7 +166,23 @@ The ZIP is 116,696,318 bytes, SHA-256
 and the extracted bundle uses 290,148 KiB on disk. This artifact binds source
 `193c2af42bd2a8641accbb3f7b5b333ba6cd9ac3`. It is not notarized, installed
 or published. Native GUI journeys, two-height notch captures, idle RSS and
-cold/warm scan timing remain open.
+packaged-app performance remain open.
+
+Synthetic source-scanner samples now compare the unchanged TypeScript and
+Swift sources on the same Apple silicon Mac. Each provider uses 32 files;
+Claude has 256 messages per file, totaling 1,712,128 bytes, and Codex totals
+10,048 bytes. Claude empty/memory/restored-disk cache samples are
+30.93/0.56/0.76 ms on native Node 26.10.0 and 392.63/1.25/1.48 ms with Swift
+6.4 compiled using `-O` and Swift 5 language mode. Codex first/second scan
+samples are 4.84/3.53 ms on Node and 3.81/3.39 ms on Swift. Session/token
+counts and cache transitions pass. The Node receipt is reused; no unchanged
+check was repeated. These separate single samples use matching generated
+fixture contents at different times. Empty cache means application cache,
+not flushed OS cache. Compilation and fixture generation are excluded.
+Swift uses its actual scan clock; Node uses a fixed fixture clock. Session
+and daily results are checked, with scan timestamps and time-dependent
+telemetry excluded from equality. These source harnesses do not establish
+packaged-app performance, idle GUI RSS or native interaction parity.
 
 The next independent review found invalid dates in disposable Claude cache
 entries and shared provider parsing. Cache dates and costs now validate before

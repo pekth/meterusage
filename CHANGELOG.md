@@ -16,6 +16,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Record synthetic Claude and Codex source-scanner timings alongside the Swift
+  baseline. Counts and cache transitions pass; packaged-app performance, idle
+  RSS and native GUI acceptance remain open.
 - Verify the current Apple silicon Electron candidate with 128 macOS fixtures,
   TypeScript checking, production bundles, extracted ZIP signature checks and
   the native schema-1 demo CLI. The candidate is ad-hoc signed and unpublished;
