@@ -3,8 +3,8 @@
 # Prepares dist/MeterUsage.app from a verified prebuilt release by default.
 #
 # Contributors can opt into a source build with --build-from-source.
-# Only that mode requires Swift and Xcode Command Line Tools. Both modes use
-# ad-hoc signing: no Apple Developer account or provisioning profile is needed.
+# Only that mode requires Swift and Xcode Command Line Tools and creates an
+# ad-hoc signed build. The default downloads the notarized Developer ID app.
 #
 # Usage:  ./Scripts/make-app.sh
 # Build:  ./Scripts/make-app.sh --build-from-source
@@ -44,8 +44,8 @@ if [ "$#" -eq 0 ]; then
 
     # Pin the reviewed release and digest together; never fall back to a build.
     RELEASE_VERSION="0.2.41"
-    RELEASE_SHA256="b759aad8a410050ee9190a8848426ea2fa3d6600be7ade16b6abbd417bfefdb6"
-    RELEASE_URL="https://github.com/pekth/meterusage/releases/download/v${RELEASE_VERSION}/MeterUsage-${RELEASE_VERSION}.zip"
+    RELEASE_SHA256="12acc43dc79506bc6cd7b2bcb27cabe67dd35bcbcab9f68458faa852869ed075"
+    RELEASE_URL="https://github.com/pekth/meterusage/releases/download/v${RELEASE_VERSION}/MeterUsage-${RELEASE_VERSION}-notarized.zip"
     TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/meterusage-download.XXXXXX")"
     STAGING_DIR=""
     trap 'rm -rf "${TEMP_DIR}" "${STAGING_DIR:-}"' EXIT
@@ -72,7 +72,7 @@ if [ "$#" -eq 0 ]; then
     rm -rf "${APP_DIR}"
     mv "${STAGED_APP}" "${APP_DIR}"
     echo "Prepared ${APP_DIR}. Drag it to Applications to install."
-    echo "First launch: right-click > Open, or allow it in System Settings > Privacy & Security."
+    echo "Open MeterUsage.app from Applications. The prebuilt app is signed and notarized."
     exit 0
 fi
 

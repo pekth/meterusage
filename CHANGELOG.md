@@ -6,6 +6,13 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Select the Developer ID signed, Apple-notarized v0.2.41 app ZIP for direct
+  downloads and `Scripts/make-app.sh`. The app carries a stapled ticket;
+  installing from a Git checkout still needs no Swift. Contributor source
+  builds keep the explicit `--build-from-source` option and ad-hoc signing.
+
 ### Fixed
 
 - `Scripts/make-app.sh` now downloads and verifies the prebuilt app by default,
