@@ -43,6 +43,11 @@ and React. The candidate uses pnpm, Vite+, Tailwind, Vitest and electron-builder
 The downloadable 0.2.41 app above remains the Swift release. The Electron
 candidate has not passed native macOS acceptance and is not a published release.
 
+The candidate also has [desktop account connection controls](docs/DESKTOP-CONNECTIONS.md)
+for Codex browser sign-in and opt-in Claude Desktop allowance. Setup uses buttons
+and approval dialogs. Grok consumer connection remains unavailable. Native
+sign-in, provider responses and Keychain acceptance still require verification.
+
 Provider readers and credentials stay in the main process. The sandboxed
 renderer receives validated snapshots through a small IPC bridge. Existing
 history/archive JSON, preference keys, managed account IDs and provider marks

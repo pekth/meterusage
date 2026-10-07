@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vite-plus/test";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vite-plus/test";
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -8,11 +8,149 @@ import { launchConfiguration } from "../src/main/launch";
 import { compose, type Source } from "../src/main/composition";
 import { primary, slotKey, quota, window, value, missing, tokens, Unavailable } from "../src/domain/models";
 import { AlertEvaluator } from "../src/domain/alerts";
+import { DesktopConnections } from "../src/main/connections";
+import { runJSON } from "../src/main/cli";
+import * as launchModule from "../src/main/launch";
+import * as transport from "../src/main/providers/transport";
+import * as claudeDesktop from "../src/main/providers/claude-desktop";
 const roots: string[] = [], controllers: Coordinator[] = []; const temp = () => { const root = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(root); return root; };
-afterEach(() => { for (const c of controllers.splice(0)) c.stop(); for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true }); });
+beforeEach(() => {
+  vi.spyOn(transport, "runCommand").mockRejectedValue(new Error("Unexpected native command"));
+  vi.spyOn(transport, "httpTransport").mockReturnValue(async () => { throw new Error("Unexpected HTTP"); });
+  vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("Unexpected network request"); }));
+});
+afterEach(() => { for (const c of controllers.splice(0)) c.stop(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true }); });
 const now = Date.parse("2026-10-06T12:00:00Z");
 async function setup(sources?: Source[], time = () => now) { const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch); const c = new Coordinator(launch, prefs, sources ?? compose(launch, prefs, { now: time }), time); controllers.push(c); return { c, root, prefs }; }
 describe("coordinator refresh journey", () => {
+  it.each(["switch", "revoke"])("discards unverified account quota on deadline after a Claude %s", async action => {
+    const { c: initial, root, prefs } = await setup([]), launch = { ...initial.launch, demo: false };
+    let identity = "a".repeat(64), denied = false, hold = false, release!: () => void, started!: () => void;
+    const response = new Promise<void>(resolve => { release = resolve; });
+    const ready = new Promise<void>(resolve => { started = resolve; });
+    prefs.values.desktopClaudeIdentity = identity; prefs.values.showProviderClaude = true;
+    const credentials = vi.spyOn(claudeDesktop, "readDesktopCredential").mockImplementation(async () => {
+      if (denied) throw new Unavailable("notSignedIn");
+      return { identity, token: "synthetic-access" };
+    });
+    const http: transport.HTTP = async url => {
+      if (url !== transport.endpoints.claudeAllowance) return '{"components":[]}';
+      if (hold) { started(); await response; throw new Unavailable("offline"); }
+      return '{"five_hour":{"utilization":42}}';
+    };
+    const connections = new DesktopConnections(launch, prefs, "/synthetic/helper", () => {}, async () => "synthetic-password", http, () => now);
+    const source = compose(launch, prefs, { connections, http, now: () => now }).find(s => s.slot.provider === "claude")!;
+    const c = new Coordinator(launch, prefs, [source], () => now); controllers.push(c);
+    await c.refresh(); expect(c.snapshot().archived.claude.windows[0].usedPercent).toBe(42);
+    hold = true; vi.useFakeTimers();
+    const pending = c.refresh(); await ready;
+    if (action === "switch") identity = "b".repeat(64); else denied = true;
+    await vi.advanceTimersByTimeAsync(30000); await pending;
+    // The deadline wins before the source can verify the post-request identity.
+    expect(credentials).toHaveBeenCalledTimes(3);
+    const snapshot = c.snapshot(), archive = readFileSync(join(root, "quota-archive.json"), "utf8");
+    release(); await vi.advanceTimersByTimeAsync(0);
+    expect(credentials).toHaveBeenCalledTimes(4);
+    expect(c.quotas.claude).toMatchObject({ status: "missing", code: "failed" });
+    expect(snapshot.archived.claude).toBeUndefined();
+    expect(c.snapshot().archived.claude).toBeUndefined();
+    expect(archive).not.toContain('"claude"');
+  });
+
+  it("retains account quota only after an offline request completes Claude identity verification", async () => {
+    const { c: initial, root, prefs } = await setup([]), launch = { ...initial.launch, demo: false };
+    const identity = "a".repeat(64); let offline = false;
+    prefs.values.desktopClaudeIdentity = identity; prefs.values.showProviderClaude = true;
+    const credentials = vi.spyOn(claudeDesktop, "readDesktopCredential").mockResolvedValue({ identity, token: "synthetic-access" });
+    const http: transport.HTTP = async url => {
+      if (url !== transport.endpoints.claudeAllowance) return '{"components":[]}';
+      if (offline) throw new Unavailable("offline");
+      return '{"five_hour":{"utilization":42}}';
+    };
+    const connections = new DesktopConnections(launch, prefs, "/synthetic/helper", () => {}, async () => "synthetic-password", http, () => now);
+    const source = compose(launch, prefs, { connections, http, now: () => now }).find(s => s.slot.provider === "claude")!;
+    const c = new Coordinator(launch, prefs, [source], () => now); controllers.push(c);
+    await c.refresh(); offline = true; await c.refresh();
+    expect(credentials).toHaveBeenCalledTimes(4);
+    expect(c.quotas.claude).toMatchObject({ status: "missing", code: "offline" });
+    expect(c.snapshot().archived.claude.windows[0].usedPercent).toBe(42);
+    expect(readFileSync(join(root, "quota-archive.json"), "utf8")).toContain('"claude"');
+  });
+
+  it("retains ordinary quota archives after a source deadline", async () => {
+    let hold = false, release!: (q: ReturnType<typeof quota>) => void;
+    const source: Source = { slot: primary("codex"), quota: () => hold ? new Promise(resolve => { release = resolve; }) : Promise.resolve(quota("codex", [window("5-hour", 42)], now)) };
+    const { c } = await setup([source]); await c.refresh();
+    hold = true; vi.useFakeTimers(); const pending = c.refresh();
+    await vi.advanceTimersByTimeAsync(30000); await pending;
+    expect(c.quotas.codex).toMatchObject({ status: "missing", code: "failed" });
+    expect(c.snapshot().archived.codex.windows[0].usedPercent).toBe(42);
+    release(quota("codex", [window("5-hour", 99)], now)); await vi.advanceTimersByTimeAsync(0);
+    expect(c.snapshot().archived.codex.windows[0].usedPercent).toBe(42);
+  });
+
+  it("keeps established connection collection after clearing the scan cache", async () => {
+    vi.spyOn(transport, "runCommand").mockRejectedValue(new Error("Synthetic command unavailable"));
+    vi.spyOn(transport, "httpTransport").mockReturnValue(async () => { throw new Unavailable("offline"); });
+    const { c: initial, prefs } = await setup([]), launch = { ...initial.launch, demo: false };
+    prefs.values.desktopClaudeIdentity = "a".repeat(64); prefs.values.showProviderClaude = true;
+    const connections = new DesktopConnections(launch, prefs, "synthetic-helper", () => {});
+    vi.spyOn(connections, "quota").mockResolvedValue(quota("claude", [window("Weekly · All models", 42)], now));
+    const factory = () => compose(launch, prefs, { connections, http: async () => { throw new Unavailable("offline"); } }).filter(s => s.slot.provider === "claude");
+    const c = new Coordinator(launch, prefs, factory(), () => now, () => {}, factory); controllers.push(c);
+    await c.refresh(); expect(c.quotas.claude).toMatchObject({ status: "value", value: { windows: [{ usedPercent: 42 }] } });
+    await c.clearCache(); expect(c.quotas.claude).toMatchObject({ status: "value", value: { windows: [{ usedPercent: 42 }] } });
+    expect(c.sources[0].activity).toBeUndefined();
+  });
+  it("uses established connections for JSON without starting sign-in or consent", async () => {
+    const { c, prefs } = await setup([]), launch = { ...c.launch, demo: false };
+    prefs.values.desktopCodexConnection = "00000000-0000-0000-0000-000000000001"; prefs.values.desktopClaudeIdentity = "a".repeat(64);
+    vi.spyOn(launchModule, "launchConfiguration").mockReturnValue(launch);
+    vi.spyOn(Preferences, "load").mockResolvedValue(prefs);
+    vi.spyOn(transport, "runCommand").mockRejectedValue(new Error("Synthetic command unavailable"));
+    vi.spyOn(transport, "httpTransport").mockReturnValue(async () => { throw new Error("Unexpected HTTP"); });
+    const reads = vi.spyOn(DesktopConnections.prototype, "quota").mockImplementation(async provider => quota(provider, [window("Weekly · All models", 42)], now));
+    const connect = vi.spyOn(DesktopConnections.prototype, "connect").mockRejectedValue(new Error("Unexpected sign-in"));
+    const report = JSON.parse(await runJSON(["--json"], {}, "synthetic-helper"));
+    for (const provider of ["codex", "claude"]) expect(report.providers.find((p: { provider: string }) => p.provider === provider)).toMatchObject({ status: "ok", windows: [{ used_percent: 42 }] });
+    expect(reads.mock.calls.map(([provider]) => provider).sort()).toEqual(["claude", "codex"]); expect(connect).not.toHaveBeenCalled();
+    expect(reads.mock.instances.every(connection => (connection as DesktopConnections).helper === "synthetic-helper")).toBe(true);
+    reads.mockRestore(); prefs.values.desktopCodexConnection = prefs.values.desktopClaudeIdentity = "off";
+    const disconnected = JSON.parse(await runJSON(["--json"], {}, "synthetic-helper"));
+    for (const provider of ["codex", "claude"]) expect(disconnected.providers.find((p: { provider: string }) => p.provider === provider)).toMatchObject({ status: "unavailable", windows: [] });
+    expect(connect).not.toHaveBeenCalled();
+  });
+  it("publishes reset capability from the current source rather than earned credits", async () => {
+    const reading = () => ({ ...quota("codex", [], now), canConsumeReset: true, resetCreditCount: 1, resetCredits: [{ id: "fixture", title: "Reset", status: "available" }] });
+    const { c } = await setup([{ slot: primary("codex"), quota: async () => reading() }]);
+    await c.refresh(); expect(c.snapshot().quotas.codex).toMatchObject({ status: "value", value: { canConsumeReset: false } });
+    c.sources = [{ slot: primary("codex"), quota: async () => reading(), consumeReset: async () => true }];
+    await c.refresh(); expect(c.snapshot().quotas.codex).toMatchObject({ status: "value", value: { canConsumeReset: true } });
+  });
+  it("re-arms only the replaced connection's alert suppression", async () => {
+    const { c, prefs } = await setup(["codex", "claude"].map(provider => ({ slot: primary(provider as "codex" | "claude"), quota: async () => {
+      const q = quota(provider as "codex" | "claude", [window("5-hour", 96)], now);
+      q.resetCredits = [{ id: "same-credit", title: "Reset", status: "available", expiresAt: now + 3600000 }]; return q;
+    } })));
+    prefs.values.showProviderClaude = true; prefs.values.quotaAlertsEnabled = true;
+    const notifications: string[] = [];
+    const next = new Coordinator(c.launch, prefs, [...c.sources], () => now, alert => notifications.push(`${alert.slot.provider}/${alert.kind}`)); controllers.push(next);
+    await next.refresh(); expect(notifications).toEqual(["codex/threshold", "codex/expiringCredit", "claude/threshold", "claude/expiringCredit"]);
+    notifications.length = 0; next.forgetQuota("codex"); await next.refresh();
+    expect(notifications).toEqual(["codex/threshold", "codex/expiringCredit"]);
+  });
+  it("drops prior-account quota when a desktop connection expires and discards replaced-source results", async () => {
+    let resolve!: (q: ReturnType<typeof quota>) => void;
+    const old: Source = { slot: primary("claude"), quota: () => new Promise(r => { resolve = r; }) };
+    const { c, root } = await setup([old]);
+    c.archived.claude = quota("claude", [window("Weekly", 90)], now);
+    const pending = c.refresh(); await Promise.resolve();
+    c.forgetQuota("claude");
+    c.sources = [{ slot: primary("claude"), accountBound: true, quota: async () => { throw new Unavailable("notSignedIn", "Claude Desktop"); } }];
+    resolve(quota("claude", [window("Weekly", 99)], now)); await pending;
+    expect(c.quotas.claude).toMatchObject({ status: "missing", code: "notSignedIn" }); expect(c.archived.claude).toBeUndefined();
+    expect(readFileSync(join(root, "quota-archive.json"), "utf8")).not.toContain("99");
+  });
   it("drops unknown history fields before durable merge, persistence and renderer publication", async () => {
     const { c, root, prefs } = await setup([]), path = join(root, "durable-daily-history.json"); c.stop();
     writeFileSync(path, JSON.stringify({ claude: [{ dayISO: "2026-10-06", tokens: { ...tokens({ input: 100 }), privatePayload: "OMIT_HISTORY_TOKEN_FIELD" }, estimatedCostUSD: 1, sessionCount: 2, peakUsedPercent: 70, unknown: "OMIT_HISTORY_RECORD_FIELD" }] }));
@@ -120,6 +258,17 @@ describe("explicit per-account reset journey", () => {
   });
 });
 describe("alert edge and recency parity", () => {
+  it("clears every suppression kind for one slot without clearing a same-provider account", () => {
+    const a = primary("codex"), b = { ...a, slotID: "other", label: "Other" }, evaluator = new AlertEvaluator();
+    const q = quota("codex", [window("5-hour", 96, now + 4 * 3600000, 300)], now);
+    q.resetCredits = [{ id: "fixture", title: "Reset", status: "available", expiresAt: now + 3600000 }];
+    const readings = { codex: value(q), "codex#other": value(q) }, burns = { codex: now, "codex#other": now };
+    expect(evaluator.events([a, b], readings, burns, now)).toHaveLength(8);
+    expect(evaluator.events([a, b], readings, burns, now)).toEqual([]); evaluator.forgetSlot("codex");
+    const events = evaluator.events([a, b], readings, burns, now);
+    expect(events.map(e => e.kind)).toEqual(["threshold", "paceSoftWarning", "paceCliff", "expiringCredit"]);
+    expect(events.every(e => slotKey(e.slot) === "codex")).toBe(true);
+  });
   it("alerts only highest threshold, re-arms after reset and isolates accounts", () => {
     const a = primary("codex"), b = { provider: "codex" as const, slotID: "other", label: "Other" }, evaluator = new AlertEvaluator();
     const state = (used: number) => value(quota("codex", [window("5-hour", used)], now));

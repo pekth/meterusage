@@ -1,7 +1,7 @@
 import { it, expect, vi } from "vite-plus/test";
 import { createElement, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { App, Meter, ProviderCard } from "../src/renderer/app";
+import { App, Connections, Meter, ProviderCard } from "../src/renderer/app";
 import { tokens, primary, quota, value, window } from "../src/domain/models";
 import type { ViewState } from "../src/shared/ipc";
 import { trayTooltip } from "../src/domain/overview";
@@ -19,6 +19,17 @@ function renderApp(view: ViewState, surface = "flyout") {
 }
 
 const now = Date.parse("2026-10-06T12:00:00Z");
+it("offers simple account setup and truthful Grok availability without directories in the primary flow", () => {
+  const view = state(); view.snapshot.demo = false;
+  view.connections = [{ provider: "codex", status: "disconnected" }, { provider: "claude", status: "connected" }, { provider: "grok", status: "unsupported" }];
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(markup).toContain("Sign in to Codex"); expect(markup).toContain("Disconnect"); expect(markup).toContain("Account allowance");
+  expect(markup).toContain("Automatic connection is not available yet"); expect(markup).not.toMatch(/directory|terminal|API key/);
+  view.connections[0].status = "connecting";
+  expect(renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }))).toContain("Cancel");
+  view.snapshot.demo = true; view.connections[0].status = "disconnected";
+  expect(renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }))).toContain("disabled");
+});
 const w = window("5-hour", 80, now + 4 * 3600000, 300);
 const session = (id: string, at: number, output: number, cacheRead = 0) => ({ id, projectName: id, model: "fixture", tokens: tokens({ output, cacheRead }), estimatedCostUSD: 0, startedAt: at, messageCount: 10 });
 const state = (): ViewState => ({ snapshot: {
@@ -40,6 +51,7 @@ it("shows unavailable reset status without a redemption action", () => {
     q.resetCredits = [{ id: "c", title: "Reset", status }];
     const markup = renderApp(view); expect(markup).not.toContain("Use reset"); expect(markup).toContain(status ?? "Status not reported");
   }
+  q.canConsumeReset = true;
   q.resetCredits = [{ id: "c", title: "Reset", status: "AVAILABLE", expiresAt: now + 1000 }]; expect(renderApp(view)).toContain("Use reset");
   q.resetCredits[0].expiresAt = now; expect(renderApp(view)).not.toContain("Use reset"); expect(renderApp(view)).toContain("expired");
 });
@@ -47,9 +59,47 @@ it("shows unavailable reset status without a redemption action", () => {
 it("limits the reset visibility setting to the notch and shared detail, keeping flyout redemption", () => {
   const view = state(), q = quota("codex", [w], now); q.resetCreditCount = 1; q.resetCredits = [{ id: "fixture-credit", title: "Reset", status: "available", expiresAt: now + 1000 }];
   view.snapshot.quotas.codex = value(q); view.snapshot.notchSlots = [primary("codex")];
+  q.canConsumeReset = true;
   expect(renderApp(view)).toContain("Use reset"); expect(renderApp(view, "notch")).not.toContain("Use reset"); expect(renderApp(view, "share")).not.toContain("Use reset");
   expect(renderApp(view, "settings")).toContain("Codex limit resets in the side notch");
   view.snapshot.appearance.resetButton = true; expect(renderApp(view, "notch")).toContain("Use reset");
+});
+
+it("hides reset actions for allowance-only sources while retaining earned credit details", () => {
+  const view = state(), q = quota("codex", [w], now); q.resetCreditCount = 1;
+  q.resetCredits = [{ id: "fixture-credit", title: "Reset", status: "available" }];
+  view.snapshot.quotas.codex = value(q); view.snapshot.notchSlots = [primary("codex")]; view.snapshot.appearance.resetButton = true;
+  for (const capability of [undefined, false, true]) {
+    q.canConsumeReset = capability;
+    for (const surface of ["flyout", "notch", "share"]) {
+      const markup = renderApp(view, surface); expect(markup).toContain("1 earned reset credits");
+      expect(markup.includes("Use reset")).toBe(capability === true);
+    }
+  }
+});
+
+it("uses general weekly-only Claude allowance in tray, tooltip and notch without model-specific fallback", () => {
+  const view = state(), s = view.snapshot, slot = primary("claude");
+  s.slots = s.traySlots = s.notchSlots = [slot]; s.appearance.compactTray = false;
+  s.quotas = { claude: value(quota("claude", [window("Weekly · Fable", 99), window("Weekly · All models", 42)], now)) }; s.activities = {};
+  expect(trayTooltip(s)).toBe("Claude: 42% used");
+  expect(renderApp(view, "tray")).toContain("42%"); expect(renderApp(view, "notch")).toContain('aria-label="Show Claude details, 42% used"');
+  s.quotas.claude = value(quota("claude", [window("Weekly · Fable", 99)], now));
+  expect(trayTooltip(s)).toBe("No usage data yet"); expect(renderApp(view, "notch")).not.toContain('class="strip-provider"');
+  s.quotas.claude = value(quota("claude", [window("Weekly · All models", 42), window("Session", 7)], now));
+  expect(trayTooltip(s)).toBe("Claude: 7% used");
+});
+
+it("keeps remote OpenRouter account usage out of explicitly local totals", () => {
+  const view = state(), s = view.snapshot; s.slots = [primary("codex"), primary("openRouter")];
+  s.quotas = {}; s.activities.codex = value({ provider: "codex", scannedAt: now, daily: [], sessions: [session("local", now - 60000, 20)] });
+  s.usages.openRouter = value({ provider: "openRouter", sessionCount: 123, messageCount: 456, todaySessionCount: 12, todayMessageCount: 45, todayTokens: tokens({ input: 999999 }), weekTokens: tokens({ input: 999999 }), todayCostUSD: 999, capturedAt: now });
+  const markup = renderApp(view), start = markup.indexOf("AI activity on this Mac"), local = markup.slice(start, markup.indexOf("</section>", start));
+  expect(local).toContain("Tokens today</dt><dd>20</dd>"); expect(local).toContain("Last 7 days</dt><dd>20</dd>"); expect(local).toContain("$0.00");
+  const card = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("openRouter"), state: view, action: async () => {} }));
+  expect(card).toContain("Account activity"); expect(card).not.toContain("Activity on this Mac"); expect(card).toContain("123");
+  s.slots = [primary("openRouter")]; s.activities = {};
+  expect(renderApp(view)).not.toContain("AI activity on this Mac");
 });
 
 it("shows rolling cost shares before token shares and handles an empty 30-day reference", () => {

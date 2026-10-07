@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { launchConfiguration } from "./launch";
 import { Preferences } from "./preferences";
 import { compose } from "./composition";
+import { DesktopConnections } from "./connections";
 import { Coordinator } from "./coordinator";
 import { NotchFold } from "./notch-fold";
 import { Updater } from "./updater";
@@ -17,11 +18,12 @@ import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize } from
 import { trayTooltip } from "../domain/overview";
 
 const args = process.argv.slice(1), launch = launchConfiguration(args);
+const desktopHelper = app.isPackaged ? join(process.resourcesPath, "desktop-keychain") : join(__dirname, "../../build/desktop-keychain");
 // Isolation is selected before Electron creates a session or any source reads.
 if (launch.demo) { app.setPath("userData", join(launch.data, "electron")); app.setPath("sessionData", join(launch.data, "electron")); }
 app.setName("MeterUsage");
 if (args.includes("json") || args.includes("--json")) {
-  runJSON(args).then(json => { process.stdout.write(json + "\n"); app.exit(0); }, () => { process.stderr.write("meterusage: could not read report\n"); app.exit(1); });
+  runJSON(args, process.env, desktopHelper).then(json => { process.stdout.write(json + "\n"); app.exit(0); }, () => { process.stderr.write("meterusage: could not read report\n"); app.exit(1); });
 } else if (process.platform !== "darwin") {
   process.stderr.write("MeterUsage desktop candidates currently support macOS only.\n"); app.exit(1);
 } else {
@@ -33,9 +35,21 @@ async function start() {
   if (!app.requestSingleInstanceLock({ candidate: launch.demo })) { app.quit(); return; }
   const prefs = await Preferences.load(launch);
   const documents = new Map<number, string>(), windows = new Map<Surface, BrowserWindow>();
-  const coordinator = new Coordinator(launch, prefs, compose(launch, prefs), Date.now, alert => {
-    if (!launch.demo && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
+  const markers = { codex: prefs.values.desktopCodexConnection, claude: prefs.values.desktopClaudeIdentity };
+  const connections = new DesktopConnections(launch, prefs, desktopHelper, () => {
+    const changed = (["codex", "claude"] as const).filter(p => markers[p] !== prefs.values[p === "codex" ? "desktopCodexConnection" : "desktopClaudeIdentity"]);
+    if (changed.length) {
+      for (const p of changed) { markers[p] = prefs.values[p === "codex" ? "desktopCodexConnection" : "desktopClaudeIdentity"]; coordinator.forgetQuota(p); }
+      coordinator.sources = sources();
+    }
+    publish();
   });
+  const sources = () => compose(launch, prefs, { connections });
+  const coordinator = new Coordinator(launch, prefs, sources(), Date.now, alert => {
+    if (!launch.demo && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
+  }, sources);
+  // Do not restore a legacy archive under a newly connected account.
+  for (const p of ["codex", "claude"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
   const notch = { expanded: prefs.values.sideNotchPanelPinned === true, cardOnRight: false, selected: "codex", dragging: false };
   let notchHeight = 200, anchor: { x: number; y: number } | undefined;
   let drag: { cursor: Electron.Point; anchor: Electron.Point; timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> } | undefined;
@@ -47,7 +61,7 @@ async function start() {
   tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showFlyout() }, { label: "Settings…", click: () => showSettings() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
   tray.on("click", () => { const w = windows.get("flyout"); w?.isVisible() ? w.hide() : showFlyout(); });
   let shareState: ViewState | undefined, shareHeight = 0, shareReady: ((image: Electron.NativeImage) => void) | undefined, shareFailed: ((error: Error) => void) | undefined;
-  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
+  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ connections: connections.state, snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
   const updater = new Updater(prefs, app.getVersion(), publish, undefined, release => {
     if (!launch.demo && Notification.isSupported()) new Notification({ title: "MeterUsage update available", body: `MeterUsage ${release.version} is ready to install.`, silent: true }).show();
   });
@@ -147,6 +161,23 @@ async function start() {
       case "close": source.hide(); break;
       case "quit": app.quit(); break;
       case "clearCache": await coordinator.clearCache(); break;
+      case "connect": {
+        if (surface !== "settings" && surface !== "flyout") throw new Error("Invalid request");
+        const connected = await connections.connect(r.provider, url => shell.openExternal(url), async () => {
+          if (r.provider !== "claude") return true;
+          const consent = await dialog.showMessageBox(source, { type: "question", title: "Connect Claude Desktop?", message: "Allow MeterUsage to read your Claude allowance?", detail: "MeterUsage will read Claude Desktop's current access token through macOS Keychain and request account allowance from Anthropic. It will not read chats, use refresh tokens or change Claude Desktop. This connection depends on an interface that can change.", buttons: ["Cancel", "Allow access"], defaultId: 0, cancelId: 0, noLink: true });
+          return consent.response === 1;
+        });
+        if (!connected) break;
+        await coordinator.refresh(); break;
+      }
+      case "connectionCancel":
+        if (surface !== "settings" && surface !== "flyout") throw new Error("Invalid request");
+        connections.cancel(r.provider); break;
+      case "disconnect":
+        if (surface !== "settings" && surface !== "flyout") throw new Error("Invalid request");
+        await connections.disconnect(r.provider);
+        await coordinator.refresh(); break;
       case "copyDiagnostics": clipboard.writeText(coordinator.diagnostics()); break;
       case "copyJSON": clipboard.writeText(coordinator.json()); break;
       case "setPreference":
@@ -166,7 +197,7 @@ async function start() {
         const chosen = await dialog.showOpenDialog(source, { title: `Choose ${r.provider === "codex" ? "Codex" : "Claude"} config directory`, properties: ["openDirectory"] });
         if (chosen.canceled || !chosen.filePaths[0]) break;
         await prefs.updateAccounts(accounts => [...accounts, { id: randomUUID(), provider: r.provider, label: "", path: chosen.filePaths[0], enabled: true }]);
-        coordinator.sources = compose(launch, prefs); await coordinator.refresh(); break;
+        coordinator.sources = sources(); await coordinator.refresh(); break;
       }
       case "accountPath": {
         const account = prefs.accounts.find(a => a.id === r.id);
@@ -174,12 +205,12 @@ async function start() {
         const chosen = await dialog.showOpenDialog(source, { title: `Choose ${account.provider === "codex" ? "Codex" : "Claude"} config directory`, properties: ["openDirectory"] });
         if (chosen.canceled || !chosen.filePaths[0]) break;
         await prefs.updateAccounts(accounts => accounts.map(a => a.id === r.id ? { ...a, path: chosen.filePaths[0] } : a));
-        coordinator.sources = compose(launch, prefs); await coordinator.refresh(); break;
+        coordinator.sources = sources(); await coordinator.refresh(); break;
       }
       case "accountUpdate": case "accountRemove": {
         if (surface !== "settings" || !prefs.accounts.some(a => a.id === r.id)) throw new Error("Unknown account");
         await prefs.updateAccounts(accounts => r.action === "accountRemove" ? accounts.filter(a => a.id !== r.id) : accounts.map(a => a.id === r.id ? { ...a, ...(r.label === undefined ? {} : { label: r.label }), ...(r.enabled === undefined ? {} : { enabled: r.enabled }) } : a));
-        coordinator.sources = compose(launch, prefs); await coordinator.refresh(); break;
+        coordinator.sources = sources(); await coordinator.refresh(); break;
       }
       case "reset": {
         if (confirmingReset) throw new Error("Reset confirmation already open");
@@ -255,7 +286,7 @@ async function start() {
     const source = BrowserWindow.fromWebContents(event.sender), surface = [...windows].find(([, w]) => w === source)?.[0];
     if (!source || !surface) return { ok: false, error: "Unknown window" };
     try { return await handle(parseRequest(raw), source, surface); }
-    catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share"].includes(e.message) ? e.message : "Could not complete action" }; }
+    catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Connections are disabled in demo mode", "Automatic Grok connection is unavailable"].includes(e.message) ? e.message : "Could not complete action" }; }
   });
   coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
   screen.on("display-metrics-changed", () => { placeNotch(); publish(); }); screen.on("display-removed", () => { placeNotch(); publish(); });
@@ -264,8 +295,23 @@ async function start() {
   app.on("window-all-closed", () => {});
   const clockTimer = setInterval(publish, 60000);
   nativeTheme.on("updated", publish);
-  app.on("before-quit", () => { coordinator.stop(); updater.reset(); clearInterval(clockTimer); if (drag) { clearInterval(drag.timer); clearTimeout(drag.timeout); } folding.cancel(); if (shareDirectory) rmSync(shareDirectory, { recursive: true, force: true }); for (const directory of sharedDirectories) rmSync(directory, { recursive: true, force: true }); tray.destroy(); });
+  let quitting = false, quitReady = false;
+  app.on("before-quit", event => {
+    if (quitReady) return;
+    event.preventDefault();
+    if (quitting) return;
+    quitting = true;
+    coordinator.stop(); updater.reset(); clearInterval(clockTimer); if (drag) { clearInterval(drag.timer); clearTimeout(drag.timeout); } folding.cancel();
+    void connections.stop().finally(() => {
+      if (shareDirectory) rmSync(shareDirectory, { recursive: true, force: true }); for (const directory of sharedDirectories) rmSync(directory, { recursive: true, force: true }); tray.destroy();
+      quitReady = true; app.quit();
+    });
+  });
   nativeTheme.themeSource = prefs.values.appearanceTheme as "system" | "dark" | "light";
-  create("tray"); restoreAnchor(); syncNotch(); await coordinator.start();
-  if (launch.candidate || prefs.values.onboardingCompleted !== true) showFlyout();
+  create("tray"); restoreAnchor();
+  // Recovery failures remain visible in connection state, with collection disabled.
+  await connections.recover().catch(() => {});
+  if (quitting) return;
+  syncNotch(); await coordinator.start();
+  if (!quitting && (launch.candidate || prefs.values.onboardingCompleted !== true)) showFlyout();
 }

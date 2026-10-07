@@ -13,6 +13,7 @@ type Kind = "boolean" | "number" | "string" | "data" | "date";
 const kinds: Record<string, Kind> = {
   refreshIntervalSeconds: "number", appearanceTheme: "string", accentTheme: "string", managedAccounts: "data",
   sideNotchPanelCorner: "string", updateLastCheckDate: "date", updateDismissedVersion: "string", updateAnnouncedVersion: "string",
+  desktopCodexConnection: "string", desktopCodexCleanup: "string", desktopClaudeIdentity: "string",
   ...Object.fromEntries(["launchAtLogin", "showHeatmap", "showClaudeHeatmap", "showCodexHeatmap", "quotaAlertsEnabled", "sideNotchPanelEnabled", "sideNotchPanelPinned", "menuBarCompactEnabled", "onboardingCompleted", "updateCheckEnabled", "showPacingBurnRate", "showActivityTelemetry", "showDailyActivityChart", "showSideNotchResetButton", ...providers.flatMap(p => [providerPreference(p), trayPreference(p)])].map(k => [k, "boolean" as const])),
 };
 export const initialPreferences: Record<string, PreferenceValue> = {
@@ -21,6 +22,7 @@ export const initialPreferences: Record<string, PreferenceValue> = {
   sideNotchPanelEnabled: false, sideNotchPanelPinned: false, menuBarCompactEnabled: true, onboardingCompleted: false,
   updateCheckEnabled: true, showPacingBurnRate: true, showActivityTelemetry: true, showDailyActivityChart: true, showSideNotchResetButton: true,
   updateDismissedVersion: "", updateAnnouncedVersion: "",
+  desktopCodexConnection: "", desktopCodexCleanup: "", desktopClaudeIdentity: "",
   ...Object.fromEntries(providers.flatMap(p => [[providerPreference(p), ["codex", "openCodeGo", "openRouter"].includes(p)], [trayPreference(p), true]])),
 };
 export function validAccounts(raw: unknown): raw is ManagedAccount[] {
@@ -35,6 +37,8 @@ function validate(key: string, v: unknown): v is PreferenceValue {
   if (key === "appearanceTheme") return ["system", "light", "dark"].includes(v);
   if (key === "accentTheme") return ["blue", "violet", "teal", "amber", "rose", "graphite"].includes(v);
   if (key === "sideNotchPanelCorner") return v === "" || /^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(v);
+  if (key === "desktopCodexConnection" || key === "desktopCodexCleanup") return v === "" || key === "desktopCodexConnection" && v === "off" || /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(v);
+  if (key === "desktopClaudeIdentity") return v === "" || v === "off" || /^[a-f\d]{64}$/.test(v);
   return true;
 }
 export class Preferences {

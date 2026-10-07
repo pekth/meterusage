@@ -3,11 +3,14 @@ import type { Provider } from "../domain/models";
 export const channel = "meterusage:request", stateChannel = "meterusage:state";
 export const statusPages = { codex: "https://status.openai.com/", claude: "https://status.claude.com/", cursor: "https://status.cursor.com/", copilot: "https://www.githubstatus.com/" };
 export type Surface = "flyout" | "settings" | "notch" | "tray" | "share";
+export type ConnectionProvider = "codex" | "claude" | "grok";
+export interface ConnectionState { provider: ConnectionProvider; status: "disconnected" | "connecting" | "connected" | "failed" | "unsupported" }
 export interface SettingsState {
   values: Record<string, boolean | number | string>;
   accounts: { id: string; provider: "codex" | "claude"; label: string; pathLabel?: string; enabled: boolean }[];
 }
 export interface ViewState {
+  connections?: ConnectionState[];
   snapshot: Snapshot; settings: SettingsState; systemDark: boolean;
   notch: { expanded: boolean; cardOnRight: boolean; selected: string; dragging: boolean; maxHeight?: number };
   update?: { version: string; state: "idle" | "downloading" | "installing" | "failed" };
@@ -18,6 +21,7 @@ export type Request =
   | { action: "statusPage"; provider: keyof typeof statusPages }
   | { action: "setPreference"; key: string; value: boolean | number | string }
   | { action: "accountAdd"; provider: "codex" | "claude" }
+  | { action: "connect" | "disconnect" | "connectionCancel"; provider: ConnectionProvider }
   | { action: "accountUpdate"; id: string; label?: string; enabled?: boolean }
   | { action: "accountRemove"; id: string }
   | { action: "accountPath"; id: string }

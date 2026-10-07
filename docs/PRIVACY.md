@@ -1,12 +1,13 @@
 # Privacy and security design
 
 MeterUsage reads quota and usage from existing local provider stores, provider
-CLIs and aggregate endpoints. It has no sign-in form, telemetry service,
-analytics or crash-upload endpoint. It does not ask for credentials or send
+CLIs and aggregate endpoints. It has no telemetry service, analytics or
+crash-upload endpoint. The Electron candidate adds opt-in account connections;
+Codex sign-in occurs in the provider browser page, not a MeterUsage password form. It does not ask for credentials or send
 prompts, code or tool payloads to a provider.
 
-The published Swift app and TypeScript/Electron candidate share these data
-boundaries. The candidate has source/fixture checks, but native behavior and
+The published Swift app retains the existing local/CLI boundaries. The
+TypeScript/Electron candidate adds the opt-in boundaries described below. The candidate has source/fixture checks, but native behavior and
 cutover acceptance remain pending. See [ADR 0010](adr/0010-macos-typescript-electron.md).
 
 ## Provider inputs and requests
@@ -32,7 +33,10 @@ before its two `.claude` companion files. The selected file's modification time
 supplies capture age when the payload omits `updated_at`; polling does not make
 an old reading fresh.
 
-MeterUsage does not open Claude `.credentials.json` or macOS Keychain items.
+The published Swift app does not open Claude `.credentials.json` or macOS
+Keychain items. The Electron candidate still skips `.credentials.json`, but
+explicit Claude Desktop connection permits one fixed Keychain read and
+read-only cache/cookie access. See the opt-in connection section below.
 Grok, OpenCode Go and OpenRouter are explicit existing-key readers. Keys stay
 in main-process memory and request headers; they are not displayed, logged,
 written to cache or sent to the renderer. Antigravity and Codex CLIs manage
@@ -43,6 +47,63 @@ Antigravity runtime recovery may start only an already-existing
 an image. A healthy runtime is not restarted to repair internet or auth errors.
 SQLite usage reads are read-only. Antigravity copies the database and WAL to an
 owned temporary directory for a coherent read, then removes that copy.
+
+## Opt-in candidate account connections
+
+The candidate offers connection buttons in setup and Settings. No terminal,
+folder picker or credential copying is part of the primary connection flow.
+Existing local account directories remain an advanced option.
+
+Codex browser sign-in uses the official app-server helper discovered in an
+existing Codex app, with existing command installations as a compatibility path.
+MeterUsage creates a separate generated profile under its own support directory
+and checks effective `cli_auth_credentials_store=keyring` before login or
+polling. Any other mode is refused. It never opens the user's Codex `auth.json`.
+Login opens only an approved HTTPS OpenAI host and uses the helper's local
+callback. Requests are initialization, effective config read, account login,
+rate-limit read and own-profile logout. No model session or prompt is started.
+The provider helper handles tokens in OS storage; no plaintext fallback is
+permitted. Cancelling login attempts own-profile logout and reports cleanup
+failure. Disconnect does not sign out the user's Codex desktop session.
+Unfinished sign-in profiles are retained only for cleanup and cannot enable
+collection. Cancellation and disconnect disable collection before logout.
+GUI startup and explicit sign-in retry recover owned-profile cleanup before
+starting another login. Normal quit waits up to five seconds. Headless reports
+do not sign in or perform cleanup logout.
+
+Claude requires an explicit explanation and consent before access. The bundled
+native helper reads only the `Claude Safe Storage` / `Claude Key` item. Background
+reads disable interaction. Its stdout goes only to the main-process bounded
+transport; do not run the helper interactively or record its output. The main
+process decrypts `oauth:tokenCacheV2` from Claude Desktop's `config.json` and
+reads only the active organization cookie from a read-only cookie database.
+It selects account-scoped current access-token/expiry fields, skips refresh
+tokens, and rejects ambiguous, legacy or expired entries. It never writes to
+Claude stores or rotates their tokens.
+
+The access token authenticates a GET to
+`https://api.anthropic.com/api/oauth/usage` with the OAuth beta header and
+MeterUsage's own User-Agent. The candidate requests no reset grants, uses no
+CLI impersonation and starts no inference. This compatibility endpoint is not
+an established third-party consumer API contract and may become unavailable.
+Only numeric quota percentages, reset times and known window labels reach the
+renderer or quota archive. The account/organization fingerprint is stored only
+as an opaque hash in preferences, excluded from settings publication. It is
+checked before and after HTTP. Identity changes invalidate the observation.
+HTTP failures also require a fresh identity check before dated allowance can
+remain. Local credential and permission failures clear that allowance.
+Collection timeout also clears account-bound allowance when the identity check
+may not have completed. Disconnect removes consent metadata and prevents the
+post-request credential reread without changing Claude Desktop.
+
+Connected Codex/Claude sources do not attach local CLI activity to the connected
+account. Quota archives are cleared on connection changes and candidate launch;
+authentication or absent-data failures clear the connected archive. Tokens,
+passwords, raw caches, account identifiers and responses are not logged or
+persisted by MeterUsage. In-memory strings remain subject to garbage collection.
+Demo mode blocks live connection code before helper or key discovery. Grok has
+no new consumer connection in this candidate. [ADR 0011](adr/0011-desktop-account-connections.md)
+amends the candidate boundary; it does not change the published Swift release.
 
 ## Selective parsing and display boundary
 

@@ -19,6 +19,7 @@ export interface Credits {
   usedDollars?: number; limitDollars?: number; dollarBalance?: number;
 }
 export interface Quota {
+  canConsumeReset?: boolean;
   provider: Provider; windows: QuotaWindow[]; groups: QuotaGroup[]; credits?: Credits;
   resetCreditCount?: number; resetCredits: ResetCredit[]; planType?: string; resetPacingSince?: number; capturedAt: number;
 }
@@ -31,7 +32,7 @@ export const quota = (provider: Provider, windows: QuotaWindow[], capturedAt = D
 export const isSessionWindow = (w: QuotaWindow) => w.label.toLowerCase() === "5-hour" || w.label.toLowerCase().includes("session");
 export function headlineWindow(provider: Provider, windows: QuotaWindow[]): QuotaWindow | undefined {
   if (provider === "codex") return windows.find(isSessionWindow) ?? (windows.length === 1 ? windows[0] : undefined);
-  if (provider === "claude") return windows.find(isSessionWindow) ?? windows.find(w => w.label === "7-day");
+  if (provider === "claude") return windows.find(isSessionWindow) ?? windows.find(w => w.label === "7-day" || w.label === "Weekly · All models");
   if (provider === "openCodeGo") return windows.find(w => w.label.toLowerCase() === "rolling");
   if (["cursor", "copilot", "gemini"].includes(provider)) { const session = windows.find(isSessionWindow); if (session) return session; }
   return windows.reduce<QuotaWindow | undefined>((max, w) => !max || w.usedPercent > max.usedPercent ? w : max, undefined);

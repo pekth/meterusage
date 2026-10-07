@@ -35,7 +35,7 @@ export class Coordinator {
   private confirmations = new Map<string, { key: string; creditID: string; expires: number; source: Source }>();
   private resets = new Set<string>();
   private currentSources: readonly Source[];
-  constructor(readonly launch: Launch, readonly preferences: Preferences, sources: Source[], readonly now: () => number = Date.now, readonly notify: (alert: Alert) => void = () => {}) {
+  constructor(readonly launch: Launch, readonly preferences: Preferences, sources: Source[], readonly now: () => number = Date.now, readonly notify: (alert: Alert) => void = () => {}, readonly sourceFactory: () => Source[] = () => compose(launch, preferences)) {
     this.currentSources = sources;
     this.history = new HistoryStore(join(launch.data, "durable-daily-history.json")); this.archived = readArchive(join(launch.data, "quota-archive.json"));
   }
@@ -65,7 +65,9 @@ export class Coordinator {
   get burns() { return Object.fromEntries(Object.entries(this.activities).flatMap(([key, state]) => { const at = state.status === "value" ? lastBurn(state.value.sessions) : undefined; return at === undefined ? [] : [[key, at]]; })); }
   snapshot(): Snapshot {
     const p = this.preferences.values, slots = this.slots, tray = slots.filter(s => p[trayPreference(s.provider)] === true);
-    return structuredClone({ demo: this.launch.demo, refreshing: !!this.inflight, clock: this.now(), lastRefreshedAt: this.lastRefreshedAt, slots, traySlots: tray.filter(s => s.provider !== "openRouter"), notchSlots: tray, quotas: this.quotas, archived: this.archived, activities: this.activities, usages: this.usages, plans: this.plans, statuses: this.statuses, appearance: { theme: p.appearanceTheme as string, accent: p.accentTheme as string, heatmap: p.showHeatmap === true, claudeHeatmap: p.showClaudeHeatmap === true, codexHeatmap: p.showCodexHeatmap === true, pacing: p.showPacingBurnRate === true, telemetry: p.showActivityTelemetry === true, chart: p.showDailyActivityChart === true, resetButton: p.showSideNotchResetButton === true, compactTray: p.menuBarCompactEnabled === true, notch: p.sideNotchPanelEnabled === true, pinned: p.sideNotchPanelPinned === true, onboarding: p.onboardingCompleted === true }, historyError: this.history.error, archiveWriteFailed: this.archiveWriteFailed, clearingCache: this.clearingCache });
+    const resettable = new Set(this.sources.filter(s => s.consumeReset).map(s => slotKey(s.slot)));
+    const quotas = Object.fromEntries(Object.entries(this.quotas).map(([key, state]) => [key, state.status === "value" ? value({ ...state.value, canConsumeReset: resettable.has(key) }) : state]));
+    return structuredClone({ demo: this.launch.demo, refreshing: !!this.inflight, clock: this.now(), lastRefreshedAt: this.lastRefreshedAt, slots, traySlots: tray.filter(s => s.provider !== "openRouter"), notchSlots: tray, quotas, archived: this.archived, activities: this.activities, usages: this.usages, plans: this.plans, statuses: this.statuses, appearance: { theme: p.appearanceTheme as string, accent: p.accentTheme as string, heatmap: p.showHeatmap === true, claudeHeatmap: p.showClaudeHeatmap === true, codexHeatmap: p.showCodexHeatmap === true, pacing: p.showPacingBurnRate === true, telemetry: p.showActivityTelemetry === true, chart: p.showDailyActivityChart === true, resetButton: p.showSideNotchResetButton === true, compactTray: p.menuBarCompactEnabled === true, notch: p.sideNotchPanelEnabled === true, pinned: p.sideNotchPanelPinned === true, onboarding: p.onboardingCompleted === true }, historyError: this.history.error, archiveWriteFailed: this.archiveWriteFailed, clearingCache: this.clearingCache });
   }
   subscribe(observer: (state: Snapshot) => void) { this.observers.add(observer); return () => this.observers.delete(observer); }
   publish() { const state = this.snapshot(); for (const observe of this.observers) observe(state); }
@@ -126,6 +128,11 @@ export class Coordinator {
       this.archiveWriteFailed = false;
     } catch { this.archiveWriteFailed = true; }
   }
+  forgetQuota(key: string) {
+    delete this.quotas[key]; delete this.archived[key]; delete this.plans[key];
+    this.evaluator.forgetSlot(key);
+    this.backoffs.delete(`quota-${key}`); this.persistArchive();
+  }
   private async load<T>(kind: Kind, source: Source, force: boolean, read: (signal?: AbortSignal) => Promise<T>, target: Record<string, Loaded<T>>) {
     const key = kind === "status" ? source.slot.provider : slotKey(source.slot), backoffKey = `${kind}-${key}`, prior = this.backoffs.get(backoffKey);
     if (!force && prior && this.now() < prior.next) return;
@@ -148,6 +155,7 @@ export class Coordinator {
       }
     }
     target[key] = result;
+    if (kind === "quota" && source.accountBound && result.status === "missing" && (controller.signal.aborted || ["notSignedIn", "noData"].includes(result.code))) delete this.archived[key];
     if (result.status === "missing" && ["failed", "offline"].includes(result.code)) { const failures = (prior?.failures ?? 0) + 1; this.backoffs.set(backoffKey, { failures, next: this.now() + backoffDelay(failures) }); }
     else this.backoffs.delete(backoffKey);
   }
@@ -184,7 +192,7 @@ export class Coordinator {
       if (this.inflight) await this.inflight;
       const entries = await readdir(this.launch.data, { withFileTypes: true }).catch(() => []);
       for (const entry of entries) if (entry.isFile() && /^claude-local-scan-cache(?:-[A-Za-z0-9-]{1,80})?\.json$/.test(entry.name)) await unlink(join(this.launch.data, entry.name));
-      this.sources = compose(this.launch, this.preferences); this.backoffs.clear(); await this.refresh();
+      this.sources = this.sourceFactory(); this.backoffs.clear(); await this.refresh();
     } finally { this.clearingCache = false; this.publish(); }
   }
   diagnostics(): string {

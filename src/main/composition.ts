@@ -10,7 +10,9 @@ import { cliPath, cliEnvironment, codexRPC, runCommand, httpTransport, endpoints
 import { AntigravityRuntime, runtimeCandidates } from "./providers/antigravity";
 import { scanGrok, openRouterUsage, openCodeUsage, parseOpenCodeRows, openCodeQuery } from "./providers/usage";
 import { demoSources } from "./demo";
+import type { DesktopConnections } from "./connections";
 export interface Source {
+  accountBound?: boolean;
   slot: Slot;
   quota?: (signal?: AbortSignal) => Promise<Quota>;
   activity?: (signal?: AbortSignal) => Promise<Activity>;
@@ -40,7 +42,7 @@ function openCodeKey(launch: Launch): string | undefined {
   const raw = read(join(launch.home, ".local/share/opencode/auth.json")); if (!raw) return;
   try { return text(object(object(selectJSON(raw, { "opencode-go": { key: true } }))["opencode-go"]).key); } catch { return; }
 }
-export function compose(launch: Launch, prefs: Preferences, options: { command?: Command; http?: HTTP; now?: () => number } = {}): Source[] {
+export function compose(launch: Launch, prefs: Preferences, options: { command?: Command; http?: HTTP; now?: () => number; connections?: DesktopConnections } = {}): Source[] {
   const now = options.now ?? Date.now;
   if (launch.demo) return demoSources(now, prefs.accounts);
   const command = options.command ?? runCommand, http = options.http ?? httpTransport(), env = cliEnvironment(launch.home, launch.env);
@@ -64,6 +66,14 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
     }, activity: async signal => activity.scan(now(), signal), plan: async () => { const raw = read(alternate ? join(home, ".claude.json") : join(launch.home, ".claude.json")); if (!raw) throw new Unavailable("noData"); try { return parseClaudePlan(raw); } catch { throw new Unavailable("noData"); } } };
   };
   const codex = makeCodex(primary("codex")), claude = makeClaude(primary("claude"), join(launch.home, ".claude"));
+  for (const [provider, source, preference] of [["codex", codex, "desktopCodexConnection"], ["claude", claude, "desktopClaudeIdentity"]] as const) {
+    if (prefs.values[preference] !== "") {
+      source.accountBound = true;
+      source.quota = signal => options.connections ? options.connections.quota(provider, signal) : Promise.reject(new Unavailable("notSignedIn", provider));
+      // Local CLI activity cannot be attributed to a separately connected account.
+      delete source.activity; delete source.plan; delete source.consumeReset;
+    }
+  }
   codex.status = async signal => parseStatus("codex", await http(endpoints.codexStatus, "codex", undefined, signal), now());
   claude.status = async signal => parseStatus("claude", await http(endpoints.claudeStatus, "claude", undefined, signal), now());
   const sources: Source[] = [codex, {

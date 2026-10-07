@@ -10,6 +10,9 @@ files:
   - dist/preload/**
   - dist/renderer/**
   - package.json
+extraResources:
+  - from: build/desktop-keychain
+    to: desktop-keychain
 mac:
   target:
     - target: zip
