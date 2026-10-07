@@ -6,7 +6,66 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Add a macOS TypeScript/Electron/React migration candidate and headless
+  schema-1 JSON CLI, with synthetic provider, account, history, pacing and IPC
+  tests. Use pnpm, Vite+, Tailwind, Vitest and electron-builder. Retain Swift as
+  the behavior oracle until native acceptance passes. No Electron release or
+  installed-app replacement is included.
+
+### Changed
+
+- Upgrade the Electron candidate's TypeScript checker from 6.0.3 to the native
+  7.0.2 compiler. Keep the existing typecheck, test and build commands.
+- Record synthetic Claude and Codex source-scanner timings alongside the Swift
+  baseline. Counts and cache transitions pass; packaged-app performance, idle
+  RSS and native GUI acceptance remain open.
+- Verify the current Apple silicon Electron candidate with 128 macOS fixtures,
+  TypeScript checking, production bundles, extracted ZIP signature checks and
+  the native schema-1 demo CLI. The candidate is ad-hoc signed and unpublished;
+  native GUI acceptance and cutover remain open.
+- Replace the earlier React Native/Tauri Windows plan with the selected macOS
+  Electron direction. Windows implementation, installers, CI, testing and
+  release are paused until a test machine is available.
+- Correct privacy documentation for Codex token/model ledger reads, transient
+  project paths, existing Grok/OpenCode keys, managed accounts and hourly
+  update checks. Provider files and credentials stay in the main process.
+
 ### Fixed
+
+- Rescan corrupt Claude cache entries with non-finite costs or unsupported
+  dates. Ignore unsupported optional provider timestamps before JSON output.
+- Use canonical temporary paths in candidate fixtures and demo commands.
+  Check the packaged executable's exact directory-entry spelling on both
+  case-sensitive and case-insensitive filesystems. Preserve symlink rejection.
+- Remove unknown daily-history fields before saving or publishing renderer
+  state, while preserving larger historic totals and account separation.
+- Keep readable sessions when a sibling disappears or cannot be opened.
+  Preserve Codex metadata/ledger fallbacks and propagate scan cancellation.
+- Scope the reset-button setting to side-notch details and context menus;
+  retain flyout redemption with the same availability and confirmation checks.
+- Restore 30-day rolling cost/token share bars and the existing adaptive
+  Claude, Antigravity, OpenCode Go and OpenRouter identity colours.
+- Validate optional archive metadata and restore only known fields. Reject
+  reset redemption unless the credit is reported available and unexpired,
+  including after the confirmation dialog.
+- Restore the primary Claude companion-file order and file modification time
+  fallback. Keep valid required quota when optional OpenRouter credits stall
+  or additional Codex model limits are malformed.
+- Show today's usage counts and reading age, restore textual tray outage/reset
+  summaries, and adapt the existing Grok mark tint to light and dark appearance.
+- Keep candidate service health visible when provider usage is hidden, with
+  buttons for the existing public status pages. Restore notch ambient ETA
+  from raw window pace and hide it when pacing is off.
+- Invalidate live readings and reset confirmations when a candidate account
+  source changes. Reject late results and reset completion from the old source
+  while keeping dated slot archives and durable history.
+- Measure shared cards at full height. Reject captures above 8,192 pixels with
+  an explicit error instead of exporting a cropped image.
+- Hide candidate accounts whose configured directory disappears. Bind sharing
+  to the displayed card, hide forecasts when pacing is off, restore active-window
+  burn detail and bound tall notch cards to the display work area.
 
 - `Scripts/make-app.sh` now downloads and verifies the prebuilt app by default,
   so installation from a Git checkout does not need Swift. Source builds require

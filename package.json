@@ -1,0 +1,40 @@
+{
+  "name": "meterusage",
+  "version": "0.2.41",
+  "private": true,
+  "type": "module",
+  "main": "dist/main/electron.cjs",
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": ">=24.13.1"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run",
+    "build": "vp build && vp pack",
+    "dev": "vp dev --host 127.0.0.1",
+    "start": "electron .",
+    "json": "node dist/main/cli.cjs json",
+    "package:mac": "pnpm export:marks && pnpm build && electron-builder --mac --publish never",
+    "export:marks": "swift Scripts/electron/export-symbols.swift Resources"
+  },
+  "dependencies": {
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "yauzl": "3.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "^24.0.0",
+    "@types/react": "~19.2.14",
+    "@types/react-dom": "~19.2.3",
+    "@types/yauzl": "2.10.3",
+    "@vitejs/plugin-react": "6.0.0",
+    "electron": "43.4.1",
+    "electron-builder": "26.15.6",
+    "tailwindcss": "4.3.3",
+    "typescript": "~7.0.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.0",
+    "vite-plus": "0.3.0"
+  }
+}

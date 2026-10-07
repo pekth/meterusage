@@ -1,0 +1,27 @@
+appId: dev.meterusage.app
+productName: MeterUsage
+afterPack: Scripts/electron/after-pack.cjs
+asar: true
+buildVersion: "46"
+directories:
+  output: release
+files:
+  - dist/main/**
+  - dist/preload/**
+  - dist/renderer/**
+  - package.json
+mac:
+  target:
+    - target: zip
+      arch: [arm64]
+  artifactName: MeterUsage-${version}.zip
+  icon: Resources/AppIcon.icns
+  category: public.app-category.developer-tools
+  minimumSystemVersion: "13.0"
+  identity: "-"
+  hardenedRuntime: true
+  notarize: false
+  extendInfo:
+    LSUIElement: true
+    NSAppTransportSecurity:
+      NSAllowsArbitraryLoads: false

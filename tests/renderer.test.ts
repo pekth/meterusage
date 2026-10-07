@@ -1,0 +1,143 @@
+import { it, expect, vi } from "vite-plus/test";
+import { createElement, useState } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { App, Meter, ProviderCard } from "../src/renderer/app";
+import { tokens, primary, quota, value, window } from "../src/domain/models";
+import type { ViewState } from "../src/shared/ipc";
+import { trayTooltip } from "../src/domain/overview";
+import { readFileSync } from "node:fs";
+
+vi.mock("react", async importOriginal => {
+  const actual = await importOriginal<typeof import("react")>();
+  return { ...actual, useState: vi.fn(actual.useState) };
+});
+function renderApp(view: ViewState, surface = "flyout") {
+  vi.stubGlobal("location", { search: `?surface=${surface}` });
+  vi.mocked(useState).mockReturnValueOnce([view, () => {}]);
+  try { return renderToStaticMarkup(createElement(App, { bridge: { request: async () => ({ ok: true as const }), subscribe: () => () => {} } })); }
+  finally { vi.unstubAllGlobals(); }
+}
+
+const now = Date.parse("2026-10-06T12:00:00Z");
+const w = window("5-hour", 80, now + 4 * 3600000, 300);
+const session = (id: string, at: number, output: number, cacheRead = 0) => ({ id, projectName: id, model: "fixture", tokens: tokens({ output, cacheRead }), estimatedCostUSD: 0, startedAt: at, messageCount: 10 });
+const state = (): ViewState => ({ snapshot: {
+  demo: true, refreshing: false, clock: now, slots: [primary("codex")], traySlots: [], notchSlots: [], quotas: { codex: value(quota("codex", [w], now)) }, archived: {},
+  activities: { codex: value({ provider: "codex", scannedAt: now, daily: [], sessions: [session("old-project", now - 2 * 3600000, 100000), session("active-project", now - 60000, 100, 100)] }) },
+  usages: {}, plans: {}, statuses: {}, appearance: { theme: "dark", accent: "blue", heatmap: false, claudeHeatmap: false, codexHeatmap: false, pacing: true, telemetry: false, chart: false, resetButton: false, compactTray: true, notch: true, pinned: false, onboarding: true }, archiveWriteFailed: false, clearingCache: false,
+}, settings: { values: {}, accounts: [] }, systemDark: true, notch: { expanded: true, cardOnRight: false, selected: "codex", dragging: false } });
+
+it("hides forecasts when pacing is disabled and retains the reported reset time", () => {
+  const render = (pacing: boolean) => renderToStaticMarkup(createElement(Meter, { w, now, pacing }));
+  expect(render(true)).toContain("left");
+  expect(render(false)).not.toContain("left"); expect(render(false)).toContain("Resets ");
+});
+
+it("shows unavailable reset status without a redemption action", () => {
+  const view = state(), q = quota("codex", [], now); q.resetCreditCount = 1; view.snapshot.appearance.resetButton = true;
+  view.snapshot.quotas.codex = value(q);
+  for (const status of ["consumed", "revoked", undefined]) {
+    q.resetCredits = [{ id: "c", title: "Reset", status }];
+    const markup = renderApp(view); expect(markup).not.toContain("Use reset"); expect(markup).toContain(status ?? "Status not reported");
+  }
+  q.resetCredits = [{ id: "c", title: "Reset", status: "AVAILABLE", expiresAt: now + 1000 }]; expect(renderApp(view)).toContain("Use reset");
+  q.resetCredits[0].expiresAt = now; expect(renderApp(view)).not.toContain("Use reset"); expect(renderApp(view)).toContain("expired");
+});
+
+it("limits the reset visibility setting to the notch and shared detail, keeping flyout redemption", () => {
+  const view = state(), q = quota("codex", [w], now); q.resetCreditCount = 1; q.resetCredits = [{ id: "fixture-credit", title: "Reset", status: "available", expiresAt: now + 1000 }];
+  view.snapshot.quotas.codex = value(q); view.snapshot.notchSlots = [primary("codex")];
+  expect(renderApp(view)).toContain("Use reset"); expect(renderApp(view, "notch")).not.toContain("Use reset"); expect(renderApp(view, "share")).not.toContain("Use reset");
+  expect(renderApp(view, "settings")).toContain("Codex limit resets in the side notch");
+  view.snapshot.appearance.resetButton = true; expect(renderApp(view, "notch")).toContain("Use reset");
+});
+
+it("shows rolling cost shares before token shares and handles an empty 30-day reference", () => {
+  const view = state(); view.snapshot.slots = [primary("openCodeGo")]; view.snapshot.activities = {}; view.snapshot.quotas = {};
+  const usage = { provider: "openCodeGo" as const, sessionCount: 10, messageCount: 50, todaySessionCount: 1, todayMessageCount: 2, capturedAt: now,
+    usageWindows: [{ label: "last 24h", sessionCount: 1, messageCount: 2, tokens: tokens({ input: 200 }), estimatedCostUSD: 8 }, { label: "last 30d", sessionCount: 10, messageCount: 50, tokens: tokens({ input: 1000 }), estimatedCostUSD: 10 }] };
+  view.snapshot.usages.openCodeGo = value(usage);
+  const cost = renderApp(view); expect(cost).toContain("80%"); expect(cost).toContain('aria-valuenow="80"'); expect(cost).toContain("Share of last 30d usage"); expect(cost).toContain("200 tokens · 2 messages");
+  expect(cost).toContain("10 sessions · 50 messages · 1,000 tokens · ~$10.00");
+  usage.usageWindows[0].estimatedCostUSD = 20; expect(renderApp(view)).toContain('aria-valuenow="100"');
+  usage.usageWindows[1].estimatedCostUSD = 0;
+  const token = renderApp(view); expect(token).toContain("20%"); expect(token).toContain('aria-valuenow="20"'); expect(token).toContain("Share of last 30d tokens");
+  usage.usageWindows[1].tokens = tokens(); const zero = renderApp(view); expect(zero).toContain('aria-valuenow="0"'); expect(zero).not.toContain("NaN");
+  usage.usageWindows.pop(); expect(renderApp(view)).toContain('aria-valuenow="0"');
+});
+
+it("keeps the four Swift adaptive provider identities and semantic status overrides", () => {
+  const css = readFileSync("src/renderer/style.css", "utf8"), view = state(); view.snapshot.activities = {}; view.snapshot.quotas = {};
+  for (const [provider, variable, light, dark] of [["claude", "claude", "#c25e00", "#d97706"], ["antigravity", "antigravity", "#2563eb", "#60a5fa"], ["openCodeGo", "opencode", "#0f766e", "#2dd4bf"], ["openRouter", "openrouter", "#6d28d9", "#a78bfa"]] as const) {
+    view.snapshot.slots = [primary(provider)]; view.snapshot.statuses = {};
+    for (const theme of ["light", "dark", "system"]) { view.snapshot.appearance.theme = theme; expect(renderApp(view)).toContain(`var(--${variable})`); }
+    expect(css).toMatch(new RegExp(`\\.app \\{[^}]*--${variable}: ${light}`));
+    for (const theme of ["dark", "system"]) expect(css).toMatch(new RegExp(`\\.theme-${theme} \\{[^}]*--${variable}: ${dark}`));
+    view.snapshot.statuses[provider] = value({ provider, severity: "majorOutage", description: "Outage", checkedAt: now }); expect(renderApp(view)).toContain("var(--alert)"); expect(renderApp(view)).not.toContain(`var(--${variable})`);
+  }
+});
+
+it("shows count-only current-day usage and capture age without invented token totals", () => {
+  const view = state(); view.snapshot.slots = [primary("grok")]; view.snapshot.quotas = {}; view.snapshot.activities = {};
+  const usage = { provider: "grok" as const, sessionCount: 10, messageCount: 50, todaySessionCount: 1, todayMessageCount: 2, capturedAt: now - 3600000 };
+  view.snapshot.usages.grok = value(usage);
+  const markup = renderApp(view); expect(markup).toContain("Today: 1 session · 2 messages · updated 1h ago"); expect(markup).not.toContain("Measured tokens");
+  view.snapshot.usages.grok = value({ ...usage, todaySessionCount: 0, todayMessageCount: 0 }); expect(renderApp(view)).toContain("Updated 1h ago · token totals unavailable");
+  view.snapshot.usages.grok = value({ ...usage, todaySessionCount: 0, todayMessageCount: 0, tokens: tokens() }); expect(renderApp(view)).toContain("measured token totals");
+});
+
+it("keeps textual tray outage, reset countdown, dated age and last refresh", () => {
+  const s = state().snapshot, account = { ...primary("codex"), slotID: "work", label: "Work" };
+  s.traySlots = [account, primary("grok")]; s.quotas = {}; s.archived = { "codex#work": quota("codex", [window("5-hour", 0, now + 3600000)], now - 7200000) };
+  s.statuses.grok = value({ provider: "grok", severity: "majorOutage", description: "Fixture outage", checkedAt: now }); s.lastRefreshedAt = now - 60000;
+  expect(trayTooltip(s)).toBe("Codex · Work: 0% used · resets in 1h · last reading 2h ago\nGrok: Major outage\nUpdated 1m ago");
+  s.statuses.grok = value({ provider: "grok", severity: "unknown", description: "Unavailable", checkedAt: now }); expect(trayTooltip(s)).toContain("Grok: Unknown");
+  s.traySlots = []; s.lastRefreshedAt = undefined; expect(trayTooltip(s)).toBe("No usage data yet");
+});
+
+it("uses adaptive Grok identity contrast while status overrides remain semantic", () => {
+  const view = state(); view.snapshot.slots = [primary("grok")]; view.snapshot.quotas = {}; view.snapshot.activities = {};
+  for (const theme of ["light", "dark", "system"]) { view.snapshot.appearance.theme = theme; expect(renderApp(view)).toContain("background:var(--grok)"); }
+  const css = readFileSync("src/renderer/style.css", "utf8");
+  expect(css).toMatch(/\.app \{[^}]*--grok: #1e1e22/); expect(css).toMatch(/\.theme-dark \{[^}]*--grok: #ebebf0/); expect(css).toMatch(/\.theme-system \{[^}]*--grok: #ebebf0/);
+  view.snapshot.statuses.grok = value({ provider: "grok", severity: "majorOutage", description: "Outage", checkedAt: now }); expect(renderApp(view)).toContain("background:var(--alert)");
+});
+
+it("shows active-window burn metrics with window scope, distinct from recent sessions", () => {
+  const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: state(), action: async () => {}, detail: true }));
+  expect(markup).toContain("Active window burn");
+  const section = markup.slice(markup.indexOf("Active window burn"), markup.indexOf("</section>", markup.indexOf("Active window burn")));
+  expect(section).toContain("active-project"); expect(section).not.toContain("old-project");
+  expect(section).toContain("200 tokens"); expect(section).toContain("100% cache hit"); expect(section).toContain("20 tokens/turn"); expect(section).toContain("1 long chat");
+  const flyout = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: state(), action: async () => {} }));
+  expect(flyout).not.toContain("Active window burn");
+});
+
+it("keeps reported service health visible when all usage providers are hidden", () => {
+  const view = state(); view.snapshot.slots = []; view.snapshot.quotas = {}; view.snapshot.activities = {};
+  view.snapshot.statuses.codex = value({ provider: "codex", severity: "majorOutage", description: "Synthetic service outage", checkedAt: now });
+  view.snapshot.statuses.claude = value({ provider: "claude", severity: "operational", description: "All systems operational", checkedAt: now });
+  const markup = renderApp(view);
+  expect(markup).toContain('aria-label="Service status"'); expect(markup).toContain("Synthetic service outage"); expect(markup).toContain("All systems operational");
+  expect(markup).toContain("var(--alert)"); expect(markup).toContain("Enable a provider in Settings");
+  expect(markup.indexOf("Service status")).toBeLessThan(markup.indexOf("Enable a provider"));
+});
+
+it("does not fabricate service rows for absent or failed status sources", () => {
+  const view = state(); view.snapshot.slots = []; view.snapshot.quotas = {}; view.snapshot.activities = {};
+  view.snapshot.statuses.codex = { status: "missing", code: "offline", reason: "Status unavailable" };
+  const markup = renderApp(view), section = markup.slice(markup.indexOf('aria-label="Service status"'), markup.indexOf("</section>", markup.indexOf('aria-label="Service status"')));
+  expect(section).toContain("Not checked yet"); expect(section).not.toContain("Codex"); expect(section).not.toContain("Claude");
+});
+
+it("shows raw-window ambient notch ETA without recent burn and hides it when pacing is off", () => {
+  const view = state(); view.snapshot.notchSlots = [primary("codex")]; view.snapshot.activities = {};
+  const row = () => { const markup = renderApp(view, "notch"), start = markup.indexOf('class="strip-provider"'); return markup.slice(start, markup.indexOf("</button>", start)); };
+  expect(row()).toContain("15m"); expect(row()).toContain('class="notch-eta"');
+  view.snapshot.appearance.pacing = false; expect(row()).not.toContain('class="notch-eta"');
+  view.snapshot.appearance.pacing = true; view.snapshot.quotas.codex = value(quota("codex", [window("5-hour", 1, now + 3600000, 300)], now));
+  expect(row()).toContain("1h");
+  view.snapshot.quotas.codex = value(quota("codex", [window("5-hour", 1, now + 4 * 3600000, 300)], now)); expect(row()).not.toContain('class="notch-eta"');
+  view.snapshot.quotas.codex = { status: "missing", code: "offline", reason: "Offline" }; view.snapshot.archived.codex = quota("codex", [w], now - 60000);
+  expect(row()).toContain("15m"); expect(row()).toContain("last known reading");
+});
