@@ -16,6 +16,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Upgrade the Electron candidate's TypeScript checker from 6.0.3 to the native
+  7.0.2 compiler. Keep the existing typecheck, test and build commands.
 - Record synthetic Claude and Codex source-scanner timings alongside the Swift
   baseline. Counts and cache transitions pass; packaged-app performance, idle
   RSS and native GUI acceptance remain open.
