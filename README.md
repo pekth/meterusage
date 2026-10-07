@@ -28,7 +28,7 @@
 * **100% Private & Zero Setup**: No accounts to connect, no passwords entered. Reads already-authenticated local CLI sessions and local SQLite/JSON logs on your machine.
 * **Agent Budget API**: Machine-readable JSON CLI (`meterusage json`) exporting burn rates, pacing, and time-to-empty for autonomous AI agents.
 
-[Download MeterUsage 0.2.41 for Apple silicon](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip),
+[Download MeterUsage 0.2.41 for Apple silicon](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41-notarized.zip),
 unzip it, and drag `MeterUsage.app` to
 **Applications**. No Swift, Xcode, Command Line Tools, or Git is required.
 The current prebuilt release supports Apple silicon Macs with macOS 13 or later.
@@ -149,12 +149,13 @@ meterusage is built from the ground up to respect developer privacy:
 Installing and running MeterUsage does not require Swift, Xcode, Command Line
 Tools, or Git. The Swift runtime it uses ships with macOS.
 
-1. [Download MeterUsage 0.2.41 for Apple silicon](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip). This app ZIP is for Apple silicon Macs (M1 or later) with macOS 13 or later. Other versions are on [Releases](https://github.com/pekth/meterusage/releases). Choose the app ZIP, not GitHub's **Source code** archives.
+1. [Download MeterUsage 0.2.41 for Apple silicon](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41-notarized.zip). This app ZIP is for Apple silicon Macs (M1 or later) with macOS 13 or later. Other versions are on [Releases](https://github.com/pekth/meterusage/releases). Choose the app ZIP, not GitHub's **Source code** archives.
 2. Unzip and drag `MeterUsage.app` to your `/Applications/` folder.
-3. Open `MeterUsage.app`. Releases are ad-hoc signed and are not notarized. If macOS blocks the first launch, right-click the app in Finder and choose **Open**, or use **Open Anyway** in System Settings → Privacy & Security.
+3. Open `MeterUsage.app`. This ZIP contains the Developer ID signed app with a stapled Apple notarization ticket. macOS may ask you to confirm opening a downloaded app. If macOS reports a damaged app or an unverified developer, report the error instead of disabling security checks.
 
-If a release has no app ZIP, use an earlier release that includes one or report
-the missing asset.
+The original `MeterUsage-0.2.41.zip` is ad-hoc signed and remains a separate
+asset. Use the `-notarized.zip` download above. If that asset is unavailable,
+report the missing download.
 
 ### From a Git checkout (no Swift)
 
