@@ -15,3 +15,4 @@ This directory records decisions that affect repository work. Read an ADR before
 | [0008](0008-reset-aware-quota-pacing.md) | ADR 0008: Collect fresh quota observations after a manual reset | Accepted |
 | [0009](0009-prebuilt-bundle-default.md) | Download and verify the prebuilt app by default; compile only with `--build-from-source`. | Accepted |
 | [0010](0010-macos-typescript-electron.md) | Port macOS and the schema-1 JSON CLI to TypeScript/Electron/React; preserve data contracts and pause Windows until a test machine is available. | Accepted architecture; native acceptance pending |
+| [0011](0011-desktop-account-connections.md) | Add opt-in Codex browser sign-in and Claude Desktop account allowance; separate account allowance from local activity. | Accepted implementation direction; native and provider acceptance pending |

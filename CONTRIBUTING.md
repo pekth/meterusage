@@ -124,6 +124,14 @@ are optional; synthetic tests and demo mode require no login. Shared checks
 can run on Linux. Packaging, system symbol export and native acceptance require
 macOS with the existing Swift and signing tools.
 
+`pnpm package:mac` also compiles the fixed Claude Desktop Keychain helper and
+bundles it as an app resource. `pnpm build:desktop-helper` targets arm64 and
+macOS 13 explicitly, matching the candidate bundle. Verify the packaged helper's
+architecture and deployment target with `file` and `vtool -show-build` on macOS.
+The same build command prepares an unpackaged native candidate. Do not invoke the helper during synthetic
+QA; it reads an actual Keychain item. Desktop connections are disabled in demo
+mode. Live connection acceptance remains separate from source checks.
+
 ```sh
 pnpm install --frozen-lockfile
 pnpm typecheck

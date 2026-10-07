@@ -3,6 +3,8 @@ import { Preferences } from "./preferences";
 import { compose, type Source } from "./composition";
 import { limitsReport, canonicalJSON } from "../domain/report";
 import { type Loaded, type Quota, slotKey, value, missing, lastBurn } from "../domain/models";
+import { join } from "node:path";
+import { DesktopConnections } from "./connections";
 export async function jsonReport(sources: Source[], now = Date.now()): Promise<ReturnType<typeof limitsReport>> {
   const quotas: Record<string, Loaded<Quota>> = Object.create(null), burns: Record<string, number> = Object.create(null);
   await Promise.all(sources.map(async source => {
@@ -17,9 +19,10 @@ export async function jsonReport(sources: Source[], now = Date.now()): Promise<R
   }));
   return limitsReport(sources.filter(s => s.quota).map(s => s.slot), quotas, burns, now);
 }
-export async function runJSON(args: string[], env: NodeJS.ProcessEnv = process.env): Promise<string> {
+export async function runJSON(args: string[], env: NodeJS.ProcessEnv = process.env, helper?: string): Promise<string> {
   const launch = launchConfiguration(args, env), preferences = await Preferences.load(launch);
-  return canonicalJSON(await jsonReport(compose(launch, preferences)));
+  const connections = launch.demo ? undefined : new DesktopConnections(launch, preferences, helper ?? join(__dirname, "../../build/desktop-keychain"), () => {});
+  return canonicalJSON(await jsonReport(compose(launch, preferences, { connections })));
 }
 // Bundled CLI entry. Importing this module for fixtures never launches it.
 if (process.argv[1]?.endsWith("cli.cjs")) {

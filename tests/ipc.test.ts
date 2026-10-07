@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vite-plus/test";
 import { parseRequest, trustedSender, projectSettings } from "../src/main/ipc";
 describe("renderer boundary", () => {
+  it("requires primitive provider names before connection consent", () => {
+    for (const action of ["connect", "disconnect", "connectionCancel"]) {
+      for (const provider of [["claude"], ["codex"], { toString: () => "claude" }, null, 1]) expect(() => parseRequest({ action, provider })).toThrow("Invalid request");
+      for (const provider of ["codex", "claude", "grok"]) expect(parseRequest({ action, provider })).toEqual({ action, provider });
+    }
+  });
   it("rejects arbitrary paths, settings, malformed accounts and unknown fields", () => {
     for (const r of [null, [], { action: "open", path: "/tmp" }, { action: "accountAdd", provider: "codex", path: "/tmp" }, { action: "setPreference", key: "managedAccounts", value: [] }, { action: "setPreference", key: "updateLastCheckDate", value: 1 }, { action: "accountUpdate", id: "../a", label: "a", enabled: true }, { action: "reset", key: "codex#../a", creditID: "a" }, { action: "refresh", args: [] }, { action: "resize", height: Infinity }]) expect(() => parseRequest(r)).toThrow();
     expect(parseRequest({ action: "setPreference", key: "showProviderCodex", value: true })).toEqual({ action: "setPreference", key: "showProviderCodex", value: true });

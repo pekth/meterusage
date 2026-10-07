@@ -1,6 +1,6 @@
 # Project knowledge
 
-Last source review: 2026-10-06
+Last source review: 2026-10-07
 
 ## Repository state
 
@@ -9,6 +9,8 @@ Last source review: 2026-10-06
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
+
+- The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, read-only Desktop cache/cookie selection and the OAuth allowance endpoint after consent. Grok consumer connection remains unavailable. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md) and ADR 0011 define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
 
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
 - The published app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure. Its AppKit and SwiftUI imports require macOS for package build and test checks; Swift itself supports other platforms. `AGENTS.md` describes a generic macOS SSH route for Linux development without private host aliases.
@@ -35,7 +37,7 @@ Last source review: 2026-10-06
 - Windows implementation, installers, CI, testing and releases are paused until a test machine is available. The former RN/Tauri Windows-first plan is superseded; shared portable source does not establish Windows support.
 - Candidate checks use synthetic fixtures. Demo/candidate selection isolates preferences, history, caches and Electron state before composition. Live provider/key discovery, updater installation and login-item changes are disabled in demo. `pnpm package:mac` creates a separate candidate with publication disabled, using existing macOS tools.
 - Candidate account visibility rechecks directory presence. Sharing freezes the displayed account key. Pacing-off hides forecasts; notch details reuse window-scoped burn metrics and have a bounded scroller. These contracts have synthetic/static-markup proof; native UI acceptance remains open.
-- Current source checks have matching passing execution proof for 128 TypeScript fixture tests, TypeScript checking and production bundling. The rebuilt bundled headless demo preserves stable schema-1 fields against the Swift demo oracle. This is source/fixture evidence only, not native parity or a published Electron release.
+- The desktop-connection candidate has matching passing source proof for 165 synthetic TypeScript tests, TypeScript checking and production bundling on Linux. Its connection cleanup, account verification, cache/JSON readers, reset capability, alerts and locality labels have regression coverage. Disconnect blocks Claude's post-request credential reread; account-bound collection timeout removes unverified allowance; explicit Codex sign-in retry recovers retained cleanup before a new login. The unchanged migration baseline's headless demo comparison preserves stable schema-1 fields against the Swift demo oracle; that older native receipt does not verify the new connections. Source checks do not establish native parity or a published Electron release.
 - The first macOS fixture attempt passed 90 cases and failed 29 due to temporary-path aliases and a case-sensitive filename assertion. Canonical roots and exact directory-entry checks now pass all 128 current fixtures on macOS, along with TypeScript checking and production bundling. Candidate symlink rejection is unchanged.
 - A temporary candidate-local pnpm PATH alias resolved the dependency collector's broken launcher without changing host configuration. At source `193c2af42bd2a8641accbb3f7b5b333ba6cd9ac3`, the Apple silicon ZIP is 116,696,318 bytes with SHA-256 `4ea7a6f297402958a52173696880f8183a05454c2e08966d71ebeaa69f52e634`. Its extracted bundle passes `codesign --verify --deep --strict` with an ad-hoc signature and hardened runtime. It is not notarized, installed or published.
 - The extracted native Electron executable exits successfully with schema-1 demo JSON and no stderr. Its eight provider/account entries match the Swift oracle's stable fields at numerical tolerance `1e-12`; comparison excludes `generated_at`, `resets_at`, `burn_rate`, `eta_seconds` and `eta_text`. The extracted bundle uses 290,148 KiB on disk. GUI behavior, idle RSS and packaged-app performance remain unverified.

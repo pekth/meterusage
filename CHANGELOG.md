@@ -8,6 +8,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Add candidate account setup for Codex browser sign-in and opt-in Claude
+  Desktop allowance, with automatic refresh, account isolation and disconnect.
+  Grok consumer connection remains unavailable. Native and provider acceptance
+  are pending; the published Swift app is unchanged.
+
 - Add a macOS TypeScript/Electron/React migration candidate and headless
   schema-1 JSON CLI, with synthetic provider, account, history, pacing and IPC
   tests. Use pnpm, Vite+, Tailwind, Vitest and electron-builder. Retain Swift as
@@ -15,6 +20,10 @@ follows [Semantic Versioning](https://semver.org/).
   installed-app replacement is included.
 
 ### Changed
+
+- Label local activity as activity on this Mac, keep folder-based accounts
+  under advanced settings, and omit local CLI activity from separately
+  connected account cards. Record the new opt-in authentication boundary.
 
 - Record synthetic Claude and Codex source-scanner timings alongside the Swift
   baseline. Counts and cache transitions pass; packaged-app performance, idle
@@ -31,6 +40,20 @@ follows [Semantic Versioning](https://semver.org/).
   update checks. Provider files and credentials stay in the main process.
 
 ### Fixed
+
+- Reject malformed connection provider values before consent and target the
+  bundled Desktop Keychain helper explicitly at arm64/macOS 13.
+- Disable cancelled or disconnected account collection before cleanup, recover
+  unfinished sign-in profiles, and verify Claude identity after HTTP failures.
+  Preserve connection readers across cache clearing and headless reports.
+- Stop Claude credential rereads after disconnect, discard unverified account
+  allowance on collection timeout, and retry retained Codex cleanup from the
+  sign-in button before opening a new login.
+- Show general weekly Claude allowance, hide unsupported reset actions, clear
+  replaced-account alert suppression, and exclude remote usage from local totals.
+
+- Check repaired cache token fields directly in the synthetic regression test;
+  a raw substring check could also match an unrelated timestamp or opaque ID.
 
 - Rescan corrupt Claude cache entries with non-finite costs or unsupported
   dates. Ignore unsupported optional provider timestamps before JSON output.

@@ -21,6 +21,7 @@ export function parseRequest(raw: unknown): Request {
       valid = typeof r.key === "string" && (boolKeys.has(r.key) ? typeof r.value === "boolean" : r.key === "refreshIntervalSeconds" ? typeof r.value === "number" && [30, 60, 120, 300, 900].includes(r.value) : r.key === "appearanceTheme" ? typeof r.value === "string" && ["system", "light", "dark"].includes(r.value) : r.key === "accentTheme" && typeof r.value === "string" && ["blue", "violet", "teal", "amber", "rose", "graphite"].includes(r.value));
       break;
     case "accountAdd": fields = ["provider"]; valid = r.provider === "codex" || r.provider === "claude"; break;
+    case "connect": case "disconnect": case "connectionCancel": fields = ["provider"]; valid = typeof r.provider === "string" && ["codex", "claude", "grok"].includes(r.provider); break;
     case "statusPage": fields = ["provider"]; valid = typeof r.provider === "string" && Object.hasOwn(statusPages, r.provider); break;
     case "accountUpdate": fields = ["id", ...("label" in r ? ["label"] : []), ...("enabled" in r ? ["enabled"] : [])]; valid = id(r.id) && fields.length > 1 && (!("label" in r) || string(r.label, 100)) && (!("enabled" in r) || typeof r.enabled === "boolean"); break;
     case "accountRemove": case "accountPath": fields = ["id"]; valid = id(r.id); break;

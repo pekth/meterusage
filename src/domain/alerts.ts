@@ -6,6 +6,9 @@ export class AlertEvaluator {
   private credits = new Set<string>();
   private cliffs = new Set<string>();
   private soft = new Set<string>();
+  forgetSlot(slot: string) {
+    for (const state of [this.highWater, this.credits, this.cliffs, this.soft]) for (const key of state.keys()) if (key.startsWith(`${slot}/`)) state.delete(key);
+  }
   events(slots: Slot[], quotas: Record<string, Loaded<Quota>>, burns: Record<string, number>, now: number): Alert[] {
     const events: Alert[] = [];
     for (const slot of slots) {

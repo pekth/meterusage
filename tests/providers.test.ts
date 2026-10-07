@@ -105,7 +105,9 @@ describe("activity and account boundaries", () => {
     const activity = await new ClaudeActivitySource(root, cache).scan(now);
     expect(activity.sessions).toEqual(original.sessions); expect(activity.daily).toEqual(original.daily);
     const history = new HistoryStore(join(root, "history.json")); expect(() => history.record("claude", activity.daily)).not.toThrow();
-    expect(history.records("claude")[0].tokens.output).toBe(7); expect(readFileSync(cache, "utf8")).not.toContain("777");
+    expect(history.records("claude")[0].tokens.output).toBe(7);
+    const repaired = JSON.parse(readFileSync(cache, "utf8"))[opaqueID(path)].result;
+    expect(repaired.tokens.output).toBe(7); expect(repaired.dailyBuckets[0].bucket.tokens.output).toBe(7);
   });
   it("keeps valid Claude sessions when siblings disappear or cannot be read", async () => {
     const root = temp(), project = join(root, "-fixture-project"); mkdirSync(project);

@@ -18,7 +18,7 @@ export function cliEnvironment(home: string, env: NodeJS.ProcessEnv): NodeJS.Pro
 }
 // Provider stderr may contain credentials or paths. Drain it, but never retain
 // or propagate it. All failures crossing this boundary use fixed messages.
-function boundedChild(binary: string, args: string[], options: CommandOptions, exchange: (child: ChildProcessWithoutNullStreams, finish: (result: string | Error) => void) => void): Promise<string> {
+export function boundedChild(binary: string, args: string[], options: CommandOptions, exchange: (child: ChildProcessWithoutNullStreams, finish: (result: string | Error) => void) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted) { reject(new Error("Provider request cancelled")); return; }
     const child = spawn(binary, args, { env: options.env, stdio: "pipe", shell: false });
@@ -49,9 +49,10 @@ export const runCommand: Command = (binary, args, options = {}) => boundedChild(
   child.on("exit", code => { exitCode = code; complete(); });
   child.stdin.end();
 });
-export async function codexRPC(binary: string, options: CommandOptions, creditID?: string): Promise<string> {
-  return boundedChild(binary, ["app-server", "--stdio"], options, (child, finish) => {
+export async function codexRPC(binary: string, options: CommandOptions, creditID?: string, configuration: string[] = [], operation: "read" | "logout" = "read"): Promise<string> {
+  return boundedChild(binary, [...configuration, "app-server", "--stdio"], options, (child, finish) => {
     const write = (v: unknown) => child.stdin.write(JSON.stringify(v) + "\n");
+    const request = () => write({ jsonrpc: "2.0", id: 2, method: operation === "logout" ? "account/logout" : creditID === undefined ? "account/rateLimits/read" : "account/rateLimitResetCredit/consume", params: creditID === undefined ? {} : { creditId: creditID, idempotencyKey: randomUUID() } });
     let pending = "", initialized = false;
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
@@ -62,8 +63,15 @@ export async function codexRPC(binary: string, options: CommandOptions, creditID
         let id: unknown; try { id = object(selectJSON(line, { id: true })).id; } catch { continue; }
         if (id === 1 && !initialized) {
           initialized = true;
+          if (object(selectJSON(line, { error: { code: true } })).error) { finish(new Error("Provider initialization failed")); return; }
           write({ jsonrpc: "2.0", method: "initialized", params: {} });
-          write({ jsonrpc: "2.0", id: 2, method: creditID === undefined ? "account/rateLimits/read" : "account/rateLimitResetCredit/consume", params: creditID === undefined ? {} : { creditId: creditID, idempotencyKey: randomUUID() } });
+          if (configuration.length) write({ id: 4, method: "config/read", params: { includeLayers: false } }); else request();
+        } else if (id === 4 && initialized && configuration.length) {
+          try {
+            const result = object(selectJSON(line, { result: { config: { cli_auth_credentials_store: true } } }));
+            if (object(object(result.result).config).cli_auth_credentials_store !== "keyring") throw new Error();
+            request();
+          } catch { finish(new Error("Secure credential storage unavailable")); }
         } else if (id === 2 && initialized) finish(line);
       }
     });
@@ -76,6 +84,7 @@ export const endpoints = {
   openRouterActivity: "https://openrouter.ai/api/v1/activity",
   openCodeGo: "https://opencode.ai/zen/go/v1/usage",
   grok: "https://cli-chat-proxy.grok.com/v1/billing?format=credits",
+  claudeAllowance: "https://api.anthropic.com/api/oauth/usage",
   codexStatus: "https://status.openai.com/api/v2/components.json",
   claudeStatus: "https://status.claude.com/api/v2/components.json",
 } as const;
@@ -86,8 +95,8 @@ export function httpTransport(fetcher: typeof fetch = fetch): HTTP {
     if (!(Object.values(endpoints) as string[]).includes(url)) throw failed(provider);
     const boundedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
     try {
-      const response = await fetcher(url, { signal: boundedSignal, redirect: "error", cache: "no-store", headers: { Accept: "application/json", "User-Agent": "meterusage/0.2.41", ...(key ? { Authorization: `Bearer ${key}` } : {}) } });
-      if (response.status === 401) throw new Unavailable("notSignedIn", provider === "openCodeGo" ? "OpenCode Go" : provider === "openRouter" ? "OpenRouter" : "Grok");
+      const response = await fetcher(url, { signal: boundedSignal, redirect: "error", cache: "no-store", headers: { Accept: "application/json", "User-Agent": "meterusage/0.2.41", ...(url === endpoints.claudeAllowance ? { "anthropic-beta": "oauth-2025-04-20" } : {}), ...(key ? { Authorization: `Bearer ${key}` } : {}) } });
+      if (response.status === 401 || response.status === 403 && url === endpoints.claudeAllowance) throw new Unavailable("notSignedIn", provider === "claude" ? "Claude Desktop" : provider === "openCodeGo" ? "OpenCode Go" : provider === "openRouter" ? "OpenRouter" : "Grok");
       if (response.status === 403 && url === endpoints.openRouterActivity) throw new Unavailable("dataNotFound", "OpenRouter Management Key");
       if (!response.ok || !response.body) throw failed(provider);
       const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
