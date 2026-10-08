@@ -12,8 +12,11 @@ The entry state is Settings with provider readings already loaded or failed.
 Clicking Report issue captures one diagnostic snapshot and starts one HTTPS
 request. The button is disabled during submission. A matching confirmed Linear
 issue reference changes it to Sent. Errors keep the report available for retry;
-an uncertain retry reuses the original report ID and snapshot while Settings
-remains open. Closing the view or app loses that in-memory retry identity.
+an uncertain retry reuses the original report ID and snapshot. The app
+coordinator retains the pending report, send state and receipt when Settings
+closes and reopens. A confirmed receipt keeps Send disabled for the rest of the
+app session. Quitting the app clears this in-memory state; no report is saved
+to disk. See [ADR 0012](adr/0012-report-state-outlives-settings.md).
 
 The report includes app/build, numeric OS/architecture, provider states,
 aggregate readings and freshness, cache/history state, and recent refresh
@@ -72,7 +75,8 @@ Run `node --test Reporting/worker.test.mjs` for the relay contract. Run
 `swift build`, `swift test` and `Scripts/make-app.sh --build-from-source` on
 macOS for the app candidate. Use synthetic inputs only.
 
-Verify success, lost acknowledgement/retry, double-click, offline failure,
+Verify success, lost acknowledgement/retry, double-click, Settings navigation
+during a send and after its result, offline failure,
 throttling, oversized input, response cancellation before stream completion,
 invalid receipts and redirects. Confirm excluded
 data stays absent from diagnostics and that arbitrary provider labels cannot

@@ -887,6 +887,34 @@ final class AppCoordinator: ObservableObject {
         return ProviderAccount(plan: plan, via: slot.provider.sourceLabel, name: slot.displayName)
     }
 
+    /// In-memory submission state survives Settings navigation for this app lifetime.
+    @Published private(set) var isSendingIssueReport = false
+    @Published private(set) var issueReportReceipt: String?
+    @Published private(set) var issueReportError: String?
+    private var pendingIssueReport: IssueReportClient.Report?
+
+    func sendIssueReport(endpoint: URL? = IssueReportClient.endpoint, session: URLSession? = nil) async {
+        guard !isSendingIssueReport, issueReportReceipt == nil else { return }
+        isSendingIssueReport = true
+        issueReportError = nil
+        let report: IssueReportClient.Report
+        if let pendingIssueReport {
+            report = pendingIssueReport
+        } else {
+            report = IssueReportClient.Report(id: UUID(), diagnostics: await diagnosticsText())
+            pendingIssueReport = report
+        }
+        let session = session ?? IssueReportClient.session()
+        defer { session.invalidateAndCancel(); isSendingIssueReport = false }
+        do {
+            issueReportReceipt = try await IssueReportClient.send(report, endpoint: endpoint, session: session)
+            pendingIssueReport = nil
+        } catch {
+            issueReportError = (error as? IssueReportClient.Failure)?.errorDescription
+                ?? IssueReportClient.Failure.unconfirmed.errorDescription
+        }
+    }
+
     /// Sanitized diagnostics for the "Copy diagnostics" button, including
     /// provider state and local history persistence errors.
     func diagnosticsText() async -> String {

@@ -84,7 +84,8 @@ request; this feature is not an anonymous-network guarantee. Reports remain in
 Linear under the maintainers' workspace access and retention settings.
 **Copy diagnostics** writes the generated summary only to the local clipboard.
 A failed request is not reported as sent; uncertain retries reuse the report ID
-while the reporting view remains open.
+and snapshot across Settings navigation. Pending reports and receipts stay in
+app memory until the app quits. They are not saved to disk.
 
 ## What leaves your machine
 

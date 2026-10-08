@@ -14,6 +14,8 @@ follows [Semantic Versioning](https://semver.org/).
   diagnostics remains available. Report replies are limited to 1,024 bytes;
   larger replies cancel the transfer. Live reporting requires a configured relay.
   Settings states that diagnostics are sent only on request.
+  Pending reports and receipts survive leaving and returning to Settings,
+  preventing a second submission while the first is in flight.
 
 ### Fixed
 

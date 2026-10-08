@@ -512,10 +512,6 @@ private struct CacheRow: View {
 private struct DiagnosticsRow: View {
     @ObservedObject var coordinator: AppCoordinator
     @State private var copied = false
-    @State private var sending = false
-    @State private var pendingReport: IssueReportClient.Report?
-    @State private var receipt: String?
-    @State private var reportError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -530,20 +526,20 @@ private struct DiagnosticsRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 6)
-                Button(action: send) {
-                    Text(sending ? "Sending…" : (receipt == nil ? "Report issue" : "Sent"))
+                Button(action: { Task { await coordinator.sendIssueReport() } }) {
+                    Text(coordinator.isSendingIssueReport ? "Sending…" : (coordinator.issueReportReceipt == nil ? "Report issue" : "Sent"))
                 }
                 .controlSize(.small)
-                .disabled(sending || receipt != nil)
+                .disabled(coordinator.isSendingIssueReport || coordinator.issueReportReceipt != nil)
                 .help("Send diagnostics to support without signing in.")
             }
-            if let receipt {
+            if let receipt = coordinator.issueReportReceipt {
                 Text("Report sent. Reference: \(receipt)")
                     .font(.muCaption)
                     .foregroundColor(MU.textSecondary)
                     .textSelection(.enabled)
             }
-            if let reportError {
+            if let reportError = coordinator.issueReportError {
                 Text(reportError)
                     .font(.muCaption)
                     .foregroundColor(MU.textSecondary)
@@ -565,30 +561,6 @@ private struct DiagnosticsRow: View {
                 }
                 .controlSize(.small)
                 .help("Copy a sanitized diagnostics report to the clipboard.")
-            }
-        }
-    }
-
-    private func send() {
-        guard !sending, receipt == nil else { return }
-        sending = true
-        reportError = nil
-        Task { @MainActor in
-            let report: IssueReportClient.Report
-            if let pendingReport {
-                report = pendingReport
-            } else {
-                report = IssueReportClient.Report(id: UUID(), diagnostics: await coordinator.diagnosticsText())
-                pendingReport = report
-            }
-            let session = IssueReportClient.session()
-            defer { session.invalidateAndCancel(); sending = false }
-            do {
-                receipt = try await IssueReportClient.send(report, endpoint: IssueReportClient.endpoint, session: session)
-                pendingReport = nil
-            } catch {
-                reportError = (error as? IssueReportClient.Failure)?.errorDescription
-                    ?? IssueReportClient.Failure.unconfirmed.errorDescription
             }
         }
     }
