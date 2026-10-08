@@ -41,6 +41,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Bound browser-demo notch cards and strips to the viewport height. Keep
+  provider rings at full width while the strip scrolls.
+- Ignore display and theme publications after the candidate tray is destroyed.
+
 - Reject malformed connection provider values before consent and target the
   bundled Desktop Keychain helper explicitly at arm64/macOS 13.
 - Disable cancelled or disconnected account collection before cleanup, recover

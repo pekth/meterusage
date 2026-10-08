@@ -87,6 +87,12 @@ explicit "Show details" action rather than a focusable control.
 
 ## Verifying a change
 
+The Electron candidate bounds the card and strip independently. The native
+window supplies the display work-area height; the browser demo uses the viewport
+height when that value is absent. Tall content scrolls inside each column. The
+strip hides its scrollbar to retain the full 44-pixel ring width. The shared-card
+capture keeps its full height and does not use the notch's scrolling bounds.
+
 Automated tests cover geometry and in-process drag events, but cannot see the
 rendered result. For any change to side notch layout or motion, capture the
 panel for at least two providers whose cards differ in height, and confirm the

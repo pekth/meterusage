@@ -67,6 +67,7 @@ async function start() {
   });
   const folding = new NotchFold(() => prefs.values.sideNotchPanelPinned === true || sharing || confirmingReset || notch.dragging, () => { notch.expanded = false; placeNotch(); publish(); });
   function publish() {
+    if (tray.isDestroyed()) return;
     const s = state();
     for (const [surface, w] of windows) if (!w.isDestroyed()) w.webContents.send(stateChannel, surface === "settings" || surface === "share" ? state(surface) : s);
     tray.setToolTip(trayTooltip(s.snapshot));

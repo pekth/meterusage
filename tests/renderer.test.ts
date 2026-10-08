@@ -19,6 +19,12 @@ function renderApp(view: ViewState, surface = "flyout") {
 }
 
 const now = Date.parse("2026-10-06T12:00:00Z");
+it("bounds browser notch content to the viewport while retaining native work-area sizing", () => {
+  const view = state(); view.snapshot.notchSlots = [primary("codex")];
+  expect(renderApp(view, "notch")).toContain("--notch-max-height:100dvh");
+  view.notch.maxHeight = 900;
+  expect(renderApp(view, "notch")).toContain("--notch-max-height:900px");
+});
 it("offers simple account setup and truthful Grok availability without directories in the primary flow", () => {
   const view = state(); view.snapshot.demo = false;
   view.connections = [{ provider: "codex", status: "disconnected" }, { provider: "claude", status: "connected" }, { provider: "grok", status: "unsupported" }];
