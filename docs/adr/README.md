@@ -16,5 +16,5 @@ This directory records decisions that affect repository work. Read an ADR before
 | [0009](0009-prebuilt-bundle-default.md) | Download and verify the prebuilt app by default; compile only with `--build-from-source`. | Accepted |
 
 | [0010](0010-user-triggered-github-diagnostics.md) | Initial GitHub form proposal, withdrawn before implementation because it required login. | Superseded by 0011 |
-| [0011](0011-login-free-linear-reports.md) | Send user-requested diagnostics through a free relay to a private Linear project without user login. | Accepted; report lifetime amended by 0012; deployment pending |
-| [0012](0012-report-state-outlives-settings.md) | Retain report identity and delivery state in the app coordinator across Settings navigation. | Accepted; live delivery pending |
+| [0011](0011-login-free-linear-reports.md) | Send user-requested diagnostics through a free relay to a private Linear project without user login. | Accepted; report lifetime amended by 0012; relay activated 2026-10-08 |
+| [0012](0012-report-state-outlives-settings.md) | Retain report identity and delivery state in the app coordinator across Settings navigation. | Accepted; native-client delivery verified; native interaction pending |

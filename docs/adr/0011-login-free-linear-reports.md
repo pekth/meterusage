@@ -1,6 +1,6 @@
 # ADR 0011: Reports reach Linear without user login
 
-- Status: Accepted; deployment and end-to-end delivery proof pending
+- Status: Accepted; relay and native-client delivery verified 2026-10-08
 - Date: 2026-10-07
 - Supersedes: [ADR 0010](0010-user-triggered-github-diagnostics.md)
 

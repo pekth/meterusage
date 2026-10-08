@@ -2,7 +2,8 @@
 
 Report issue sends app-generated diagnostics to a private Linear project
 without requiring the reporter to sign in. Copy diagnostics stays available.
-This document describes the candidate implementation, not a live deployment.
+The relay is deployed on Workers Free. Source builds configure its `/report`
+endpoint; the released v0.2.41 app does not include this feature.
 Settings states that diagnostics are sent only on request; it does not promise
 that all data stays local.
 
@@ -38,6 +39,10 @@ replies incrementally and cancels reception above 1,024 bytes. Oversized or
 invalid replies show delivery as unconfirmed. Upstream error bodies are never
 displayed to reporters.
 
+Diagnostics use a fenced Markdown block because Linear converts indented
+blocks to fences. The delimiter is longer than every backtick sequence in the
+report. Receipt checks still require the exact description, UUID and destination.
+
 ## Free hosting and configuration
 
 Use [Cloudflare Workers Free](https://developers.cloudflare.com/workers/platform/pricing/)
@@ -61,13 +66,25 @@ Configure these server-side bindings:
 Keep credentials out of source, app bundles, command arguments, logs and files.
 Use the hosting provider's secure secret-input mechanism. The app contains only
 the public HTTPS endpoint under `MeterUsageReportURL` in `Resources/Info.plist`.
-Set it to the deployed worker's `/report` URL before building for distribution.
+The source bundle sets it to
+`https://meterusage-reports.fancy-queen-3301.workers.dev/report`.
 Missing configuration returns an explicit unavailable state.
 
 Limits allow three requests per minute per network address and 30 per minute
 per Cloudflare location. Missing rate-limit bindings fail closed. These limits
 reduce spam; they do not authenticate an anonymous sender or guarantee a
 global ceiling. The Linear UUID prevents duplicate issue creation on a retry.
+
+## Activation evidence
+
+On 2026-10-08, the authenticated Cloudflare dashboard showed Workers Free
+Active. A synthetic report sent by the unmodified Swift client reached the
+MeterUsage Linear project. Repeating the identical request returned the same
+issue reference; an independent Linear read confirmed one issue, its exact
+diagnostic text and destination. No paid resource was added.
+
+This proves native client delivery and retry against the deployed service.
+It does not prove native Settings interaction or availability in a released app.
 
 ## Required verification
 

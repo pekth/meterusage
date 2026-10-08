@@ -1,6 +1,6 @@
 # ADR 0012: Report state outlives Settings
 
-- Status: Accepted; native interaction and live delivery proof pending
+- Status: Accepted; native interaction pending; native-client delivery verified 2026-10-08
 - Date: 2026-10-08
 - Amends: The view-lifetime retry limit in [ADR 0011](0011-login-free-linear-reports.md)
 

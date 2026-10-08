@@ -50,8 +50,9 @@ account labels, personal paths and raw provider errors. It reports unavailable
 observations and any size limits explicitly.
 
 This feature is being prepared for a future build. The released v0.2.41 app
-does not include it. Maintainers must configure and verify the report relay
-before distributing an enabled build; see [reporting setup](docs/REPORTING.md).
+does not include it. Source builds use the verified support relay; native
+Settings interaction remains to be checked before distribution. See
+[reporting setup](docs/REPORTING.md).
 
 ## 📸 Showcase
 
