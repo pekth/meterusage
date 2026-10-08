@@ -127,6 +127,8 @@ final class AppCoordinator: ObservableObject {
     /// that keeps failing (provider outage, no network) is skipped by scheduled
     /// sweeps until its backoff elapses instead of being hammered every cycle.
     private var backoffs: [String: Backoff] = [:]
+    /// Safe, in-memory outcomes only. No raw errors or persisted diagnostic log.
+    private var diagnosticOutcomes: [DiagnosticsReport.RefreshOutcome] = []
 
     /// One source's retry state. `nextAttemptAt` is when a scheduled sweep may
     /// try it again; user-initiated refreshes always bypass it.
@@ -582,7 +584,21 @@ final class AppCoordinator: ObservableObject {
         }
     }
 
+    private func recordDiagnostic<T>(stage: DiagnosticsReport.Stage, slot: ProviderSlot,
+                                     startedAt: TimeInterval, result: Loaded<T>,
+                                     error: DiagnosticsReport.SafeError?) {
+        diagnosticOutcomes.append(DiagnosticsReport.RefreshOutcome(
+            slot: slot, stage: stage, finishedAt: Date(),
+            duration: ProcessInfo.processInfo.systemUptime - startedAt,
+            unavailable: result.unavailable, error: error))
+        if diagnosticOutcomes.count > DiagnosticsReport.maximumOutcomes {
+            diagnosticOutcomes.removeFirst(diagnosticOutcomes.count - DiagnosticsReport.maximumOutcomes)
+        }
+    }
+
     private func load(quota source: QuotaSource) async {
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        var safeError: DiagnosticsReport.SafeError?
         let resetAtStart = archivedQuotas[source.slot]?.resetPacingSince
         let result: Loaded<ProviderQuota>
         do {
@@ -599,14 +615,18 @@ final class AppCoordinator: ObservableObject {
             result = .value(quota)
             archivedQuotas[source.slot] = quota
         } catch {
+            safeError = DiagnosticsReport.SafeError(error: error)
             guard archivedQuotas[source.slot]?.resetPacingSince == resetAtStart else { return }
             result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
         quotas[source.slot] = result
         record(kind: "quota", slot: source.slot, result: result.unavailable)
+        recordDiagnostic(stage: .quota, slot: source.slot, startedAt: startedAt, result: result, error: safeError)
     }
 
     private func load(activity source: LocalActivitySource) async {
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        var safeError: DiagnosticsReport.SafeError?
         let result: Loaded<LocalActivity>
         do {
             var activity = try await source.scan()
@@ -643,32 +663,42 @@ final class AppCoordinator: ObservableObject {
                 ? .missing(.noData)
                 : .value(activity)
         } catch {
+            safeError = DiagnosticsReport.SafeError(error: error)
             result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
         activities[source.slot] = result
         record(kind: "activity", slot: source.slot, result: result.unavailable)
+        recordDiagnostic(stage: .activity, slot: source.slot, startedAt: startedAt, result: result, error: safeError)
     }
 
     private func load(usage source: UsageSource) async {
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        var safeError: DiagnosticsReport.SafeError?
         let result: Loaded<ProviderUsage>
         do {
             result = .value(try await source.fetchUsage())
         } catch {
+            safeError = DiagnosticsReport.SafeError(error: error)
             result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
         usages[source.slot] = result
         record(kind: "usage", slot: source.slot, result: result.unavailable)
+        recordDiagnostic(stage: .usage, slot: source.slot, startedAt: startedAt, result: result, error: safeError)
     }
 
     private func load(status source: StatusSource) async {
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        var safeError: DiagnosticsReport.SafeError?
         let result: Loaded<ServiceStatus>
         do {
             result = .value(try await source.fetchStatus())
         } catch {
+            safeError = DiagnosticsReport.SafeError(error: error)
             result = .missing(Self.reason(for: error, provider: source.provider))
         }
         statuses[source.provider] = result
         record(kind: "status", slot: source.statusSlot, result: result.unavailable)
+        recordDiagnostic(stage: .status, slot: source.statusSlot, startedAt: startedAt, result: result, error: safeError)
     }
 
     /// A plan we couldn't read is not worth a message.
@@ -678,14 +708,18 @@ final class AppCoordinator: ObservableObject {
     /// still correct without it, and an "Unknown plan" badge would be pure
     /// noise. So the failure is recorded but the view draws nothing.
     private func load(plan source: PlanSource) async {
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        var safeError: DiagnosticsReport.SafeError?
         let result: Loaded<PlanTier>
         do {
             result = .value(try await source.fetchPlan())
         } catch {
+            safeError = DiagnosticsReport.SafeError(error: error)
             result = .missing(Self.reason(for: error, provider: source.slot.provider))
         }
         plans[source.slot] = result
         record(kind: "plan", slot: source.slot, result: result.unavailable)
+        recordDiagnostic(stage: .plan, slot: source.slot, startedAt: startedAt, result: result, error: safeError)
     }
 
     /// Downloads, verifies, and installs the visible update, then relaunches.
@@ -853,23 +887,93 @@ final class AppCoordinator: ObservableObject {
         return ProviderAccount(plan: plan, via: slot.provider.sourceLabel, name: slot.displayName)
     }
 
+    /// In-memory submission state survives Settings navigation for this app lifetime.
+    @Published private(set) var isSendingIssueReport = false
+    @Published private(set) var issueReportReceipt: String?
+    @Published private(set) var issueReportError: String?
+    private var pendingIssueReport: IssueReportClient.Report?
+
+    func sendIssueReport(endpoint: URL? = IssueReportClient.endpoint, session: URLSession? = nil) async {
+        guard !isSendingIssueReport, issueReportReceipt == nil else { return }
+        isSendingIssueReport = true
+        issueReportError = nil
+        let report: IssueReportClient.Report
+        if let pendingIssueReport {
+            report = pendingIssueReport
+        } else {
+            report = IssueReportClient.Report(id: UUID(), diagnostics: await diagnosticsText())
+            pendingIssueReport = report
+        }
+        let session = session ?? IssueReportClient.session()
+        defer { session.invalidateAndCancel(); isSendingIssueReport = false }
+        do {
+            issueReportReceipt = try await IssueReportClient.send(report, endpoint: endpoint, session: session)
+            pendingIssueReport = nil
+        } catch {
+            issueReportError = (error as? IssueReportClient.Failure)?.errorDescription
+                ?? IssueReportClient.Failure.unconfirmed.errorDescription
+        }
+    }
+
     /// Sanitized diagnostics for the "Copy diagnostics" button, including
     /// provider state and local history persistence errors.
-    func diagnosticsText() -> String {
-        DiagnosticsReport.build(
+    func diagnosticsText() async -> String {
+        var sourceFiles: [ProviderSlot: [DiagnosticsReport.FileObservation]] = [:]
+        var codexCLIAvailable: [ProviderSlot: Bool] = [:]
+        if !isDemoMode {
+            for source in activitySources {
+                if let source = source as? CodexLocalSource {
+                    let files = await source.diagnosticFiles
+                    sourceFiles[source.slot, default: []] += files
+                }
+                if let source = source as? ClaudeLocalSource {
+                    let files = await source.diagnosticFiles
+                    sourceFiles[source.slot, default: []] += files
+                }
+            }
+            for source in quotaSources {
+                if let source = source as? OptionalQuotaFileSource { sourceFiles[source.slot, default: []] += source.diagnosticFiles }
+                if let source = source as? CodexQuotaSource { codexCLIAvailable[source.slot] = source.diagnosticCLIAvailable }
+            }
+        }
+        var cachePresence = DiagnosticsReport.Presence.notUsed
+        if !isDemoMode {
+            var isDirectory: ObjCBool = false
+            cachePresence = FileManager.default.fileExists(atPath: Self.cacheDirectory.path, isDirectory: &isDirectory)
+                ? (isDirectory.boolValue ? .present : .notDirectory) : .notObserved
+        }
+        let mounted = Set(quotaSources.map(\.slot) + activitySources.map(\.slot)
+                          + usageSources.map(\.slot) + planSources.map(\.slot))
+        let slots = Provider.allCases.map { ProviderSlot.primary($0) } + additionalSlots
+        let states = slots.map { slot in
+            DiagnosticsReport.SlotState(
+                slot: slot, configured: mounted.contains(slot),
+                enabled: slot.isPrimary ? preferences.isEnabled(slot.provider)
+                    : preferences.managedAccounts.first(where: { $0.id == slot.slotID })?.enabled == true,
+                visible: showsSlot(slot))
+        }
+        return DiagnosticsReport.build(
             appName: AppInfo.name,
             appVersion: AppInfo.version,
             isDemoMode: isDemoMode,
             refreshInterval: preferences.refreshInterval,
             lastRefreshedAt: lastRefreshedAt,
-            now: clock,
+            now: Date(),
             enabledSlots: visibleSlots,
             quotas: quotas,
             activities: activities,
             usages: usages,
             statuses: statuses,
             plans: plans,
-            historyError: isDemoMode ? nil : DurableHistoryStore.shared.error
+            historyError: isDemoMode ? nil : DurableHistoryStore.shared.error,
+            appBuild: Bundle.main.infoDictionary?["CFBundleVersion"] as? String,
+            slotStates: states,
+            isRefreshing: isRefreshing,
+            cacheDirectory: cachePresence,
+            archivedQuotas: archivedQuotas,
+            recentOutcomes: diagnosticOutcomes,
+            sourceFiles: sourceFiles,
+            codexCLIAvailable: codexCLIAvailable
         )
     }
 }

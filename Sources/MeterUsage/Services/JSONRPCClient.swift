@@ -113,7 +113,7 @@ public final class SubprocessJSONRPCClient: JSONRPCClient {
     /// `/usr/bin:/bin:/usr/sbin:/sbin`), which is not where Homebrew, a
     /// manual install, or cargo puts `codex`. Probe the common install
     /// locations directly instead of assuming PATH already has them.
-    private static func resolveCodexBinary() throws -> String {
+    static func resolveCodexBinary() throws -> String {
         let fm = FileManager.default
         let candidates = [
             "/opt/homebrew/bin/codex",

@@ -36,6 +36,10 @@ public actor CodexLocalSource: LocalActivitySource {
         self.fileManager = fileManager
     }
 
+    var diagnosticFiles: [DiagnosticsReport.FileObservation] {
+        [.inspect(root, role: .sessions, fileManager: fileManager)]
+    }
+
     public func scan() async throws -> LocalActivity {
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue else {
