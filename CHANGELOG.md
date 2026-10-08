@@ -6,6 +6,15 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Settings offers Report issue for direct, user-requested diagnostic delivery
+  through a private Linear relay without user login. The report includes app
+  and environment details, provider state and recent refresh outcomes. Copy
+  diagnostics remains available. Report replies are limited to 1,024 bytes;
+  larger replies cancel the transfer. Live reporting requires a configured relay.
+  Settings states that diagnostics are sent only on request.
+
 ### Fixed
 
 - `Scripts/make-app.sh` now downloads and verifies the prebuilt app by default,

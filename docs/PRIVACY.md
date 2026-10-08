@@ -9,7 +9,7 @@ meterusage reads AI coding-assistant usage from your own machine. That means it 
 * 🛡️ **Zero Credential Exposure**: Never touches Claude or Codex authentication tokens, passwords, or macOS Keychain items. OpenRouter uses an existing environment variable/local key strictly for aggregate balances in memory.
 * 🚫 **No Prompts, Code, or Message Inspection**: Only reads numeric token tallies and event timestamps from local CLI stores. Message bodies, prompts, tool inputs/outputs, and workspace paths are never decoded or transmitted.
 * 🧼 **Sanitized at the Boundary**: User paths (`/Users/<username>/`), terminal IDs, hostnames, and emails are structurally dropped before reaching memory or the UI.
-* 🔒 **Strict Network Isolation**: Zero analytics, telemetry, crash reporting, or remote tracking servers. Only connects directly to documented usage endpoints or public status feeds.
+* 🔒 **Strict Network Isolation**: No automatic diagnostic uploads or analytics. Connects to provider endpoints and public feeds; the support relay is contacted only when you request a report.
 * 🧪 **Enforced by Automated Tests**: Privacy guarantees are asserted by unit tests and locked with a pre-commit git hook that fails closed on credentials or paths.
 
 ---
@@ -19,7 +19,7 @@ meterusage reads AI coding-assistant usage from your own machine. That means it 
 - **Never reads Codex or Claude credentials.** It does not open `~/.codex/auth.json`, `~/.claude/.credentials.json`, or any macOS Keychain item. OpenRouter is the explicit exception: when configured, it reads an existing `OPENROUTER_API_KEY` or supported local key file in memory only to call OpenRouter's aggregate usage and balance endpoints; it never displays, logs, or stores that key.
 - **Never asks you to paste a key.** There is no login screen, no token field, and no account connection flow.
 - **Never uses undocumented provider APIs.** It does not reuse another application's OAuth client id, and it does not call private endpoints.
-- **Never sends prompts or code anywhere.** Provider requests are limited to the documented Codex/OpenRouter usage calls and public status feeds. There is no telemetry, analytics, crash reporting, or update ping; it has no server.
+- **Never sends prompts or code anywhere.** Provider requests are limited to the documented Codex/OpenRouter usage calls and public status feeds. There is no automatic telemetry, analytics or crash upload. User-requested diagnostic reports use the support relay described below.
 - **Never reads your prompts or code.** It parses only usage and metadata fields from local transcripts. Message content is skipped, not stored.
 
 ## Where the numbers actually come from
@@ -63,6 +63,29 @@ The consequence is honest rather than hidden: Codex shows real live quota, inclu
 
 Costs are computed locally from token counts against a rate table in `Sources/MeterUsage/Services/Pricing.swift`. That table covers Claude list rates and OpenAI/Codex Standard list rates (the GPT-6 and GPT-5.6 families and `gpt-5.3-codex`); Codex sessions are priced using the model recorded in the local rollout, and cache writes are free because Codex does not charge for them. Published rates change, and the table can drift. Treat every cost in this app as an approximation for awareness — never as a billing figure. Your provider's dashboard is the only source of truth for what you owe.
 
+## User-requested diagnostic reports
+
+Settings **Report issue** sends a generated diagnostic summary to the configured
+HTTPS support relay. The relay creates an issue in the maintainers' Linear
+workspace. The user needs no account. The app contains no Linear credential.
+Sending is explicit; no background upload or automatic retry is added.
+
+Reports include app version/build, numeric macOS version and architecture,
+provider state, aggregate quota and token readings, freshness, cache/history
+status and recent refresh outcomes. Only allowlisted fields leave the app.
+Reports exclude credentials, account labels, persisted account identifiers,
+personal paths, hostnames, arbitrary provider labels, raw errors, prompts and
+transcripts. Unknown observations and omitted counts are marked explicitly.
+Recent outcomes stay in bounded app memory until the user sends or copies them.
+
+The relay uses the network address for rate limiting but does not include it in
+the Linear issue. Cloudflare receives network metadata when handling the HTTPS
+request; this feature is not an anonymous-network guarantee. Reports remain in
+Linear under the maintainers' workspace access and retention settings.
+**Copy diagnostics** writes the generated summary only to the local clipboard.
+A failed request is not reported as sent; uncertain retries reuse the report ID
+while the reporting view remains open.
+
 ## What leaves your machine
 
 ### Installation downloads
@@ -84,6 +107,8 @@ Outbound requests or subprocess-backed provider checks, all of which you can ver
 4. meterusage fetches OpenRouter's documented `/api/v1/key` and `/api/v1/credits` endpoints with the existing key, retaining only aggregate dollar usage and balance fields. When an OpenRouter Management Key is configured, it queries `/api/v1/activity` for 30-day token volumes.
 5. meterusage fetches Grok's billing endpoint (`cli-chat-proxy.grok.com/v1/billing`) with the OIDC bearer token re-read from `~/.grok/auth.json`, retaining only the allowance percent, period type, and reset time. No prompts or model requests are sent.
 6. At most once a day, meterusage fetches `https://api.github.com/repos/pekth/meterusage/releases/latest` to check for a newer release. The request is unauthenticated, carries no body, no identifier, and no usage data — the server sees only your IP and a User-Agent string, the same as any web visit. The response's version tag is compared to the running build; a failed or rate-limited check is silently ignored. This check can be switched off in Settings → General → "Check for updates". When you click Install, the release zip is downloaded from the same release's asset URL and its SHA-256 is verified against the digest GitHub publishes with the asset; a missing or mismatched digest aborts the install.
+
+7. When you click Report issue, meterusage posts its diagnostic summary to the configured HTTPS relay. The relay forwards it to the private Linear project. No background diagnostic upload occurs.
 
 The local usage commands and file reads above add no outbound request. There is no analytics endpoint to disable because there is none.
 

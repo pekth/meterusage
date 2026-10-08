@@ -10,7 +10,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2013%2B-blue?style=flat-square" alt="Platform: macOS 13+">
-  <img src="https://img.shields.io/badge/privacy-100%25%20local%20%7C%20zero%20telemetry-brightgreen?style=flat-square" alt="Privacy: 100% local">
+  <img src="https://img.shields.io/badge/privacy-no%20automatic%20telemetry-brightgreen?style=flat-square" alt="Privacy: no automatic telemetry">
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License: MIT">
 </p>
 
@@ -35,6 +35,23 @@ The current prebuilt release supports Apple silicon Macs with macOS 13 or later.
 See [installation](#download-and-installation) for first-launch steps.
 
 ---
+
+## Report a problem
+
+In Settings, **Report issue** sends a diagnostic summary privately to support
+in Linear. No GitHub or Linear account is needed. The app shows a report
+reference only after the server confirms delivery. If sending fails, try again
+or use **Copy diagnostics** to keep a local copy.
+
+The report contains app/build and macOS details, provider configuration and
+state, aggregate quota and usage readings, data freshness, cache/history state,
+and recent refresh outcomes. It excludes credentials, prompts, transcripts,
+account labels, personal paths and raw provider errors. It reports unavailable
+observations and any size limits explicitly.
+
+This feature is being prepared for a future build. The released v0.2.41 app
+does not include it. Maintainers must configure and verify the report relay
+before distributing an enabled build; see [reporting setup](docs/REPORTING.md).
 
 ## 📸 Showcase
 

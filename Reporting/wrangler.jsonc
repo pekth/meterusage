@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/wrangler@4.148.0/config-schema.json",
+  "name": "meterusage-reports",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-07",
+  "workers_dev": true,
+  "preview_urls": false,
+  // Wrangler 4.148.0 has no usage_model field. Deploy only on Workers FREE.
+  // FREE: 100,000 requests/day, 10 ms CPU/request. Never upgrade for this relay.
+  // Account plan, hostname and unused namespace IDs require deployment verification.
+  // LINEAR_API_KEY must be a Worker secret. Team/project UUIDs are server configuration.
+  // No credentials or team/project defaults are included in this source-only config.
+  "observability": { "enabled": false },
+  "ratelimits": [
+    { "name": "PER_IP", "namespace_id": "731001", "simple": { "limit": 3, "period": 60 } },
+    { "name": "GLOBAL", "namespace_id": "731002", "simple": { "limit": 30, "period": 60 } }
+  ]
+}

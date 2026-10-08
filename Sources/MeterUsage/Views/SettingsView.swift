@@ -417,7 +417,7 @@ struct SettingsView: View {
             HStack {
                 Text("v\(AppInfo.version)")
                 Spacer()
-                Text("No telemetry · all data stays local · est. \(Pricing.snapshotLabel) rates")
+                Text("Diagnostics sent only on request · est. \(Pricing.snapshotLabel) rates")
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -512,33 +512,93 @@ private struct CacheRow: View {
 private struct DiagnosticsRow: View {
     @ObservedObject var coordinator: AppCoordinator
     @State private var copied = false
+    @State private var sending = false
+    @State private var pendingReport: IssueReportClient.Report?
+    @State private var receipt: String?
+    @State private var reportError: String?
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Copy diagnostics")
-                    .font(.muBody)
-                    .foregroundColor(MU.text)
-                Text("Copies a privacy-safe summary of each provider's status for bug reports.")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Report issue")
+                        .font(.muBody)
+                        .foregroundColor(MU.text)
+                    Text("Sends app and provider diagnostics privately to our support team in Linear. No login needed. No credentials or chat content.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 6)
+                Button(action: send) {
+                    Text(sending ? "Sending…" : (receipt == nil ? "Report issue" : "Sent"))
+                }
+                .controlSize(.small)
+                .disabled(sending || receipt != nil)
+                .help("Send diagnostics to support without signing in.")
+            }
+            if let receipt {
+                Text("Report sent. Reference: \(receipt)")
                     .font(.muCaption)
-                    .foregroundColor(MU.textTertiary)
+                    .foregroundColor(MU.textSecondary)
+                    .textSelection(.enabled)
+            }
+            if let reportError {
+                Text(reportError)
+                    .font(.muCaption)
+                    .foregroundColor(MU.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 6)
-            Button(action: copy) {
-                Text(copied ? "Copied" : "Copy")
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Copy diagnostics")
+                        .font(.muBody)
+                        .foregroundColor(MU.text)
+                    Text("Copies a privacy-safe summary of each provider's status for bug reports.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 6)
+                Button(action: copy) {
+                    Text(copied ? "Copied" : "Copy")
+                }
+                .controlSize(.small)
+                .help("Copy a sanitized diagnostics report to the clipboard.")
             }
-            .controlSize(.small)
-            .help("Copy a sanitized diagnostics report to the clipboard.")
+        }
+    }
+
+    private func send() {
+        guard !sending, receipt == nil else { return }
+        sending = true
+        reportError = nil
+        Task { @MainActor in
+            let report: IssueReportClient.Report
+            if let pendingReport {
+                report = pendingReport
+            } else {
+                report = IssueReportClient.Report(id: UUID(), diagnostics: await coordinator.diagnosticsText())
+                pendingReport = report
+            }
+            let session = IssueReportClient.session()
+            defer { session.invalidateAndCancel(); sending = false }
+            do {
+                receipt = try await IssueReportClient.send(report, endpoint: IssueReportClient.endpoint, session: session)
+                pendingReport = nil
+            } catch {
+                reportError = (error as? IssueReportClient.Failure)?.errorDescription
+                    ?? IssueReportClient.Failure.unconfirmed.errorDescription
+            }
         }
     }
 
     private func copy() {
-        let text = coordinator.diagnosticsText()
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        copied = true
         Task { @MainActor in
+            let text = await coordinator.diagnosticsText()
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            copied = true
             try? await Task.sleep(nanoseconds: 2 * NSEC_PER_SEC)
             copied = false
         }
@@ -722,4 +782,3 @@ private struct AccountRow: View {
         .accessibilityLabel("\(account.name), \(account.plan ?? "plan unknown"), via \(account.via)")
     }
 }
-

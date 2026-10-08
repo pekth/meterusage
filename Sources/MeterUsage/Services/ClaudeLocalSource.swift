@@ -104,6 +104,10 @@ public actor ClaudeLocalSource: LocalActivitySource {
             .appendingPathComponent("claude-local-scan-cache.json")
     }
 
+    var diagnosticFiles: [DiagnosticsReport.FileObservation] {
+        [.inspect(root, role: .sessions, fileManager: fileManager)]
+    }
+
     public func scan() async throws -> LocalActivity {
         loadDiskCacheIfNeeded()
 
