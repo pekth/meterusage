@@ -89,10 +89,11 @@ async function start() {
       });
     }
     const document = pathToFileURL(join(__dirname, "../renderer/index.html")); document.searchParams.set("surface", surface);
-    documents.set(w.webContents.id, document.href); windows.set(surface, w);
+    const webContentsId = w.webContents.id;
+    documents.set(webContentsId, document.href); windows.set(surface, w);
     w.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     w.webContents.on("will-navigate", e => e.preventDefault()); w.webContents.on("will-attach-webview", e => e.preventDefault());
-    w.on("closed", () => { documents.delete(w.webContents.id); windows.delete(surface); if (panel) finishDrag(); });
+    w.on("closed", () => { documents.delete(webContentsId); if (windows.get(surface) === w) windows.delete(surface); if (panel) finishDrag(); });
     if (surface === "flyout") w.on("blur", () => { if (!sharing) w.hide(); });
     if (panel) { w.setAlwaysOnTop(true, "status"); w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); }
     void w.loadURL(document.href).then(() => { publish(); if (panel) { placeNotch(); w.showInactive(); } });

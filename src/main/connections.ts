@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Launch } from "./launch";
 import { Preferences } from "./preferences";
-import { boundedChild, cliPath, codexRPC, endpoints, httpTransport, runCommand, type Command, type HTTP } from "./providers/transport";
+import { boundedChild, cliEnvironment, cliPath, codexRPC, endpoints, httpTransport, runCommand, type Command, type HTTP } from "./providers/transport";
 import { object, parseCodex } from "./providers/parsers";
 import { desktopQuota, readDesktopCredential } from "./providers/claude-desktop";
 import { selectJSON } from "./select-json";
@@ -18,7 +18,7 @@ export function codexLoginURL(raw: unknown): string {
   return url.href;
 }
 export function connectCodex(binary: string, env: NodeJS.ProcessEnv, open: (url: string) => Promise<void>, signal?: AbortSignal) {
-  return boundedChild(binary, [...configuration, "app-server", "--stdio"], { env, signal, timeoutMs: 180000, maxBytes: 1048576 }, (child, finish) => {
+  return boundedChild(binary, [...configuration, "app-server", "--listen", "stdio://"], { env, signal, timeoutMs: 180000, maxBytes: 1048576 }, (child, finish) => {
     const write = (message: unknown) => child.stdin.write(JSON.stringify(message) + "\n");
     let pending = "", loginID: string | undefined, completion: Record<string, unknown> | undefined;
     const completed = () => {
@@ -79,7 +79,7 @@ export class DesktopConnections {
   private env(id: string) {
     const home = join(this.launch.data, "connections", "codex", id);
     mkdirSync(home, { recursive: true, mode: 0o700 });
-    return { HOME: this.launch.home, PATH: "/usr/bin:/bin", CODEX_HOME: home, TMPDIR: this.launch.env.TMPDIR };
+    return { HOME: this.launch.home, PATH: cliEnvironment(this.launch.home, { PATH: this.launch.env.PATH }).PATH, CODEX_HOME: home, TMPDIR: this.launch.env.TMPDIR };
   }
   private async claude(allowUI: boolean, signal?: AbortSignal) {
     try {

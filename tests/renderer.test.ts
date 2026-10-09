@@ -25,6 +25,22 @@ it("bounds browser notch content to the viewport while retaining native work-are
   view.notch.maxHeight = 900;
   expect(renderApp(view, "notch")).toContain("--notch-max-height:900px");
 });
+it("groups settings and names provider controls while keeping accent choices selectable", () => {
+  const view = state(); view.settings.values = { showProviderCodex: true, menuBarProviderCodex: true, accentTheme: "violet" };
+  const markup = renderApp(view, "settings");
+  expect(markup).toContain("Collect usage"); expect(markup).toContain("Show in menu bar and side notch");
+  expect(markup).toContain('aria-label="Collect Codex usage"'); expect(markup).toContain('aria-label="Show Codex in menu bar and side notch"');
+  expect(markup).not.toMatch(/aria-label="Show Codex in menu bar and side notch"[^>]*disabled/);
+  expect(markup).toContain("Side notch"); expect(markup).toContain("Usage details"); expect(markup).toContain("Codex limit resets in the side notch");
+  expect(markup).not.toContain('<span>Accent</span><select');
+  expect((markup.match(/type="radio" name="accentTheme"/g) ?? []).length).toBe(6);
+  expect(markup).toMatch(/type="radio" name="accentTheme"(?=[^>]*value="violet")(?=[^>]*checked)/);
+  view.settings.values.showProviderCodex = false;
+  const disabledMarkup = renderApp(view, "settings");
+  expect(disabledMarkup).toMatch(/aria-label="Show Codex in menu bar and side notch"[^>]*disabled/);
+  expect(disabledMarkup).not.toMatch(/aria-label="Collect Codex usage"[^>]*checked/);
+  expect(disabledMarkup).toMatch(/aria-label="Show Codex in menu bar and side notch"[^>]*checked/);
+});
 it("offers simple account setup and truthful Grok availability without directories in the primary flow", () => {
   const view = state(); view.snapshot.demo = false;
   view.connections = [{ provider: "codex", status: "disconnected" }, { provider: "claude", status: "connected" }, { provider: "grok", status: "unsupported" }];
@@ -35,6 +51,17 @@ it("offers simple account setup and truthful Grok availability without directori
   expect(renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }))).toContain("Cancel");
   view.snapshot.demo = true; view.connections[0].status = "disconnected";
   expect(renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }))).toContain("disabled");
+});
+it.each(["codex", "claude"] as const)("keeps %s display control available for an active additional account", provider => {
+  const view = state(), name = provider === "codex" ? "Codex" : "Claude";
+  view.settings.values = { [`showProvider${name}`]: false, [`menuBarProvider${name}`]: true };
+  view.snapshot.slots = [{ ...primary(provider), slotID: "additional-fixture", label: "Synthetic account" }];
+  const control = new RegExp(`aria-label="Show ${name} in menu bar and side notch"[^>]*`);
+  expect(renderApp(view, "settings").match(control)?.[0]).not.toContain("disabled");
+  view.snapshot.slots = [];
+  view.settings.accounts = [{ id: "absent-fixture", provider, label: "Absent account", pathLabel: "Synthetic absent directory", enabled: true }];
+  const disabled = renderApp(view, "settings").match(control)?.[0];
+  expect(disabled).toContain("disabled"); expect(disabled).toContain("checked");
 });
 const w = window("5-hour", 80, now + 4 * 3600000, 300);
 const session = (id: string, at: number, output: number, cacheRead = 0) => ({ id, projectName: id, model: "fixture", tokens: tokens({ output, cacheRead }), estimatedCostUSD: 0, startedAt: at, messageCount: 10 });

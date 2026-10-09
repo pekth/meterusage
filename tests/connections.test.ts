@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { accessSync, chmodSync, constants, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createCipheriv, createHash, pbkdf2Sync } from "node:crypto";
@@ -14,7 +15,21 @@ import { endpoints, httpTransport, type Command } from "../src/main/providers/tr
 import * as transport from "../src/main/providers/transport";
 import { parseRequest, projectSettings } from "../src/main/ipc";
 
-const roots: string[] = [];
+const { roots } = vi.hoisted(() => ({ roots: [] as string[] }));
+vi.mock("node:fs", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, accessSync: vi.fn<typeof actual.accessSync>((path, mode) => {
+    if (typeof path !== "string" || !roots.some(root => path.startsWith(root + "/"))) throw new Error("Non-fixture executable discovery");
+    return actual.accessSync(path, mode);
+  }) };
+});
+vi.mock("node:child_process", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawn: vi.fn((...args: Parameters<typeof actual.spawn>) => {
+    if (!roots.some(root => args[0].startsWith(root + "/"))) throw new Error("Non-fixture provider process");
+    return actual.spawn(...args);
+  }) };
+});
 const temp = () => { const root = mkdtempSync(join(tmpdir(), "meterusage-connection-fixture-")); roots.push(root); return root; };
 const realHTTPTransport = httpTransport;
 beforeEach(() => {
@@ -57,6 +72,7 @@ async function prefs(home = temp(), demo = false) {
 function fakeCodex(root: string, failure: boolean | "wait" = false, logoutFailure: boolean | "wait" = false) {
   const binary = join(root, "codex");
   writeFileSync(binary, `#!${process.execPath}\nconst fs = require('node:fs'), path = require('node:path'), rl = require('node:readline').createInterface({input:process.stdin});
+if (JSON.stringify(process.argv.slice(-3)) !== JSON.stringify(['app-server','--listen','stdio://'])) process.exit(64);
 const send = m => process.stdout.write(JSON.stringify(m)+'\\n');
 rl.on('line', line => { const r = JSON.parse(line);
 fs.appendFileSync(path.join(process.env.CODEX_HOME,'requests'), r.method+'\\n');
@@ -65,6 +81,7 @@ if (r.method==='config/read') send({id:r.id,result:{config:{cli_auth_credentials
 if (r.method==='account/login/start') {
 ${failure === true ? "send({id:r.id,error:{code:-1,message:'OMIT_RAW_AUTH_ERROR'}});" : (failure === "wait" ? "" : "send({method:'account/login/completed',params:{loginId:'fixture-login',success:true}});") + "send({id:r.id,result:{type:'chatgpt',loginId:'fixture-login',authUrl:'https://auth.openai.com/authorize?state=fixture'}});"}
 }
+
 if (r.method==='account/rateLimits/read') send({id:r.id,result:{rateLimits:{primary:{usedPercent:25,windowDurationMins:300}}}});
 if (r.method==='account/logout') { ${logoutFailure === "wait" ? "" : `send(${logoutFailure ? "{id:r.id,error:{code:-1}}" : "{id:r.id,result:{}}"});`} }
 });\n`);
@@ -332,14 +349,31 @@ it("blocks demo and unavailable Grok access and never falls back after a configu
 });
 it("keeps Codex helper authentication isolated and removes only its own login on disconnect", async () => {
   const root = temp(), binary = fakeCodex(root), launch = launchConfiguration([], { PATH: root, OPENAI_API_KEY: "OMIT_INHERITED_API_KEY" }, root);
+  symlinkSync(process.execPath, join(root, "node"));
+  writeFileSync(binary, readFileSync(binary, "utf8").replace(`#!${process.execPath}`, "#!/usr/bin/env node"));
   const preferences = await Preferences.load(launch, async () => "");
   const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
   expect(await connections.connect("codex", async () => {})).toBe(true);
+  const env = vi.mocked(spawn).mock.calls.at(-1)![2]!.env!;
+  expect(env.PATH!.split(":")).toContain("/opt/homebrew/bin");
+  expect(env.PATH!.split(":")).toContain(root);
+  expect(env).not.toHaveProperty("OPENAI_API_KEY");
   const id = String(preferences.values.desktopCodexConnection), profile = join(launch.data, "connections/codex", id);
   expect((await connections.quota("codex")).windows[0].usedPercent).toBe(25);
   await connections.disconnect("codex"); expect(preferences.values.desktopCodexConnection).toBe("off");
   expect(readFileSync(join(profile, "requests"), "utf8")).toContain("account/logout");
   expect(binary).toBe(join(root, "codex"));
+});
+it("discovers a synthetic installed Codex app without permitting a real installed helper to execute", async () => {
+  const root = temp(), resources = join(root, "Applications/Codex.app/Contents/Resources");
+  mkdirSync(resources, { recursive: true }); const binary = fakeCodex(resources);
+  const launch = launchConfiguration([], {}, root), preferences = await Preferences.load(launch, async () => "");
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  expect(() => accessSync("/Applications/Codex.app/Contents/Resources/codex", constants.X_OK)).toThrow("Non-fixture");
+  expect(() => spawn("/Applications/Codex.app/Contents/Resources/codex", [])).toThrow("Non-fixture");
+  expect(await connections.connect("codex", async () => {})).toBe(true);
+  expect(vi.mocked(spawn).mock.calls.at(-1)![0]).toBe(binary);
+  expect(transport.cliPath).not.toHaveBeenCalled();
 });
 it("uses the MeterUsage identity and bounded HTTP without provider CLI impersonation", async () => {
   const calls: RequestInit[] = [];

@@ -50,7 +50,7 @@ export const runCommand: Command = (binary, args, options = {}) => boundedChild(
   child.stdin.end();
 });
 export async function codexRPC(binary: string, options: CommandOptions, creditID?: string, configuration: string[] = [], operation: "read" | "logout" = "read"): Promise<string> {
-  return boundedChild(binary, [...configuration, "app-server", "--stdio"], options, (child, finish) => {
+  return boundedChild(binary, [...configuration, "app-server", "--listen", "stdio://"], options, (child, finish) => {
     const write = (v: unknown) => child.stdin.write(JSON.stringify(v) + "\n");
     const request = () => write({ jsonrpc: "2.0", id: 2, method: operation === "logout" ? "account/logout" : creditID === undefined ? "account/rateLimits/read" : "account/rateLimitResetCredit/consume", params: creditID === undefined ? {} : { creditId: creditID, idempotencyKey: randomUUID() } });
     let pending = "", initialized = false;

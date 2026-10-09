@@ -21,6 +21,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Group candidate Settings by task, show six accent color swatches, and label
+  provider collection separately from menu-bar and side-notch display.
+  Turning collection off retains the saved display preference.
+
 - Label local activity as activity on this Mac, keep folder-based accounts
   under advanced settings, and omit local CLI activity from separately
   connected account cards. Record the new opt-in authentication boundary.
@@ -41,9 +45,17 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Launch Codex account helpers with the documented stdio transport. Keep
+  interpreter search paths available without inheriting credential variables.
+- Keep provider display controls available for active additional accounts when
+  primary collection is off, and isolate connection-test helper discovery.
+
 - Bound browser-demo notch cards and strips to the viewport height. Keep
   provider rings at full width while the strip scrolls.
+- Hide scrollbar indicators throughout the candidate while retaining scrolling.
 - Ignore display and theme publications after the candidate tray is destroyed.
+- Retain each window's document ID before destruction so closing a candidate
+  window does not access destroyed web contents or remove its replacement.
 
 - Reject malformed connection provider values before consent and target the
   bundled Desktop Keychain helper explicitly at arm64/macOS 13.

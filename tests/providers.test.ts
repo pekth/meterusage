@@ -158,7 +158,7 @@ describe("activity and account boundaries", () => {
 describe("bounded transports", () => {
   it("waits for initialize, redirects one account and tears down the RPC child", async () => {
     const root = temp(), binary = join(root, "fake-codex");
-    writeFileSync(binary, `#!/usr/bin/env node\nconst rl=require('node:readline').createInterface({input:process.stdin});let ready=false;rl.on('line',line=>{const r=JSON.parse(line);if(r.method==='initialize'){setTimeout(()=>{ready=true;process.stdout.write(JSON.stringify({id:1,result:{installationId:'PRIVATE'}})+'\\n')},25)}else if(r.method==='account/rateLimits/read'){if(!ready)process.exit(2);process.stdout.write(JSON.stringify({id:2,result:{home:process.env.CODEX_HOME}})+'\\n')}});`, { mode: 0o700 });
+    writeFileSync(binary, `#!/usr/bin/env node\nif(JSON.stringify(process.argv.slice(2))!==JSON.stringify(['app-server','--listen','stdio://']))process.exit(3);const rl=require('node:readline').createInterface({input:process.stdin});let ready=false;rl.on('line',line=>{const r=JSON.parse(line);if(r.method==='initialize'){setTimeout(()=>{ready=true;process.stdout.write(JSON.stringify({id:1,result:{installationId:'PRIVATE'}})+'\\n')},25)}else if(r.method==='account/rateLimits/read'){if(!ready)process.exit(2);process.stdout.write(JSON.stringify({id:2,result:{home:process.env.CODEX_HOME}})+'\\n')}});`, { mode: 0o700 });
     const response = await codexRPC(binary, { env: { ...process.env, CODEX_HOME: "synthetic-account" }, timeoutMs: 1000 });
     expect(JSON.parse(response).result.home).toBe("synthetic-account"); expect(response).not.toContain("PRIVATE");
   });

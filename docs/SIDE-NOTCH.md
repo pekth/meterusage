@@ -90,7 +90,8 @@ explicit "Show details" action rather than a focusable control.
 The Electron candidate bounds the card and strip independently. The native
 window supplies the display work-area height; the browser demo uses the viewport
 height when that value is absent. Tall content scrolls inside each column. The
-strip hides its scrollbar to retain the full 44-pixel ring width. The shared-card
+candidate hides scrollbar indicators throughout its windows while retaining
+scrolling. The strip retains the full 44-pixel ring width. The shared-card
 capture keeps its full height and does not use the notch's scrolling bounds.
 
 Automated tests cover geometry and in-process drag events, but cannot see the

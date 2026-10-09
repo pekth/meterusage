@@ -45,7 +45,10 @@ Claude chat tokens and Grok consumer history are outside this implementation.
 
 Codex uses a generated MeterUsage-owned helper profile. Before login or polling,
 the candidate checks the effective helper configuration for `keyring` storage.
-It refuses another mode, including plaintext-file fallback. The browser URL
+It refuses another mode, including plaintext-file fallback. Login, allowance
+reads and own-profile logout use the helper's `--listen stdio://` transport.
+The helper environment keeps interpreter search paths without forwarding
+inherited credential variables. The browser URL
 must use HTTPS on an approved OpenAI host. Disconnect invokes logout only for
 that generated profile. Cancellation attempts the same cleanup; a cleanup
 failure is reported.
