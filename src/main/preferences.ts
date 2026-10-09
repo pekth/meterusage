@@ -25,6 +25,10 @@ export const initialPreferences: Record<string, PreferenceValue> = {
   desktopCodexConnection: "", desktopCodexCleanup: "", desktopClaudeIdentity: "",
   ...Object.fromEntries(providers.flatMap(p => [[providerPreference(p), ["codex", "openCodeGo", "openRouter"].includes(p)], [trayPreference(p), true]])),
 };
+const codexTestPreferences: Record<string, PreferenceValue> = {
+  launchAtLogin: false, updateCheckEnabled: false, desktopClaudeIdentity: "off",
+  ...Object.fromEntries(providers.filter(p => p !== "codex").map(p => [providerPreference(p), false])),
+};
 export function validAccounts(raw: unknown): raw is ManagedAccount[] {
   return Array.isArray(raw) && raw.every(a => a && typeof a === "object" && typeof a.id === "string" && /^[A-Za-z0-9-]{1,80}$/.test(a.id) && ["codex", "claude"].includes(a.provider) && typeof a.label === "string" && a.label.length <= 100 && !/[\r\n]/.test(a.label) && typeof a.path === "string" && a.path.length <= 4096 && !/[\r\n\0]/.test(a.path) && typeof a.enabled === "boolean") && new Set(raw.map(a => a.id)).size === raw.length;
 }
@@ -47,10 +51,11 @@ export class Preferences {
   private constructor(readonly launch: Launch, readonly command: Command, readonly domain: string) {}
   static async load(launch: Launch, command: Command = runCommand, domain = defaultsDomain): Promise<Preferences> {
     const prefs = new Preferences(launch, command, domain);
-    if (launch.demo) {
+    if (launch.codexTest) prefs.values.desktopCodexConnection = "off";
+    if (launch.demo || launch.codexTest) {
       const path = join(launch.data, "preferences.json");
       if (existsSync(path)) { try { const raw = JSON.parse(readFileSync(path, "utf8")); for (const [key, v] of Object.entries(raw)) if (validate(key, v)) prefs.values[key] = v; } catch { /* Keep known defaults for a damaged candidate file. */ } }
-      else for (const p of providers) prefs.values[providerPreference(p)] = true;
+      else if (launch.demo) for (const p of providers) prefs.values[providerPreference(p)] = true;
     } else {
       await Promise.all(Object.keys(kinds).map(async key => {
         try {
@@ -66,11 +71,12 @@ export class Preferences {
         } catch { /* An absent or mismatched key retains its registered default. */ }
       }));
     }
+    if (launch.codexTest) Object.assign(prefs.values, codexTestPreferences);
     prefs.values.refreshIntervalSeconds = prefs.refreshInterval; return prefs;
   }
   get refreshInterval() { const stored = this.values.refreshIntervalSeconds as number; return Math.max(30, stored > 0 ? stored : 60); }
   get accounts() { return this.values.managedAccounts as ManagedAccount[]; }
-  enabled(p: Provider) { return this.values[providerPreference(p)] === true; }
+  enabled(p: Provider) { return (!this.launch.codexTest || p === "codex") && this.values[providerPreference(p)] === true; }
   private enqueue(write: () => Promise<void>) {
     const result = this.writes.then(write); this.writes = result.catch(() => {}); return result;
   }
@@ -80,8 +86,9 @@ export class Preferences {
   }
   private async write(key: string, value: unknown) {
     if (!validate(key, value)) throw new Error("Invalid preference");
+    if (this.launch.codexTest && key in codexTestPreferences && value !== codexTestPreferences[key]) throw new Error("Preference unavailable in Codex test mode");
     if (key === "refreshIntervalSeconds") value = Math.max(30, (value as number) > 0 ? value as number : 60);
-    if (this.launch.demo) {
+    if (this.launch.demo || this.launch.codexTest) {
       const next = { ...this.values, [key]: value as PreferenceValue }; atomicJSON(join(this.launch.data, "preferences.json"), next);
     } else {
       const kind = kinds[key]; const typed = kind === "data" ? ["-data", Buffer.from(JSON.stringify(value)).toString("hex")] : kind === "date" ? ["-date", new Date(value as number).toISOString()] : kind === "boolean" ? ["-bool", value ? "true" : "false"] : kind === "number" ? ["-float", String(value)] : ["-string", value as string];

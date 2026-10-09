@@ -8,6 +8,12 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Add an isolated Codex cloud test profile for the existing candidate UI. It
+  starts disconnected, reads account allowance after browser sign-in, and
+  excludes demo data, local activity and other providers. Candidate profiles
+  cannot check or install updates, change login items or send notifications.
+  Profile validation rejects nested symlinks before app or helper writes.
+
 - Add candidate account setup for Codex browser sign-in and opt-in Claude
   Desktop allowance, with automatic refresh, account isolation and disconnect.
   Grok consumer connection remains unavailable. Native and provider acceptance

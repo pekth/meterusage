@@ -20,7 +20,7 @@ import { trayTooltip } from "../domain/overview";
 const args = process.argv.slice(1), launch = launchConfiguration(args);
 const desktopHelper = app.isPackaged ? join(process.resourcesPath, "desktop-keychain") : join(__dirname, "../../build/desktop-keychain");
 // Isolation is selected before Electron creates a session or any source reads.
-if (launch.demo) { app.setPath("userData", join(launch.data, "electron")); app.setPath("sessionData", join(launch.data, "electron")); }
+if (launch.profile) { app.setPath("userData", join(launch.data, "electron")); app.setPath("sessionData", join(launch.data, "electron")); }
 app.setName("MeterUsage");
 if (args.includes("json") || args.includes("--json")) {
   runJSON(args, process.env, desktopHelper).then(json => { process.stdout.write(json + "\n"); app.exit(0); }, () => { process.stderr.write("meterusage: could not read report\n"); app.exit(1); });
@@ -32,7 +32,7 @@ if (args.includes("json") || args.includes("--json")) {
 async function start() {
   mkdirSync(launch.data, { recursive: true });
   app.dock?.hide();
-  if (!app.requestSingleInstanceLock({ candidate: launch.demo })) { app.quit(); return; }
+  if (!app.requestSingleInstanceLock({ candidate: launch.candidate || launch.demo })) { app.quit(); return; }
   const prefs = await Preferences.load(launch);
   const documents = new Map<number, string>(), windows = new Map<Surface, BrowserWindow>();
   const markers = { codex: prefs.values.desktopCodexConnection, claude: prefs.values.desktopClaudeIdentity };
@@ -46,7 +46,7 @@ async function start() {
   });
   const sources = () => compose(launch, prefs, { connections });
   const coordinator = new Coordinator(launch, prefs, sources(), Date.now, alert => {
-    if (!launch.demo && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
+    if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
   }, sources);
   // Do not restore a legacy archive under a newly connected account.
   for (const p of ["codex", "claude"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
@@ -63,7 +63,7 @@ async function start() {
   let shareState: ViewState | undefined, shareHeight = 0, shareReady: ((image: Electron.NativeImage) => void) | undefined, shareFailed: ((error: Error) => void) | undefined;
   const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ connections: connections.state, snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
   const updater = new Updater(prefs, app.getVersion(), publish, undefined, release => {
-    if (!launch.demo && Notification.isSupported()) new Notification({ title: "MeterUsage update available", body: `MeterUsage ${release.version} is ready to install.`, silent: true }).show();
+    if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: "MeterUsage update available", body: `MeterUsage ${release.version} is ready to install.`, silent: true }).show();
   });
   const folding = new NotchFold(() => prefs.values.sideNotchPanelPinned === true || sharing || confirmingReset || notch.dragging, () => { notch.expanded = false; placeNotch(); publish(); });
   function publish() {
@@ -105,7 +105,7 @@ async function start() {
     w.show(); w.focus(); void coordinator.refreshIfStale();
   }
   function showSettings() {
-    if (!launch.demo && app.isPackaged) prefs.values.launchAtLogin = app.getLoginItemSettings().openAtLogin;
+    if (!launch.demo && !launch.candidate && app.isPackaged) prefs.values.launchAtLogin = app.getLoginItemSettings().openAtLogin;
     windows.get("flyout")?.hide(); const w = create("settings"); publish(); w.show(); w.focus();
   }
   function restoreAnchor() {
@@ -184,7 +184,7 @@ async function start() {
       case "copyJSON": clipboard.writeText(coordinator.json()); break;
       case "setPreference":
         if (r.key === "launchAtLogin") {
-          if (launch.demo || !app.isPackaged) throw new Error("Login items require an installed app");
+          if (launch.demo || launch.candidate || !app.isPackaged) throw new Error("Login items require an installed app");
           app.setLoginItemSettings({ openAtLogin: r.value === true });
           if (app.getLoginItemSettings().openAtLogin !== r.value) throw new Error("Could not change login item");
         }
@@ -274,7 +274,7 @@ async function start() {
       }
       case "updateDismiss": await updater.dismiss(); break;
       case "updateInstall": {
-        if (launch.demo || !app.isPackaged || !updater.visible) throw new Error("Update installation unavailable");
+        if (launch.demo || launch.candidate || !app.isPackaged || !updater.visible) throw new Error("Update installation unavailable");
         const confirmedRelease = structuredClone(updater.visible);
         const accepted = await dialog.showMessageBox(source, { type: "question", title: "Install MeterUsage update?", message: `Install MeterUsage ${confirmedRelease.version}?`, detail: "The app will quit, verify the downloaded bundle, replace this app and relaunch.", buttons: ["Cancel", "Install update"], defaultId: 0, cancelId: 0 });
         if (accepted.response === 1) { await updater.install(resolve(app.getPath("exe"), "../../.."), confirmedRelease); app.quit(); }

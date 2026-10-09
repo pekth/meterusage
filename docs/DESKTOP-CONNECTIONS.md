@@ -87,3 +87,30 @@ Demo mode blocks live account connections, Keychain access and helper login.
 Synthetic tests cover protocol, consent, token selection, account switching,
 disconnect, numeric validation, stale source results and IPC boundaries.
 See [privacy](PRIVACY.md) and [ADR 0011](adr/0011-desktop-account-connections.md).
+
+## Isolated live Codex validation
+
+The candidate accepts `--codex-test-profile` with an absolute test directory.
+This selects the existing UI and connection flow with live Codex allowance.
+It cannot be combined with `--demo` or `--candidate-profile`. The directory
+must be empty on first use and owned by this test mode on later launches.
+Installed-app storage and symlink paths are refused, including nested paths
+inside an existing profile. Startup checks file metadata before starting
+Electron or the helper, with a limit of 32,768 entries and 24 directory levels.
+
+Preferences, history, connection profiles and Electron state stay in that
+directory. The real OS home remains available for helper discovery and macOS
+Keychain. Choose **Sign in to Codex** in the app and finish browser sign-in.
+The app starts disconnected, so an unavailable reading before sign-in is
+expected. Successful connections remain available across normal quit and
+relaunch; **Disconnect** signs out only that MeterUsage connection.
+
+This mode reads only Codex account allowance. It has no local activity, status
+feed, reset redemption or other-provider collection. Update checks, update
+installation, login-item changes and notifications are disabled. It does not
+change the primary setup for users or replace an installed app.
+
+Synthetic isolation tests do not prove native sign-in or visible cloud usage.
+Live acceptance requires the packaged app, human browser sign-in, fresh
+allowance in its actual UI and comparison with the same provider account.
+See [ADR 0012](adr/0012-codex-live-test-profile.md).

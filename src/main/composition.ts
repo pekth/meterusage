@@ -44,6 +44,7 @@ function openCodeKey(launch: Launch): string | undefined {
 }
 export function compose(launch: Launch, prefs: Preferences, options: { command?: Command; http?: HTTP; now?: () => number; connections?: DesktopConnections } = {}): Source[] {
   const now = options.now ?? Date.now;
+  if (launch.codexTest) return [{ slot: primary("codex"), accountBound: true, quota: signal => options.connections ? options.connections.quota("codex", signal) : Promise.reject(new Unavailable("notSignedIn", "codex")) }];
   if (launch.demo) return demoSources(now, prefs.accounts);
   const command = options.command ?? runCommand, http = options.http ?? httpTransport(), env = cliEnvironment(launch.home, launch.env);
   const runtime = new AntigravityRuntime(runtimeCandidates(env), command, env);

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { accessSync, chmodSync, constants, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { accessSync, chmodSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -346,6 +346,46 @@ it("blocks demo and unavailable Grok access and never falls back after a configu
   const source = compose(live.launch, live.preferences, { connections: real }).find(s => s.slot.provider === "codex")!;
   expect(source.activity).toBeUndefined(); expect(source.consumeReset).toBeUndefined();
   await expect(source.quota!()).rejects.toThrow("Not signed in");
+});
+it("denies non-Codex connections and quota in a live test profile even with persisted identity", async () => {
+  const processes = vi.mocked(spawn).mock.calls.length;
+  const home = realpathSync(temp()), profile = realpathSync(temp()), launch = launchConfiguration(["--codex-test-profile", profile], {}, home);
+  const command = vi.fn<Command>(async () => { throw new Error("Forbidden helper/defaults"); });
+  const http = vi.fn(async () => { throw new Error("Forbidden HTTP"); });
+  const preferences = await Preferences.load(launch, command);
+  preferences.values.desktopClaudeIdentity = "a".repeat(64);
+  const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http);
+  const consent = vi.fn(async () => true), open = vi.fn(async () => {});
+  expect(connections.enabled("claude")).toBe(false);
+  expect(connections.state).toEqual([{ provider: "codex", status: "disconnected" }, { provider: "claude", status: "unsupported" }, { provider: "grok", status: "unsupported" }]);
+  for (const provider of ["claude", "grok"] as const) {
+    await expect(connections.connect(provider, open, consent)).rejects.toThrow("unavailable");
+    await expect(connections.quota(provider)).rejects.toMatchObject({ code: "notSignedIn" });
+    await expect(connections.disconnect(provider)).rejects.toThrow("unavailable");
+  }
+  await expect(connections.quota("codex")).rejects.toMatchObject({ code: "notSignedIn" });
+  expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled(); expect(consent).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled(); expect(spawn).toHaveBeenCalledTimes(processes);
+});
+it("connects, reloads and disconnects Codex through the isolated JSON test profile and OS home helper", async () => {
+  const home = realpathSync(temp()), profile = realpathSync(temp()), resources = join(home, "Applications/Codex.app/Contents/Resources");
+  mkdirSync(resources, { recursive: true }); const binary = fakeCodex(resources);
+  const launch = launchConfiguration(["--codex-test-profile", profile], { OPENAI_API_KEY: "OMIT_INHERITED_API_KEY", CODEX_HOME: "/foreign/codex", HOME: "/foreign/home" }, home);
+  const command = vi.fn<Command>(async () => { throw new Error("Forbidden installed defaults"); });
+  const preferences = await Preferences.load(launch, command);
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {}, command);
+  expect(await connections.connect("codex", async () => {})).toBe(true);
+  const options = vi.mocked(spawn).mock.calls.at(-1)![2]!;
+  expect(vi.mocked(spawn).mock.calls.at(-1)![0]).toBe(binary);
+  expect(options.env).toMatchObject({ HOME: home, CODEX_HOME: join(profile, "connections/codex", String(preferences.values.desktopCodexConnection)) });
+  expect(options.env).not.toHaveProperty("OPENAI_API_KEY"); expect(options.env!.CODEX_HOME).not.toBe("/foreign/codex");
+  const restored = await Preferences.load(launchConfiguration(["--codex-test-profile", profile], {}, home), command);
+  const restart = new DesktopConnections(launch, restored, "/not-a-helper", () => {}, command);
+  expect(restart.enabled("codex")).toBe(true);
+  expect((await compose(launch, restored, { connections: restart })[0].quota!()).windows[0].usedPercent).toBe(25);
+  await restart.disconnect("codex");
+  expect((await Preferences.load(launch, command)).values.desktopCodexConnection).toBe("off");
+  await expect(compose(launch, restored, { connections: restart })[0].quota!()).rejects.toMatchObject({ code: "notSignedIn" });
+  expect(command).not.toHaveBeenCalled(); expect(transport.cliPath).not.toHaveBeenCalled(); expect(existsSync(join(home, "Library"))).toBe(false);
 });
 it("keeps Codex helper authentication isolated and removes only its own login on disconnect", async () => {
   const root = temp(), binary = fakeCodex(root), launch = launchConfiguration([], { PATH: root, OPENAI_API_KEY: "OMIT_INHERITED_API_KEY" }, root);

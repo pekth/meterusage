@@ -85,9 +85,9 @@ export class Updater {
   private checkController?: AbortController;
   private installController?: AbortController;
   constructor(readonly prefs: Preferences, readonly currentVersion: string, readonly changed: () => void, readonly download = fetchUpdate, readonly announce: (release: Release) => void = () => {}) {}
-  get visible() { return this.prefs.values.updateCheckEnabled === true && this.available?.version !== this.prefs.values.updateDismissedVersion ? this.available : undefined; }
+  get visible() { return !this.prefs.launch.demo && !this.prefs.launch.candidate && this.prefs.values.updateCheckEnabled === true && this.available?.version !== this.prefs.values.updateDismissedVersion ? this.available : undefined; }
   checkIfDue(now = Date.now()) {
-    if (this.prefs.launch.demo || this.prefs.values.updateCheckEnabled !== true || this.check || now - Number(this.prefs.values.updateLastCheckDate ?? 0) < 3600000) return;
+    if (this.prefs.launch.demo || this.prefs.launch.candidate || this.prefs.values.updateCheckEnabled !== true || this.check || now - Number(this.prefs.values.updateLastCheckDate ?? 0) < 3600000) return;
     const generation = this.generation, controller = new AbortController(); this.checkController = controller;
     const pending: Promise<void> = (async () => {
       await this.prefs.set("updateLastCheckDate", now);
@@ -103,7 +103,7 @@ export class Updater {
   reset() { this.generation++; this.checkController?.abort(); this.installController?.abort(); this.checkController = undefined; this.check = undefined; this.available = undefined; this.changed(); }
   async dismiss() { if (this.available) await this.prefs.set("updateDismissedVersion", this.available.version); this.changed(); }
   async install(current: string, release: Release | undefined, command: Command = runCommand) {
-    if (this.prefs.launch.demo || this.prefs.values.updateCheckEnabled !== true || basename(current) !== "MeterUsage.app" || !release || ["downloading", "installing"].includes(this.installState)) throw new Error("Update installation unavailable");
+    if (this.prefs.launch.demo || this.prefs.launch.candidate || this.prefs.values.updateCheckEnabled !== true || basename(current) !== "MeterUsage.app" || !release || ["downloading", "installing"].includes(this.installState)) throw new Error("Update installation unavailable");
     const generation = this.generation, controller = new AbortController(); this.installController = controller;
     const guard = () => { controller.signal.throwIfAborted(); if (generation !== this.generation || this.prefs.values.updateCheckEnabled !== true) throw new Error("Update cancelled"); };
     this.installState = "downloading"; this.changed();

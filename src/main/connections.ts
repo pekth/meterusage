@@ -65,9 +65,9 @@ export class DesktopConnections {
   private cleanupController = new AbortController();
   constructor(readonly launch: Launch, readonly prefs: Preferences, readonly helper: string, readonly changed: () => void, readonly command: Command = runCommand, readonly http: HTTP = httpTransport(), readonly now = Date.now) {}
   get state(): ConnectionState[] {
-    return (["codex", "claude", "grok"] as const).map(provider => ({ provider, status: this.pending.has(provider) ? "connecting" : provider === "grok" ? "unsupported" : this.enabled(provider) ? "connected" : this.errors.has(provider) ? "failed" : "disconnected" }));
+    return (["codex", "claude", "grok"] as const).map(provider => ({ provider, status: provider === "grok" || this.launch.codexTest && provider !== "codex" ? "unsupported" : this.pending.has(provider) ? "connecting" : this.enabled(provider) ? "connected" : this.errors.has(provider) ? "failed" : "disconnected" }));
   }
-  enabled(provider: "codex" | "claude") { const value = this.prefs.values[provider === "codex" ? "desktopCodexConnection" : "desktopClaudeIdentity"]; return !this.stopped && !this.pending.has(provider) && !(provider === "codex" && this.prefs.values.desktopCodexCleanup !== "") && typeof value === "string" && value !== "" && value !== "off"; }
+  enabled(provider: "codex" | "claude") { const value = this.prefs.values[provider === "codex" ? "desktopCodexConnection" : "desktopClaudeIdentity"]; return (!this.launch.codexTest || provider === "codex") && !this.stopped && !this.pending.has(provider) && !(provider === "codex" && this.prefs.values.desktopCodexCleanup !== "") && typeof value === "string" && value !== "" && value !== "off"; }
   configured(provider: "codex" | "claude") { return this.prefs.values[provider === "codex" ? "desktopCodexConnection" : "desktopClaudeIdentity"] !== ""; }
   private binary() {
     for (const root of ["/Applications", join(this.launch.home, "Applications")]) {
@@ -87,8 +87,8 @@ export class DesktopConnections {
       return await readDesktopCredential(this.launch.home, password, this.now());
     } catch { throw new Unavailable("notSignedIn", "Claude Desktop"); }
   }
-  async quota(provider: "codex" | "claude", signal?: AbortSignal) {
-    if (this.launch.demo || !this.enabled(provider)) throw new Unavailable("notSignedIn", provider);
+  async quota(provider: ConnectionProvider, signal?: AbortSignal) {
+    if (this.launch.demo || provider === "grok" || !this.enabled(provider)) throw new Unavailable("notSignedIn", provider);
     if (provider === "codex") return parseCodex(await codexRPC(this.binary(), { env: this.env(String(this.prefs.values.desktopCodexConnection)), signal }, undefined, configuration), this.now());
     const credential = await this.claude(false, signal);
     if (credential.identity !== this.prefs.values.desktopClaudeIdentity) throw new Unavailable("notSignedIn", "Claude Desktop");
@@ -104,6 +104,7 @@ export class DesktopConnections {
   async connect(provider: ConnectionProvider, open: (url: string) => Promise<void>, consent: () => Promise<boolean> = async () => true) {
     if (this.stopped) throw new Error("Connection unavailable");
     if (this.launch.demo) throw new Error("Connections are disabled in demo mode");
+    if (this.launch.codexTest && provider !== "codex") throw new Error("Connection unavailable in Codex test mode");
     if (provider === "grok") throw new Error("Automatic Grok connection is unavailable");
     if (this.pending.has(provider) || this.enabled(provider)) throw new Error("Connection already active");
     if (provider === "codex" && this.prefs.values.desktopCodexCleanup !== "") {
@@ -178,6 +179,7 @@ export class DesktopConnections {
   async disconnect(provider: ConnectionProvider) {
     if (this.stopped) throw new Error("Connection unavailable");
     if (this.launch.demo) throw new Error("Connections are disabled in demo mode");
+    if (this.launch.codexTest && provider !== "codex") throw new Error("Connection unavailable in Codex test mode");
     if (provider === "grok" || this.pending.has(provider)) throw new Error("Connection unavailable");
     const id = String(this.prefs.values.desktopCodexCleanup || this.prefs.values.desktopCodexConnection);
     const { finish } = this.begin(provider);

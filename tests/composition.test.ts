@@ -7,10 +7,104 @@ import { Preferences, defaultsDomain } from "../src/main/preferences";
 import { compose, accountHome } from "../src/main/composition";
 import { jsonReport, runJSON } from "../src/main/cli";
 import { endpoints, type Command } from "../src/main/providers/transport";
+import { providers, quota, Unavailable } from "../src/domain/models";
+import { DesktopConnections } from "../src/main/connections";
 const roots: string[] = []; const temp = () => { const root = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(root); return root; };
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 const now = Date.parse("2026-10-06T12:00:00Z");
 const liveFixture = (home: string): Launch => ({ home, data: join(home, "app-data"), env: {}, demo: false, candidate: false });
+describe("Codex live test profile", () => {
+  it("isolates data while retaining OS home and only helper environment", () => {
+    const root = temp(), home = temp();
+    const launch = launchConfiguration(["--codex-test-profile", root], { HOME: "/foreign/home", CODEX_HOME: "/foreign/codex", OPENAI_API_KEY: "synthetic-secret", METERUSAGE_DEMO: "0", PATH: "/usr/bin:/bin", TMPDIR: "/tmp" }, home);
+    expect(launch).toMatchObject({ codexTest: true, demo: false, candidate: true, home, data: root, profile: root });
+    expect(launch.env).toEqual({ PATH: "/usr/bin:/bin", TMPDIR: "/tmp" });
+    expect(launchConfiguration(["--codex-test-profile", root], {}, home).profile).toBe(root);
+    expect(() => launchConfiguration(["--demo", "--candidate-profile", root], {}, home)).toThrow("empty");
+  });
+  it("rejects conflicting flags and invalid or foreign profile paths before mutation", () => {
+    const home = temp(), root = temp();
+    for (const [args, env] of [
+      [["--demo", "--codex-test-profile", root], {}],
+      [["--codex-test-profile", root], { METERUSAGE_DEMO: "1" }],
+      [["--candidate-profile", root, "--codex-test-profile", root], {}],
+    ] as [string[], NodeJS.ProcessEnv][]) expect(() => launchConfiguration(args, env, home)).toThrow("conflict");
+    expect(existsSync(join(root, ".meterusage-codex-test"))).toBe(false);
+    for (const path of [undefined, "relative"]) expect(() => launchConfiguration(["--codex-test-profile", ...(path ? [path] : [])], {}, home)).toThrow("absolute");
+    for (const path of ["/", home, join(home, "Library/Application Support/MeterUsage"), join(home, "Library/Application Support/MeterUsage/nested")]) expect(() => launchConfiguration(["--codex-test-profile", path], {}, home)).toThrow("installed");
+    expect(existsSync(join(home, "Library"))).toBe(false);
+    writeFileSync(join(root, "foreign.txt"), "preserved");
+    expect(() => launchConfiguration(["--codex-test-profile", root], {}, home)).toThrow("empty");
+    expect(readFileSync(join(root, "foreign.txt"), "utf8")).toBe("preserved");
+    const alias = join(temp(), "alias"); symlinkSync(root, alias);
+    for (const path of [alias, join(alias, "nested")]) expect(() => launchConfiguration(["--codex-test-profile", path], {}, home)).toThrow("symlink");
+    const demo = temp(); launchConfiguration(["--demo", "--candidate-profile", demo], {}, home);
+    expect(() => launchConfiguration(["--codex-test-profile", demo], {}, home)).toThrow("empty");
+  });
+  it.each(["electron", "electron/Cache", "connections", "connections/codex/account", "preferences.json"])("rejects a nested profile symlink at %s without touching its target", path => {
+    const root = temp(), home = temp(), foreign = temp();
+    launchConfiguration(["--codex-test-profile", root], {}, home);
+    writeFileSync(join(foreign, "sentinel"), "preserved");
+    mkdirSync(join(root, path, ".."), { recursive: true });
+    symlinkSync(foreign, join(root, path));
+    expect(() => launchConfiguration(["--codex-test-profile", root], {}, home)).toThrow("symlink");
+    expect(readFileSync(join(foreign, "sentinel"), "utf8")).toBe("preserved");
+  });
+  it("rejects dangling nested links and accepts regular populated profile directories", () => {
+    const root = temp(), home = temp();
+    launchConfiguration(["--codex-test-profile", root], {}, home);
+    mkdirSync(join(root, "electron", "Cache"), { recursive: true });
+    writeFileSync(join(root, "electron", "Cache", "entry"), "synthetic");
+    expect(launchConfiguration(["--codex-test-profile", root], {}, home).profile).toBe(root);
+    symlinkSync(join(temp(), "absent"), join(root, "connections"));
+    expect(() => launchConfiguration(["--codex-test-profile", root], {}, home)).toThrow("symlink");
+  });
+  it("roundtrips JSON preferences without defaults and keeps collection restricted after reload", async () => {
+    const root = temp(), home = temp(), launch = launchConfiguration(["--codex-test-profile", root], {}, home);
+    const command = vi.fn<Command>(async () => { throw new Error("Installed defaults must not be used"); });
+    const prefs = await Preferences.load(launch, command);
+    expect(providers.filter(p => prefs.enabled(p))).toEqual(["codex"]);
+    expect(prefs.values).toMatchObject({ desktopCodexConnection: "off", desktopCodexCleanup: "", desktopClaudeIdentity: "off", launchAtLogin: false, updateCheckEnabled: false });
+    const id = "11111111-1111-4111-8111-111111111111";
+    await prefs.set("appearanceTheme", "dark"); await prefs.set("desktopCodexConnection", id);
+    const restored = await Preferences.load(launchConfiguration(["--codex-test-profile", root], {}, home), command);
+    expect(restored.values).toMatchObject({ appearanceTheme: "dark", desktopCodexConnection: id });
+    expect(JSON.parse(readFileSync(join(root, "preferences.json"), "utf8"))).toMatchObject({ appearanceTheme: "dark", desktopCodexConnection: id });
+    for (const key of ["showProviderClaude", "showProviderGrok", "showProviderOpenRouter", "showProviderOpenCodeGo", "launchAtLogin", "updateCheckEnabled"]) await expect(restored.set(key, true)).rejects.toThrow("Codex test");
+    writeFileSync(join(root, "preferences.json"), JSON.stringify({ ...restored.values, ...Object.fromEntries(providers.map(p => [`showProvider${p[0].toUpperCase() + p.slice(1)}`, true])), launchAtLogin: true, updateCheckEnabled: true, desktopClaudeIdentity: "a".repeat(64) }));
+    const restricted = await Preferences.load(launch, command);
+    expect(providers.filter(p => restricted.enabled(p))).toEqual(["codex"]);
+    expect(restricted.values).toMatchObject({ launchAtLogin: false, updateCheckEnabled: false, desktopClaudeIdentity: "off", desktopCodexConnection: id });
+    restricted.values.showProviderClaude = true; expect(restricted.enabled("claude")).toBe(false);
+    await restricted.set("showProviderCodex", false); expect(restricted.enabled("codex")).toBe(false);
+    expect(command).not.toHaveBeenCalled(); expect(existsSync(join(home, "Library"))).toBe(false);
+  });
+  it("composes only connected Codex quota and never falls back to local, demo or other providers", async () => {
+    const launch = launchConfiguration(["--codex-test-profile", temp()], {}, temp());
+    const command = vi.fn<Command>(async () => { throw new Error("Forbidden command"); });
+    const http = vi.fn(async () => { throw new Error("Forbidden HTTP"); });
+    const prefs = await Preferences.load(launch, command);
+    prefs.values.managedAccounts = [{ id: "foreign-account", provider: "claude", label: "Foreign", path: temp(), enabled: true }];
+    for (const p of providers) prefs.values[`showProvider${p[0].toUpperCase() + p.slice(1)}`] = true;
+    const withoutConnection = compose(launch, prefs, { command, http });
+    expect(withoutConnection).toHaveLength(1);
+    expect(withoutConnection[0].slot).toEqual({ provider: "codex", slotID: "", label: "" });
+    expect(Object.keys(withoutConnection[0]).sort()).toEqual(["accountBound", "quota", "slot"]);
+    expect(withoutConnection[0].accountBound).toBe(true);
+    await expect(withoutConnection[0].quota!()).rejects.toMatchObject({ code: "notSignedIn" });
+    const connections = new DesktopConnections(launch, prefs, "/synthetic/helper", () => {}, command, http);
+    const expected = quota("codex", [{ label: "5-hour", usedPercent: 37 }], now);
+    const read = vi.spyOn(connections, "quota").mockResolvedValue(expected);
+    const [source] = compose(launch, prefs, { connections, command, http });
+    const signal = new AbortController().signal;
+    expect(await source.quota!(signal)).toEqual(expected); expect(read).toHaveBeenCalledExactlyOnceWith("codex", signal);
+    read.mockRejectedValue(new Unavailable("notSignedIn", "codex"));
+    await expect(source.quota!()).rejects.toMatchObject({ code: "notSignedIn" });
+    read.mockRejectedValue(new Unavailable("failed", "codex"));
+    await expect(source.quota!()).rejects.toMatchObject({ code: "failed" });
+    expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled();
+  });
+});
 describe("candidate isolation before composition", () => {
   it("rejects incomplete, relative, installed and nonempty profiles", () => {
     const root = temp();

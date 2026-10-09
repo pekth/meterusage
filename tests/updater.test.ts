@@ -23,6 +23,18 @@ describe("verified explicit updates", () => {
     let calls = 0; const updater = new Updater(prefs, "0.2.41", () => {}, async () => { calls++; return bytes; });
     await updater.checkIfDue(); updater.available = parseRelease(payload()); await expect(updater.install("/tmp/MeterUsage.app", updater.visible)).rejects.toThrow("unavailable"); expect(calls).toBe(0);
   });
+  it("blocks updates from a live candidate even when its saved setting enables them", async () => {
+    const root = temp();
+    const prefs = await Preferences.load({ demo: true, candidate: true, home: root, data: root, env: {} });
+    prefs.launch.demo = false;
+    prefs.values.updateCheckEnabled = true;
+    let calls = 0;
+    const updater = new Updater(prefs, "0.2.41", () => {}, async () => { calls++; return Buffer.from(payload()); });
+    await updater.checkIfDue();
+    const release = parseRelease(payload()); updater.available = release;
+    await expect(updater.install("/tmp/MeterUsage.app", release)).rejects.toThrow("unavailable");
+    expect(updater.visible).toBeUndefined(); expect(calls).toBe(0);
+  });
   it("checks hourly, announces once and persists dismissal separately from usage failures", async () => {
     const root = temp(), prefs = await Preferences.load({ demo: false, candidate: false, home: root, data: root, env: {} }, async (_binary, args) => { if (args[0] !== "write") throw new Error("absent fixture defaults"); return ""; }, "fixture.meterusage");
     let calls = 0, announcements = 0; const updater = new Updater(prefs, "0.2.41", () => {}, async url => { expect(url).toBe(releaseEndpoint); calls++; return Buffer.from(payload()); }, () => announcements++);

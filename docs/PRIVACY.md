@@ -182,11 +182,18 @@ types. The Electron adapter reads/writes only known keys, without a new storage
 migration. Native Swift-to-Electron-to-Swift round-trip proof is still required.
 
 Demo selects synthetic sources before composition and isolates preferences,
-history, caches and Electron state. An explicit candidate profile requires
+history, caches and Electron state. The `--candidate-profile` option requires
 `--demo` and an empty test directory on first use. Demo blocks live provider/key
 discovery, update installation and login-item changes. It does write its own
 isolated files. Candidate QA must leave the installed app and provider data
 untouched.
+
+The separate `--codex-test-profile` mode uses the real UI and opt-in Codex
+connection with isolated JSON preferences, app data and Electron state. It
+retains the OS home for Keychain and helper discovery. It excludes all other
+provider sources, local activity, status feeds and reset redemption, and blocks
+updates, login-item changes and notifications. Its Codex credential boundary
+is the same keyring-only boundary described above.
 
 ## Installation and enforcement
 

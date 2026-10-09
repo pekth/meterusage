@@ -1,6 +1,6 @@
 # Project knowledge
 
-Last source review: 2026-10-07
+Last source review: 2026-10-09
 
 ## Repository state
 
@@ -59,6 +59,8 @@ Last source review: 2026-10-07
 - Replacing an account source invalidates its live quota, activity, usage, plan and pending reset confirmation. Late reads and reset completion from that source cannot update its replacement. Dated slot archives and durable history remain available; reset requires a current source reading.
 - Shared-card sizing uses the full measured height, separate from visible-window bounds. The candidate rejects capture heights above 8,192 pixels, or 4,096 CSS pixels at 2x, with `Card too tall to share`. Native image completeness remains unverified.
 
+
+- The `--codex-test-profile` candidate mode runs the existing Codex connection UI with isolated preferences, app data and Electron state. It excludes synthetic readings, other providers, local activity and status feeds; updates, login-item changes and notifications are blocked. [ADR 0012](adr/0012-codex-live-test-profile.md) amends the demo-only candidate restriction. Native and provider acceptance remain separate.
 
 ## Verification gaps
 
