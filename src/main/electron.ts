@@ -11,7 +11,7 @@ import { Coordinator } from "./coordinator";
 import { NotchFold } from "./notch-fold";
 import { Updater } from "./updater";
 import { runJSON } from "./cli";
-import { channel, stateChannel, statusPages, panelScales, type PanelSize, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
+import { channel, stateChannel, statusPages, panelScales, PanelSize, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
 import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./ipc";
 import { providers, slotKey } from "../domain/models";
 import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize } from "../domain/notch";
@@ -64,6 +64,7 @@ async function start(launch: Launch) {
   let notchHeight = 200, anchor: { x: number; y: number } | undefined;
   let flyoutHeight = 700;
   const panelScale = () => panelScales[prefs.values.panelSize as PanelSize] ?? 1;
+  let panelSizeKeys = Promise.resolve();
   let drag: { cursor: Electron.Point; anchor: Electron.Point; timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> } | undefined;
   let shareMenu: ShareMenu | undefined, shareDirectory: string | undefined, sharing = false, confirmingReset = false, trayWidth = 0;
   const sharedDirectories = new Set<string>();
@@ -105,6 +106,20 @@ async function start(launch: Launch) {
     documents.set(webContentsId, document.href); windows.set(surface, w);
     w.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     w.webContents.on("will-navigate", e => e.preventDefault()); w.webContents.on("will-attach-webview", e => e.preventDefault());
+    if (surface === "flyout" || surface === "settings") {
+      // A saved Chromium zoom would compound the persisted CSS panel scale.
+      w.webContents.on("did-finish-load", () => w.webContents.setZoomFactor(1));
+      w.webContents.on("before-input-event", (event, input) => {
+        if (input.type !== "keyDown" || input.alt || !(input.control || input.meta) || !["+", "=", "-", "0"].includes(input.key)) return;
+        event.preventDefault();
+        panelSizeKeys = panelSizeKeys.then(async () => {
+          if (quitting || w.isDestroyed()) return;
+          const sizes = Object.values(PanelSize), current = sizes.indexOf(prefs.values.panelSize as PanelSize);
+          const value = input.key === "0" ? PanelSize.Medium : sizes[Math.max(0, Math.min(sizes.length - 1, (current < 0 ? 1 : current) + (input.key === "-" ? -1 : 1)))];
+          if (value !== prefs.values.panelSize) await handle({ action: "setPreference", key: "panelSize", value }, w, surface);
+        }).catch(() => { dialog.showErrorBox("Could not change panel size", "Your panel size was not saved. Try again."); });
+      });
+    }
     w.on("closed", () => { documents.delete(webContentsId); if (windows.get(surface) === w) windows.delete(surface); if (panel) finishDrag(); });
     if (surface === "flyout") w.on("blur", () => { if (!sharing) w.hide(); });
     if (panel) { w.setAlwaysOnTop(true, "status"); w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); }

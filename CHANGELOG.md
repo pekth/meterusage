@@ -11,6 +11,9 @@ follows [Semantic Versioning](https://semver.org/).
 - Add Small, Medium and Large panel sizes in candidate Settings. The choice
   persists and applies to main-panel and Settings text and controls. Main-panel
   width scales with the choice; its height fits content up to the display edge.
+  Small uses 80% scale and a 336-point main-panel width before display clamping.
+  Ctrl/Cmd plus and minus select these sizes; Ctrl/Cmd 0 restores Medium.
+  These shortcuts keep the content scale, saved choice and main-panel fit together.
 
 - Add an isolated Codex cloud test profile for the existing candidate UI. It
   starts disconnected, reads account allowance after browser sign-in, and
@@ -34,6 +37,9 @@ follows [Semantic Versioning](https://semver.org/).
 - Group candidate Settings by task, show six accent color swatches, and label
   provider collection separately from menu-bar and side-notch display.
   Turning collection off retains the saved display preference.
+  Appearance sits below account connections, with visible size choices,
+  grouped rows and aligned provider controls. Settings content scales with the
+  size choice while its window frame stays fixed.
 
 - Label local activity as activity on this Mac, keep folder-based accounts
   under advanced settings, and omit local CLI activity from separately

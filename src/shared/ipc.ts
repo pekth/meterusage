@@ -4,7 +4,7 @@ export const channel = "meterusage:request", stateChannel = "meterusage:state";
 export const statusPages = { codex: "https://status.openai.com/", claude: "https://status.claude.com/", cursor: "https://status.cursor.com/", copilot: "https://www.githubstatus.com/" };
 export type Surface = "flyout" | "settings" | "notch" | "tray" | "share";
 export enum PanelSize { Small = "small", Medium = "medium", Large = "large" }
-export const panelScales = { [PanelSize.Small]: 0.9, [PanelSize.Medium]: 1, [PanelSize.Large]: 1.15 };
+export const panelScales = { [PanelSize.Small]: 0.8, [PanelSize.Medium]: 1, [PanelSize.Large]: 1.15 };
 export type ConnectionProvider = "codex" | "claude" | "grok";
 export interface ConnectionState { provider: ConnectionProvider; status: "disconnected" | "connecting" | "connected" | "failed" | "unsupported" }
 export interface SettingsState {

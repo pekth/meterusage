@@ -21,16 +21,17 @@ function renderApp(view: ViewState, surface = "flyout") {
 const now = Date.parse("2026-10-06T12:00:00Z");
 it("offers a labelled size selector and scopes scale and keyboard scrolling to main panel and Settings", () => {
   const view = state();
-  for (const [size, scale] of [["small", "0.9"], ["medium", "1"], ["large", "1.15"]]) {
+  for (const [size, scale] of [["small", "0.8"], ["medium", "1"], ["large", "1.15"]]) {
     view.settings.values.panelSize = size;
     for (const surface of ["flyout", "settings"]) {
       const markup = renderApp(view, surface);
       expect(markup).toContain(`zoom:${scale}`);
       expect(markup).toMatch(/class="panel-viewport"[^>]*tabindex="0"/);
       if (surface === "settings") {
-        expect(markup).toMatch(/<span>Panel size<\/span><select/);
-        expect(markup).toContain(`<option value="${size}" selected="">`);
-        for (const label of ["Small", "Medium", "Large"]) expect(markup).toContain(`>${label}</option>`);
+        expect(markup).toContain("<legend>Usage-panel size</legend>");
+        expect(markup).toContain("The Settings window stays the same size.");
+        expect(markup).toMatch(new RegExp(`type="radio" name="panelSize"(?=[^>]*value="${size}")(?=[^>]*checked)`));
+        for (const label of ["Small", "Medium", "Large"]) expect(markup).toContain(`>${label}</span>`);
       }
     }
     for (const surface of ["notch", "tray", "share"]) {
@@ -40,6 +41,7 @@ it("offers a labelled size selector and scopes scale and keyboard scrolling to m
   }
   delete view.settings.values.panelSize;
   expect(renderApp(view)).toContain("zoom:1");
+  expect(renderApp(view, "settings")).toMatch(/type="radio" name="panelSize"(?=[^>]*value="medium")(?=[^>]*checked)/);
 });
 
 it("reports the scaled natural content box when scrollHeight retains the taller viewport", () => {
@@ -100,8 +102,12 @@ it("offers simple account setup and truthful Grok availability without directori
   const view = state(); view.snapshot.demo = false;
   view.connections = [{ provider: "codex", status: "disconnected" }, { provider: "claude", status: "connected" }, { provider: "grok", status: "unsupported" }];
   const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(markup).toContain('aria-label="Disconnect Claude"');
   expect(markup).toContain("Sign in to Codex"); expect(markup).toContain("Disconnect"); expect(markup).toContain("Account allowance");
   expect(markup).toContain("Automatic connection is not available yet"); expect(markup).not.toMatch(/directory|terminal|API key/);
+  view.connections[0].status = "failed";
+  const failed = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(failed).toContain("Usage unavailable. Open the desktop app and try again."); expect(failed).toContain("Sign in to Codex");
   view.connections[0].status = "connecting";
   expect(renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }))).toContain("Cancel");
   view.snapshot.demo = true; view.connections[0].status = "disconnected";

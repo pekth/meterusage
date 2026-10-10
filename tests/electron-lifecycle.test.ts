@@ -5,7 +5,12 @@ import { tmpdir, hostname } from "node:os";
 import { createServer } from "node:net";
 import { join } from "node:path";
 
-it.each([false, true])("cleans up windows and isolates candidate effects (candidate=%s)", async candidate => {
+it.each([
+  { candidate: false, keyboard: false, retainedZoom: false },
+  { candidate: true, keyboard: false, retainedZoom: false },
+  { candidate: true, keyboard: true, retainedZoom: false },
+  { candidate: true, keyboard: false, retainedZoom: true },
+])("cleans up windows and isolates candidate effects (candidate=$candidate, keyboard=$keyboard, retainedZoom=$retainedZoom)", async ({ candidate, keyboard, retainedZoom }) => {
   vi.resetModules();
   const root = mkdtempSync(join(tmpdir(), "meterusage-lifecycle-"));
   const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
@@ -31,10 +36,12 @@ it.each([false, true])("cleans up windows and isolates candidate effects (candid
   const windows: TestWindow[] = [];
   const ipc = vi.fn();
   const notify = vi.fn();
+  const showErrorBox = vi.fn();
   class TestWindow extends EventEmitter {
     destroyed = false;
+    zoomFactor = 1;
     bounds: { x: number; y: number; width: number; height: number };
-    contents = { id: windows.length + 1, mainFrame: { url: "" }, setFrameRate: vi.fn(), on: vi.fn(), send: vi.fn(), setWindowOpenHandler: vi.fn() };
+    contents = Object.assign(new EventEmitter(), { id: windows.length + 1, mainFrame: { url: "" }, setFrameRate: vi.fn(), setZoomFactor: vi.fn((factor: number) => { this.zoomFactor = factor; }), send: vi.fn(), setWindowOpenHandler: vi.fn() });
     constructor(options: { width: number; height: number }) { super(); this.bounds = { x: 0, y: 0, width: options.width, height: options.height }; windows.push(this); }
     get webContents() { if (this.destroyed) throw new Error("webContents is unavailable after destruction"); return this.contents; }
     static fromWebContents(contents: unknown) { return windows.find(w => w.contents === contents); }
@@ -44,20 +51,25 @@ it.each([false, true])("cleans up windows and isolates candidate effects (candid
     setBounds = vi.fn((bounds: typeof this.bounds) => { this.bounds = bounds; });
     setSize = vi.fn((width: number, height: number) => { this.bounds.width = width; this.bounds.height = height; });
     setPosition = vi.fn((x: number, y: number) => { this.bounds.x = x; this.bounds.y = y; }); show = vi.fn(); focus = vi.fn(); hide = vi.fn();
-    loadURL = (url: string) => { this.contents.mainFrame.url = url; return Promise.resolve(); };
+    loadURL = (url: string) => {
+      this.contents.mainFrame.url = url;
+      if (retainedZoom && ["flyout", "settings"].includes(new URL(url).searchParams.get("surface")!)) this.zoomFactor = 1.25;
+      this.contents.emit("did-finish-load"); return Promise.resolve();
+    };
   }
   const start = vi.fn(async () => {});
   vi.doMock("electron", () => ({ app: application, Tray: TestTray, BrowserWindow: TestWindow,
-    screen: display, nativeTheme: theme, powerMonitor: new EventEmitter(), ipcMain: { handle: ipc },
+    screen: display, nativeTheme: theme, powerMonitor: new EventEmitter(), ipcMain: { handle: ipc }, dialog: { showErrorBox },
     Notification: Object.assign(class { show = notify; }, { isSupported: () => true }),
     nativeImage: { createFromPath: () => ({ resize: () => ({ setTemplateImage: vi.fn() }) }) },
     session: { defaultSession: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } } },
   }));
   vi.doMock("../src/main/launch", () => ({ launchConfiguration: () => ({ data: root, home: root, demo: false, candidate, profile: candidate ? root : undefined }) }));
   const values: Record<string, boolean | string> = { onboardingCompleted: true, panelSize: "medium" };
+  const setPreference = vi.fn(async (key: string, value: boolean | string) => { await Promise.resolve(); values[key] = value; });
   let finishLoad!: () => void;
   const loading = new Promise<void>(resolve => { finishLoad = resolve; });
-  const load = vi.fn(async () => { await loading; return { values, accounts: [], set: async (key: string, value: boolean | string) => { values[key] = value; } }; });
+  const load = vi.fn(async () => { await loading; return { values, accounts: [], set: setPreference }; });
   vi.doMock("../src/main/preferences", () => ({ Preferences: { load } }));
   vi.doMock("../src/main/composition", () => ({ compose: () => [] }));
   vi.doMock("../src/main/connections", () => ({ DesktopConnections: class {
@@ -106,27 +118,79 @@ it.each([false, true])("cleans up windows and isolates candidate effects (candid
     expect(await invoke(flyout, { action: "resize", height: 593 })).toEqual({ ok: true });
     expect(flyout.bounds).toMatchObject({ width: 420, height: 593 });
     await invoke(windows[2], { action: "settings" });
+    const settings = windows[3];
+    if (retainedZoom) {
+      expect(flyout.zoomFactor).toBe(1); expect(settings.zoomFactor).toBe(1);
+      flyout.zoomFactor = 1.5; flyout.contents.emit("did-finish-load");
+      expect(flyout.zoomFactor).toBe(1);
+      expect(windows[0].contents.setZoomFactor).not.toHaveBeenCalled();
+    }
+    if (keyboard) {
+      const key = (w: TestWindow, key: string, modifiers = { control: true, meta: false, alt: false }, type = "keyDown") => {
+        const event = { preventDefault: vi.fn() };
+        w.contents.emit("before-input-event", event, { key, type, ...modifiers });
+        return event;
+      };
+      expect(key(flyout, "-").preventDefault).toHaveBeenCalledOnce();
+      await vi.waitFor(() => expect(values.panelSize).toBe("small"));
+      expect(flyout.bounds).toMatchObject({ width: 336, height: 475 });
+      expect(settings.contents.send.mock.lastCall?.[1].settings.values.panelSize).toBe("small");
+      expect(key(flyout, "-").preventDefault).toHaveBeenCalledOnce();
+      await Promise.resolve(); await Promise.resolve();
+      expect(values.panelSize).toBe("small");
+      // Two inputs before persistence completes must advance twice, not lose a step.
+      key(flyout, "="); key(flyout, "+", { control: false, meta: true, alt: false });
+      await vi.waitFor(() => expect(values.panelSize).toBe("large"));
+      expect(flyout.bounds).toMatchObject({ width: 483, height: 682 });
+      key(settings, "+");
+      await Promise.resolve(); await Promise.resolve();
+      expect(values.panelSize).toBe("large");
+      key(settings, "0", { control: false, meta: true, alt: false });
+      await vi.waitFor(() => expect(values.panelSize).toBe("medium"));
+      expect(flyout.bounds).toMatchObject({ width: 420, height: 593 });
+      expect(settings.contents.send.mock.lastCall?.[1].settings.values.panelSize).toBe("medium");
+      for (const input of ["+", "-", "=", "0", "a", "z"]) expect(key(settings, input, { control: false, meta: false, alt: false }).preventDefault).not.toHaveBeenCalled();
+      expect(key(settings, "a").preventDefault).not.toHaveBeenCalled();
+      expect(key(settings, "z").preventDefault).not.toHaveBeenCalled();
+      expect(key(settings, "+", { control: true, meta: false, alt: true }).preventDefault).not.toHaveBeenCalled();
+      expect(key(settings, "+", undefined, "keyUp").preventDefault).not.toHaveBeenCalled();
+      expect(key(windows[0], "+").preventDefault).not.toHaveBeenCalled();
+      setPreference.mockRejectedValueOnce(new Error("Synthetic write failure"));
+      key(settings, "-");
+      await vi.waitFor(() => expect(showErrorBox).toHaveBeenCalledOnce());
+      expect(values.panelSize).toBe("medium");
+      expect(flyout.bounds).toMatchObject({ width: 420, height: 593 });
+      key(flyout, "-");
+      await vi.waitFor(() => expect(values.panelSize).toBe("small"));
+      key(flyout, "0");
+      await vi.waitFor(() => expect(values.panelSize).toBe("medium"));
+      expect(flyout.zoomFactor).toBe(1); expect(settings.zoomFactor).toBe(1);
+      const writes = setPreference.mock.calls.length;
+      key(closed, "-");
+      await new Promise(resolve => setImmediate(resolve));
+      expect(setPreference).toHaveBeenCalledTimes(writes);
+    }
     expect(await invoke(windows[3], { action: "setPreference", key: "panelSize", value: "large" })).toEqual({ ok: true });
     expect(flyout.bounds).toMatchObject({ width: 483, height: 682 });
     expect(await invoke(flyout, { action: "resize", height: 1200 })).toEqual({ ok: true });
     expect(flyout.bounds).toMatchObject({ width: 483, height: 900 });
     expect(await invoke(windows[3], { action: "setPreference", key: "panelSize", value: "small" })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 378, height: 900 });
+    expect(flyout.bounds).toMatchObject({ width: 336, height: 835 });
     expect(await invoke(flyout, { action: "resize", height: 400, width: 10000 })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 378, height: 400 });
+    expect(flyout.bounds).toMatchObject({ width: 336, height: 400 });
     workArea.height = 350;
     display.emit("display-metrics-changed");
-    expect(flyout.bounds).toMatchObject({ width: 378, height: 350 });
+    expect(flyout.bounds).toMatchObject({ width: 336, height: 350 });
     workArea.height = 900;
     display.emit("display-metrics-changed");
-    expect(flyout.bounds).toMatchObject({ width: 378, height: 400 });
+    expect(flyout.bounds).toMatchObject({ width: 336, height: 400 });
     expect(await invoke(windows[3], { action: "setPreference", key: "panelSize", value: "huge" })).toEqual({ ok: false, error: "Invalid request" });
-    expect(flyout.bounds).toMatchObject({ width: 378, height: 400 });
+    expect(flyout.bounds).toMatchObject({ width: 336, height: 400 });
     workArea.height = 2400;
     expect(await invoke(flyout, { action: "resize", height: 2800 })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 378, height: 2400 });
+    expect(flyout.bounds).toMatchObject({ width: 336, height: 2400 });
     expect(await invoke(flyout, { action: "resize", height: 2200 })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 378, height: 2200 });
+    expect(flyout.bounds).toMatchObject({ width: 336, height: 2200 });
     workArea.height = 900;
     if (candidate) {
       expect(application.getLoginItemSettings).not.toHaveBeenCalled();
