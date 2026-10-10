@@ -156,3 +156,16 @@ Stated policy is not a control. These are:
 ## Reporting a problem
 
 If you find a case where meterusage exposes something it should not, please open an issue. If it involves a live credential, do not paste it into the issue — describe the shape and location instead.
+
+## Agent bug drafts
+
+The `report draft` and `report submit` commands read bounded descriptions,
+steps, expected behavior and actual behavior from stdin. The CLI does not read
+arbitrary files, transcripts, provider credentials or saved account state.
+It appends app and system metadata from the existing diagnostics builder;
+provider and history state are not observed. User prose is not automatically
+safe: common paths, links, email addresses, credential patterns and controls
+are rejected, but private facts and unrecognized secrets must be omitted by
+the agent and checked by the user. The read-only native preview shows all text,
+the relay and the fixed private Linear destination before each explicit send.
+No confirmation flag or automatic retry exists. See [REPORTING.md](REPORTING.md).

@@ -34,6 +34,8 @@ Last verified: 2026-09-29
 
 - The reporting candidate adds Settings Report issue, using an HTTPS relay to create a private Linear issue without a user login or bundled Linear credential. Diagnostics use allowlisted state and numbers; success requires a matching server receipt. AppCoordinator retains pending reports and receipts across Settings navigation until the app quits. On 2026-10-08, Workers Free and native-client delivery/retry were verified, and the source bundle endpoint was configured. Native Settings interaction and released-app availability remain unverified. See `docs/REPORTING.md` and ADRs 0011 and 0012.
 
+- The agent feedback CLI accepts short structured bug drafts, then requires a native preview and user consent for each send. It reuses the private reporting client and relay, without polling providers or collecting transcripts. See [REPORTING.md](REPORTING.md) and [ADR 0013](adr/0013-agent-feedback-native-consent.md).
+
 ## Verification gaps
 
 - Repository files do not prove current provider authentication, quota freshness, network responses, local machine state, app installation, signed-bundle state, GitHub Release state, or runtime UI behavior.
