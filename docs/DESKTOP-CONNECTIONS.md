@@ -95,8 +95,13 @@ This selects the existing UI and connection flow with live Codex allowance.
 It cannot be combined with `--demo` or `--candidate-profile`. The directory
 must be empty on first use and owned by this test mode on later launches.
 Installed-app storage and symlink paths are refused, including nested paths
-inside an existing profile. Startup checks file metadata before starting
-Electron or the helper, with a limit of 32,768 entries and 24 directory levels.
+inside an existing profile. The macOS GUI permits only Electron's three direct
+singleton links after checking their ownership, socket location and matching
+metadata. JSON entrypoints retain strict symlink rejection. Startup checks
+metadata before requesting Electron's lock or starting the helper, with a
+limit of 32,768 entries and 24 directory levels. A second launch reveals the
+existing panel; invalid metadata exits without an uncaught popup. See
+[ADR 0013](adr/0013-candidate-single-instance-startup.md).
 
 Preferences, history, connection profiles and Electron state stay in that
 directory. The real OS home remains available for helper discovery and macOS

@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vite-plus/test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, symlinkSync, utimesSync, realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, symlinkSync, utimesSync, realpathSync, readlinkSync, unlinkSync, chmodSync } from "node:fs";
+import { tmpdir, hostname } from "node:os";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import { launchConfiguration, type Launch } from "../src/main/launch";
 import { Preferences, defaultsDomain } from "../src/main/preferences";
@@ -14,6 +15,57 @@ afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: 
 const now = Date.parse("2026-10-06T12:00:00Z");
 const liveFixture = (home: string): Launch => ({ home, data: join(home, "app-data"), env: {}, demo: false, candidate: false });
 describe("Codex live test profile", () => {
+  it("accepts only coherent Electron singleton metadata for GUI handoff, preserving every link", async () => {
+    const root = temp(), home = temp(), socketDirectory = temp(), electron = join(root, "electron");
+    const args = ["--codex-test-profile", root];
+    launchConfiguration(args, {}, home);
+    mkdirSync(electron);
+    const socket = join(socketDirectory, "SingletonSocket"), cookie = "123456789";
+    const server = createServer();
+    await new Promise<void>(resolve => server.listen(socket, resolve));
+    const links = new Map([
+      [join(electron, "SingletonSocket"), socket],
+      [join(electron, "SingletonCookie"), cookie],
+      [join(electron, "SingletonLock"), `${hostname()}-${process.pid}`],
+      [join(socketDirectory, "SingletonCookie"), cookie],
+    ]);
+    for (const [path, target] of links) symlinkSync(target, path);
+    try {
+      expect(() => launchConfiguration(args, {}, home)).toThrow("symlink");
+      expect(launchConfiguration(args, {}, home, true).profile).toBe(root);
+      for (const [path, target] of links) expect(readlinkSync(path)).toBe(target);
+      for (const path of ["electron/Cache/link", "connections/link", "electron/Cache/SingletonSocket"]) {
+        mkdirSync(join(root, path, ".."), { recursive: true }); symlinkSync(socketDirectory, join(root, path));
+        expect(() => launchConfiguration(args, {}, home, true)).toThrow("symlink");
+        unlinkSync(join(root, path));
+      }
+      for (const [path, target] of [
+        [join(electron, "SingletonSocket"), join(socketDirectory, "absent")],
+        [join(electron, "SingletonSocket"), socketDirectory],
+        [join(electron, "SingletonSocket"), "/foreign/SingletonSocket"],
+        [join(electron, "SingletonCookie"), "not-a-cookie"],
+        [join(electron, "SingletonLock"), "foreign-host-123"],
+        [join(electron, "SingletonLock"), `${hostname()}-../123`],
+      ]) {
+        unlinkSync(path); symlinkSync(target, path);
+        expect(() => launchConfiguration(args, {}, home, true)).toThrow("singleton");
+        expect(readlinkSync(path)).toBe(target);
+        unlinkSync(path); symlinkSync(links.get(path)!, path);
+      }
+      const alias = join(temp(), "alias"); symlinkSync(socketDirectory, alias);
+      unlinkSync(join(electron, "SingletonSocket")); symlinkSync(join(alias, "SingletonSocket"), join(electron, "SingletonSocket"));
+      expect(() => launchConfiguration(args, {}, home, true)).toThrow("singleton");
+      unlinkSync(join(electron, "SingletonSocket")); symlinkSync(socket, join(electron, "SingletonSocket"));
+      chmodSync(socketDirectory, 0o755);
+      expect(() => launchConfiguration(args, {}, home, true)).toThrow("singleton");
+      chmodSync(socketDirectory, 0o700);
+      unlinkSync(join(electron, "SingletonLock"));
+      expect(() => launchConfiguration(args, {}, home, true)).toThrow("singleton");
+      symlinkSync(links.get(join(electron, "SingletonLock"))!, join(electron, "SingletonLock"));
+      unlinkSync(join(socketDirectory, "SingletonCookie")); symlinkSync("987654321", join(socketDirectory, "SingletonCookie"));
+      expect(() => launchConfiguration(args, {}, home, true)).toThrow("singleton");
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
   it("isolates data while retaining OS home and only helper environment", () => {
     const root = temp(), home = temp();
     const launch = launchConfiguration(["--codex-test-profile", root], { HOME: "/foreign/home", CODEX_HOME: "/foreign/codex", OPENAI_API_KEY: "synthetic-secret", METERUSAGE_DEMO: "0", PATH: "/usr/bin:/bin", TMPDIR: "/tmp" }, home);

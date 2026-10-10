@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vite-plus/test";
 import { parseRequest, trustedSender, projectSettings } from "../src/main/ipc";
 describe("renderer boundary", () => {
+  it("accepts and publishes only Small, Medium and Large panel sizes", () => {
+    for (const value of ["small", "medium", "large"]) {
+      const request = { action: "setPreference", key: "panelSize", value };
+      expect(parseRequest(request)).toEqual(request);
+      expect(projectSettings({ panelSize: value }, [], "/synthetic").values.panelSize).toBe(value);
+    }
+    for (const value of ["", "Small", "extra-large", "__proto__", ["large"], 1, true, null]) expect(() => parseRequest({ action: "setPreference", key: "panelSize", value })).toThrow("Invalid request");
+  });
   it("requires primitive provider names before connection consent", () => {
     for (const action of ["connect", "disconnect", "connectionCancel"]) {
       for (const provider of [["claude"], ["codex"], { toString: () => "claude" }, null, 1]) expect(() => parseRequest({ action, provider })).toThrow("Invalid request");
@@ -41,10 +49,11 @@ it("binds sharing to the displayed account key", () => {
   for (const raw of [{ action: "share" }, { action: "share", key: "claude#../other" }, { action: "share", key: "claude", path: "/tmp" }]) expect(() => parseRequest(raw)).toThrow();
 });
 
-it("reports full shared-card height separately from bounded window resizing", () => {
+it("allows natural panel heights for native display clamping and keeps separate share requests", () => {
+  expect(parseRequest({ action: "resize", height: 2500 })).toEqual({ action: "resize", height: 2500 });
   expect(parseRequest({ action: "shareResize", height: 2500 })).toEqual({ action: "shareResize", height: 2500 });
   expect(parseRequest({ action: "shareResize", height: 5000 }).action).toBe("shareResize");
-  for (const raw of [{ action: "resize", height: 2500 }, { action: "shareResize", height: Infinity }, { action: "shareResize", height: 0 }, { action: "shareResize", height: 100, width: 250 }]) expect(() => parseRequest(raw)).toThrow();
+  for (const raw of [{ action: "resize", height: NaN }, { action: "resize", height: 0 }, { action: "resize", height: "2500" }, { action: "shareResize", height: Infinity }, { action: "shareResize", height: 0 }, { action: "shareResize", height: 100, width: 250 }]) expect(() => parseRequest(raw)).toThrow();
 });
 
 it("allows only known public service-status pages, without a renderer-selected URL", () => {

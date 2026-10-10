@@ -1,5 +1,5 @@
 import { it, expect, vi } from "vite-plus/test";
-import { createElement, useState } from "react";
+import { createElement, useEffect, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { App, Connections, Meter, ProviderCard } from "../src/renderer/app";
 import { tokens, primary, quota, value, window } from "../src/domain/models";
@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 
 vi.mock("react", async importOriginal => {
   const actual = await importOriginal<typeof import("react")>();
-  return { ...actual, useState: vi.fn(actual.useState) };
+  return { ...actual, useState: vi.fn(actual.useState), useEffect: vi.fn(actual.useEffect), useRef: vi.fn(actual.useRef) };
 });
 function renderApp(view: ViewState, surface = "flyout") {
   vi.stubGlobal("location", { search: `?surface=${surface}` });
@@ -19,6 +19,61 @@ function renderApp(view: ViewState, surface = "flyout") {
 }
 
 const now = Date.parse("2026-10-06T12:00:00Z");
+it("offers a labelled size selector and scopes scale and keyboard scrolling to main panel and Settings", () => {
+  const view = state();
+  for (const [size, scale] of [["small", "0.9"], ["medium", "1"], ["large", "1.15"]]) {
+    view.settings.values.panelSize = size;
+    for (const surface of ["flyout", "settings"]) {
+      const markup = renderApp(view, surface);
+      expect(markup).toContain(`zoom:${scale}`);
+      expect(markup).toMatch(/class="panel-viewport"[^>]*tabindex="0"/);
+      if (surface === "settings") {
+        expect(markup).toMatch(/<span>Panel size<\/span><select/);
+        expect(markup).toContain(`<option value="${size}" selected="">`);
+        for (const label of ["Small", "Medium", "Large"]) expect(markup).toContain(`>${label}</option>`);
+      }
+    }
+    for (const surface of ["notch", "tray", "share"]) {
+      expect(renderApp(view, surface)).not.toContain("zoom:");
+      expect(renderApp(view, surface)).not.toContain("panel-viewport");
+    }
+  }
+  delete view.settings.values.panelSize;
+  expect(renderApp(view)).toContain("zoom:1");
+});
+
+it("reports the scaled natural content box when scrollHeight retains the taller viewport", () => {
+  const view = state(), request = vi.fn(async () => ({ ok: true as const }));
+  let measure!: ResizeObserverCallback;
+  const lifecycle: { cleanup?: void | (() => void) } = {};
+  const node = { scrollHeight: 850, getBoundingClientRect: () => ({ height: 593 }) };
+  vi.mocked(useRef).mockReturnValueOnce({ current: node });
+  vi.mocked(useEffect).mockImplementationOnce(() => {}).mockImplementationOnce(effect => { lifecycle.cleanup = effect(); });
+  const disconnect = vi.fn();
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: ResizeObserverCallback) { measure = callback; }
+    observe = vi.fn(); disconnect = disconnect;
+  });
+  vi.stubGlobal("location", { search: "?surface=flyout" });
+  vi.mocked(useState).mockReturnValueOnce([view, () => {}]);
+  try {
+    renderToStaticMarkup(createElement(App, { bridge: { request, subscribe: () => () => {} } }));
+    measure([], {} as ResizeObserver);
+    expect(request).toHaveBeenLastCalledWith({ action: "resize", height: 593 });
+    node.getBoundingClientRect = () => ({ height: 351.2 });
+    measure([], {} as ResizeObserver);
+    expect(request).toHaveBeenLastCalledWith({ action: "resize", height: 352 });
+    measure([], {} as ResizeObserver);
+    expect(request).toHaveBeenCalledTimes(2);
+    node.getBoundingClientRect = () => ({ height: 2500 });
+    measure([], {} as ResizeObserver);
+    expect(request).toHaveBeenLastCalledWith({ action: "resize", height: 2500 });
+  } finally {
+    lifecycle.cleanup?.();
+    vi.unstubAllGlobals();
+  }
+  expect(disconnect).toHaveBeenCalledOnce();
+});
 it("bounds browser notch content to the viewport while retaining native work-area sizing", () => {
   const view = state(); view.snapshot.notchSlots = [primary("codex")];
   expect(renderApp(view, "notch")).toContain("--notch-max-height:100dvh");

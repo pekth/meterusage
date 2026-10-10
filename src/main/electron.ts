@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { launchConfiguration } from "./launch";
+import { launchConfiguration, type Launch } from "./launch";
 import { Preferences } from "./preferences";
 import { compose } from "./composition";
 import { DesktopConnections } from "./connections";
@@ -11,28 +11,38 @@ import { Coordinator } from "./coordinator";
 import { NotchFold } from "./notch-fold";
 import { Updater } from "./updater";
 import { runJSON } from "./cli";
-import { channel, stateChannel, statusPages, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
+import { channel, stateChannel, statusPages, panelScales, type PanelSize, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
 import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./ipc";
 import { providers, slotKey } from "../domain/models";
 import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize } from "../domain/notch";
 import { trayTooltip } from "../domain/overview";
 
-const args = process.argv.slice(1), launch = launchConfiguration(args);
+const args = process.argv.slice(1);
 const desktopHelper = app.isPackaged ? join(process.resourcesPath, "desktop-keychain") : join(__dirname, "../../build/desktop-keychain");
-// Isolation is selected before Electron creates a session or any source reads.
-if (launch.profile) { app.setPath("userData", join(launch.data, "electron")); app.setPath("sessionData", join(launch.data, "electron")); }
-app.setName("MeterUsage");
-if (args.includes("json") || args.includes("--json")) {
-  runJSON(args, process.env, desktopHelper).then(json => { process.stdout.write(json + "\n"); app.exit(0); }, () => { process.stderr.write("meterusage: could not read report\n"); app.exit(1); });
-} else if (process.platform !== "darwin") {
-  process.stderr.write("MeterUsage desktop candidates currently support macOS only.\n"); app.exit(1);
-} else {
-  void app.whenReady().then(start).catch(() => { process.stderr.write("MeterUsage could not start.\n"); app.exit(1); });
+void main().catch(() => { process.stderr.write("MeterUsage could not start.\n"); app.exit(1); });
+async function main() {
+  const json = args.includes("json") || args.includes("--json");
+  const launch = launchConfiguration(args, process.env, undefined, !json && process.platform === "darwin");
+  // Validate isolation before Electron creates a session or contacts a singleton socket.
+  if (launch.profile) { app.setPath("userData", join(launch.data, "electron")); app.setPath("sessionData", join(launch.data, "electron")); }
+  app.setName("MeterUsage");
+  if (json) {
+    await runJSON(args, process.env, desktopHelper).then(json => { process.stdout.write(json + "\n"); app.exit(0); }, () => { process.stderr.write("meterusage: could not read report\n"); app.exit(1); });
+  } else if (process.platform !== "darwin") {
+    process.stderr.write("MeterUsage desktop candidates currently support macOS only.\n"); app.exit(1);
+  } else {
+    let reveal: (() => void) | undefined, requested = false;
+    const activate = () => { if (reveal) reveal(); else requested = true; };
+    app.on("second-instance", activate); app.on("activate", activate);
+    if (!app.requestSingleInstanceLock({ candidate: launch.candidate || launch.demo })) { app.quit(); return; }
+    await app.whenReady();
+    reveal = await start(launch);
+    if (requested) reveal?.();
+  }
 }
-async function start() {
+async function start(launch: Launch) {
   mkdirSync(launch.data, { recursive: true });
   app.dock?.hide();
-  if (!app.requestSingleInstanceLock({ candidate: launch.candidate || launch.demo })) { app.quit(); return; }
   const prefs = await Preferences.load(launch);
   const documents = new Map<number, string>(), windows = new Map<Surface, BrowserWindow>();
   const markers = { codex: prefs.values.desktopCodexConnection, claude: prefs.values.desktopClaudeIdentity };
@@ -52,6 +62,8 @@ async function start() {
   for (const p of ["codex", "claude"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
   const notch = { expanded: prefs.values.sideNotchPanelPinned === true, cardOnRight: false, selected: "codex", dragging: false };
   let notchHeight = 200, anchor: { x: number; y: number } | undefined;
+  let flyoutHeight = 700;
+  const panelScale = () => panelScales[prefs.values.panelSize as PanelSize] ?? 1;
   let drag: { cursor: Electron.Point; anchor: Electron.Point; timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> } | undefined;
   let shareMenu: ShareMenu | undefined, shareDirectory: string | undefined, sharing = false, confirmingReset = false, trayWidth = 0;
   const sharedDirectories = new Set<string>();
@@ -79,7 +91,7 @@ async function start() {
   function create(surface: Surface) {
     const existing = windows.get(surface); if (existing && !existing.isDestroyed()) return existing;
     const panel = surface === "notch", trayImage = surface === "tray", shareImage = surface === "share";
-    const w = new BrowserWindow({ width: shareImage ? cardWidth * 2 : trayImage ? 1000 : panel ? stripWidth : surface === "settings" ? 620 : 420, height: trayImage ? 22 : panel ? notchHeight : surface === "settings" ? 680 : 700, show: false, frame: surface === "settings", transparent: panel || trayImage || shareImage, resizable: surface === "settings", minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, ...(panel ? { type: "panel", focusable: false, hasShadow: false } : {}), title: surface === "settings" ? "MeterUsage Settings" : "MeterUsage", backgroundColor: panel || trayImage || shareImage ? "#00000000" : "#242428", webPreferences: { preload: join(__dirname, "../preload/preload.cjs"), offscreen: trayImage || shareImage, zoomFactor: shareImage ? 2 : 1, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false } });
+    const w = new BrowserWindow({ width: shareImage ? cardWidth * 2 : trayImage ? 1000 : panel ? stripWidth : surface === "settings" ? 620 : Math.round(420 * panelScale()), height: trayImage ? 22 : panel ? notchHeight : surface === "settings" ? 680 : Math.ceil(flyoutHeight * panelScale()), show: false, frame: surface === "settings", transparent: panel || trayImage || shareImage, resizable: surface === "settings", minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, ...(panel ? { type: "panel", focusable: false, hasShadow: false } : {}), title: surface === "settings" ? "MeterUsage Settings" : "MeterUsage", backgroundColor: panel || trayImage || shareImage ? "#00000000" : "#242428", webPreferences: { preload: join(__dirname, "../preload/preload.cjs"), offscreen: trayImage || shareImage, zoomFactor: shareImage ? 2 : 1, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false } });
     if (trayImage) { w.webContents.setFrameRate(10); w.webContents.on("paint", (_event, _rect, image) => { if (!tray.isDestroyed() && trayWidth > 0) tray.setImage(image); }); }
     if (shareImage) {
       w.webContents.setFrameRate(10);
@@ -102,7 +114,13 @@ async function start() {
   function showFlyout() {
     const w = create("flyout"), bounds = tray.getBounds(), work = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y }).workArea;
     w.setPosition(Math.round(Math.min(Math.max(bounds.x + bounds.width / 2 - w.getBounds().width / 2, work.x), work.x + work.width - w.getBounds().width)), work.y);
-    w.show(); w.focus(); void coordinator.refreshIfStale();
+    sizeFlyout(); w.show(); w.focus(); void coordinator.refreshIfStale();
+  }
+  function sizeFlyout() {
+    const w = windows.get("flyout"); if (!w || w.isDestroyed()) return;
+    const bounds = w.getBounds(), work = screen.getDisplayMatching(bounds).workArea;
+    const width = Math.min(Math.round(420 * panelScale()), work.width), height = Math.min(Math.ceil(flyoutHeight * panelScale()), work.height);
+    w.setBounds({ x: Math.round(Math.min(Math.max(bounds.x, work.x), work.x + work.width - width)), y: Math.round(Math.min(Math.max(bounds.y, work.y), work.y + work.height - height)), width, height }, false);
   }
   function showSettings() {
     if (!launch.demo && !launch.candidate && app.isPackaged) prefs.values.launchAtLogin = app.getLoginItemSettings().openAtLogin;
@@ -189,6 +207,7 @@ async function start() {
           if (app.getLoginItemSettings().openAtLogin !== r.value) throw new Error("Could not change login item");
         }
         await prefs.set(r.key, r.value);
+        if (r.key === "panelSize") sizeFlyout();
         if (r.key === "refreshIntervalSeconds") coordinator.restartTimer();
         if (r.key === "sideNotchPanelPinned") { notch.expanded = r.value === true || folding.hovered; folding.changed(); }
         nativeTheme.themeSource = prefs.values.appearanceTheme as "system" | "dark" | "light";
@@ -239,9 +258,9 @@ async function start() {
         Menu.buildFromTemplate([{ label: "Keep open", type: "checkbox", checked: prefs.values.sideNotchPanelPinned === true, click: () => { void handle({ action: "setPreference", key: "sideNotchPanelPinned", value: prefs.values.sideNotchPanelPinned !== true }, source, surface); } }, { label: "Refresh now", click: () => { void coordinator.refresh(); } }, { type: "separator" }, { label: "Hide panel", click: () => { void handle({ action: "setPreference", key: "sideNotchPanelEnabled", value: false }, source, surface); } }]).popup({ window: source });
         break;
       case "resize":
-        if (surface === "notch") { notchHeight = Math.ceil(r.height); placeNotch(); }
+        if (surface === "notch") { notchHeight = Math.min(2000, Math.ceil(r.height)); placeNotch(); }
         else if (surface === "tray" && r.width !== undefined) { trayWidth = Math.ceil(r.width); source.setSize(trayWidth, 22, false); }
-        else if (surface === "flyout") source.setSize(420, Math.min(Math.ceil(r.height), screen.getDisplayMatching(source.getBounds()).workArea.height));
+        else if (surface === "flyout") { flyoutHeight = r.height / panelScale(); sizeFlyout(); }
         break;
       case "shareResize":
         if (surface !== "share" || !shareReady) throw new Error("Invalid request");
@@ -291,9 +310,8 @@ async function start() {
     catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Connections are disabled in demo mode", "Automatic Grok connection is unavailable"].includes(e.message) ? e.message : "Could not complete action" }; }
   });
   const unsubscribe = coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
-  screen.on("display-metrics-changed", () => { placeNotch(); publish(); }); screen.on("display-removed", () => { placeNotch(); publish(); });
+  screen.on("display-metrics-changed", () => { placeNotch(); sizeFlyout(); publish(); }); screen.on("display-removed", () => { placeNotch(); sizeFlyout(); publish(); });
   powerMonitor.on("resume", () => { void coordinator.refresh(); });
-  app.on("second-instance", () => showFlyout());
   app.on("window-all-closed", () => {});
   const clockTimer = setInterval(publish, 60000);
   nativeTheme.on("updated", publish);
@@ -317,4 +335,5 @@ async function start() {
   if (quitting) return;
   syncNotch(); await coordinator.start();
   if (!quitting && (launch.candidate || prefs.values.onboardingCompleted !== true)) showFlyout();
+  if (!quitting) return () => { if (!quitting) showFlyout(); };
 }

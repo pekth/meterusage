@@ -8,6 +8,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Add Small, Medium and Large panel sizes in candidate Settings. The choice
+  persists and applies to main-panel and Settings text and controls. Main-panel
+  width scales with the choice; its height fits content up to the display edge.
+
 - Add an isolated Codex cloud test profile for the existing candidate UI. It
   starts disconnected, reads account allowance after browser sign-in, and
   excludes demo data, local activity and other providers. Candidate profiles
@@ -50,6 +54,12 @@ follows [Semantic Versioning](https://semver.org/).
   update checks. Provider files and credentials stay in the main process.
 
 ### Fixed
+
+- Handle opening an already-running candidate without an uncaught startup
+  popup. Validate Electron's singleton metadata before requesting its lock,
+  retain all other symlink checks, and reveal the existing panel after startup.
+  Invalid profiles exit with a fixed error; activation cannot reopen a panel
+  during Quit.
 
 - Stop display updates when Quit begins so a late usage refresh cannot reopen
   the side notch or restart update checks during shutdown.

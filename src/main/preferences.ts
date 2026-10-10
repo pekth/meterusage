@@ -4,6 +4,7 @@ import { providers, type Provider, type ManagedAccount } from "../domain/models"
 import { atomicJSON } from "./history";
 import { runCommand, type Command } from "./providers/transport";
 import { type Launch } from "./launch";
+import { PanelSize, panelScales } from "../shared/ipc";
 export const defaultsDomain = "dev.meterusage.app";
 const suffix = (p: Provider) => p[0].toUpperCase() + p.slice(1);
 export const providerPreference = (p: Provider) => `showProvider${suffix(p)}`;
@@ -11,13 +12,13 @@ export const trayPreference = (p: Provider) => `menuBarProvider${suffix(p)}`;
 export type PreferenceValue = boolean | number | string | ManagedAccount[];
 type Kind = "boolean" | "number" | "string" | "data" | "date";
 const kinds: Record<string, Kind> = {
-  refreshIntervalSeconds: "number", appearanceTheme: "string", accentTheme: "string", managedAccounts: "data",
+  refreshIntervalSeconds: "number", appearanceTheme: "string", accentTheme: "string", panelSize: "string", managedAccounts: "data",
   sideNotchPanelCorner: "string", updateLastCheckDate: "date", updateDismissedVersion: "string", updateAnnouncedVersion: "string",
   desktopCodexConnection: "string", desktopCodexCleanup: "string", desktopClaudeIdentity: "string",
   ...Object.fromEntries(["launchAtLogin", "showHeatmap", "showClaudeHeatmap", "showCodexHeatmap", "quotaAlertsEnabled", "sideNotchPanelEnabled", "sideNotchPanelPinned", "menuBarCompactEnabled", "onboardingCompleted", "updateCheckEnabled", "showPacingBurnRate", "showActivityTelemetry", "showDailyActivityChart", "showSideNotchResetButton", ...providers.flatMap(p => [providerPreference(p), trayPreference(p)])].map(k => [k, "boolean" as const])),
 };
 export const initialPreferences: Record<string, PreferenceValue> = {
-  refreshIntervalSeconds: 60, appearanceTheme: "system", accentTheme: "blue", managedAccounts: [], sideNotchPanelCorner: "",
+  refreshIntervalSeconds: 60, appearanceTheme: "system", accentTheme: "blue", panelSize: PanelSize.Medium, managedAccounts: [], sideNotchPanelCorner: "",
   launchAtLogin: false, showHeatmap: true, showClaudeHeatmap: true, showCodexHeatmap: true, quotaAlertsEnabled: false,
   sideNotchPanelEnabled: false, sideNotchPanelPinned: false, menuBarCompactEnabled: true, onboardingCompleted: false,
   updateCheckEnabled: true, showPacingBurnRate: true, showActivityTelemetry: true, showDailyActivityChart: true, showSideNotchResetButton: true,
@@ -40,6 +41,7 @@ function validate(key: string, v: unknown): v is PreferenceValue {
   if (typeof v !== "string" || v.length > 100 || /[\r\n\0]/.test(v)) return false;
   if (key === "appearanceTheme") return ["system", "light", "dark"].includes(v);
   if (key === "accentTheme") return ["blue", "violet", "teal", "amber", "rose", "graphite"].includes(v);
+  if (key === "panelSize") return Object.hasOwn(panelScales, v);
   if (key === "sideNotchPanelCorner") return v === "" || /^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(v);
   if (key === "desktopCodexConnection" || key === "desktopCodexCleanup") return v === "" || key === "desktopCodexConnection" && v === "off" || /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(v);
   if (key === "desktopClaudeIdentity") return v === "" || v === "off" || /^[a-f\d]{64}$/.test(v);
