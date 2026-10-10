@@ -105,3 +105,58 @@ content and report ID, then retry the same ID and verify only one issue exists.
 Record the candidate digest, endpoint, issue reference and executed checks.
 Check the actual Settings interaction on the native target. Source inspection
 or a static rendered capture does not establish interactive UI behavior.
+
+## Agent-facing bug feedback
+
+Use the executable inside a configured MeterUsage app bundle. A bare SwiftPM
+binary can draft, but cannot submit without the bundle's existing reporting
+endpoint. This feature adds no endpoint override or client credential.
+
+`meterusage report draft` reads JSON from stdin with exactly four string fields:
+
+```json
+{"description":"Synthetic external link does not open","steps":"Select the example external link","expected":"The browser opens","actual":"Nothing happens"}
+```
+
+It prints those fields plus a new `id`. Retain that JSON in the agent's current
+context. Pass it unchanged on stdin to `meterusage report submit`. Neither
+command reads a report file or saves a draft. Description is limited to 512
+UTF-8 bytes; each other field to 2,048 bytes; total stdin to 8,192 bytes. Empty
+fields, extra fields, non-v4 IDs, controls, paths, links, email addresses and
+common credential patterns fail before preview or network access. A supplied
+`confirmed` field is rejected.
+
+Submission opens a native scrollable preview with the exact report, report ID,
+HTTPS relay and MeterUsage support's private Linear destination. Cancel is the
+default button. Send this report grants consent for one request. CLI stdout
+returns JSON containing `id`, `status`, and a verified `identifier` only on
+success. Decline returns `declined` with no request. Delivery failures are
+sanitized, and the user can cancel or explicitly retry the unchanged report.
+Cancel after a failed acknowledgement returns `unconfirmed`, not unsent.
+Unavailable configuration returns `unavailable`. Errors exit nonzero; a fresh
+decline or confirmed receipt exits zero. No raw response body or URL error is
+printed.
+
+The appended diagnostics contain app and numeric system metadata only. No
+provider is polled and no transcript, arbitrary file or account data is read.
+The CLI marks provider/history observations unknown; it does not borrow state
+from a running app. The short prose fields describe observed evidence, not raw
+logs or conversations. Pattern validation cannot identify every private fact:
+the agent must omit them and the real user must review the full preview.
+
+Keep the same draft ID and text for an uncertain retry, including after process
+exit. The relay reconciles exact UUID, content and destination. Changed app or
+system metadata with the same ID can produce an unconfirmed result. Do not
+mint a new ID automatically after a failure. A deliberate new draft is a new
+report and requires new native consent. See [ADR 0013](adr/0013-agent-feedback-native-consent.md).
+
+The external-link fixture is a synthetic UX example inspired by
+[Ben Davis's post](https://x.com/davis7/status/2108756950641254490).
+It does not establish that the reported Grok bug was reproduced or fixed.
+
+Focused proof covers draft validation, exact native preview, cancel without a
+request, explicit send through the existing client to an injected synthetic
+transport, matching/mismatched receipts, sanitized failures and byte-identical
+uncertain retries. Native tests operate on their own modal window and never
+contact the deployed relay. Live delivery, installed-app behavior and release
+availability require separate proof and authorization.

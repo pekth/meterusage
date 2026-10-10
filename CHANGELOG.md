@@ -8,6 +8,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Agents can prepare bounded bug drafts with `report draft`. `report submit`
+  shows the exact text and private Linear destination in a native consent
+  dialog. Each send or uncertain retry requires a user click; receipt checks
+  reuse the existing client and relay. No provider data is collected.
+
 - Settings offers Report issue for direct, user-requested diagnostic delivery
   through a private Linear relay without user login. The report includes app
   and environment details, provider state and recent refresh outcomes. Copy
