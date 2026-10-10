@@ -290,7 +290,7 @@ async function start() {
     try { return await handle(parseRequest(raw), source, surface); }
     catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Connections are disabled in demo mode", "Automatic Grok connection is unavailable"].includes(e.message) ? e.message : "Could not complete action" }; }
   });
-  coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
+  const unsubscribe = coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
   screen.on("display-metrics-changed", () => { placeNotch(); publish(); }); screen.on("display-removed", () => { placeNotch(); publish(); });
   powerMonitor.on("resume", () => { void coordinator.refresh(); });
   app.on("second-instance", () => showFlyout());
@@ -303,6 +303,7 @@ async function start() {
     event.preventDefault();
     if (quitting) return;
     quitting = true;
+    unsubscribe();
     coordinator.stop(); updater.reset(); clearInterval(clockTimer); if (drag) { clearInterval(drag.timer); clearTimeout(drag.timeout); } folding.cancel();
     void connections.stop().finally(() => {
       if (shareDirectory) rmSync(shareDirectory, { recursive: true, force: true }); for (const directory of sharedDirectories) rmSync(directory, { recursive: true, force: true }); tray.destroy();

@@ -51,6 +51,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Stop display updates when Quit begins so a late usage refresh cannot reopen
+  the side notch or restart update checks during shutdown.
+
 - Launch Codex account helpers with the documented stdio transport. Keep
   interpreter search paths available without inheriting credential variables.
 - Keep provider display controls available for active additional accounts when
