@@ -12,6 +12,8 @@ follows [Semantic Versioning](https://semver.org/).
   shows the exact text and private Linear destination in a native consent
   dialog. Each send or uncertain retry requires a user click; receipt checks
   reuse the existing client and relay. No provider data is collected.
+  Draft serialization reserves space for its ID and newline. CLI metadata
+  excludes unobserved app state; native test failures abort their modal.
 
 - Settings offers Report issue for direct, user-requested diagnostic delivery
   through a private Linear relay without user login. The report includes app

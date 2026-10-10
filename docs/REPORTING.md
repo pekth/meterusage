@@ -125,6 +125,8 @@ UTF-8 bytes; each other field to 2,048 bytes; total stdin to 8,192 bytes. Empty
 fields, extra fields, non-v4 IDs, controls, paths, links, email addresses and
 common credential patterns fail before preview or network access. A supplied
 `confirmed` field is rejected.
+The encoded draft including its ID and output newline must also fit the stdin
+limit, so every successful draft can be passed unchanged to submit.
 
 Submission opens a native scrollable preview with the exact report, report ID,
 HTTPS relay and MeterUsage support's private Linear destination. Cancel is the

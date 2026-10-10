@@ -57,7 +57,10 @@ enum AgentFeedback {
             else { throw Failure.invalidInput }
             id = parsed
         } else { id = UUID() }
-        return Draft(id: id, description: fields[0], steps: fields[1], expected: fields[2], actual: fields[3])
+        let draft = Draft(id: id, description: fields[0], steps: fields[1], expected: fields[2], actual: fields[3])
+        // Leave room for the output newline when the draft is passed back on stdin.
+        guard try JSONEncoder().encode(draft).count < maximumInputBytes else { throw Failure.invalidInput }
+        return draft
     }
 
     static func report(_ draft: Draft) -> IssueReportClient.Report {
@@ -65,6 +68,7 @@ enum AgentFeedback {
             appName: AppInfo.name, appVersion: AppInfo.version, isDemoMode: false,
             refreshInterval: 0, lastRefreshedAt: nil, now: Date(), enabledSlots: [],
             quotas: [:], activities: [:], usages: [:], statuses: [:], plans: [:])
+            .split(separator: "\n").prefix(5).joined(separator: "\n")
         return .init(id: draft.id, diagnostics: "Description:\n\(draft.description)\n\nSteps:\n\(draft.steps)\n\nExpected:\n\(draft.expected)\n\nActual:\n\(draft.actual)\n\nCLI snapshot: provider and history state not observed; no sources polled.\n\(diagnostics)")
     }
 

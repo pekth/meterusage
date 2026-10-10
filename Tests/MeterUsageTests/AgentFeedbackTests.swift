@@ -18,6 +18,25 @@ final class AgentFeedbackTests: XCTestCase {
         XCTAssertThrowsError(try AgentFeedback.decode(example, requiresID: true))
     }
 
+    func testDraftFitsSubmitAndMetadataDoesNotClaimAppState() throws {
+        let large = try JSONSerialization.data(withJSONObject: [
+            "description": "x", "steps": "x" + String(repeating: "\n", count: 2047),
+            "expected": String(repeating: "x ", count: 1024),
+            "actual": String(repeating: "x ", count: 990)])
+        XCTAssertLessThanOrEqual(large.count, AgentFeedback.maximumInputBytes)
+        XCTAssertThrowsError(try AgentFeedback.decode(large, requiresID: false))
+        let draft = try AgentFeedback.decode(example, requiresID: false)
+        var encoded = try JSONEncoder().encode(draft)
+        encoded.append(10)
+        XCTAssertEqual(try AgentFeedback.decode(encoded, requiresID: true).id, draft.id)
+        let text = AgentFeedback.report(draft).diagnostics
+        XCTAssertTrue(text.contains("os version:"))
+        XCTAssertTrue(text.contains("architecture:"))
+        for unobserved in ["refresh interval:", "slots:", "history:", "archived quota slots:"] {
+            XCTAssertFalse(text.contains(unobserved))
+        }
+    }
+
     @MainActor
     func testNativeReviewAndClientReceipt() async throws {
         let report = AgentFeedback.report(try AgentFeedback.decode(example, requiresID: false))
@@ -43,10 +62,13 @@ final class AgentFeedbackTests: XCTestCase {
                     XCTAssertTrue(views.compactMap { $0 as? NSTextView }.contains { $0.string == preview && !$0.isEditable })
                     XCTAssertTrue(preview.contains(report.diagnostics))
                     XCTAssertTrue(preview.contains(endpoint.absoluteString))
-                    let button = views.compactMap { $0 as? NSButton }.first { $0.title == title }
-                    XCTAssertNotNil(button)
-                    if title != "Cancel" { XCTAssertEqual(button?.keyEquivalent, "") }
-                    button?.performClick(nil)
+                    guard let button = views.compactMap({ $0 as? NSButton }).first(where: { $0.title == title }) else {
+                        XCTFail("Expected native review button is missing")
+                        NSApplication.shared.abortModal()
+                        return
+                    }
+                    if title != "Cancel" { XCTAssertEqual(button.keyEquivalent, "") }
+                    button.performClick(nil)
                 }
                 RunLoop.main.add(timer, forMode: .modalPanel)
                 return AgentFeedback.review(preview, failure: failure)
