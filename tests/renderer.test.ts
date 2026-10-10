@@ -113,6 +113,22 @@ it("offers simple account setup and truthful Grok availability without directori
   view.snapshot.demo = true; view.connections[0].status = "disconnected";
   expect(renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }))).toContain("disabled");
 });
+it("keeps onboarding in Settings and removes it from usage after completion", () => {
+  const view = state(); view.snapshot.demo = false;
+  view.connections = [{ provider: "codex", status: "disconnected" }, { provider: "claude", status: "disconnected" }, { provider: "grok", status: "unsupported" }];
+  view.snapshot.appearance.onboarding = false;
+  const setup = renderApp(view, "settings");
+  expect(setup).toContain("Your usage, at a glance"); expect(setup).toContain("Choose an account once");
+  expect(setup).toContain("Connect your accounts"); expect(setup).toContain(">Done</button>");
+  expect(setup).toContain("Sign in to Codex"); expect(setup).toContain("Connect Claude Desktop");
+  for (const surface of ["flyout", "notch", "tray", "share"]) {
+    expect(renderApp(view, surface)).not.toContain("Your usage, at a glance");
+    expect(renderApp(view, surface)).not.toContain("Connect your accounts");
+  }
+  view.snapshot.appearance.onboarding = true;
+  const completed = renderApp(view, "settings");
+  expect(completed).not.toContain("Your usage, at a glance"); expect(completed).not.toContain(">Done</button>");
+});
 it.each(["codex", "claude"] as const)("keeps %s display control available for an active additional account", provider => {
   const view = state(), name = provider === "codex" ? "Codex" : "Claude";
   view.settings.values = { [`showProvider${name}`]: false, [`menuBarProvider${name}`]: true };

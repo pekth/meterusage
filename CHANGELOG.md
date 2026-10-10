@@ -34,6 +34,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Move candidate onboarding into Settings. First-time setup reuses account
+  connections and allows Done without signing in. Done saves completion before
+  returning to usage; a save failure keeps setup open. The main panel shows usage
+  without the welcome and account-setup card.
+
 - Group candidate Settings by task, show six accent color swatches, and label
   provider collection separately from menu-bar and side-notch display.
   Turning collection off retains the saved display preference.

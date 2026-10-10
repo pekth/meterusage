@@ -71,8 +71,8 @@ async function start(launch: Launch) {
   const icon = nativeImage.createFromPath(join(__dirname, "../renderer/AppIcon.png")).resize({ width: 18, height: 18 }); icon.setTemplateImage(true);
   const tray = new Tray(icon);
   tray.setToolTip("MeterUsage");
-  tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showFlyout() }, { label: "Settings…", click: () => showSettings() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
-  tray.on("click", () => { const w = windows.get("flyout"); w?.isVisible() ? w.hide() : showFlyout(); });
+  tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showUsage() }, { label: "Settings…", click: () => showSettings() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
+  tray.on("click", () => { const w = windows.get("flyout"); w?.isVisible() ? w.hide() : showUsage(); });
   let shareState: ViewState | undefined, shareHeight = 0, shareReady: ((image: Electron.NativeImage) => void) | undefined, shareFailed: ((error: Error) => void) | undefined;
   const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ connections: connections.state, snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
   const updater = new Updater(prefs, app.getVersion(), publish, undefined, release => {
@@ -131,6 +131,7 @@ async function start(launch: Launch) {
     w.setPosition(Math.round(Math.min(Math.max(bounds.x + bounds.width / 2 - w.getBounds().width / 2, work.x), work.x + work.width - w.getBounds().width)), work.y);
     sizeFlyout(); w.show(); w.focus(); void coordinator.refreshIfStale();
   }
+  function showUsage() { if (prefs.values.onboardingCompleted === true) showFlyout(); else showSettings(); }
   function sizeFlyout() {
     const w = windows.get("flyout"); if (!w || w.isDestroyed()) return;
     const bounds = w.getBounds(), work = screen.getDisplayMatching(bounds).workArea;
@@ -222,6 +223,7 @@ async function start(launch: Launch) {
           if (app.getLoginItemSettings().openAtLogin !== r.value) throw new Error("Could not change login item");
         }
         await prefs.set(r.key, r.value);
+        if (r.key === "onboardingCompleted" && r.value === true && surface === "settings" && !quitting && !source.isDestroyed()) { source.hide(); showFlyout(); }
         if (r.key === "panelSize") sizeFlyout();
         if (r.key === "refreshIntervalSeconds") coordinator.restartTimer();
         if (r.key === "sideNotchPanelPinned") { notch.expanded = r.value === true || folding.hovered; folding.changed(); }
@@ -349,6 +351,6 @@ async function start(launch: Launch) {
   await connections.recover().catch(() => {});
   if (quitting) return;
   syncNotch(); await coordinator.start();
-  if (!quitting && (launch.candidate || prefs.values.onboardingCompleted !== true)) showFlyout();
-  if (!quitting) return () => { if (!quitting) showFlyout(); };
+  if (!quitting && (launch.candidate || prefs.values.onboardingCompleted !== true)) showUsage();
+  if (!quitting) return () => { if (!quitting) showUsage(); };
 }

@@ -1,11 +1,18 @@
 # Desktop account connections
 
-The macOS Electron candidate adds account connection controls to first-run
-setup and Settings. This is candidate source behavior, not support in the
+The macOS Electron candidate keeps account connection controls in Settings,
+including first-run setup. This is candidate source behavior, not support in the
 published Swift app. Native sign-in, Keychain permission, packaging and live
 provider acceptance remain unverified.
 
 ## Setup
+
+Before setup is complete, launch or app activation opens Settings. Connect an
+account there, or choose **Done** to continue without signing in. Done saves the
+existing setup-completion preference before opening usage. If saving fails,
+Settings keeps the setup guidance and reports the error. Account connections
+remain in Settings after setup; the main usage panel has no welcome card.
+See [ADR 0014](adr/0014-settings-onboarding.md).
 
 - Codex: choose **Sign in to Codex** and complete browser sign-in. The candidate
   finds the helper in an existing Codex app in Applications, with existing

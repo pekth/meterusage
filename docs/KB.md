@@ -1,6 +1,6 @@
 # Project knowledge
 
-Last source review: 2026-10-09
+Last source review: 2026-10-10
 
 ## Repository state
 
@@ -9,6 +9,13 @@ Last source review: 2026-10-09
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
+
+- Candidate onboarding lives in Settings and reuses its account connections.
+  Incomplete setup opens Settings on launch or app activation. Done persists
+  `onboardingCompleted` before returning to usage; a failed write leaves setup
+  open. Sign-in is optional. The main panel has no setup card. Existing completed
+  profiles retain their preference. [ADR 0014](adr/0014-settings-onboarding.md)
+  records this placement; native acceptance is separate from source validation.
 
 - The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, read-only Desktop cache/cookie selection and the OAuth allowance endpoint after consent. Grok consumer connection remains unavailable. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md) and ADR 0011 define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
 

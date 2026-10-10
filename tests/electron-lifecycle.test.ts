@@ -6,11 +6,12 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 
 it.each([
-  { candidate: false, keyboard: false, retainedZoom: false },
+  { candidate: false, keyboard: false, retainedZoom: false, onboarding: true },
+  { candidate: false, keyboard: false, retainedZoom: false, onboarding: false },
   { candidate: true, keyboard: false, retainedZoom: false },
   { candidate: true, keyboard: true, retainedZoom: false },
   { candidate: true, keyboard: false, retainedZoom: true },
-])("cleans up windows and isolates candidate effects (candidate=$candidate, keyboard=$keyboard, retainedZoom=$retainedZoom)", async ({ candidate, keyboard, retainedZoom }) => {
+])("cleans up windows and isolates candidate effects (candidate=$candidate, keyboard=$keyboard, retainedZoom=$retainedZoom, onboarding=$onboarding)", async ({ candidate, keyboard, retainedZoom, onboarding = true }) => {
   vi.resetModules();
   const root = mkdtempSync(join(tmpdir(), "meterusage-lifecycle-"));
   const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
@@ -40,6 +41,7 @@ it.each([
   class TestWindow extends EventEmitter {
     destroyed = false;
     zoomFactor = 1;
+    surface = "";
     bounds: { x: number; y: number; width: number; height: number };
     contents = Object.assign(new EventEmitter(), { id: windows.length + 1, mainFrame: { url: "" }, setFrameRate: vi.fn(), setZoomFactor: vi.fn((factor: number) => { this.zoomFactor = factor; }), send: vi.fn(), setWindowOpenHandler: vi.fn() });
     constructor(options: { width: number; height: number }) { super(); this.bounds = { x: 0, y: 0, width: options.width, height: options.height }; windows.push(this); }
@@ -53,6 +55,7 @@ it.each([
     setPosition = vi.fn((x: number, y: number) => { this.bounds.x = x; this.bounds.y = y; }); show = vi.fn(); focus = vi.fn(); hide = vi.fn();
     loadURL = (url: string) => {
       this.contents.mainFrame.url = url;
+      this.surface = new URL(url).searchParams.get("surface")!;
       if (retainedZoom && ["flyout", "settings"].includes(new URL(url).searchParams.get("surface")!)) this.zoomFactor = 1.25;
       this.contents.emit("did-finish-load"); return Promise.resolve();
     };
@@ -65,7 +68,7 @@ it.each([
     session: { defaultSession: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } } },
   }));
   vi.doMock("../src/main/launch", () => ({ launchConfiguration: () => ({ data: root, home: root, demo: false, candidate, profile: candidate ? root : undefined }) }));
-  const values: Record<string, boolean | string> = { onboardingCompleted: true, panelSize: "medium" };
+  const values: Record<string, boolean | string> = { onboardingCompleted: onboarding, panelSize: "medium" };
   const setPreference = vi.fn(async (key: string, value: boolean | string) => { await Promise.resolve(); values[key] = value; });
   let finishLoad!: () => void;
   const loading = new Promise<void>(resolve => { finishLoad = resolve; });
@@ -94,7 +97,7 @@ it.each([
     await vi.waitFor(() => expect(windows).toHaveLength(2));
     expect(windows[1].focus).toHaveBeenCalled();
     application.emit("activate");
-    expect(windows[1].focus).toHaveBeenCalledTimes(candidate ? 3 : 2);
+    expect(windows[1].focus).toHaveBeenCalledTimes(candidate || !onboarding ? 3 : 2);
     expect(application.requestSingleInstanceLock.mock.invocationCallOrder[0]).toBeLessThan(application.whenReady.mock.invocationCallOrder[0]);
     if (candidate) {
       expect(application.setPath.mock.calls).toEqual([["userData", join(root, "electron")], ["sessionData", join(root, "electron")]]);
@@ -104,6 +107,20 @@ it.each([
     }
     tray.emit("click");
     await vi.waitFor(() => expect(windows).toHaveLength(2));
+    if (!onboarding) {
+      const setup = windows[1];
+      expect(setup.surface).toBe("settings");
+      application.emit("activate");
+      expect(setup.focus).toHaveBeenCalled();
+      const invoke = (w: TestWindow, request: unknown) => ipc.mock.calls[0][1]({ sender: w.contents, senderFrame: w.contents.mainFrame }, request);
+      setPreference.mockRejectedValueOnce(new Error("Synthetic write failure"));
+      expect(await invoke(setup, { action: "setPreference", key: "onboardingCompleted", value: true })).toEqual({ ok: false, error: "Could not complete action" });
+      expect(values.onboardingCompleted).toBe(false); expect(setup.hide).not.toHaveBeenCalled();
+      expect(await invoke(setup, { action: "setPreference", key: "onboardingCompleted", value: true })).toEqual({ ok: true });
+      expect(values.onboardingCompleted).toBe(true); expect(setup.hide).toHaveBeenCalled();
+      expect(windows.some(w => w.surface === "flyout" && w.show.mock.calls.length > 0)).toBe(true);
+      return;
+    }
     const closed = windows[1];
     closed.destroyed = true;
     tray.emit("click");
