@@ -12,7 +12,7 @@ export interface SettingsState {
   values: Record<string, boolean | number | string>;
   accounts: { id: string; provider: "codex" | "claude"; label: string; pathLabel?: string; enabled: boolean }[];
 }
-export interface IssueReportState { sending: boolean; receipt?: string; error?: string }
+export interface IssueReportState { sending: boolean; receipt?: string; error?: string; retryAt?: number }
 export interface ViewState {
   issueReport?: IssueReportState;
   connections?: ConnectionState[];

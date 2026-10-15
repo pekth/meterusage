@@ -62,7 +62,7 @@ async function start(launch: Launch) {
   const coordinator = new Coordinator(launch, prefs, sources(), Date.now, alert => {
     if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
   }, sources);
-  const issueReports = new IssueReports(() => coordinator.diagnostics(app.getVersion()), publish);
+  const issueReports = new IssueReports(() => coordinator.diagnostics(app.getVersion()), publish, prefs);
   // Do not restore a legacy archive under a newly connected account.
   for (const p of ["codex", "claude"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
   const notch = { expanded: false, cardOnRight: false, selected: "codex", dragging: false };

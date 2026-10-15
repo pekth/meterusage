@@ -3,6 +3,7 @@ import { parseRequest, trustedSender, projectSettings } from "../src/main/ipc";
 describe("renderer boundary", () => {
   it("accepts report intent without renderer-selected content or destination", () => {
     expect(parseRequest({ action: "sendReport" })).toEqual({ action: "sendReport" });
+    expect(() => parseRequest({ action: "setPreference", key: "reportNextAllowedAt", value: 0 })).toThrow();
     for (const extra of [{ diagnostics: "private" }, { url: "https://example.invalid" }, { id: "chosen" }, { consent: true }, { body: {} }]) expect(() => parseRequest({ action: "sendReport", ...extra })).toThrow();
   });
   it("accepts and publishes only Small, Medium and Large panel sizes", () => {

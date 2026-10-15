@@ -261,7 +261,9 @@ identifiers, credentials, usage contents, prompts and transcripts.
 
 Main generates the summary; renderer requests cannot supply report text, IDs or
 URLs. Reports have a random UUID for duplicate-safe retries. Pending summaries
-and confirmed references remain in memory for the app session. Requests omit
+and confirmed references remain in memory for the app session. A next-allowed
+submission time is saved locally to enforce a 10-minute cooldown across app
+relaunches. No report content or receipt is persisted. Requests omit
 cookies and stored credentials, reject redirects, and enforce byte limits and a
 timeout. The relay sees the network source IP for rate limiting; Cloudflare and
 Linear process the submission. MeterUsage does not attach provider credentials.

@@ -2,6 +2,7 @@ import { it, expect } from "vite-plus/test";
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { IssueReports } from "../src/main/issue-reports";
 import { Preferences } from "../src/main/preferences";
 import type { Command } from "../src/main/providers/transport";
 
@@ -61,4 +62,29 @@ it("rejects the removed strip preference without changing stored fixture data", 
     await expect(prefs.set("sideNotchStripMode", "usage")).rejects.toThrow("Invalid preference");
     expect(readFileSync(file, "utf8")).toBe(stored);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+it("persists the report cooldown as a native date and blocks requests after relaunch", async () => {
+  let stored: string | undefined;
+  const writes: string[][] = [];
+  const command: Command = async (_binary, args) => {
+    if (args[2] !== "reportNextAllowedAt") throw new Error("Absent fixture key");
+    if (args[0] === "read-type") { if (!stored) throw new Error("Absent fixture key"); return "Type is date"; }
+    if (args[0] === "read") return stored!;
+    expect(args.slice(0, 4)).toEqual(["write", "dev.meterusage.fixture", "reportNextAllowedAt", "-date"]);
+    writes.push([...args]); stored = args[4]; return "";
+  };
+  const launch = { home: "/synthetic", data: "/synthetic", demo: false, candidate: false, env: {} };
+  const now = Date.parse("2026-10-15T12:00:00Z"), send = async () => "MU-123";
+  let calls = 0;
+  const countedSend = async () => { calls++; return send(); };
+  const prefs = await Preferences.load(launch, command, "dev.meterusage.fixture");
+  await new IssueReports(() => "sanitized fixture", () => {}, prefs, countedSend, () => now).submit();
+  const reloaded = await Preferences.load(launch, command, "dev.meterusage.fixture");
+  const afterRestart = new IssueReports(() => "different fixture", () => {}, reloaded, countedSend, () => now + 1);
+  await afterRestart.submit();
+  expect(calls).toBe(1);
+  expect(afterRestart.state.retryAt).toBe(now + 600000);
+  expect(writes).toEqual([["write", "dev.meterusage.fixture", "reportNextAllowedAt", "-date", "2026-10-15T12:10:00.000Z"]]);
 });

@@ -14,7 +14,7 @@ export type PreferenceValue = boolean | number | string | ManagedAccount[] | Pro
 type Kind = "boolean" | "number" | "string" | "data" | "date";
 const kinds: Record<string, Kind> = {
   refreshIntervalSeconds: "number", appearanceTheme: "string", accentTheme: "string", panelSize: "string", managedAccounts: "data", providerOrder: "data",
-  sideNotchPanelCorner: "string", updateLastCheckDate: "date", updateDismissedVersion: "string", updateAnnouncedVersion: "string",
+  sideNotchPanelCorner: "string", updateLastCheckDate: "date", reportNextAllowedAt: "date", updateDismissedVersion: "string", updateAnnouncedVersion: "string",
   desktopCodexConnection: "string", desktopCodexCleanup: "string", desktopClaudeIdentity: "string",
   ...Object.fromEntries(["launchAtLogin", "showHeatmap", "showClaudeHeatmap", "showCodexHeatmap", "quotaAlertsEnabled", "sideNotchPanelEnabled", "sideNotchPanelPinned", "menuBarCompactEnabled", "onboardingCompleted", "updateCheckEnabled", "showPacingBurnRate", "showActivityTelemetry", "showDailyActivityChart", "showSideNotchResetButton", ...providers.flatMap(p => [providerPreference(p), trayPreference(p)])].map(k => [k, "boolean" as const])),
 };

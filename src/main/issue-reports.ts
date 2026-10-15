@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { IssueReportState } from "../shared/ipc";
+import type { Preferences } from "./preferences";
 
 const endpoint = "https://meterusage-reports.fancy-queen-3301.workers.dev/report";
 const failures = {
   tooLarge: "This report is too large to send. Copy diagnostics to keep the full report.",
-  rateLimited: "Too many reports. Please wait a minute, then try again.",
+  rateLimited: "Too many reports. Try again later or copy diagnostics.",
+  storage: "Could not save the report cooldown. Nothing was sent. Copy diagnostics instead.",
   unconfirmed: "Delivery could not be confirmed. Try again or copy diagnostics.",
 };
 class ReportFailure extends Error {
@@ -44,18 +46,25 @@ export async function sendIssueReport(report: Report, fetcher: typeof fetch = fe
 
 // Keep one snapshot and UUID across retries and Settings navigation.
 export class IssueReports {
-  state: IssueReportState = { sending: false };
+  private current: IssueReportState = { sending: false };
   private pending?: Report;
-  constructor(private diagnostics: () => string, private changed: () => void, private send = sendIssueReport) {}
+  constructor(private diagnostics: () => string, private changed: () => void, private prefs: Pick<Preferences, "values" | "set">, private send = sendIssueReport, private now = Date.now) {}
+  get state(): IssueReportState {
+    const retryAt = Number(this.prefs.values.reportNextAllowedAt ?? 0);
+    return { ...this.current, ...(retryAt > this.now() ? { retryAt } : {}) };
+  }
   async submit() {
-    if (this.state.sending || this.state.receipt) return;
-    this.state = { sending: true }; this.changed();
+    if (this.current.sending || this.current.receipt || this.state.retryAt) return;
+    this.current = { sending: true }; this.changed();
     try {
       this.pending ??= { schema: 1, id: randomUUID(), diagnostics: this.diagnostics() };
+      // Reserve before HTTP so failures, crashes and relaunches cannot reset the cooldown.
+      try { await this.prefs.set("reportNextAllowedAt", this.now() + 10 * 60 * 1000); }
+      catch { throw new ReportFailure("storage"); }
       const receipt = await this.send(this.pending);
-      this.state = { sending: false, receipt }; this.pending = undefined;
+      this.current = { sending: false, receipt }; this.pending = undefined;
     } catch (error) {
-      this.state = { sending: false, error: error instanceof ReportFailure ? error.message : failures.unconfirmed };
+      this.current = { sending: false, error: error instanceof ReportFailure ? error.message : failures.unconfirmed };
     } finally { this.changed(); }
   }
 }

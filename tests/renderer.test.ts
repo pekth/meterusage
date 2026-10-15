@@ -567,6 +567,13 @@ it("preserves action alerts and dated archive reasons across the shared cards", 
 it("shows reporting progress, confirmed references and safe failures in Diagnostics", () => {
   const view = state();
   expect(renderApp(view, "settings")).toContain('>Send report</button>');
+  view.issueReport = { sending: false, retryAt: view.snapshot.clock + 600000 };
+  expect(renderApp(view, "settings")).toContain('<button disabled="">Send report</button>');
+  expect(renderApp(view, "settings")).toContain('Next report attempt after');
+  expect(renderApp(view, "settings")).toContain('Please wait 10 minutes between attempts.');
+  view.snapshot.clock += 600000;
+  expect(renderApp(view, "settings")).toContain('>Send report</button>');
+  expect(renderApp(view, "settings")).not.toContain('Next report attempt after');
   view.issueReport = { sending: true };
   expect(renderApp(view, "settings")).toContain('<button disabled="">Sending…</button>');
   view.issueReport = { sending: false, receipt: "MU-123" };

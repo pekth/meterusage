@@ -24,8 +24,24 @@ HTTP201, the matching UUID and a valid support reference.
 Repeated clicks while sending do nothing. An uncertain retry reuses the UUID
 and snapshot for server-side reconciliation. A confirmed reference stays visible
 through Settings navigation; further sends are disabled until app relaunch.
-Pending reports and receipts are not saved to disk. Rate limits and unknown
-failures show fixed messages without server responses or raw errors.
+Each attempt also reserves a 10-minute cooldown before contacting the relay.
+The next allowed time is saved as a private local preference, so app relaunch,
+Settings navigation and failed requests do not reset it. The button stays
+disabled until that time and shows when retry is available. Main enforces the
+same gate even if a renderer sends another request. If saving the cooldown
+fails, nothing is sent. Copy diagnostics remains available.
+
+Only the cooldown time is persisted. Pending report content and receipts are
+not saved to disk. Uncertain retries within the same app session keep the
+report UUID and snapshot. No automatic retry runs after the cooldown expires.
+Rate limits and unknown failures show fixed messages without server responses
+or raw errors.
+
+The legacy relay configuration sets 3 requests per IP per minute and 30 total
+per minute before contacting Linear. These Cloudflare counters are local and
+eventually consistent, not a strict worldwide cap. Client cooldown protects
+against accidental repeated sends; it does not replace server enforcement.
+The reviewed source configuration does not establish current deployed limits.
 
 Mock transport tests cover requests, receipts, limits, retries and redaction.
 They do not establish current relay deployment or delivery to Linear. A live

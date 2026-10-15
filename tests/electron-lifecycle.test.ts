@@ -83,8 +83,8 @@ it.each([
     session: { defaultSession: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } } },
   }));
   vi.doMock("../src/main/launch", () => ({ launchConfiguration: () => ({ data: root, home: root, demo: false, candidate, profile: candidate ? root : undefined }) }));
-  const values: Record<string, boolean | string | Provider[]> = { onboardingCompleted: onboarding, panelSize: "medium", sideNotchPanelPinned: notchTest };
-  const setPreference = vi.fn(async (key: string, value: boolean | string | Provider[]) => { await Promise.resolve(); values[key] = value; });
+  const values: Record<string, boolean | number | string | Provider[]> = { onboardingCompleted: onboarding, panelSize: "medium", sideNotchPanelPinned: notchTest };
+  const setPreference = vi.fn(async (key: string, value: boolean | number | string | Provider[]) => { await Promise.resolve(); values[key] = value; });
   let finishLoad!: () => void;
   const loading = new Promise<void>(resolve => { finishLoad = resolve; });
   const load = vi.fn(async () => { await loading; return { values, accounts: [], set: setPreference }; });
@@ -180,7 +180,7 @@ it.each([
     expect(await invoke(settings, { action: "sendReport" })).toEqual({ ok: true });
     expect(reportFetch).toHaveBeenCalledOnce();
     expect(JSON.parse(String(reportFetch.mock.calls[0][1]?.body)).diagnostics).toBe("MeterUsage 0.0.0\nquota: unavailable (offline)");
-    expect((await invoke(settings, { action: "state" })).state.issueReport).toEqual({ sending: false, receipt: "MU-123" });
+    expect((await invoke(settings, { action: "state" })).state.issueReport).toMatchObject({ sending: false, receipt: "MU-123", retryAt: expect.any(Number) });
     expect((await invoke(flyout, { action: "state" })).state).not.toHaveProperty("issueReport");
     await invoke(settings, { action: "sendReport" });
     expect(reportFetch).toHaveBeenCalledOnce();

@@ -15,6 +15,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Limit diagnostic report attempts to once every 10 minutes across app relaunches,
+  with a visible retry time and no transmission if the cooldown cannot be saved.
+
 - Fit Electron Settings to its active page and expanded controls within the display
   work area. Remove the fixed-height blank space and oversized heatmap readout
   reservation. Exact daily counts wrap below the grid on hover or focus.
