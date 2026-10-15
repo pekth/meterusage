@@ -20,6 +20,14 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Keep Service status at the top of the Electron menu. Switch between provider
+  and account tabs instead of stacking every usage card. Preserve saved order
+  and keyboard navigation.
+- Compact menu and side-notch usage cards with tighter spacing and shorter
+  sparklines. Keep quota, reset actions and heatmaps visible. Extra activity
+  statistics, period comparisons and burn breakdowns expand on demand; shared
+  cards retain their complete data.
+
 - Organize Electron Settings into a compact category sidebar with provider
   summaries and setup details under Configure. Keep existing settings, account
   controls and explicit connection actions. Show the current source, collection

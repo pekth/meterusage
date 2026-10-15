@@ -59,13 +59,23 @@ Last source review: 2026-10-10
   Input accessible names and full label hit areas remain. Settings action
   errors retain their alert role, message and dismissal in a sticky banner.
   Advanced account rows wrap without changing their save/remove behavior.
-- Candidate Usage places Service status after usage and burn cards and shows local summary metrics in
-  three equal columns, with two columns at 360 pixels or narrower. Recorded
+- Candidate Usage keeps Service status first and visible, before provider usage.
+  Provider/account tabs show one usage card at a time in saved provider order.
+  Arrow keys and Home/End switch tabs; removing a selected slot falls back to
+  the first available slot. Local summary metrics and measured burn remain in
+  the All-provider activity breakdown disclosure. Summary metrics use three
+  equal columns, with two columns at 360 pixels or narrower. Recorded
   activity labels distinguish telemetry counters from account/local totals
   without changing values or adding a time scope. Archived quota retains its
   timestamp and failure reason in a warning well. Long labels and metadata
   wrap; percentages and reset actions stay together. This is resilience
   polish, not a reproduced overflow fix.
+- Live menu and side-notch cards show the first two available recorded metrics,
+  with the remainder under More activity. Usage by period and active-window burn
+  also use closed disclosures. Quota, eligible reset actions and heatmaps stay
+  visible. Spacing and sparkline height are reduced without changing font-size
+  choices or source values. Static exports retain all recorded metrics and full
+  period/burn data without those disclosures.
 - Static shared cards omit footer actions, reset buttons and the heatmap
   selector. Credit details and the 26 weeks label remain. Export heatmaps omit
   the unused hover readout space. Live readouts also use only their text height. Full-height capture,

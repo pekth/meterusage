@@ -114,6 +114,10 @@
 .surface-flyout .service-status { padding: 10px 12px; background: transparent; }
 .surface-flyout .service-status .status { margin-top: 8px; }
 .surface-flyout .service-status h2 { font-size: 12px; }
+.surface-flyout .service-status .status { margin: 5px 0 0; }
+.surface-flyout .service-status .service-reading { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 2px 6px; }
+.surface-flyout .service-status .service-reading button { font-size: 11px; line-height: 1.2; padding: 3px 6px; }
+.surface-flyout .service-status .service-reading .secondary { font-size: 10px; }
 .surface-flyout .service-status button { min-height: 24px; }
 .surface-flyout .service-status button .badge { background: transparent; padding: 0; }
 .surface-flyout .activity-summary .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
@@ -134,6 +138,28 @@
 .update-actions > span { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
 .update-actions button { flex-shrink: 0; }
 @media (max-width: 360px) { .surface-flyout .activity-summary .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.provider-tabs { display: flex; align-items: center; gap: 3px; overflow-x: auto; padding: 4px; margin-bottom: 8px; border-radius: 8px; background: var(--well); }
+.provider-tabs [role="tab"] { display: flex; align-items: center; gap: 5px; min-height: 28px; padding: 5px 6px; flex-shrink: 0; border-color: transparent; background: transparent; }
+.provider-tabs [role="tab"][aria-selected="true"] { background: var(--surface); font-weight: 600; }
+.provider-tabs small { font-size: 9px; color: var(--muted); }
+.surface-flyout .usage-card { padding: 10px; }
+:is(.surface-flyout, .surface-notch) .usage-card h3 { margin: 7px 0 3px; }
+:is(.surface-flyout, .surface-notch) .usage-card .status { margin: 2px 0 6px; }
+:is(.surface-flyout, .surface-notch) .usage-card .quota-window { margin: 6px 0; }
+:is(.surface-flyout, .surface-notch) .usage-card .meter { height: 4px; margin: 3px 0; }
+:is(.surface-flyout, .surface-notch) .usage-card .credit { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; margin: 6px 0; padding: 6px; }
+:is(.surface-flyout, .surface-notch) .usage-card .credit > .row { flex: 1 1 100px; }
+:is(.surface-flyout, .surface-notch) .usage-card .metrics { margin: 5px 0; gap: 5px 10px; }
+:is(.surface-flyout, .surface-notch) .usage-card .sparkline { display: block; height: 24px; margin: 4px 0; }
+:is(.surface-flyout, .surface-notch) .usage-card .reset-credit { padding: 4px 0; }
+:is(.surface-flyout, .surface-notch) .usage-card .activity-heatmap { margin-top: 8px; }
+:is(.surface-flyout, .surface-notch) .usage-card .telemetry { padding-top: 6px; }
+:is(.surface-flyout, .surface-notch) .usage-card summary { padding-top: 4px; }
+:is(.surface-flyout, .surface-notch) .usage-card footer { margin-top: 8px; }
+.surface-flyout .overview-details { background: transparent; padding: 8px 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; }
+.overview-details > summary { padding: 0; }
+.overview-details[open] > summary { margin-bottom: 8px; }
+.overview-details > .provider-card:last-child { margin-bottom: 0; }
 .surface-notch { width: max-content; background: transparent; } .notch { display: flex; align-items: flex-start; width: max-content; background: transparent; } .strip { display: flex; flex-direction: column; width: 36px; background: #262629; border-radius: 10px; padding: 6px 0; flex-shrink: 0; touch-action: none; user-select: none; } .strip-settings { display: grid; place-items: center; order: 1; background: none; border: none; padding: 7px 0 3px; width: 100%; color: var(--muted); } .strip-provider { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 36px; padding: 5px 0; border: none; background: none; border-radius: 6px; } .strip-provider[aria-pressed="true"] { background: #ffffff08; } .strip-provider .mark { width: 13px; height: 13px; } .strip-percent { font-size: 8px; line-height: 1.25; } .strip-provider small { position: absolute; top: 3px; right: 2px; font-size: 7px; line-height: 1; border-radius: 3px; background: var(--surface); padding: 1px; } .usage-ring { width: 22px; height: 22px; border-radius: 50%; padding: 2px; } .usage-ring > span { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #262629; } .detail-card { width: 250px; flex-shrink: 0; border-radius: 10px; margin: 0; padding: 14px;  overflow: auto; } .detail-card h2 { font-size: 12px; } .detail-card .row { gap: 5px; } .detail-card .badge { font-size: 9px; } .detail-card .quota-window strong { font-size: 11px; } .detail-card .secondary { font-size: 10px; } .card-left .detail-card { order: -1; } .detail-card footer button, .reset-credit button { font-size: 11px; }
 @media (hover: hover) and (pointer: fine) { button:hover:not(:disabled) { border-color: var(--accent); } }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation: none !important; transition: none !important; } }
@@ -152,9 +178,9 @@
 
 .surface-notch .strip { max-height: var(--notch-max-height); overflow-y: auto; }
 /* Integer pixel sizes keep notch text sharp without moving the strip anchor. */
-.surface-notch { --notch-body: 13px; --notch-secondary: 10px; --notch-heading: 12px; --notch-value: 13px; --notch-control: 11px; --notch-padding: 14px; --notch-space: 10px; --notch-gap: 8px; }
-.surface-notch.size-small { --notch-body: 11px; --notch-secondary: 10px; --notch-heading: 11px; --notch-value: 11px; --notch-control: 11px; --notch-padding: 10px; --notch-space: 7px; --notch-gap: 6px; }
-.surface-notch.size-large { --notch-body: 15px; --notch-secondary: 12px; --notch-heading: 14px; --notch-value: 15px; --notch-control: 13px; --notch-padding: 16px; --notch-space: 12px; --notch-gap: 10px; }
+.surface-notch { --notch-body: 13px; --notch-secondary: 10px; --notch-heading: 12px; --notch-value: 13px; --notch-control: 11px; --notch-padding: 10px; --notch-space: 6px; --notch-gap: 6px; }
+.surface-notch.size-small { --notch-body: 11px; --notch-secondary: 10px; --notch-heading: 11px; --notch-value: 11px; --notch-control: 11px; --notch-padding: 9px; --notch-space: 6px; --notch-gap: 5px; }
+.surface-notch.size-large { --notch-body: 15px; --notch-secondary: 12px; --notch-heading: 14px; --notch-value: 15px; --notch-control: 13px; --notch-padding: 12px; --notch-space: 8px; --notch-gap: 8px; }
 .surface-notch .detail-card { width: 220px; max-height: var(--notch-max-height); overflow-y: auto; font-size: var(--notch-body); padding: var(--notch-padding); }
 .surface-notch .detail-card h2, .surface-notch .detail-card h3 { font-size: var(--notch-heading); }
 .surface-notch .detail-card .secondary, .surface-notch .detail-card dt, .surface-notch .detail-card .badge, .surface-notch .detail-card summary, .surface-notch .detail-card .heatmap { font-size: var(--notch-secondary); }

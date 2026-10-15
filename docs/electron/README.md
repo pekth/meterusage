@@ -81,8 +81,15 @@ current source, collection state and reading availability. Choose Configure for
 setup actions; selecting a method still requires its explicit connection action.
 The category controls wrap above the content in narrow windows. Settings fits
 the active page and expanded setup content, retains its width and top position
-while on screen, and scrolls when content exceeds the available work area. Service health
-appears after the primary usage cards in the Usage panel.
+while on screen, and scrolls when content exceeds the available work area.
+
+Service status appears first in the Usage panel and stays visible. Provider and
+account tabs show one card at a time in saved order; arrow keys and Home/End
+switch tabs. Quota, eligible reset actions and heatmaps stay visible. More
+activity opens secondary recorded metrics, Usage by period opens period shares,
+and Active window breakdown opens notch burn contributors. The All-provider
+activity breakdown contains local totals and measured burn. Shared cards retain
+complete statistics and period/burn data.
 
 Provider groups can be reordered with drag handles, arrow keys or move buttons.
 Saved order applies to Usage, service status, menu bar and side notch. Additional

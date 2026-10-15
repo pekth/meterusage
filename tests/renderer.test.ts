@@ -1,7 +1,7 @@
 import { it, expect, vi } from "vite-plus/test";
 import { createElement, useEffect, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings } from "../src/renderer/app";
+import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings, UsagePanel } from "../src/renderer/app";
 import { tokens, providers, primary, quota, value, window, localDay, shiftDay } from "../src/domain/models";
 import type { ViewState } from "../src/shared/ipc";
 import { openRouterUsage } from "../src/main/providers/usage";
@@ -343,7 +343,8 @@ it("keeps reported service health visible when all usage providers are hidden", 
   const markup = renderApp(view);
   expect(markup).toContain('aria-label="Service status"'); expect(markup).toContain("Synthetic service outage"); expect(markup).toContain("All systems operational");
   expect(markup).toContain("var(--alert)"); expect(markup).toContain("Enable a provider in Settings");
-  expect(markup.indexOf("Service status")).toBeGreaterThan(markup.indexOf("Enable a provider"));
+  expect(markup.indexOf("Service status")).toBeLessThan(markup.indexOf("Enable a provider"));
+  expect(markup.indexOf('aria-label="Service status"')).toBeLessThan(markup.indexOf("<details"));
 });
 
 it("shows idle and failed public status sources without inventing unsupported providers", () => {
@@ -461,7 +462,7 @@ it("always shows usage rings and percentages, with hover-only details and no des
       view.notch.expanded = expanded; view.notch.selected = key;
       const markup = renderApp(view, "notch");
       expect(markup).toContain('class="usage-ring"'); expect(markup).toMatch(/class="strip-percent"[^>]*>42%<\/span>/);
-      expect(markup.includes('class="provider-card detail-card"')).toBe(expanded);
+      expect(markup.includes('class="provider-card usage-card detail-card"')).toBe(expanded);
       expect(markup).not.toContain("folded-pill"); expect(markup).not.toContain("folded-strip");
       expect(markup).toContain(key === "codex" ? "Codex" : "Claude");
     }
@@ -569,8 +570,8 @@ it("renders the preferred provider groups in Settings, usage, tray and notch", (
   for (const slot of s.slots) s.quotas[slot.slotID ? `${slot.provider}#${slot.slotID}` : slot.provider] = value(quota(slot.provider, [window("5-hour", slot.provider === "claude" ? 11 : 22)], now));
   for (const surface of ["settings", "flyout", "tray", "notch"]) {
     const markup = renderApp(view, surface);
-    const first = surface === "settings" ? 'aria-label="Reorder Claude"' : surface === "notch" ? 'aria-label="Show Claude details' : surface === "tray" ? "11%" : '<h2>Claude</h2>';
-    const second = surface === "settings" ? 'aria-label="Reorder Codex"' : surface === "notch" ? 'aria-label="Show Codex details' : surface === "tray" ? "22%" : '<h2>Codex</h2>';
+    const first = surface === "settings" ? 'aria-label="Reorder Claude"' : surface === "notch" ? 'aria-label="Show Claude details' : surface === "tray" ? "11%" : 'title="Claude"';
+    const second = surface === "settings" ? 'aria-label="Reorder Codex"' : surface === "notch" ? 'aria-label="Show Codex details' : surface === "tray" ? "22%" : 'title="Codex"';
     expect(markup.indexOf(first), surface).toBeGreaterThanOrEqual(0); expect(markup.indexOf(first)).toBeLessThan(markup.indexOf(second));
   }
   s.statuses = { codex: { status: "idle" }, claude: { status: "idle" } };
@@ -778,4 +779,53 @@ it("refreshes visible focused and hovered readings when the same calendar cells 
   refresh?.(); expect(focus).toHaveBeenLastCalledWith("Oct 15 · 100 tokens"); expect(hover).toHaveBeenLastCalledWith("Oct 14 · 200 tokens");
   focused.dataset.readout = "Oct 15 · 1,000 tokens"; hovered.dataset.readout = "Week of Oct 11 · 2,000 tokens";
   refresh?.(); expect(focus).toHaveBeenLastCalledWith(focused.dataset.readout); expect(hover).toHaveBeenLastCalledWith(hovered.dataset.readout);
+});
+
+
+it("shows one selected usage card while retaining ordered provider and account tabs", () => {
+  const view = state(); view.snapshot.activities = {};
+  view.snapshot.slots = [primary("codex"), primary("claude"), { ...primary("claude"), slotID: "work", label: "Work" }];
+  view.snapshot.quotas.claude = value(quota("claude", [window("Session", 21)], now));
+  view.snapshot.quotas["claude#work"] = value(quota("claude", [window("Session", 43)], now));
+  for (const [selected, expected] of [["", "80% used"], ["claude", "21% used"], ["claude#work", "43% used"], ["removed", "80% used"]]) {
+    vi.mocked(useState).mockReturnValueOnce([selected, () => {}]);
+    const markup = renderToStaticMarkup(createElement(UsagePanel, { state: view, action: async () => {} }));
+    expect((markup.match(/<article/g) ?? []).length).toBe(1);
+    expect((markup.match(/role="tab"/g) ?? []).length).toBe(3);
+    expect((markup.match(/tabindex="0"/g) ?? []).length).toBe(1);
+    expect(markup).toContain(expected);
+    expect(markup).toContain('aria-label="Claude · Work"');
+    expect(markup.indexOf('aria-label="Codex"')).toBeLessThan(markup.indexOf('aria-label="Claude"'));
+    for (const other of ["80% used", "21% used", "43% used"].filter(value => value !== expected)) expect(markup).not.toContain(other);
+  }
+});
+it("distinguishes unnamed accounts in usage tab names and tooltips", () => {
+  const view = state(); view.snapshot.activities = {};
+  view.snapshot.slots = [primary("claude"), { ...primary("claude"), slotID: "one", label: "" }, { ...primary("claude"), slotID: "two", label: "" }];
+  const markup = renderToStaticMarkup(createElement(UsagePanel, { state: view, action: async () => {} }));
+  for (const digit of [2, 3]) {
+    expect(markup).toContain(`aria-label="Claude · Account ${digit}" title="Claude · Account ${digit}"`);
+  }
+  expect(markup).not.toContain('aria-label="Claude · Account"');
+});
+it("keeps live secondary activity collapsed while shared cards retain all metrics", () => {
+  const view = state(), daily = [{ day: localDay(now), tokens: tokens({ output: 100 }), sessionCount: 2, estimatedCostUSD: 0 }];
+  view.snapshot.appearance.telemetry = view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = true;
+  view.snapshot.activities.codex = value({ provider: "codex", scannedAt: now, sessions: [], daily, telemetry: telemetry([], daily, now) });
+  for (const detail of [false, true]) {
+    const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, detail }));
+    expect(markup).toContain('<details class="activity-details"><summary>More activity</summary>');
+    const visible = markup.replace(/<details\b[^>]*>[\s\S]*?<\/details>/g, "");
+    expect(visible).toContain("Today tokens"); expect(visible).toContain("Last 30 days");
+    expect(visible).not.toContain("Lifetime tokens");
+    expect(visible).toContain('aria-label="5-hour quota used"'); expect(visible).toContain('class="activity-heatmap"');
+    const shared = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, detail, staticExport: true }));
+    expect(shared).not.toContain("More activity"); expect(shared).toContain("Lifetime tokens");
+  }
+});
+it("keeps service status above the usage overview and selected provider", () => {
+  const view = state(); view.snapshot.statuses.codex = value({ provider: "codex", severity: "operational", description: "All systems operational", checkedAt: now });
+  const markup = renderApp(view);
+  expect(markup.indexOf('aria-label="Service status"')).toBeLessThan(markup.indexOf("AI activity on this Mac"));
+  expect(markup.indexOf('aria-label="Service status"')).toBeLessThan(markup.indexOf('class="usage-panel"'));
 });

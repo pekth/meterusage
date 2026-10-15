@@ -140,7 +140,13 @@ provider-switch states do not animate. Browser and native checks must verify
 these rendered states and scrolling after the added telemetry spacing.
 
 Live cards use the natural-height heatmap readout and show Daily, Weekly and
-Cumulative choices with their existing values. Recorded activity headings and
+Cumulative choices with their existing values. Quota, eligible reset actions and
+heatmaps remain visible. Recorded activity starts with two available metrics;
+More activity opens the remaining metrics. Usage by period and Active window
+breakdown open the existing period and burn details. These rows start closed.
+Tighter spacing and a shorter sparkline reduce card height without changing the
+saved font-size choice or the rail. Static exports retain all metrics and full
+period/burn data. Recorded activity headings and
 Recorded sessions/messages labels distinguish telemetry from account/local
 summary counts. Static shared cards omit footer actions, reset buttons and the
 heatmap selector while retaining credit details and the 26 weeks label. They
