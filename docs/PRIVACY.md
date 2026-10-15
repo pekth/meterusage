@@ -54,6 +54,14 @@ The candidate offers connection buttons in setup and Settings. No terminal,
 folder picker or credential copying is part of the primary connection flow.
 Existing local account directories remain an advanced option.
 
+Setup also offers the existing CLI sources through an explicit **Use CLI**
+action. Selecting an option alone performs no account access. Applying CLI
+selection disconnects only MeterUsage-owned account state and waits for its
+logout cleanup before enabling local collection. Cleanup failure prevents the
+switch. Ordinary Disconnect never silently falls back to local data. The
+selector adds no credential store, provider endpoint or authentication flow;
+CLI sources retain the input and coverage limits above.
+
 Codex browser sign-in uses the official app-server helper discovered in an
 existing Codex app, with existing command installations as a compatibility path.
 MeterUsage creates a separate generated profile under its own support directory
@@ -61,17 +69,32 @@ and checks effective `cli_auth_credentials_store=keyring` before login or
 polling. Any other mode is refused. It never opens the user's Codex `auth.json`.
 Login opens only an approved HTTPS OpenAI host and uses the helper's local
 callback. Requests are initialization, effective config read, account login,
-rate-limit read and own-profile logout. No model session or prompt is started.
+rate-limit read, account daily-token read, explicitly confirmed reset redemption and own-profile logout. No model session or prompt is started.
 The provider helper handles tokens in OS storage; no plaintext fallback is
 permitted. Cancelling login attempts own-profile logout and reports cleanup
 failure. Disconnect does not sign out the user's Codex desktop session.
 Unfinished sign-in profiles are retained only for cleanup and cannot enable
 collection. Cancellation and disconnect disable collection before logout.
 GUI startup and explicit sign-in retry recover owned-profile cleanup before
-starting another login. Normal quit waits up to five seconds. Headless reports
+starting another login. Normal quit gives authentication helpers up to five
+seconds, then cancels them. Pending CLI-selection preference saves and rollback
+must settle before the app exits. Headless reports
 do not sign in or perform cleanup logout.
 
-Claude requires an explicit explanation and consent before access. The bundled
+Connected Codex daily history uses `account/usage/read` without `threadId`
+through that same managed ChatGPT profile and keyring guard. The main process
+projects only valid unique date labels, safe nonnegative integer token counts
+and a capture timestamp before publication. Summary fields, unknown fields and
+provider error text are discarded. No raw response, account identifier or
+credential reaches the renderer or a new durable cache. Account token history
+stays in memory, clears after failed reads, replacement or disconnect, and never
+enters local rollups or durable daily history. Captured-profile and cancellation
+checks reject late results. Missing history and unreported dates remain
+unavailable. The provider contract does not establish complete product, device
+or cloud coverage. See [ADR 0022](adr/0022-codex-account-token-history.md).
+
+Claude requires an explicit explanation and consent before access. A connection
+call without a consent callback denies access. The bundled
 native helper reads only the `Claude Safe Storage` / `Claude Key` item. Background
 reads disable interaction. Its stdout goes only to the main-process bounded
 transport; do not run the helper interactively or record its output. The main
@@ -191,9 +214,21 @@ untouched.
 The separate `--codex-test-profile` mode uses the real UI and opt-in Codex
 connection with isolated JSON preferences, app data and Electron state. It
 retains the OS home for Keychain and helper discovery. It excludes all other
-provider sources, local activity, status feeds and reset redemption, and blocks
-updates, login-item changes and notifications. Its Codex credential boundary
-is the same keyring-only boundary described above.
+provider sources, local activity and Claude status. Its only status request is
+an unauthenticated GET to the public OpenAI status feed above. It blocks updates,
+login-item changes and notifications. Explicitly confirmed Codex reset redemption
+uses the same captured keyring-only connection profile and a fresh eligibility
+check. [ADR 0017](adr/0017-connected-codex-menu-reset.md) supersedes only ADR 0012's
+reset prohibition. Its Codex credential boundary is the same keyring-only boundary
+described above.
+
+`--claude-test-profile` uses a separate profile marker and the existing Claude
+consent and allowance flow. It starts without consent and collects only Claude
+account allowance. It cannot use a Codex or demo profile. JSON preferences and
+Electron state remain isolated; OS home is retained for the read-only Desktop
+reader. Codex access and cleanup, other providers, local activity, status feeds
+and reset redemption are blocked. Candidate update, login-item and notification
+guards apply. It adds no credential source, refresh flow or provider request.
 
 ## Installation and enforcement
 

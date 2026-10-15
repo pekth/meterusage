@@ -7,6 +7,14 @@ import { Unavailable, quota, window } from "../../domain/models";
 
 const uuid = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 const unavailable = () => new Unavailable("notSignedIn", "Claude Desktop");
+export const desktopReadErrors = {
+  configuration: "Could not read Claude Desktop's account configuration.",
+  organization: "Could not read Claude Desktop's active organization cookie.",
+  decryption: "Could not decrypt Claude Desktop's sign-in cache with its Keychain entry.",
+  selection: "Claude Desktop's cache has no current allowance token for the active account and organization.",
+  ambiguous: "Claude Desktop's cache has multiple matching allowance tokens. MeterUsage cannot safely choose one.",
+} as const;
+type ReadStage = (stage: keyof typeof desktopReadErrors) => void;
 export function decryptDesktop(bytes: Uint8Array, password: string): Buffer {
   const input = Buffer.from(bytes);
   if (input.length > 1048576 || input.subarray(0, 3).toString() !== "v10") throw unavailable();
@@ -17,23 +25,29 @@ export function decryptDesktop(bytes: Uint8Array, password: string): Buffer {
   } catch { throw unavailable(); }
   finally { key.fill(0); }
 }
-export function desktopCredential(config: string, organization: string, password: string, now: number) {
+export function desktopCredential(config: string, organization: string, password: string, now: number, reading?: ReadStage) {
   try {
+    reading?.("configuration");
     const root = object(selectJSON(config, { lastKnownAccountUuid: true, "oauth:tokenCacheV2": true }));
     const account = text(root.lastKnownAccountUuid)?.toLowerCase();
     if (!account || !uuid.test(account) || !uuid.test(organization)) throw unavailable();
     const cache = text(root["oauth:tokenCacheV2"]); if (!cache || cache.length > 1400000) throw unavailable();
+    reading?.("decryption");
     const plaintext = decryptDesktop(Buffer.from(cache, "base64"), password);
     try {
       // Select only scoped access tokens and expiry. Refresh tokens stay skipped.
       const entries = object(selectJSON(plaintext.toString("utf8"), { "*": { token: true, expiresAt: true } }));
+      reading?.("selection");
       const candidates = Object.entries(entries).filter(([key, value]) => {
         const match = /^acct:([^|]+)\|([^:]+):([^:]+):https:\/\/api\.anthropic\.com:(.*)$/.exec(key);
         const entry = object(value), scopes = match?.[4].split(/\s+/);
         return match && match[1].toLowerCase() === account && uuid.test(match[2]) && match[3].toLowerCase() === organization.toLowerCase() && scopes?.includes("user:profile") && scopes.includes("user:inference") && typeof entry.expiresAt === "number" && Number.isFinite(entry.expiresAt) && entry.expiresAt > now + 120000 && !!text(entry.token);
       });
       // Fail closed for ambiguous caches instead of guessing which login to use.
-      if (candidates.length !== 1) throw unavailable();
+      if (candidates.length !== 1) {
+        if (candidates.length > 1) reading?.("ambiguous");
+        throw unavailable();
+      }
       return { token: text(object(candidates[0][1]).token)!, identity: createHash("sha256").update(account + ":" + organization.toLowerCase()).digest("hex") };
     } finally { plaintext.fill(0); }
   } catch { throw unavailable(); }
@@ -43,9 +57,11 @@ function configFile(home: string) {
   if (statSync(path).size > 2 * 1048576) throw unavailable();
   return readFileSync(path, "utf8");
 }
-export async function readDesktopCredential(home: string, password: string, now: number) {
+export async function readDesktopCredential(home: string, password: string, now: number, reading?: ReadStage) {
   try {
+    reading?.("configuration");
     const config = configFile(home);
+    reading?.("organization");
     const { DatabaseSync } = await import("node:sqlite");
     for (const relative of ["Cookies", "Network/Cookies"]) {
       const path = join(home, "Library/Application Support/Claude", relative); if (!existsSync(path)) continue;
@@ -59,7 +75,8 @@ export async function readDesktopCredential(home: string, password: string, now:
             try { if (decrypted.subarray(0, 32).equals(hash)) organization = decrypted.subarray(32).toString("utf8"); }
             finally { decrypted.fill(0); }
           }
-          return desktopCredential(config, organization, password, now);
+          if (!uuid.test(organization)) throw unavailable();
+          return desktopCredential(config, organization, password, now, reading);
         }
       } finally { db.close(); }
     }

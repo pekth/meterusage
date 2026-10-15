@@ -11,7 +11,7 @@ import { Unavailable } from "../src/domain/models";
 import { Preferences } from "../src/main/preferences";
 import { compose } from "../src/main/composition";
 import { launchConfiguration } from "../src/main/launch";
-import { endpoints, httpTransport, type Command } from "../src/main/providers/transport";
+import { endpoints, httpTransport, type Command, type HTTP } from "../src/main/providers/transport";
 import * as transport from "../src/main/providers/transport";
 import { parseRequest, projectSettings } from "../src/main/ipc";
 
@@ -69,7 +69,7 @@ async function prefs(home = temp(), demo = false) {
   const preferences = await Preferences.load(launch, async () => "");
   return { launch, preferences };
 }
-function fakeCodex(root: string, failure: boolean | "wait" = false, logoutFailure: boolean | "wait" = false) {
+function fakeCodex(root: string, failure: boolean | "wait" = false, logoutFailure: boolean | "wait" = false, reset = false) {
   const binary = join(root, "codex");
   writeFileSync(binary, `#!${process.execPath}\nconst fs = require('node:fs'), path = require('node:path'), rl = require('node:readline').createInterface({input:process.stdin});
 if (JSON.stringify(process.argv.slice(-3)) !== JSON.stringify(['app-server','--listen','stdio://'])) process.exit(64);
@@ -82,7 +82,8 @@ if (r.method==='account/login/start') {
 ${failure === true ? "send({id:r.id,error:{code:-1,message:'OMIT_RAW_AUTH_ERROR'}});" : (failure === "wait" ? "" : "send({method:'account/login/completed',params:{loginId:'fixture-login',success:true}});") + "send({id:r.id,result:{type:'chatgpt',loginId:'fixture-login',authUrl:'https://auth.openai.com/authorize?state=fixture'}});"}
 }
 
-if (r.method==='account/rateLimits/read') send({id:r.id,result:{rateLimits:{primary:{usedPercent:25,windowDurationMins:300}}}});
+if (r.method==='account/rateLimits/read') send({id:r.id,result:{rateLimits:{primary:{usedPercent:25,windowDurationMins:300}}, ${reset ? "rateLimitResetCredits:{availableCount:1,credits:[{id:'fixture-credit',title:'Full reset',status:'available'}]}" : ""}}});
+if (r.method==='account/rateLimitResetCredit/consume') { fs.writeFileSync(path.join(process.env.CODEX_HOME,'reset-request'),JSON.stringify(r.params)); send({id:r.id,result:{outcome:'reset'}}); }
 if (r.method==='account/logout') { ${logoutFailure === "wait" ? "" : `send(${logoutFailure ? "{id:r.id,error:{code:-1}}" : "{id:r.id,result:{}}"});`} }
 });\n`);
   chmodSync(binary, 0o755); return binary;
@@ -132,6 +133,238 @@ it("disables a connected Codex account before failed disconnect cleanup", async 
   expect(preferences.values.desktopCodexCleanup).toBe(id);
   expect(connections.state.find(s => s.provider === "codex")?.status).toBe("failed");
   await expect(connections.quota("codex")).rejects.toMatchObject({ code: "notSignedIn" });
+});
+
+it("publishes CLI versus account choice without exposing saved identities", async () => {
+  const { launch, preferences } = await prefs();
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  expect(connections.state).toEqual([
+    { provider: "codex", status: "disconnected", source: "cli", localAvailable: true },
+    { provider: "claude", status: "disconnected", source: "cli", localAvailable: true },
+    { provider: "grok", status: "unsupported", source: "cli", localAvailable: true },
+  ]);
+  preferences.values.desktopCodexConnection = "off"; preferences.values.desktopClaudeIdentity = "a".repeat(64);
+  expect(connections.state.map(s => s.source)).toEqual(["account", "account", "cli"]);
+  expect(JSON.stringify(connections.state)).not.toContain("a".repeat(64));
+});
+
+it.each(["connected", "off", "failed"])("switches %s Codex to CLI, rebuilds sources and persists the choice", async initial => {
+  const root = temp(); fakeCodex(root, false, initial === "failed");
+  const launch = launchConfiguration([], { PATH: root }, root), command = savedPreferences(), preferences = await Preferences.load(launch, command);
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  if (initial === "off") await connections.disconnect("codex");
+  else await connections.connect("codex", async () => {});
+  const profile = String(preferences.values.desktopCodexConnection);
+  if (initial === "failed") {
+    await expect(connections.disconnect("codex")).rejects.toThrow("Could not disconnect Codex");
+    fakeCodex(root);
+  }
+  expect(connections.state.find(s => s.provider === "codex")).toMatchObject({ source: "account", status: initial === "off" ? "disconnected" : initial });
+  const old = compose(launch, preferences, { connections }).find(s => s.slot.provider === "codex")!;
+  expect(old.accountBound).toBe(true); expect(old.activity).toBeUndefined();
+  await preferences.set("showProviderCodex", false);
+  await connections.useLocal("codex");
+  expect(preferences.values).toMatchObject({ desktopCodexConnection: "", desktopCodexCleanup: "", showProviderCodex: true });
+  expect(connections.state.find(s => s.provider === "codex")).toEqual({ provider: "codex", status: "disconnected", source: "cli", localAvailable: true });
+  await expect(old.quota!()).rejects.toMatchObject({ code: "notSignedIn" });
+  const local = compose(launch, preferences, { connections }).find(s => s.slot.provider === "codex")!;
+  expect(local.accountBound).toBeUndefined(); expect(local.accountActivity).toBeUndefined(); expect(local.activity).toBeTypeOf("function");
+  const restored = await Preferences.load(launch, command), restart = new DesktopConnections(launch, restored, "/not-a-helper", () => {});
+  expect(restored.values).toMatchObject({ desktopCodexConnection: "", desktopCodexCleanup: "", showProviderCodex: true });
+  expect(restart.state.find(s => s.provider === "codex")?.source).toBe("cli");
+  expect(compose(launch, restored, { connections: restart }).find(s => s.slot.provider === "codex")!.activity).toBeTypeOf("function");
+  const processes = vi.mocked(spawn).mock.calls.length;
+  await connections.useLocal("codex"); expect(vi.mocked(spawn)).toHaveBeenCalledTimes(processes);
+  if (initial !== "off") expect(readFileSync(join(launch.data, "connections/codex", profile, "requests"), "utf8").match(/account\/logout/g)).toHaveLength(initial === "failed" ? 2 : 1);
+});
+
+it.each(["connected", "off", "failed"])("switches %s Claude to CLI without reading or modifying Desktop auth", async initial => {
+  const home = temp(), launch = launchConfiguration([], {}, home), command = savedPreferences(), preferences = await Preferences.load(launch, command);
+  desktop(home);
+  const root = join(home, "Library/Application Support/Claude"), before = ["config.json", "Cookies"].map(name => readFileSync(join(root, name)));
+  const helper = vi.fn<Command>(async () => password), http = vi.fn<HTTP>(async () => '{"five_hour":{"utilization":25}}');
+  const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, helper, http, () => now);
+  if (initial === "off") await connections.disconnect("claude");
+  else if (initial === "failed") {
+    await preferences.set("desktopClaudeIdentity", "off");
+    helper.mockRejectedValueOnce(new Error("OMIT_PRIVATE_AUTH"));
+    await expect(connections.connect("claude", async () => {}, async () => true)).rejects.toThrow("Could not access Claude Desktop");
+  } else await connections.connect("claude", async () => {}, async () => true);
+  expect(connections.state.find(s => s.provider === "claude")).toMatchObject({ source: "account", status: initial === "off" ? "disconnected" : initial });
+  const old = compose(launch, preferences, { connections }).find(s => s.slot.provider === "claude")!;
+  const helperCalls = helper.mock.calls.length, httpCalls = http.mock.calls.length;
+  await preferences.set("showProviderClaude", false); await connections.useLocal("claude");
+  expect(preferences.values).toMatchObject({ desktopClaudeIdentity: "", showProviderClaude: true });
+  await expect(old.quota!()).rejects.toMatchObject({ code: "notSignedIn" });
+  expect(helper).toHaveBeenCalledTimes(helperCalls); expect(http).toHaveBeenCalledTimes(httpCalls);
+  const local = compose(launch, preferences, { connections }).find(s => s.slot.provider === "claude")!;
+  expect(local.accountBound).toBeUndefined(); expect(local.activity).toBeTypeOf("function"); expect(local.plan).toBeTypeOf("function");
+  const restored = await Preferences.load(launch, command), restart = new DesktopConnections(launch, restored, "/synthetic/helper", () => {});
+  expect(restored.values).toMatchObject({ desktopClaudeIdentity: "", showProviderClaude: true });
+  expect(restart.state.find(s => s.provider === "claude")?.source).toBe("cli");
+  for (const [i, name] of ["config.json", "Cookies"].entries()) expect(readFileSync(join(root, name))).toEqual(before[i]);
+  expect(JSON.stringify(connections.state)).not.toMatch(/synthetic-access|11111111|22222222|OMIT/);
+});
+
+it("keeps failed CLI switch cleanup fail-closed across reconstruction", async () => {
+  const root = temp(); fakeCodex(root, false, true);
+  const launch = launchConfiguration([], { PATH: root }, root), command = savedPreferences(), preferences = await Preferences.load(launch, command);
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  await connections.connect("codex", async () => {}); const profile = preferences.values.desktopCodexConnection;
+  await expect(connections.useLocal("codex")).rejects.toThrow("Could not disconnect Codex");
+  expect(preferences.values).toMatchObject({ desktopCodexConnection: "off", desktopCodexCleanup: profile });
+  expect(connections.state.find(s => s.provider === "codex")).toMatchObject({ source: "account", status: "failed" });
+  const restored = await Preferences.load(launch, command), restart = new DesktopConnections(launch, restored, "/not-a-helper", () => {});
+  expect(restart.enabled("codex")).toBe(false);
+  const source = compose(launch, restored, { connections: restart }).find(s => s.slot.provider === "codex")!;
+  expect(source.activity).toBeUndefined(); await expect(source.quota!()).rejects.toMatchObject({ code: "notSignedIn" });
+});
+
+it.each(["cleanup-marker", "disable", "cleanup-clear", "visibility", "selection"])("keeps a failed %s preference write in account mode", async stage => {
+  const root = temp(); fakeCodex(root);
+  const launch = launchConfiguration([], { PATH: root }, root), command = savedPreferences(), preferences = await Preferences.load(launch, command);
+  await preferences.set("desktopCodexConnection", client); await preferences.set("showProviderCodex", false);
+  const set = preferences.set.bind(preferences);
+  vi.spyOn(preferences, "set").mockImplementation((key, value) => {
+    if (stage === "cleanup-marker" && key === "desktopCodexCleanup" && value === client || stage === "disable" && key === "desktopCodexConnection" && value === "off" || stage === "cleanup-clear" && key === "desktopCodexCleanup" && value === "" || stage === "visibility" && key === "showProviderCodex" || stage === "selection" && key === "desktopCodexConnection" && value === "") return Promise.reject(new Error("OMIT_PRIVATE_PREF_ERROR"));
+    return set(key, value);
+  });
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  await expect(connections.useLocal("codex")).rejects.toThrow("Could not disconnect Codex");
+  expect(preferences.values.desktopCodexConnection).toBe("off");
+  expect(connections.state.find(s => s.provider === "codex")).toMatchObject({ source: "account", status: "failed" });
+  if (stage !== "cleanup-marker") {
+    const restored = await Preferences.load(launch, command), restart = new DesktopConnections(launch, restored, "/not-a-helper", () => {});
+    expect(restart.enabled("codex")).toBe(false); expect(restart.state.find(s => s.provider === "codex")?.source).toBe("account");
+  }
+});
+
+it.each(["complete", "cancel", "stop"])("holds the mutation lock through CLI cleanup and handles %s", async outcome => {
+  const root = temp(); fakeCodex(root);
+  const launch = launchConfiguration([], { PATH: root }, root), preferences = await Preferences.load(launch, savedPreferences());
+  await preferences.set("desktopCodexConnection", client);
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  let finishCleanup!: (raw: string) => void;
+  const rpc = vi.spyOn(transport, "codexRPC").mockImplementation(async () => new Promise(resolve => { finishCleanup = resolve; }));
+  const pending = connections.useLocal("codex");
+  await vi.waitFor(() => expect(rpc).toHaveBeenCalledOnce());
+  expect(rpc.mock.calls[0][1].env!.CODEX_HOME).toBe(join(launch.data, "connections/codex", client));
+  expect(rpc.mock.calls[0][4]).toBe("logout");
+  expect(preferences.values).toMatchObject({ desktopCodexConnection: "off", desktopCodexCleanup: client });
+  expect(connections.state.find(s => s.provider === "codex")).toMatchObject({ source: "account", status: "connecting" });
+  await expect(connections.useLocal("codex")).rejects.toThrow("Connection unavailable");
+  await expect(connections.disconnect("codex")).rejects.toThrow("Connection unavailable");
+  await expect(connections.connect("codex", async () => {})).rejects.toThrow("Connection already active");
+  let stopped: Promise<void> | undefined;
+  if (outcome === "cancel") connections.cancel("codex");
+  if (outcome === "stop") stopped = connections.stop();
+  finishCleanup('{"result":{}}');
+  if (outcome === "complete") { await pending; expect(preferences.values.desktopCodexConnection).toBe(""); }
+  else { await expect(pending).rejects.toThrow("Could not disconnect Codex"); expect(preferences.values.desktopCodexConnection).toBe("off"); }
+  await stopped;
+  expect(preferences.values.desktopCodexCleanup).toBe(""); expect(rpc).toHaveBeenCalledOnce();
+});
+
+it("rolls back CLI selection if stop arrives during the final preference save", async () => {
+  const { launch, preferences } = await prefs(); preferences.values.desktopClaudeIdentity = "off";
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  const set = preferences.set.bind(preferences);
+  let release!: () => void; const saving = new Promise<void>(resolve => { release = resolve; });
+  vi.spyOn(preferences, "set").mockImplementation(async (key, value) => { await set(key, value); if (key === "desktopClaudeIdentity" && value === "") await saving; });
+  const pending = connections.useLocal("claude");
+  await vi.waitFor(() => expect(preferences.values.desktopClaudeIdentity).toBe(""));
+  const stopped = connections.stop(); release();
+  await expect(pending).rejects.toThrow("Could not disconnect Claude Desktop"); await stopped;
+  expect(preferences.values.desktopClaudeIdentity).toBe("off");
+});
+
+it("enables only existing Grok local collection without auth or cleanup", async () => {
+  const { launch, preferences } = await prefs(); preferences.values.showProviderGrok = false;
+  preferences.values.desktopCodexCleanup = client;
+  const before = structuredClone(preferences.values), command = vi.fn<Command>(async () => { throw new Error("Forbidden helper"); }), http = vi.fn<HTTP>(async () => { throw new Error("Forbidden HTTP"); });
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {}, command, http);
+  const processes = vi.mocked(spawn).mock.calls.length;
+  await connections.useLocal("grok"); await connections.useLocal("grok");
+  expect(preferences.values).toEqual({ ...before, showProviderGrok: true });
+  expect(connections.state.find(s => s.provider === "grok")).toEqual({ provider: "grok", status: "unsupported", source: "cli", localAvailable: true });
+  expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled(); expect(spawn).toHaveBeenCalledTimes(processes);
+});
+
+it.each(["demo", "codex-test", "claude-test", "stopped"])("denies CLI selection for every provider in %s mode", async mode => {
+  const home = temp(), launch = launchConfiguration(mode === "demo" ? ["--demo"] : mode === "stopped" ? [] : [mode === "codex-test" ? "--codex-test-profile" : "--claude-test-profile", temp()], {}, home);
+  const preferences = await Preferences.load(launch, savedPreferences()), before = structuredClone(preferences.values);
+  const command = vi.fn<Command>(async () => { throw new Error("Forbidden helper"); }), http = vi.fn<HTTP>(async () => { throw new Error("Forbidden HTTP"); });
+  const changed = vi.fn(), connections = new DesktopConnections(launch, preferences, "/not-a-helper", changed, command, http);
+  if (mode === "stopped") await connections.stop();
+  else expect(connections.state.every(s => !s.localAvailable)).toBe(true);
+  const processes = vi.mocked(spawn).mock.calls.length;
+  for (const provider of ["codex", "claude", "grok"] as const) await expect(connections.useLocal(provider)).rejects.toThrow();
+  expect(preferences.values).toEqual(before); expect(changed).not.toHaveBeenCalled();
+  expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled(); expect(spawn).toHaveBeenCalledTimes(processes);
+});
+
+it("identifies Grok when local selection cannot be saved", async () => {
+  const { launch, preferences } = await prefs();
+  vi.spyOn(preferences, "set").mockRejectedValueOnce(new Error("Private storage error"));
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  await expect(connections.useLocal("grok")).rejects.toThrow("Could not select Grok CLI");
+});
+
+it.each(["cancel", "stop"] as const)("restores Grok collection after %s during its selection save", async outcome => {
+  const command = savedPreferences(), launch = launchConfiguration([], {}, temp());
+  const preferences = await Preferences.load(launch, command);
+  await preferences.set("showProviderGrok", false);
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  const set = preferences.set.bind(preferences);
+  let release!: () => void; const saving = new Promise<void>(resolve => { release = resolve; });
+  vi.spyOn(preferences, "set").mockImplementation(async (key, value) => { await set(key, value); if (key === "showProviderGrok" && value === true) await saving; });
+  const pending = connections.useLocal("grok");
+  await vi.waitFor(() => expect(preferences.values.showProviderGrok).toBe(true));
+  const stopped = outcome === "stop" ? connections.stop() : undefined;
+  if (outcome === "cancel") connections.cancel("grok");
+  release(); await expect(pending).rejects.toThrow("Could not select Grok CLI"); await stopped;
+  expect(preferences.enabled("grok")).toBe(false);
+  expect((await Preferences.load(launch, command)).enabled("grok")).toBe(false);
+});
+
+it("keeps Grok collection disabled in memory if cancelled selection rollback cannot save", async () => {
+  const { launch, preferences } = await prefs(); preferences.values.showProviderGrok = false;
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  const set = preferences.set.bind(preferences);
+  vi.spyOn(preferences, "set").mockImplementation(async (key, value) => {
+    if (key === "showProviderGrok" && value === false) throw new Error("Private rollback error");
+    await set(key, value); if (key === "showProviderGrok") connections.cancel("grok");
+  });
+  await expect(connections.useLocal("grok")).rejects.toThrow("Could not select Grok CLI");
+  expect(preferences.enabled("grok")).toBe(false);
+});
+
+it("waits past the helper deadline for a queued Grok rollback before completing stop", async () => {
+  const stored = savedPreferences(), launch = launchConfiguration([], {}, temp());
+  let releaseSelection!: () => void, releaseQueued!: () => void, queuedStarted!: () => void;
+  const selection = new Promise<void>(resolve => { releaseSelection = resolve; });
+  const queued = new Promise<void>(resolve => { releaseQueued = resolve; });
+  const ready = new Promise<void>(resolve => { queuedStarted = resolve; });
+  const command: Command = async (binary, args, options) => {
+    if (args[0] === "write" && args[2] === "showProviderGrok" && args[4] === "true") await selection;
+    if (args[0] === "write" && args[2] === "menuBarCompactEnabled") { queuedStarted(); await queued; }
+    return stored(binary, args, options);
+  };
+  const preferences = await Preferences.load(launch, command);
+  await preferences.set("showProviderGrok", false);
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  const local = connections.useLocal("grok").catch(e => e);
+  const other = preferences.set("menuBarCompactEnabled", false);
+  let finished = false; const stopped = connections.stop(1).then(() => { finished = true; });
+  releaseSelection(); await ready;
+  try {
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(preferences.values.showProviderGrok).toBe(true);
+    expect(finished).toBe(false);
+  } finally { releaseQueued(); await other; await local; await stopped; }
+  expect((await local).message).toBe("Could not select Grok CLI");
+  expect(preferences.enabled("grok")).toBe(false);
+  expect((await Preferences.load(launch, command)).enabled("grok")).toBe(false);
 });
 
 it("recovers retained Codex cleanup on explicit sign-in retry before enabling collection", async () => {
@@ -279,7 +512,7 @@ it("normalizes local Claude file, SQLite, decryption, JSON and helper failures t
   await expect(connections.quota("claude")).rejects.toMatchObject({ code: "notSignedIn" });
 });
 
-it.each(["disconnect", "replace"])("does not reread Claude credentials after %s during an allowance request", async action => {
+it.each(["disconnect", "replace", "local"])("does not reread Claude credentials after %s during an allowance request", async action => {
   const { launch, preferences } = await prefs(); desktop(launch.home);
   await preferences.set("desktopClaudeIdentity", desktopCredential(config({ [cacheKey()]: entry() }), org, password, now).identity);
   let release!: (raw: string) => void, started!: () => void, reads = 0;
@@ -289,6 +522,7 @@ it.each(["disconnect", "replace"])("does not reread Claude credentials after %s 
   const pending = connections.quota("claude"); await ready;
   expect(reads).toBe(1);
   if (action === "disconnect") await connections.disconnect("claude");
+  else if (action === "local") await connections.useLocal("claude");
   else await preferences.set("desktopClaudeIdentity", "a".repeat(64));
   release('{"five_hour":{"utilization":25}}');
   await expect(pending).rejects.toMatchObject({ code: "notSignedIn" });
@@ -315,6 +549,86 @@ it("verifies the current Claude identity after HTTP failure and permits fallback
   }, async () => { denyHelper = true; throw new Unavailable("failed", "Claude"); }, () => now);
   await expect(revoked.quota("claude")).rejects.toMatchObject({ code: "notSignedIn" });
 });
+it.each([
+  ["keychain", "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again."],
+  ["cache", "Could not read Claude Desktop's account configuration."],
+  ["cookies", "Could not read Claude Desktop's active organization cookie."],
+  ["cookie-hash", "Could not read Claude Desktop's active organization cookie."],
+  ["decrypt", "Could not decrypt Claude Desktop's sign-in cache with its Keychain entry."],
+  ["selection", "Claude Desktop's cache has no current allowance token for the active account and organization."],
+  ["expired", "Claude Desktop's cache has no current allowance token for the active account and organization."],
+  ["ambiguous", "Claude Desktop's cache has multiple matching allowance tokens. MeterUsage cannot safely choose one."],
+  ["request", "Could not read Claude account allowance. Try connecting again later."],
+  ["response", "Could not read Claude account allowance. Try connecting again later."],
+  ["identity", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again."],
+  ["identity-keychain", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again."],
+  ["identity-cache", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again."],
+  ["save-identity", "Could not save the Claude Desktop connection preferences. Try connecting again."],
+  ["save-visibility", "Could not save the Claude Desktop connection preferences. Try connecting again."],
+  ["save-rollback", "Could not save the Claude Desktop connection preferences. Try connecting again."],
+])("reports only the fixed Claude Connect stage message for %s", async (failure, message) => {
+  const home = temp(), launch = launchConfiguration([], {}, home); desktop(home);
+  const privateError = `OMIT_PRIVATE_EXCEPTION response=OMIT_PRIVATE_RESPONSE token=synthetic-access-one account=${account} org=${org} path=${home}`;
+  const preferences = await Preferences.load(launch, async (_binary, args) => {
+    if (args[0] === "write" && (failure === "save-identity" && args[2] === "desktopClaudeIdentity" || ["save-visibility", "save-rollback"].includes(failure) && args[2] === "showProviderClaude" || failure === "save-rollback" && args[2] === "desktopClaudeIdentity" && args[4] === "off")) throw new Error(privateError);
+    return "";
+  });
+  const root = join(home, "Library/Application Support/Claude");
+  if (failure === "cache") writeFileSync(join(root, "config.json"), privateError);
+  if (failure === "cookies") writeFileSync(join(root, "Cookies"), privateError);
+  if (failure === "cookie-hash") {
+    const db = new DatabaseSync(join(root, "Cookies"));
+    try { db.prepare("UPDATE cookies SET encrypted_value = ?").run(encrypt(Buffer.concat([Buffer.alloc(32), Buffer.from(org)]))); }
+    finally { db.close(); }
+  }
+  if (failure === "decrypt") writeFileSync(join(root, "config.json"), JSON.stringify({ lastKnownAccountUuid: account, "oauth:tokenCacheV2": Buffer.from("v10invalid").toString("base64") }));
+  if (failure === "selection") writeFileSync(join(root, "config.json"), config({ [cacheKey().replace(" user:inference", "")]: entry() }));
+  if (failure === "expired") writeFileSync(join(root, "config.json"), config({ [cacheKey()]: entry("synthetic-expired", now) }));
+  if (failure === "ambiguous") writeFileSync(join(root, "config.json"), config({ [cacheKey()]: entry(), [cacheKey().replace(client, "55555555-5555-5555-5555-555555555555")]: entry("synthetic-second") }));
+  const command = vi.fn<Command>(async (_binary, args) => {
+    if (failure === "keychain" || failure === "identity-keychain" && args.length === 0) throw new Error(privateError);
+    return password;
+  });
+  const http = vi.fn<HTTP>(async () => {
+    if (failure === "request") throw new Error(privateError);
+    if (failure === "response") return JSON.stringify({ five_hour: { utilization: privateError }, privateResponse: privateError });
+    if (failure === "identity") desktop(home, "66666666-6666-6666-6666-666666666666");
+    if (failure === "identity-cache") writeFileSync(join(root, "config.json"), privateError);
+    return '{"five_hour":{"utilization":25}}';
+  });
+  const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http, () => now);
+  const error = await connections.connect("claude", async () => {}, async () => true).catch(error => error);
+  expect(error).toBeInstanceOf(Error); expect(error.message).toBe(message);
+  expect(error.message).not.toMatch(/OMIT|synthetic-access|11111111|22222222/); expect(error.message).not.toContain(home);
+  expect(connections.enabled("claude")).toBe(false);
+  expect(connections.state.find(s => s.provider === "claude")?.status).toBe("failed");
+  expect(preferences.values.desktopClaudeIdentity).toBe(["save-visibility", "save-rollback"].includes(failure) ? "off" : "");
+  const beforeRequest = ["keychain", "cache", "cookies", "cookie-hash", "decrypt", "selection", "expired", "ambiguous"].includes(failure);
+  expect(command.mock.calls.map(([, args]) => args)).toEqual(beforeRequest || ["request", "response"].includes(failure) ? [["--allow-ui"]] : [["--allow-ui"], []]);
+  expect(http).toHaveBeenCalledTimes(beforeRequest ? 0 : 1);
+  expect(JSON.stringify(connections.state)).not.toMatch(/OMIT|synthetic-access|11111111|22222222/);
+  expect(JSON.stringify(projectSettings(preferences.values, [], home))).not.toContain("desktopClaudeIdentity");
+});
+it.each(["consent", "keychain", "request", "identity", "save"])("keeps Claude Connect cancellation fail-closed during %s", async stage => {
+  const home = temp(), launch = launchConfiguration([], {}, home); desktop(home);
+  const preferences = await Preferences.load(launch, async (_binary, args) => {
+    if (stage === "save" && args[0] === "write" && args[2] === "showProviderClaude") connections.cancel("claude");
+    return "";
+  });
+  const command = vi.fn<Command>(async (_binary, args, options) => {
+    if (stage === "keychain" && args.length || stage === "identity" && !args.length) connections.cancel("claude");
+    options?.signal?.throwIfAborted(); return password;
+  });
+  const http = vi.fn<HTTP>(async () => { if (stage === "request") connections.cancel("claude"); return '{"five_hour":{"utilization":25}}'; });
+  const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http, () => now);
+  await expect(connections.connect("claude", async () => {}, async () => {
+    if (stage === "consent") connections.cancel("claude"); return true;
+  })).rejects.toThrow("Open Claude Desktop and sign in, then try connecting again");
+  expect(connections.enabled("claude")).toBe(false);
+  expect(preferences.values.desktopClaudeIdentity).toBe(stage === "save" ? "off" : "");
+  if (stage === "consent") expect(command).not.toHaveBeenCalled();
+  if (["consent", "keychain"].includes(stage)) expect(http).not.toHaveBeenCalled();
+});
 it("connects Claude with consent, refreshes rotated access tokens, rejects account switches and disconnects without desktop writes", async () => {
   const { launch, preferences } = await prefs(); desktop(launch.home);
   const calls: string[][] = [], tokens: string[] = [], urls: string[] = [];
@@ -334,6 +648,14 @@ it("connects Claude with consent, refreshes rotated access tokens, rejects accou
   expect(urls.every(url => url === endpoints.claudeAllowance)).toBe(true);
   expect(JSON.stringify(connections.state)).not.toMatch(/synthetic-access|11111111|OMIT/);
   expect(JSON.stringify(projectSettings(preferences.values, [], launch.home))).not.toContain(String(preferences.values.desktopClaudeIdentity));
+});
+it("requires an explicit consent callback before Claude access", async () => {
+  const { launch, preferences } = await prefs(); desktop(launch.home);
+  const command = vi.fn<Command>(async () => password), http = vi.fn(async () => '{"five_hour":{"utilization":25}}');
+  const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http, () => now);
+  expect(await connections.connect("claude", async () => {})).toBe(false);
+  expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled();
+  expect(connections.enabled("claude")).toBe(false); expect(preferences.values.desktopClaudeIdentity).toBe("");
 });
 it("blocks demo and unavailable Grok access and never falls back after a configured disconnect", async () => {
   const { launch, preferences } = await prefs(undefined, true);
@@ -357,7 +679,7 @@ it("denies non-Codex connections and quota in a live test profile even with pers
   const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http);
   const consent = vi.fn(async () => true), open = vi.fn(async () => {});
   expect(connections.enabled("claude")).toBe(false);
-  expect(connections.state).toEqual([{ provider: "codex", status: "disconnected" }, { provider: "claude", status: "unsupported" }, { provider: "grok", status: "unsupported" }]);
+  expect(connections.state).toEqual([{ provider: "codex", status: "disconnected", source: "account", localAvailable: false }, { provider: "claude", status: "unsupported", source: "account", localAvailable: false }, { provider: "grok", status: "unsupported", source: "cli", localAvailable: false }]);
   for (const provider of ["claude", "grok"] as const) {
     await expect(connections.connect(provider, open, consent)).rejects.toThrow("unavailable");
     await expect(connections.quota(provider)).rejects.toMatchObject({ code: "notSignedIn" });
@@ -365,6 +687,59 @@ it("denies non-Codex connections and quota in a live test profile even with pers
   }
   await expect(connections.quota("codex")).rejects.toMatchObject({ code: "notSignedIn" });
   expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled(); expect(consent).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled(); expect(spawn).toHaveBeenCalledTimes(processes);
+});
+it("denies non-Claude connections, quota and cleanup in a Claude test profile", async () => {
+  const processes = vi.mocked(spawn).mock.calls.length;
+  const home = realpathSync(temp()), profile = realpathSync(temp()), launch = launchConfiguration(["--claude-test-profile", profile], {}, home);
+  const command = vi.fn<Command>(async () => { throw new Error("Forbidden helper/defaults"); });
+  const http = vi.fn(async () => { throw new Error("Forbidden HTTP"); });
+  const preferences = await Preferences.load(launch, command);
+  preferences.values.desktopCodexConnection = client; preferences.values.desktopCodexCleanup = client;
+  const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http);
+  const consent = vi.fn(async () => true), open = vi.fn(async () => {});
+  expect(connections.enabled("codex")).toBe(false);
+  expect(connections.state).toEqual([{ provider: "codex", status: "unsupported", source: "account", localAvailable: false }, { provider: "claude", status: "disconnected", source: "account", localAvailable: false }, { provider: "grok", status: "unsupported", source: "cli", localAvailable: false }]);
+  for (const provider of ["codex", "grok"] as const) {
+    await expect(connections.connect(provider, open, consent)).rejects.toThrow("unavailable");
+    await expect(connections.quota(provider)).rejects.toMatchObject({ code: "notSignedIn" });
+    await expect(connections.disconnect(provider)).rejects.toThrow("unavailable");
+  }
+  await connections.recover();
+  await expect(connections.quota("claude")).rejects.toMatchObject({ code: "notSignedIn" });
+  expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled(); expect(consent).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled();
+  expect(transport.cliPath).not.toHaveBeenCalled(); expect(spawn).toHaveBeenCalledTimes(processes);
+});
+it("connects, reloads and disconnects Claude through isolated preferences and read-only Desktop fixtures", async () => {
+  const processes = vi.mocked(spawn).mock.calls.length;
+  const home = realpathSync(temp()), profile = realpathSync(temp()), launch = launchConfiguration(["--claude-test-profile", profile], {}, home);
+  desktop(home);
+  const root = join(home, "Library/Application Support/Claude"), before = ["config.json", "Cookies"].map(name => readFileSync(join(root, name)));
+  const command = vi.fn<Command>(async (binary, args) => { expect(binary).toBe("/synthetic/helper"); expect([[], ["--allow-ui"]]).toContainEqual(args); return password; });
+  const http = vi.fn<HTTP>(async (url, provider, token) => {
+    expect(url).toBe(endpoints.claudeAllowance); expect(provider).toBe("claude"); expect(token).toBe("synthetic-access-one");
+    return '{"five_hour":{"utilization":25},"seven_day":{"utilization":0}}';
+  });
+  const preferences = await Preferences.load(launch, command);
+  const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http, () => now);
+  expect(await connections.connect("claude", async () => {}, async () => false)).toBe(false);
+  expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled();
+  expect(await connections.connect("claude", async () => {}, async () => true)).toBe(true);
+  expect(command.mock.calls.map(([, args]) => args)).toEqual([["--allow-ui"], []]);
+  await connections.stop();
+  const restored = await Preferences.load(launchConfiguration(["--claude-test-profile", profile], {}, home), command);
+  const restart = new DesktopConnections(launch, restored, "/synthetic/helper", () => {}, command, http, () => now);
+  expect(restart.enabled("claude")).toBe(true);
+  const [source] = compose(launch, restored, { connections: restart });
+  expect(Object.keys(source).sort()).toEqual(["accountBound", "quota", "slot"]);
+  expect((await source.quota!()).windows.map(w => w.usedPercent)).toEqual([25, 0]);
+  expect(command.mock.calls.slice(2).every(([, args]) => args.length === 0)).toBe(true);
+  await restart.disconnect("claude");
+  expect((await Preferences.load(launch, command)).values.desktopClaudeIdentity).toBe("off");
+  await expect(source.quota!()).rejects.toMatchObject({ code: "notSignedIn" });
+  for (const [i, name] of ["config.json", "Cookies"].entries()) expect(readFileSync(join(root, name))).toEqual(before[i]);
+  expect(existsSync(join(home, "Library/Application Support/MeterUsage"))).toBe(false);
+  expect(readFileSync(join(profile, "preferences.json"), "utf8")).not.toMatch(/synthetic-access|11111111|22222222|OMIT/);
+  expect(transport.cliPath).not.toHaveBeenCalled(); expect(spawn).toHaveBeenCalledTimes(processes);
 });
 it("connects, reloads and disconnects Codex through the isolated JSON test profile and OS home helper", async () => {
   const home = realpathSync(temp()), profile = realpathSync(temp()), resources = join(home, "Applications/Codex.app/Contents/Resources");
@@ -440,4 +815,49 @@ it("rejects effective plaintext storage before login and cleans up an in-progres
   connections.cancel("codex"); await expect(pending).rejects.toThrow("try connecting again");
   expect(preferences.values.desktopCodexConnection).toBe("off");
   expect(readFileSync(join(launch.data, "connections/codex", id, "requests"), "utf8")).toContain("account/logout");
+});
+
+it("uses the existing reset RPC on a synthetic helper with keyring verification and one idempotency key", async () => {
+  const root = temp(); fakeCodex(root, false, false, true);
+  const launch = launchConfiguration([], { PATH: root }, root), preferences = await Preferences.load(launch, async () => "");
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
+  await connections.connect("codex", async () => {});
+  const profile = String(preferences.values.desktopCodexConnection), path = join(launch.data, "connections/codex", profile);
+  await expect(connections.consumeReset(profile, "fixture-credit")).resolves.toBe(true);
+  const request = JSON.parse(readFileSync(join(path, "reset-request"), "utf8"));
+  expect(Object.keys(request).sort()).toEqual(["creditId", "idempotencyKey"]);
+  expect(request.creditId).toBe("fixture-credit"); expect(request.idempotencyKey).toMatch(/^[a-f\d-]{36}$/);
+  expect(readFileSync(join(path, "requests"), "utf8").match(/account\/rateLimitResetCredit\/consume/g)).toHaveLength(1);
+  expect(readFileSync(join(path, "requests"), "utf8")).toContain("config/read\naccount/rateLimitResetCredit/consume");
+  rmSync(join(path, "reset-request"));
+  const binary = join(root, "codex"); writeFileSync(binary, readFileSync(binary, "utf8").replace("cli_auth_credentials_store:'keyring'", "cli_auth_credentials_store:'file'"));
+  await expect(connections.consumeReset(profile, "fixture-credit")).rejects.toThrow("Secure credential storage unavailable");
+  expect(existsSync(join(path, "reset-request"))).toBe(false);
+});
+
+
+it("reads daily history for the captured managed profile and rejects late swaps, aborts and disconnects", async () => {
+  const root = temp(); fakeCodex(root);
+  const launch = launchConfiguration([], { PATH: root }, root), preferences = await Preferences.load(launch, async () => "");
+  preferences.values.desktopCodexConnection = "11111111-1111-4111-8111-111111111111";
+  const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {}, undefined, undefined, () => now);
+  const profile = String(preferences.values.desktopCodexConnection), raw = '{"result":{"dailyUsageBuckets":[{"startDate":"2026-10-06","tokens":123}]}}';
+  const rpc = vi.spyOn(transport, "codexRPC").mockResolvedValue(raw);
+  expect(await connections.accountActivity(undefined, profile)).toEqual({ capturedAt: now, dailyUsageBuckets: [{ startDate: "2026-10-06", tokens: 123 }] });
+  expect(rpc.mock.calls[0].slice(2)).toEqual([undefined, expect.arrayContaining(['cli_auth_credentials_store="keyring"', 'forced_login_method="chatgpt"']), "usage"]);
+  expect(rpc.mock.calls[0][1].env?.CODEX_HOME).toBe(join(launch.data, "connections/codex", profile));
+  for (const action of ["swap", "abort", "disconnect", "local"] as const) {
+    preferences.values.desktopCodexConnection = profile;
+    let finish!: (s: string) => void;
+    rpc.mockImplementation(async (_binary, _options, _credit, _configuration, operation) => operation === "logout" ? '{"result":{}}' : new Promise(resolve => { finish = resolve; }));
+    const controller = new AbortController(), reading = connections.accountActivity(controller.signal, profile);
+    if (action === "swap") preferences.values.desktopCodexConnection = "22222222-2222-4222-8222-222222222222";
+    if (action === "abort") controller.abort();
+    if (action === "disconnect") await connections.disconnect("codex");
+    if (action === "local") await connections.useLocal("codex");
+    finish(raw); await expect(reading).rejects.toThrow();
+  }
+  const calls = rpc.mock.calls.length;
+  await expect(connections.accountActivity()).rejects.toMatchObject({ code: "notSignedIn" });
+  expect(rpc).toHaveBeenCalledTimes(calls);
 });

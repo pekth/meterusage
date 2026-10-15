@@ -13,6 +13,7 @@ import { runJSON } from "../src/main/cli";
 import * as launchModule from "../src/main/launch";
 import * as transport from "../src/main/providers/transport";
 import * as claudeDesktop from "../src/main/providers/claude-desktop";
+import { parseStatus } from "../src/main/providers/parsers";
 const roots: string[] = [], controllers: Coordinator[] = []; const temp = () => { const root = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(root); return root; };
 beforeEach(() => {
   vi.spyOn(transport, "runCommand").mockRejectedValue(new Error("Unexpected native command"));
@@ -109,6 +110,7 @@ describe("coordinator refresh journey", () => {
     vi.spyOn(Preferences, "load").mockResolvedValue(prefs);
     vi.spyOn(transport, "runCommand").mockRejectedValue(new Error("Synthetic command unavailable"));
     vi.spyOn(transport, "httpTransport").mockReturnValue(async () => { throw new Error("Unexpected HTTP"); });
+    vi.spyOn(DesktopConnections.prototype, "accountActivity").mockResolvedValue({ capturedAt: now, dailyUsageBuckets: null });
     const reads = vi.spyOn(DesktopConnections.prototype, "quota").mockImplementation(async provider => quota(provider, [window("Weekly · All models", 42)], now));
     const connect = vi.spyOn(DesktopConnections.prototype, "connect").mockRejectedValue(new Error("Unexpected sign-in"));
     const report = JSON.parse(await runJSON(["--json"], {}, "synthetic-helper"));
@@ -185,6 +187,36 @@ describe("coordinator refresh journey", () => {
   it("does not back off permanent no-data conditions and polls health when usage is hidden", async () => {
     let reads = 0, statuses = 0; const { c, prefs } = await setup([{ slot: primary("codex"), quota: async () => { reads++; throw new Unavailable("noData"); }, status: async () => { statuses++; return { provider: "codex", severity: "operational", description: "All systems operational", checkedAt: now }; } }]);
     await c.refresh(true); await c.refresh(true); expect(reads).toBe(2); await prefs.set("showProviderCodex", false); await c.refresh(true); expect(reads).toBe(2); expect(statuses).toBe(3);
+  });
+  it("publishes public status as idle, failed, then refreshed without using a credential source", async () => {
+    let fail = true, at = now;
+    const { c } = await setup([{ slot: primary("codex"), status: async () => { if (fail) throw new Unavailable("offline"); return { provider: "codex", severity: "operational", description: "All systems operational", checkedAt: at }; } }], () => at);
+    expect(c.snapshot().statuses.codex).toEqual({ status: "idle" });
+    expect(c.diagnostics()).toContain("status: not checked yet");
+    await c.refresh(); expect(c.snapshot().statuses.codex).toMatchObject({ status: "missing", code: "offline" });
+    expect(c.diagnostics()).toContain("status: unavailable (offline)");
+    fail = false; await c.refresh(); expect(c.snapshot().statuses.codex).toMatchObject({ status: "value", value: { checkedAt: now } });
+    expect(c.diagnostics()).toContain("status: ok");
+    at += 65000;
+    fail = true; await c.refresh(); expect(c.snapshot().statuses.codex).toMatchObject({ status: "value", value: { checkedAt: now, stale: true, refreshError: "Service status unavailable" } });
+    expect(c.diagnostics()).toContain("status: stale (last successful check: 65s ago; Service status unavailable)");
+    fail = false; await c.refresh();
+    expect(c.diagnostics()).toContain("status: ok");
+    expect(c.diagnostics()).not.toContain("status: stale");
+  });
+  it.each([[401, "notSignedIn"], [503, "failed"]] as const)("normalizes public status HTTP %i errors and clears them after retry", async (status, code) => {
+    vi.mocked(transport.httpTransport).mockRestore();
+    const root = temp(), launch = launchConfiguration(["--codex-test-profile", root], {}), prefs = await Preferences.load(launch);
+    let responseStatus: number = status;
+    const http = transport.httpTransport(async () => new Response(responseStatus === 200 ? '{"components":[{"name":"Codex","status":"operational"}]}' : "{}", { status: responseStatus }));
+    const source: Source[] = [{ slot: primary("codex"), status: async signal => parseStatus("codex", await http(transport.endpoints.codexStatus, status === 401 ? "grok" : "codex", undefined, signal), now) }];
+    const c = new Coordinator(launch, prefs, source, () => now); controllers.push(c);
+    await c.refresh();
+    expect(c.snapshot().statuses.codex).toMatchObject({ status: "missing", code, reason: "Service status unavailable" });
+    responseStatus = 200; await c.refresh();
+    const refreshed = c.snapshot().statuses.codex;
+    expect(refreshed).toMatchObject({ status: "value", value: { severity: "operational", checkedAt: now } });
+    if (refreshed?.status === "value") expect(refreshed.value).not.toHaveProperty("stale");
   });
   it("preserves corrupt durable history while still returning current activity and sanitized diagnostics", async () => {
     const { c, root } = await setup(); c.stop(); const path = join(root, "durable-daily-history.json"); writeFileSync(path, "CORRUPT_HISTORY");
@@ -281,4 +313,41 @@ describe("alert edge and recency parity", () => {
     expect(evaluator.events([a], { codex: value(q) }, { codex: now }, now).map(e => e.kind)).toContain("paceSoftWarning"); expect(evaluator.events([a], { codex: value(q) }, { codex: now }, now)).toEqual([]);
     expect(evaluator.events([a], { codex: missing(new Unavailable("offline"), "codex") }, {}, now)).toEqual([]);
   });
+});
+
+
+it("keeps account buckets out of local rollups and durable history, clearing failed or replaced reads", async () => {
+  let hold = false, finish!: (v: { capturedAt: number; dailyUsageBuckets: { startDate: string; tokens: number }[] | null }) => void;
+  const expected = { capturedAt: now, dailyUsageBuckets: [{ startDate: "2026-10-06", tokens: 123 }] };
+  const source: Source = { slot: primary("codex"), accountBound: true, quota: async () => quota("codex", [window("5-hour", 25)], now), accountActivity: () => hold ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(expected) };
+  const { c, root } = await setup([source]);
+  expect(c.snapshot().accountActivities?.codex).toEqual({ status: "idle" });
+  await c.refresh();
+  expect(c.snapshot().accountActivities?.codex).toEqual(value(expected));
+  expect(c.activities.codex).toBeUndefined(); expect(c.usages.codex).toBeUndefined(); expect(c.burns.codex).toBeUndefined();
+  expect(c.history.records("codex")).toEqual([]); expect(existsSync(join(root, "durable-daily-history.json"))).toBe(false);
+  hold = true; vi.useFakeTimers(); const pending = c.refresh();
+  await vi.advanceTimersByTimeAsync(30000); await pending;
+  expect(c.snapshot().accountActivities?.codex).toMatchObject({ status: "missing", code: "failed" });
+  finish(expected); await vi.advanceTimersByTimeAsync(0);
+  expect(c.snapshot().accountActivities?.codex).toMatchObject({ status: "missing" });
+  hold = false; await c.refresh();
+  expect(c.snapshot().accountActivities?.codex).toEqual(value(expected));
+  hold = true; const oldRead = c.refresh(); await vi.advanceTimersByTimeAsync(0);
+  const next: Source = { ...source, accountActivity: async () => ({ capturedAt: now, dailyUsageBuckets: null }) };
+  c.sources = [next];
+  expect(c.snapshot().accountActivities?.codex).toEqual({ status: "idle" });
+  finish(expected); await oldRead;
+  expect(c.snapshot().accountActivities?.codex).toEqual(value({ capturedAt: now, dailyUsageBuckets: null }));
+  c.forgetQuota("codex"); c.sources = [];
+  expect(c.accountActivities.codex).toBeUndefined(); expect(c.snapshot().accountActivities).toEqual({});
+});
+it("uses the existing bounded backoff for failed account history reads", async () => {
+  let clock = now;
+  const read = vi.fn(async () => { throw new Unavailable("failed", "Codex"); });
+  const { c } = await setup([{ slot: primary("codex"), accountBound: true, accountActivity: read }], () => clock);
+  await c.refresh(); await c.refresh(true); expect(read).toHaveBeenCalledTimes(1);
+  clock += 60000; await c.refresh(true); expect(read).toHaveBeenCalledTimes(2);
+  clock += 60000; await c.refresh(true); expect(read).toHaveBeenCalledTimes(2);
+  clock += 60000; await c.refresh(true); expect(read).toHaveBeenCalledTimes(3);
 });

@@ -12,7 +12,7 @@ export function trayTooltip(s: Snapshot): string {
       if (!fresh) parts.push(`last reading ${formatETA((s.clock - reading!.capturedAt) / 1000, true)} ago`);
     }
     const status = s.statuses[slot.provider];
-    if (status?.status === "value" && status.value.severity !== "operational") parts.push(severityNames[status.value.severity]);
+    if (status?.status === "value" && (status.value.severity !== "operational" || status.value.stale)) parts.push(`${status.value.stale ? "Last known " : ""}${severityNames[status.value.severity]}${status.value.stale ? ` · checked ${formatETA((s.clock - status.value.checkedAt) / 1000, true)} ago · ${status.value.refreshError}` : ""}`);
     return parts.length ? [`${slotName(slot)}: ${parts.join(" · ")}`] : [];
   });
   if (!entries.length) entries.push("No usage data yet");

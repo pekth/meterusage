@@ -1,16 +1,32 @@
 # Contributing to meterusage
 
-> ### ⚡ TL;DR
+> ### Quick start
 > 1. Fork & clone the repo.
 > 2. Enable pre-commit hook: `git config core.hooksPath .githooks`
-> 3. Verify: `swift test` & `./Scripts/make-app.sh --build-from-source`
+> 3. For Electron, use the declared Node/pnpm versions, then run
+>    `pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test` and `pnpm build`.
 > 4. Keep diffs focused, zero secrets or credentials, synthetic fixtures only.
 
 
 Fork the repository, make one focused change, run the checks below, and open a
 pull request.
 
+## Edition routing
+
+New features target the [Electron implementation](docs/electron/README.md).
+The [legacy Swift app](docs/swift/README.md) is frozen for new features and kept
+for critical maintenance, transition compatibility and rollback. Both source
+trees remain until the [retirement conditions](docs/adr/0024-electron-primary-swift-retirement.md#retirement-conditions)
+pass. Validate both affected paths when a shared contract changes.
+`Scripts/make-app.sh` prepares the published Swift app by default and never
+builds Electron. Isolated demo/test profiles are required for candidate QA;
+shared normal profiles do not support safe side-by-side use.
+
 ## Before you start
+
+Electron development uses the Node and pnpm versions declared in `package.json`.
+Follow [the Electron commands](#typescript-electron-candidate). Electron's macOS
+packaging still needs Swift for its Keychain helper and asset exporter.
 
 The published app is a macOS 13+ Swift menu-bar app. A TypeScript/Electron
 candidate is under development; see the candidate commands below. The package uses Swift tools
@@ -76,13 +92,14 @@ Add OpenRouter balance display
 
 Do not mix unrelated fixes in the same commit.
 
-## Build and test
+<a id="build-and-test"></a>
+## Legacy Swift build and test
 
 GitHub Actions runs `swift build` and `swift test` on macOS 15 for pushes to
 `main` and pull requests. Repository owners must enable Actions under
 Settings > Actions > General for these checks to run.
 
-Run these checks before a pull request:
+For Swift source changes, run these checks before a pull request:
 
 ```sh
 swift build
@@ -118,6 +135,11 @@ not move, and include the captures in the pull request. See
 See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
 
 ## TypeScript Electron candidate
+
+The source version is 0.2.41. This candidate is unpublished; private build and
+installation receipts exist, while complete native acceptance remains open.
+See the [candidate guide](docs/electron/README.md) for source choices and parity gaps.
+
 
 Use the Node and pnpm versions declared in `package.json`. Provider accounts
 are optional; synthetic tests and demo mode require no login. Shared checks
@@ -186,17 +208,26 @@ See [ADR 0010](docs/adr/0010-macos-typescript-electron.md) and
 
 ## Where to make changes
 
+New providers and data sources belong in Electron. Use the `src/` and `tests/`
+map in [Electron development](#typescript-electron-candidate).
+
+### Legacy Swift maintenance
+
+Use these paths only for critical fixes, transition compatibility and rollback:
+
 - `Sources/MeterUsage/Services/` contains provider readers, pricing, and
   service-status sources.
 - `Sources/MeterUsage/Core/` contains coordination and saved preferences.
 - `Sources/MeterUsage/Views/` contains the SwiftUI menu-bar interface.
 - `Tests/MeterUsageTests/` contains unit tests and synthetic fixtures.
 
-When adding a provider or data source, use the existing `QuotaSource`,
+When maintaining a legacy provider or data source, use the existing `QuotaSource`,
 `UsageSource`, `LocalActivitySource`, or `StatusSource` contract in
 `Sources/MeterUsage/Services/DataSource.swift`. Keep provider failures isolated
 so one unavailable provider does not hide the others. Add or update the model,
-coordinator, settings, and tests only when the feature needs them.
+coordinator, settings, and tests only when the maintenance change needs them.
+
+### Shared contribution rules
 
 New providers must have synthetic demo data and tests. Normal tests and
 screenshots must not require a live login.
@@ -223,10 +254,11 @@ positive.
 
 ## Generated assets
 
-Run `./Scripts/make-icon.sh` only when the icon design changes. The app bundle
-is assembled from source by `./Scripts/make-app.sh --build-from-source`.
-Output under `dist/` is ignored
-and should not be force-added.
+Run `./Scripts/make-icon.sh` only when the icon design changes. Build the legacy
+Swift app bundle with `./Scripts/make-app.sh --build-from-source`. For Electron
+packaging, follow [Electron development](#typescript-electron-candidate).
+Generated output under `dist/` and `release/` is ignored and should not be
+force-added.
 
 ## Pull requests
 
@@ -234,7 +266,7 @@ A pull request should include:
 
 - the user-visible change and why it is needed;
 - the files or provider paths affected;
-- the exact checks you ran, including `swift test`;
+- the exact checks you ran, including the affected Swift or TypeScript checks;
 - any privacy, network, or credential-handling impact; and
 - demo-mode screenshots when a UI change needs visual review, plus captured
   side notch frames when the change touches panel layout or motion.

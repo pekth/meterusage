@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join, isAbsolute, resolve } from "node:path";
-import { type Quota, type Activity, type Usage, type ServiceStatus, type Slot, type ManagedAccount, primary, accountSlot, Unavailable, failed } from "../domain/models";
+import { type Quota, type AccountActivity, type Activity, type Usage, type ServiceStatus, type Slot, type ManagedAccount, primary, accountSlot, Unavailable, failed } from "../domain/models";
 import { selectJSON } from "./select-json";
 import { type Launch } from "./launch";
 import { Preferences } from "./preferences";
@@ -13,6 +13,7 @@ import { demoSources } from "./demo";
 import type { DesktopConnections } from "./connections";
 export interface Source {
   accountBound?: boolean;
+  accountActivity?: (signal?: AbortSignal) => Promise<AccountActivity>;
   slot: Slot;
   quota?: (signal?: AbortSignal) => Promise<Quota>;
   activity?: (signal?: AbortSignal) => Promise<Activity>;
@@ -44,9 +45,19 @@ function openCodeKey(launch: Launch): string | undefined {
 }
 export function compose(launch: Launch, prefs: Preferences, options: { command?: Command; http?: HTTP; now?: () => number; connections?: DesktopConnections } = {}): Source[] {
   const now = options.now ?? Date.now;
-  if (launch.codexTest) return [{ slot: primary("codex"), accountBound: true, quota: signal => options.connections ? options.connections.quota("codex", signal) : Promise.reject(new Unavailable("notSignedIn", "codex")) }];
+  if (launch.claudeTest) return [{ slot: primary("claude"), accountBound: true, quota: signal => options.connections ? options.connections.quota("claude", signal) : Promise.reject(new Unavailable("notSignedIn", "claude")) }];
+  const http = options.http ?? httpTransport();
+  const connectedCodex = (): Source => {
+    const profile = String(prefs.values.desktopCodexConnection), connections = options.connections;
+    return { slot: primary("codex"), accountBound: true,
+      accountActivity: signal => connections ? connections.accountActivity(signal, profile) : Promise.reject(new Unavailable("notSignedIn", "codex")),
+      quota: signal => connections ? connections.quota("codex", signal, profile) : Promise.reject(new Unavailable("notSignedIn", "codex")),
+      ...(connections?.enabled("codex") ? { consumeReset: (id: string, signal?: AbortSignal) => connections.consumeReset(profile, id, signal) } : {}),
+    };
+  };
+  if (launch.codexTest) return [{ ...connectedCodex(), status: async signal => parseStatus("codex", await http(endpoints.codexStatus, "codex", undefined, signal), now()) }];
   if (launch.demo) return demoSources(now, prefs.accounts);
-  const command = options.command ?? runCommand, http = options.http ?? httpTransport(), env = cliEnvironment(launch.home, launch.env);
+  const command = options.command ?? runCommand, env = cliEnvironment(launch.home, launch.env);
   const runtime = new AntigravityRuntime(runtimeCandidates(env), command, env);
   const makeCodex = (slot: Slot, home?: string): Source => {
     const rpc = (signal?: AbortSignal, id?: string) => codexRPC(cliPath("codex", launch.home, env), { env: { ...env, ...(home ? { CODEX_HOME: home } : {}) }, signal }, id);
@@ -66,14 +77,12 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
       try { return parseClaudeQuota(raw, capturedAt); } catch { throw new Unavailable("noData"); }
     }, activity: async signal => activity.scan(now(), signal), plan: async () => { const raw = read(alternate ? join(home, ".claude.json") : join(launch.home, ".claude.json")); if (!raw) throw new Unavailable("noData"); try { return parseClaudePlan(raw); } catch { throw new Unavailable("noData"); } } };
   };
-  const codex = makeCodex(primary("codex")), claude = makeClaude(primary("claude"), join(launch.home, ".claude"));
-  for (const [provider, source, preference] of [["codex", codex, "desktopCodexConnection"], ["claude", claude, "desktopClaudeIdentity"]] as const) {
-    if (prefs.values[preference] !== "") {
-      source.accountBound = true;
-      source.quota = signal => options.connections ? options.connections.quota(provider, signal) : Promise.reject(new Unavailable("notSignedIn", provider));
-      // Local CLI activity cannot be attributed to a separately connected account.
-      delete source.activity; delete source.plan; delete source.consumeReset;
-    }
+  const codex = prefs.values.desktopCodexConnection !== "" ? connectedCodex() : makeCodex(primary("codex")), claude = makeClaude(primary("claude"), join(launch.home, ".claude"));
+  if (prefs.values.desktopClaudeIdentity !== "") {
+    claude.accountBound = true;
+    claude.quota = signal => options.connections ? options.connections.quota("claude", signal) : Promise.reject(new Unavailable("notSignedIn", "claude"));
+    // Local CLI activity cannot be attributed to a separately connected account.
+    delete claude.activity; delete claude.plan;
   }
   codex.status = async signal => parseStatus("codex", await http(endpoints.codexStatus, "codex", undefined, signal), now());
   claude.status = async signal => parseStatus("claude", await http(endpoints.claudeStatus, "claude", undefined, signal), now());

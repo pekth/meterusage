@@ -2,8 +2,10 @@ import { it, expect, vi } from "vite-plus/test";
 import { createElement, useEffect, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { App, Connections, Meter, ProviderCard } from "../src/renderer/app";
-import { tokens, primary, quota, value, window } from "../src/domain/models";
+import { tokens, providers, primary, quota, value, window, localDay, shiftDay } from "../src/domain/models";
 import type { ViewState } from "../src/shared/ipc";
+import { openRouterUsage } from "../src/main/providers/usage";
+import { telemetry } from "../src/domain/telemetry";
 import { trayTooltip } from "../src/domain/overview";
 import { readFileSync } from "node:fs";
 
@@ -11,15 +13,15 @@ vi.mock("react", async importOriginal => {
   const actual = await importOriginal<typeof import("react")>();
   return { ...actual, useState: vi.fn(actual.useState), useEffect: vi.fn(actual.useEffect), useRef: vi.fn(actual.useRef) };
 });
-function renderApp(view: ViewState, surface = "flyout") {
+function renderApp(view: ViewState, surface = "flyout", error = "") {
   vi.stubGlobal("location", { search: `?surface=${surface}` });
-  vi.mocked(useState).mockReturnValueOnce([view, () => {}]);
+  vi.mocked(useState).mockReturnValueOnce([view, () => {}]).mockReturnValueOnce([error, () => {}]);
   try { return renderToStaticMarkup(createElement(App, { bridge: { request: async () => ({ ok: true as const }), subscribe: () => () => {} } })); }
   finally { vi.unstubAllGlobals(); }
 }
 
 const now = Date.parse("2026-10-06T12:00:00Z");
-it("offers a labelled size selector and scopes scale and keyboard scrolling to main panel and Settings", () => {
+it("passes the saved size to notch details without scaling the strip or share surface", () => {
   const view = state();
   for (const [size, scale] of [["small", "0.8"], ["medium", "1"], ["large", "1.15"]]) {
     view.settings.values.panelSize = size;
@@ -34,6 +36,7 @@ it("offers a labelled size selector and scopes scale and keyboard scrolling to m
         for (const label of ["Small", "Medium", "Large"]) expect(markup).toContain(`>${label}</span>`);
       }
     }
+    expect(renderApp(view, "notch")).toContain(`surface-notch size-${size}`);
     for (const surface of ["notch", "tray", "share"]) {
       expect(renderApp(view, surface)).not.toContain("zoom:");
       expect(renderApp(view, surface)).not.toContain("panel-viewport");
@@ -100,14 +103,14 @@ it("groups settings and names provider controls while keeping accent choices sel
 });
 it("offers simple account setup and truthful Grok availability without directories in the primary flow", () => {
   const view = state(); view.snapshot.demo = false;
-  view.connections = [{ provider: "codex", status: "disconnected" }, { provider: "claude", status: "connected" }, { provider: "grok", status: "unsupported" }];
+  view.connections = [{ provider: "codex", source: "account", localAvailable: true, status: "disconnected" }, { provider: "claude", source: "account", localAvailable: true, status: "connected" }, { provider: "grok", source: "cli", localAvailable: true, status: "unsupported" }];
   const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
   expect(markup).toContain('aria-label="Disconnect Claude"');
   expect(markup).toContain("Sign in to Codex"); expect(markup).toContain("Disconnect"); expect(markup).toContain("Account allowance");
-  expect(markup).toContain("Automatic connection is not available yet"); expect(markup).not.toMatch(/directory|terminal|API key/);
+  expect(markup).toContain("Grok website and mobile usage are not supported"); expect(markup).not.toMatch(/directory|terminal|API key/);
   view.connections[0].status = "failed";
   const failed = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
-  expect(failed).toContain("Usage unavailable. Open the desktop app and try again."); expect(failed).toContain("Sign in to Codex");
+  expect(failed).toContain("Connection failed. Check the message above and try again."); expect(failed).toContain("Sign in to Codex");
   view.connections[0].status = "connecting";
   expect(renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }))).toContain("Cancel");
   view.snapshot.demo = true; view.connections[0].status = "disconnected";
@@ -115,19 +118,77 @@ it("offers simple account setup and truthful Grok availability without directori
 });
 it("keeps onboarding in Settings and removes it from usage after completion", () => {
   const view = state(); view.snapshot.demo = false;
-  view.connections = [{ provider: "codex", status: "disconnected" }, { provider: "claude", status: "disconnected" }, { provider: "grok", status: "unsupported" }];
+  view.connections = [{ provider: "codex", source: "account", localAvailable: true, status: "disconnected" }, { provider: "claude", source: "account", localAvailable: true, status: "disconnected" }, { provider: "grok", source: "cli", localAvailable: true, status: "unsupported" }];
   view.snapshot.appearance.onboarding = false;
   const setup = renderApp(view, "settings");
-  expect(setup).toContain("Your usage, at a glance"); expect(setup).toContain("Choose an account once");
-  expect(setup).toContain("Connect your accounts"); expect(setup).toContain(">Done</button>");
+  expect(setup).toContain("Your usage, at a glance"); expect(setup).toContain("Choose a method for each provider");
+  expect(setup).toContain("Choose how to connect"); expect(setup).toContain(">Done</button>");
   expect(setup).toContain("Sign in to Codex"); expect(setup).toContain("Connect Claude Desktop");
   for (const surface of ["flyout", "notch", "tray", "share"]) {
     expect(renderApp(view, surface)).not.toContain("Your usage, at a glance");
-    expect(renderApp(view, surface)).not.toContain("Connect your accounts");
+    expect(renderApp(view, surface)).not.toContain("Choose how to connect");
   }
   view.snapshot.appearance.onboarding = true;
   const completed = renderApp(view, "settings");
   expect(completed).not.toContain("Your usage, at a glance"); expect(completed).not.toContain(">Done</button>");
+});
+it("offers only supported methods and puts Done after the source choices", () => {
+  const view = state(); view.snapshot.demo = false; view.snapshot.appearance.onboarding = false;
+  const markup = renderApp(view, "settings");
+  expect(markup).toContain('aria-label="Codex connection method"');
+  expect(markup).toContain('aria-label="Claude connection method"');
+  expect(markup).toContain('aria-label="Grok connection method"');
+  expect(markup).toContain('>Browser sign-in</option>');
+  expect(markup).toContain('>Claude Desktop</option>');
+  expect(markup).toContain('>Claude Code CLI</option>');
+  const grok = markup.slice(markup.indexOf('aria-label="Grok connection method"')).split('</select>')[0];
+  expect(grok).toContain('>Grok CLI</option>'); expect(grok).not.toContain('value="account"');
+  expect(markup.indexOf('>Done</button>')).toBeGreaterThan(markup.indexOf('aria-label="Grok connection method"'));
+});
+it("keeps a selected CLI switch explicit while showing the still-connected account", () => {
+  const view = state(); view.snapshot.demo = false;
+  view.connections = [{ provider: "codex", source: "account", localAvailable: true, status: "connected" }];
+  vi.mocked(useState).mockReturnValueOnce(["cli", () => {}]);
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(markup).toContain('value="cli" selected=""');
+  expect(markup).toContain('>Use CLI</button>');
+  expect(markup).toContain('Connected · Account allowance');
+  expect(markup).toContain('Use CLI disconnects this MeterUsage account connection.');
+  expect(markup).not.toContain('>Disconnect</button>');
+});
+it("restores the saved CLI source without claiming account sign-in", () => {
+  const view = state(); view.snapshot.demo = false;
+  view.settings.values.showProviderClaude = true;
+  view.connections = [{ provider: "claude", source: "cli", localAvailable: true, status: "disconnected" }];
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(markup).toContain('value="cli" selected=""');
+  expect(markup).toContain('CLI selected. Data appears when available.');
+  expect(markup).toContain('Allowance needs a companion usage file.');
+  expect(markup).not.toContain('>Connect Claude Desktop</button>');
+  expect(markup).not.toContain('Connected · Account allowance');
+});
+it("blocks CLI in isolated profiles and disables the selector while connecting", () => {
+  const view = state(); view.snapshot.demo = false;
+  view.connections = [{ provider: "claude", source: "account", localAvailable: false, status: "connecting" }];
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(markup).toContain('aria-label="Claude connection method" disabled=""');
+  expect(markup).toContain('value="cli" disabled=""');
+  expect(markup).toContain('aria-label="Cancel Claude connection"');
+  expect(markup).not.toContain('>Use CLI</button>');
+});
+it("starts an isolated profile on its available account method", () => {
+  const view = state(); view.snapshot.demo = false;
+  view.connections = [{ provider: "claude", source: "cli", localAvailable: false, status: "disconnected" }];
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(markup).toContain('value="account" selected=""');
+  expect(markup).toContain('>Connect Claude Desktop</button>');
+  expect(markup).toContain('value="cli" disabled=""');
+});
+it("disables disconnect for saved account state in demo", () => {
+  const view = state();
+  view.connections = [{ provider: "codex", source: "account", localAvailable: false, status: "connected" }];
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(markup).toMatch(/aria-label="Disconnect Codex"[^>]*disabled=""/);
 });
 it.each(["codex", "claude"] as const)("keeps %s display control available for an active additional account", provider => {
   const view = state(), name = provider === "codex" ? "Codex" : "Claude";
@@ -166,7 +227,7 @@ it("shows unavailable reset status without a redemption action", () => {
   q.resetCredits[0].expiresAt = now; expect(renderApp(view)).not.toContain("Use reset"); expect(renderApp(view)).toContain("expired");
 });
 
-it("limits the reset visibility setting to the notch and shared detail, keeping flyout redemption", () => {
+it("limits the reset visibility setting to live notch details, keeping flyout redemption", () => {
   const view = state(), q = quota("codex", [w], now); q.resetCreditCount = 1; q.resetCredits = [{ id: "fixture-credit", title: "Reset", status: "available", expiresAt: now + 1000 }];
   view.snapshot.quotas.codex = value(q); view.snapshot.notchSlots = [primary("codex")];
   q.canConsumeReset = true;
@@ -183,7 +244,7 @@ it("hides reset actions for allowance-only sources while retaining earned credit
     q.canConsumeReset = capability;
     for (const surface of ["flyout", "notch", "share"]) {
       const markup = renderApp(view, surface); expect(markup).toContain("1 earned reset credits");
-      expect(markup.includes("Use reset")).toBe(capability === true);
+      expect(markup.includes("Use reset")).toBe(capability === true && surface !== "share");
     }
   }
 });
@@ -283,11 +344,31 @@ it("keeps reported service health visible when all usage providers are hidden", 
   expect(markup.indexOf("Service status")).toBeLessThan(markup.indexOf("Enable a provider"));
 });
 
-it("does not fabricate service rows for absent or failed status sources", () => {
+it("shows idle and failed public status sources without inventing unsupported providers", () => {
   const view = state(); view.snapshot.slots = []; view.snapshot.quotas = {}; view.snapshot.activities = {};
   view.snapshot.statuses.codex = { status: "missing", code: "offline", reason: "Status unavailable" };
   const markup = renderApp(view), section = markup.slice(markup.indexOf('aria-label="Service status"'), markup.indexOf("</section>", markup.indexOf('aria-label="Service status"')));
-  expect(section).toContain("Not checked yet"); expect(section).not.toContain("Codex"); expect(section).not.toContain("Claude");
+  expect(section).toContain("Status unavailable"); expect(section).toContain("Codex"); expect(section).not.toContain("Claude");
+  view.snapshot.refreshing = true;
+  expect(renderApp(view)).toContain("Checking…");
+  view.snapshot.refreshing = false; view.snapshot.statuses.codex = { status: "idle" };
+  expect(renderApp(view)).toContain("Not checked yet");
+});
+
+it("shows the age of the last successful public status check", () => {
+  const view = state(); view.snapshot.statuses.codex = value({ provider: "codex", severity: "operational", description: "All systems operational", checkedAt: now - 60000, stale: true, refreshError: "Offline" });
+  const markup = renderApp(view), section = markup.slice(markup.indexOf('aria-label="Service status"'), markup.indexOf("</section>", markup.indexOf('aria-label="Service status"')));
+  expect(section).toContain("Last known 1m ago"); expect(section).toContain("Offline");
+});
+
+it("marks retained service status as last known in notch cards and tray tooltips", () => {
+  const view = state(); view.snapshot.statuses.codex = value({ provider: "codex", severity: "operational", description: "All systems operational", checkedAt: now - 60000, stale: true, refreshError: "Service status unavailable" });
+  const card = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, detail: true }));
+  expect(card).toContain("Last known Operational · 1m ago · Service status unavailable");
+  view.snapshot.traySlots = [primary("codex")];
+  expect(trayTooltip(view.snapshot)).toContain("Codex: 80% used · resets in 4h · Last known Operational · checked 1m ago · Service status unavailable");
+  view.snapshot.statuses.codex = value({ provider: "codex", severity: "majorOutage", description: "Major outage", checkedAt: now });
+  expect(trayTooltip(view.snapshot)).toContain("Major outage");
 });
 
 it("shows raw-window ambient notch ETA without recent burn and hides it when pacing is off", () => {
@@ -300,4 +381,268 @@ it("shows raw-window ambient notch ETA without recent burn and hides it when pac
   view.snapshot.quotas.codex = value(quota("codex", [window("5-hour", 1, now + 4 * 3600000, 300)], now)); expect(row()).not.toContain('class="notch-eta"');
   view.snapshot.quotas.codex = { status: "missing", code: "offline", reason: "Offline" }; view.snapshot.archived.codex = quota("codex", [w], now - 60000);
   expect(row()).toContain("15m"); expect(row()).toContain("last known reading");
+});
+
+it("keeps eligible menu resets accessible at Small, Medium and Large and hides archived actions", () => {
+  const view = state(), q = quota("codex", [w], now); q.canConsumeReset = true; q.resetCreditCount = 3;
+  q.resetCredits = ["one", "two", "three"].map(id => ({ id, title: "Full reset", status: "available", expiresAt: now + 3600000 }));
+  view.snapshot.quotas.codex = value(q);
+  for (const [size, scale] of [["small", "0.8"], ["medium", "1"], ["large", "1.15"]]) {
+    view.settings.values.panelSize = size;
+    const markup = renderApp(view);
+    expect(markup).toContain(`zoom:${scale}`);
+    expect(markup.match(/<button aria-label="Use reset: Full reset for Codex">Use reset<\/button>/g)).toHaveLength(3);
+  }
+  view.snapshot.archived.codex = q; view.snapshot.quotas.codex = { status: "missing", code: "offline", reason: "Offline" };
+  expect(renderApp(view)).not.toContain("Use reset");
+});
+
+it("sizes reset controls with the compact detail footer while retaining the account label", () => {
+  const view = state(), q = quota("codex", [w], now);
+  q.canConsumeReset = true; q.resetCreditCount = 1;
+  q.resetCredits = [{ id: "fixture", title: "Full reset", status: "available" }];
+  view.snapshot.quotas.codex = value(q); view.snapshot.appearance.resetButton = true;
+  const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, detail: true }));
+  expect(markup).toContain('aria-label="Use reset: Full reset for Codex"');
+  const css = readFileSync("src/renderer/style.css", "utf8");
+  expect(css).toMatch(/\.detail-card footer button, \.reset-credit button \{ font-size: 11px; \}/);
+});
+
+it.each(["daily", "weekly", "cumulative"])("exposes exact heatmap values on hover and focus with %s scope", mode => {
+  const view = state(), day = localDay(now);
+  const daily = [{ day, tokens: tokens({ output: 1234567 }), sessionCount: 2, estimatedCostUSD: 0 }];
+  view.snapshot.activities.codex = value({ provider: "codex", scannedAt: now, sessions: [], daily, telemetry: telemetry([], daily, now) });
+  view.snapshot.appearance.heatmap = true; view.snapshot.appearance.codexHeatmap = true;
+  vi.mocked(useState).mockReturnValueOnce([mode, () => {}]);
+  const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, detail: true }));
+  const date = (at: number) => new Date(at).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+  const scope = mode === "weekly" ? `Week of ${date(shiftDay(day, -new Date(day).getDay()))}` : mode === "cumulative" ? `Through ${date(day)}` : date(day);
+  expect(markup).toContain(`tabindex="0" role="img" aria-label="${scope}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
+  expect(markup).toContain(`title="${scope}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
+  expect(markup).toContain(`data-readout="${scope} · 1.2M tokens · 2 sessions"`);
+  for (const name of ["daily", "weekly", "cumulative"]) expect(markup).toMatch(new RegExp(`<option value="${name}"[^>]*>${name[0].toUpperCase() + name.slice(1)}</option>`));
+  const css = readFileSync("src/renderer/style.css", "utf8");
+  expect(css).toContain('content: attr(data-readout)');
+  expect(css).toContain('.heatmap-cell:hover::after'); expect(css).toContain('.heatmap-cell:focus::after');
+  expect(css).toContain('padding-bottom: 4.5em');
+});
+
+it("labels count-only heatmap days without inventing measured zero tokens", () => {
+  const view = state(), day = localDay(now), daily = [{ day, tokens: tokens(), sessionCount: 2, estimatedCostUSD: 0 }];
+  view.snapshot.slots = [primary("grok")]; view.snapshot.activities = {};
+  view.snapshot.usages.grok = value({ provider: "grok", capturedAt: now, sessionCount: 2, messageCount: 0, todaySessionCount: 2, todayMessageCount: 0, telemetry: telemetry([], daily, now) });
+  view.snapshot.appearance.heatmap = true;
+  const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("grok"), state: view, action: async () => {} }));
+  expect(markup).toContain('2 sessions, token totals unavailable'); expect(markup).not.toContain('0 tokens');
+  expect(markup).toContain('2 sessions · token totals unavailable');
+});
+
+it("keeps OpenRouter ledger dates in UTC when the local date is a day earlier", () => {
+  vi.stubEnv("TZ", "America/Los_Angeles");
+  try {
+    const view = state(); view.snapshot.slots = [primary("openRouter")]; view.snapshot.activities = {};
+    view.snapshot.usages.openRouter = value(openRouterUsage(JSON.stringify({ data: [{ date: "2026-10-06", prompt_tokens: 1234567, requests: 2 }] }), now));
+    view.snapshot.appearance.heatmap = true;
+    const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("openRouter"), state: view, action: async () => {} }));
+    const date = new Date(Date.UTC(2026, 9, 6)).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+    expect(markup).toContain(`aria-label="${date}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
+    expect(markup).toContain(`data-readout="${date} · 1.2M tokens · 2 sessions"`);
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it("always shows usage rings and percentages, with hover-only details and no design selector", () => {
+  const view = state(); view.snapshot.notchSlots = [primary("codex"), primary("claude")];
+  view.snapshot.quotas.claude = value(quota("claude", [window("7-day", 42)], now));
+  view.snapshot.appearance.pinned = true;
+  for (const expanded of [false, true]) {
+    for (const key of ["codex", "claude"]) {
+      view.notch.expanded = expanded; view.notch.selected = key;
+      const markup = renderApp(view, "notch");
+      expect(markup).toContain('class="ring"'); expect(markup).toContain('<span>42</span>');
+      expect(markup.includes('class="provider-card detail-card"')).toBe(expanded);
+      expect(markup).not.toContain("folded-pill"); expect(markup).not.toContain("folded-strip");
+      expect(markup).toContain(key === "codex" ? "Codex" : "Claude");
+    }
+  }
+  const settings = renderApp(view, "settings");
+  expect(settings).not.toContain("Resting strip"); expect(settings).not.toContain("Compact dots");
+  expect(settings).not.toContain("Pin detail card");
+  const css = readFileSync("src/renderer/style.css", "utf8");
+  expect(css).not.toContain("folded-pill"); expect(css).not.toContain("folded-strip");
+  expect(css).not.toContain("zoom: var(--panel-scale)");
+  expect(css).toContain("--notch-body: 11px; --notch-secondary: 10px;");
+});
+
+it("demonstrates the same hover delay across providers in the synthetic preview", async () => {
+  vi.useFakeTimers();
+  try {
+    const { previewBridge } = await import("../src/renderer/preview");
+    const bridge = await previewBridge();
+    const read = async () => { const reply = await bridge.request({ action: "state" }); if (!reply.ok || !reply.state) throw new Error("Missing preview state"); return reply.state; };
+    expect((await read()).notch.expanded).toBe(false);
+    for (const key of ["codex", "claude"]) {
+      await bridge.request({ action: "notchHover", hovering: true });
+      await bridge.request({ action: "notchSelect", key });
+      expect((await read()).notch).toMatchObject({ expanded: true, selected: key });
+      await bridge.request({ action: "notchHover", hovering: false });
+      vi.advanceTimersByTime(449); expect((await read()).notch.expanded).toBe(true);
+      vi.advanceTimersByTime(1); expect((await read()).notch.expanded).toBe(false);
+    }
+  } finally { vi.useRealTimers(); }
+});
+
+it("explains disabled demo connections before their actions and preserves labelled provider hit areas", () => {
+  const view = state(), markup = renderApp(view, "settings");
+  const explanation = markup.indexOf("Demo uses sample data. Account access is disabled.");
+  expect(explanation).toBeGreaterThan(-1);
+  expect(explanation).toBeLessThan(markup.indexOf("Sign in to Codex"));
+  expect(explanation).toBeLessThan(markup.indexOf("Connect Claude Desktop"));
+  expect(markup).toContain('<section class="providers">');
+  expect(markup).toMatch(/<label class="setting"><span>Collect<\/span><input type="checkbox" aria-label="Collect Codex usage"[^>]*\/><\/label>/);
+  expect(markup).toMatch(/<label class="setting"><span>Show<\/span><input type="checkbox" aria-label="Show Codex in menu bar and side notch"[^>]*\/><\/label>/);
+  view.snapshot.demo = false;
+  expect(renderApp(view, "settings")).not.toContain("Demo uses sample data. Account access is disabled.");
+});
+
+it("keeps static exports free of actions and selectors while retaining credit and heatmap data", () => {
+  const view = state(), q = quota("codex", [w], now), day = localDay(now);
+  q.canConsumeReset = true; q.resetCreditCount = 1;
+  q.resetCredits = [{ id: "fixture", title: "Full reset", status: "available", expiresAt: now + 1000 }];
+  view.snapshot.quotas.codex = value(q); view.snapshot.notchSlots = [primary("codex")];
+  view.snapshot.appearance.resetButton = view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = true;
+  const daily = [{ day, tokens: tokens({ output: 1234567 }), sessionCount: 2, estimatedCostUSD: 0 }];
+  view.snapshot.activities.codex = value({ provider: "codex", scannedAt: now, sessions: [], daily, telemetry: telemetry([], daily, now) });
+  const live = renderApp(view, "notch"), exported = renderApp(view, "share");
+  for (const action of ["Use reset", "Share card", "Heatmap view"]) {
+    expect(live).toContain(action); expect(exported).not.toContain(action);
+  }
+  expect(exported).not.toMatch(/<(button|select)\b/);
+  for (const data of ["1 earned reset credits", "Full reset", "available", "Expires", "26 weeks", "1,234,567 tokens, 2 sessions", "80% used"]) {
+    expect(live).toContain(data); expect(exported).toContain(data);
+  }
+});
+
+it("distinguishes recorded history from local activity without changing their values or inventing scope", () => {
+  const view = state(), daily = [{ day: localDay(now), tokens: tokens({ output: 100 }), sessionCount: 2, estimatedCostUSD: 0 }];
+  view.snapshot.appearance.telemetry = true;
+  view.snapshot.activities.codex = value({ provider: "codex", scannedAt: now, sessions: [], daily, telemetry: telemetry([{ startedAt: now, tokens: 50, messageCount: 3 }, { startedAt: now, tokens: 50, messageCount: 1 }], daily, now) });
+  view.snapshot.usages.codex = value({ provider: "codex", capturedAt: now, sessionCount: 9, messageCount: 7, todaySessionCount: 1, todayMessageCount: 1 });
+  view.snapshot.notchSlots = [primary("codex")];
+  for (const surface of ["flyout", "notch", "share"]) {
+    const markup = renderApp(view, surface);
+    expect(markup).toContain('<h3>Activity on this Mac</h3>');
+    expect(markup).toContain('<dt>Sessions</dt><dd>9</dd>');
+    expect(markup).toContain('<dt>Messages</dt><dd>7</dd>');
+    expect(markup).toContain('<h3>Recorded activity</h3>');
+    expect(markup).toContain('<dt>Recorded sessions</dt><dd>2</dd>');
+    expect(markup).toContain('<dt>Recorded messages</dt><dd>4</dd>');
+  }
+  view.snapshot.activities.codex = value({ provider: "codex", scannedAt: now, sessions: [], daily, telemetry: telemetry([], daily, now) });
+  expect(renderApp(view)).not.toContain("Recorded sessions"); expect(renderApp(view)).not.toContain("Recorded messages");
+  view.snapshot.appearance.telemetry = false; view.snapshot.appearance.chart = true;
+  expect(renderApp(view)).not.toContain("Recorded activity");
+  expect(renderApp(view)).toContain('aria-label="Token usage in the last 30 days"');
+});
+
+it("preserves action alerts and dated archive reasons across the shared cards", () => {
+  const view = state(), message = "Synthetic save failed: choice retained";
+  const markup = renderApp(view, "settings", message);
+  expect(markup).toContain(`<div class="action-error" role="alert"><span>${message}</span><button aria-label="Dismiss error">×</button></div>`);
+  expect(markup).toContain("Copy diagnostics"); expect(markup).toContain("Clear local scan cache");
+  view.snapshot.archived.codex = quota("codex", [w], now - 60000);
+  view.snapshot.quotas.codex = { status: "missing", code: "offline", reason: "Synthetic offline reason" };
+  view.snapshot.notchSlots = [primary("codex")];
+  for (const surface of ["flyout", "notch", "share"]) {
+    const card = renderApp(view, surface);
+    expect(card).toContain(`<p class="stale quota-stale">Last known · ${new Date(now - 60000).toLocaleString()}<br/>Synthetic offline reason</p>`);
+    expect(card).toContain("80% used"); expect(card).not.toContain("Use reset");
+  }
+});
+
+it("renders the preferred provider groups in Settings, usage, tray and notch", () => {
+  const view = state(), s = view.snapshot;
+  view.settings.providerOrder = ["claude", ...providers.filter(p => p !== "claude")];
+  s.slots = s.traySlots = s.notchSlots = [primary("claude"), { ...primary("claude"), slotID: "work", label: "Work" }, primary("codex")];
+  s.appearance.compactTray = false;
+  for (const slot of s.slots) s.quotas[slot.slotID ? `${slot.provider}#${slot.slotID}` : slot.provider] = value(quota(slot.provider, [window("5-hour", slot.provider === "claude" ? 11 : 22)], now));
+  for (const surface of ["settings", "flyout", "tray", "notch"]) {
+    const markup = renderApp(view, surface);
+    const first = surface === "settings" ? 'aria-label="Reorder Claude"' : surface === "notch" ? 'aria-label="Show Claude details' : surface === "tray" ? "11%" : '<h2>Claude</h2>';
+    const second = surface === "settings" ? 'aria-label="Reorder Codex"' : surface === "notch" ? 'aria-label="Show Codex details' : surface === "tray" ? "22%" : '<h2>Codex</h2>';
+    expect(markup.indexOf(first), surface).toBeGreaterThanOrEqual(0); expect(markup.indexOf(first)).toBeLessThan(markup.indexOf(second));
+  }
+  s.statuses = { codex: { status: "idle" }, claude: { status: "idle" } };
+  const markup = renderApp(view);
+  expect(markup.indexOf("<strong>Claude</strong>")).toBeLessThan(markup.indexOf("<strong>Codex</strong>"));
+});
+
+
+it("renders provider account buckets beside quota without local activity", () => {
+  const view = state();
+  view.snapshot.activities = {};
+  view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = true;
+  Object.assign(view.snapshot, { accountActivities: { codex: value({ capturedAt: now, dailyUsageBuckets: [
+    { startDate: "2026-10-04", tokens: 1234567 }, { startDate: "2026-10-06", tokens: 0 },
+  ] }) } });
+  for (const props of [{}, { detail: true }, { detail: true, staticExport: true }]) {
+    const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, ...props }));
+    expect(markup).toContain("Account token activity");
+    expect(markup).toContain("Provider account");
+    expect(markup).toContain('tabindex="0" role="img" aria-label="2026-10-04: 1,234,567 tokens"');
+    expect(markup).toContain('aria-label="2026-10-05: Unavailable"');
+    expect(markup).toContain('aria-label="2026-10-06: 0 tokens"');
+    expect(markup).not.toContain("Recorded activity");
+    expect(markup).not.toContain("sessions");
+    expect(markup).not.toContain("Heatmap view");
+  }
+});
+
+
+it("keeps unavailable account history explicit and respects global and Codex heatmap preferences", () => {
+  const view = state(); view.snapshot.activities = {};
+  view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = true;
+  for (const reading of [{ status: "idle" as const }, { status: "missing" as const, code: "failed" as const, reason: "Unavailable" }, value({ capturedAt: now, dailyUsageBuckets: null }), value({ capturedAt: now, dailyUsageBuckets: [] })]) {
+    view.snapshot.accountActivities = { codex: reading };
+    const markup = renderApp(view);
+    expect(markup).toContain("Account history unavailable"); expect(markup).not.toContain("0 tokens");
+  }
+  for (const [global, codex] of [[false, true], [true, false]]) {
+    view.snapshot.appearance.heatmap = global; view.snapshot.appearance.codexHeatmap = codex;
+    expect(renderApp(view)).not.toContain("Account token activity");
+  }
+  view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = true;
+  const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: { provider: "codex", slotID: "local", label: "Local" }, state: view, action: async () => {} }));
+  expect(markup).not.toContain("Account token activity");
+  const css = readFileSync("src/renderer/style.css", "utf8");
+  expect(css).toContain(".heatmap-cell:hover::after"); expect(css).toContain(".heatmap-cell:focus::after");
+  expect(css).toContain(".heatmap .unavailable-day > span");
+});
+
+it.each([[0, "0"], [42, "42"], [12500, "12.5K"], [1234567, "1.2M"], [499543210, "499.5M"], [2400000000, "2.4B"]])("makes %s account tokens readable without losing the exact count", (count, compact) => {
+  vi.stubEnv("TZ", "America/Los_Angeles");
+  try {
+    const view = state(); view.snapshot.activities = {};
+    view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = true;
+    view.snapshot.accountActivities = { codex: value({ capturedAt: now, dailyUsageBuckets: [{ startDate: "2026-10-11", tokens: count as number }] }) };
+    const date = new Date("2026-10-11").toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
+    for (const props of [{}, { detail: true }, { detail: true, staticExport: true }]) {
+      const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, ...props }));
+      const exact = `2026-10-11: ${new Intl.NumberFormat("en").format(count as number)} tokens`;
+      expect(markup).toContain(`aria-label="${exact}" title="${exact}" data-readout="${date} · ${compact} tokens"`);
+      expect(markup).toContain('aria-label="2026-10-10: Unavailable"');
+    }
+  } finally { vi.unstubAllEnvs(); }
+});
+
+it.each(providers)("uses the shared heatmap design for %s activity", provider => {
+  const view = state(), day = localDay(now), daily = [{ day, tokens: tokens({ output: 1234567 }), sessionCount: 2, estimatedCostUSD: 0 }];
+  view.snapshot.activities = { [provider]: value({ provider, scannedAt: now, sessions: [], daily, telemetry: telemetry([], daily, now) }) };
+  view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = view.snapshot.appearance.claudeHeatmap = true;
+  const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary(provider), state: view, action: async () => {} }));
+  expect(markup).toContain('class="activity-heatmap"');
+  expect(markup).toContain('class="heatmap-heading"');
+  expect(markup).toContain('class="heatmap-legend secondary"');
+  expect(markup).toContain('aria-label="Usage intensity from less to more"');
+  expect(markup).toContain(`${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions`);
+  expect(markup).toContain('1.2M tokens · 2 sessions');
 });

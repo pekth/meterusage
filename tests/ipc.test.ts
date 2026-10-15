@@ -10,10 +10,13 @@ describe("renderer boundary", () => {
     for (const value of ["", "Small", "extra-large", "__proto__", ["large"], 1, true, null]) expect(() => parseRequest({ action: "setPreference", key: "panelSize", value })).toThrow("Invalid request");
   });
   it("requires primitive provider names before connection consent", () => {
-    for (const action of ["connect", "disconnect", "connectionCancel"]) {
+    for (const action of ["connect", "disconnect", "connectionCancel", "connectionLocal"]) {
       for (const provider of [["claude"], ["codex"], { toString: () => "claude" }, null, 1]) expect(() => parseRequest({ action, provider })).toThrow("Invalid request");
       for (const provider of ["codex", "claude", "grok"]) expect(parseRequest({ action, provider })).toEqual({ action, provider });
     }
+  });
+  it("requires exactly a provider for explicit CLI selection", () => {
+    for (const request of [{ action: "connectionLocal" }, { action: "connectionLocal", provider: "other" }, { action: "connectionLocal", provider: "codex", path: "/tmp" }, { action: "connectionLocal", provider: "claude", consent: true }, { action: "connectionLocal", provider: "grok", source: "cli" }]) expect(() => parseRequest(request)).toThrow("Invalid request");
   });
   it("rejects arbitrary paths, settings, malformed accounts and unknown fields", () => {
     for (const r of [null, [], { action: "open", path: "/tmp" }, { action: "accountAdd", provider: "codex", path: "/tmp" }, { action: "setPreference", key: "managedAccounts", value: [] }, { action: "setPreference", key: "updateLastCheckDate", value: 1 }, { action: "accountUpdate", id: "../a", label: "a", enabled: true }, { action: "reset", key: "codex#../a", creditID: "a" }, { action: "refresh", args: [] }, { action: "resize", height: Infinity }]) expect(() => parseRequest(r)).toThrow();
@@ -59,4 +62,12 @@ it("allows natural panel heights for native display clamping and keeps separate 
 it("allows only known public service-status pages, without a renderer-selected URL", () => {
   expect(parseRequest({ action: "statusPage", provider: "claude" })).toEqual({ action: "statusPage", provider: "claude" });
   for (const raw of [{ action: "statusPage", provider: "grok" }, { action: "statusPage", provider: "claude", url: "https://example.invalid" }, { action: "statusPage", provider: "https://example.invalid" }]) expect(() => parseRequest(raw)).toThrow();
+});
+
+it("rejects removed strip and legacy pin edits and excludes strip mode from settings", () => {
+  for (const value of ["usage", "dots"]) {
+    expect(() => parseRequest({ action: "setPreference", key: "sideNotchStripMode", value })).toThrow();
+    expect(projectSettings({ sideNotchStripMode: value }, [], "/synthetic").values).not.toHaveProperty("sideNotchStripMode");
+  }
+  expect(() => parseRequest({ action: "setPreference", key: "sideNotchPanelPinned", value: true })).toThrow();
 });

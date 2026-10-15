@@ -1,5 +1,5 @@
 import { it, expect } from "vite-plus/test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Preferences } from "../src/main/preferences";
@@ -46,5 +46,19 @@ it("reads and writes panel size as a validated defaults string without changing 
     expect((await Preferences.load(launch, command, "dev.meterusage.fixture")).values.panelSize).toBe("small");
     stored = "enormous";
     expect((await Preferences.load(launch, command, "dev.meterusage.fixture")).values.panelSize).toBe("medium");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it("rejects the removed strip preference without changing stored fixture data", async () => {
+  const root = mkdtempSync(join(tmpdir(), "meterusage-strip-"));
+  const launch = { home: root, data: root, demo: true, candidate: true, env: {} };
+  try {
+    const file = join(root, "preferences.json"), stored = JSON.stringify({ sideNotchPanelPinned: true, sideNotchStripMode: "dots" });
+    writeFileSync(file, stored);
+    const prefs = await Preferences.load(launch);
+    expect(prefs.values).not.toHaveProperty("sideNotchStripMode");
+    expect(prefs.values.sideNotchPanelPinned).toBe(true);
+    await expect(prefs.set("sideNotchStripMode", "usage")).rejects.toThrow("Invalid preference");
+    expect(readFileSync(file, "utf8")).toBe(stored);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

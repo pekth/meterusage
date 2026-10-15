@@ -49,10 +49,10 @@ export const runCommand: Command = (binary, args, options = {}) => boundedChild(
   child.on("exit", code => { exitCode = code; complete(); });
   child.stdin.end();
 });
-export async function codexRPC(binary: string, options: CommandOptions, creditID?: string, configuration: string[] = [], operation: "read" | "logout" = "read"): Promise<string> {
+export async function codexRPC(binary: string, options: CommandOptions, creditID?: string, configuration: string[] = [], operation: "read" | "logout" | "usage" = "read"): Promise<string> {
   return boundedChild(binary, [...configuration, "app-server", "--listen", "stdio://"], options, (child, finish) => {
     const write = (v: unknown) => child.stdin.write(JSON.stringify(v) + "\n");
-    const request = () => write({ jsonrpc: "2.0", id: 2, method: operation === "logout" ? "account/logout" : creditID === undefined ? "account/rateLimits/read" : "account/rateLimitResetCredit/consume", params: creditID === undefined ? {} : { creditId: creditID, idempotencyKey: randomUUID() } });
+    const request = () => write({ jsonrpc: "2.0", id: 2, method: operation === "logout" ? "account/logout" : operation === "usage" ? "account/usage/read" : creditID === undefined ? "account/rateLimits/read" : "account/rateLimitResetCredit/consume", params: creditID === undefined ? {} : { creditId: creditID, idempotencyKey: randomUUID() } });
     let pending = "", initialized = false;
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {

@@ -1,7 +1,8 @@
 import { join } from "node:path";
 import { readdir, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { type Loaded, type Quota, type Activity, type Usage, type ServiceStatus, type Slot, type Provider, providers, primary, slotKey, lastBurn, totalTokens, utcDay, value, missing, Unavailable, resetCreditAvailable } from "../domain/models";
+import { type Loaded, type Quota, type AccountActivity, type Activity, type Usage, type ServiceStatus, type Slot, type Provider, providers, primary, slotKey, lastBurn, totalTokens, utcDay, value, missing, Unavailable, resetCreditAvailable } from "../domain/models";
+import { orderedSlots } from "../domain/provider-order";
 import { AlertEvaluator, type Alert } from "../domain/alerts";
 import { telemetry } from "../domain/telemetry";
 import { resetPacing } from "../domain/pacing";
@@ -11,9 +12,10 @@ import { type Launch } from "./launch";
 import { type Source, compose, accountHome } from "./composition";
 import { HistoryStore, readArchive, saveArchive } from "./history";
 import { limitsReport, canonicalJSON } from "../domain/report";
-type Kind = "quota" | "activity" | "usage" | "plan" | "status";
+type Kind = "accountActivity" | "quota" | "activity" | "usage" | "plan" | "status";
 export const backoffDelay = (failures: number) => Math.min(2 ** (Math.min(Math.max(failures, 1), 6) - 1), 30) * 60000;
 export class Coordinator {
+  accountActivities: Record<string, Loaded<AccountActivity>> = Object.create(null);
   quotas: Record<string, Loaded<Quota>> = Object.create(null);
   activities: Record<string, Loaded<Activity>> = Object.create(null);
   usages: Record<string, Loaded<Usage>> = Object.create(null);
@@ -33,7 +35,7 @@ export class Coordinator {
   private stopped = false;
   private controllers = new Set<AbortController>();
   private confirmations = new Map<string, { key: string; creditID: string; expires: number; source: Source }>();
-  private resets = new Set<string>();
+  private resets = new Map<string, AbortController>();
   private currentSources: readonly Source[];
   constructor(readonly launch: Launch, readonly preferences: Preferences, sources: Source[], readonly now: () => number = Date.now, readonly notify: (alert: Alert) => void = () => {}, readonly sourceFactory: () => Source[] = () => compose(launch, preferences)) {
     this.currentSources = sources;
@@ -43,8 +45,9 @@ export class Coordinator {
   set sources(next: readonly Source[]) {
     for (const source of this.currentSources) if (!next.includes(source)) {
       const key = slotKey(source.slot);
-      for (const readings of [this.quotas, this.activities, this.usages, this.plans]) delete readings[key];
-      for (const kind of ["quota", "activity", "usage", "plan"]) this.backoffs.delete(`${kind}-${key}`);
+      this.resets.get(key)?.abort();
+      for (const readings of [this.accountActivities, this.quotas, this.activities, this.usages, this.plans]) delete readings[key];
+      for (const kind of ["accountActivity", "quota", "activity", "usage", "plan"]) this.backoffs.delete(`${kind}-${key}`);
       for (const [token, intent] of this.confirmations) if (intent.source === source) this.confirmations.delete(token);
     }
     // Durable slot history and dated archives survive directory/label edits.
@@ -60,20 +63,22 @@ export class Coordinator {
   }
   get slots(): Slot[] {
     const byKey = new Map(this.sources.filter(s => this.visible(s)).map(s => [slotKey(s.slot), s.slot]));
-    return [...providers.map(primary), ...this.sources.filter(s => s.slot.slotID).map(s => s.slot)].filter(s => byKey.has(slotKey(s))).map(s => byKey.get(slotKey(s))!);
+    return orderedSlots([...providers.map(primary), ...this.sources.filter(s => s.slot.slotID).map(s => s.slot)].filter(s => byKey.has(slotKey(s))).map(s => byKey.get(slotKey(s))!), this.preferences.providerOrder);
   }
   get burns() { return Object.fromEntries(Object.entries(this.activities).flatMap(([key, state]) => { const at = state.status === "value" ? lastBurn(state.value.sessions) : undefined; return at === undefined ? [] : [[key, at]]; })); }
   snapshot(): Snapshot {
     const p = this.preferences.values, slots = this.slots, tray = slots.filter(s => p[trayPreference(s.provider)] === true);
     const resettable = new Set(this.sources.filter(s => s.consumeReset).map(s => slotKey(s.slot)));
     const quotas = Object.fromEntries(Object.entries(this.quotas).map(([key, state]) => [key, state.status === "value" ? value({ ...state.value, canConsumeReset: resettable.has(key) }) : state]));
-    return structuredClone({ demo: this.launch.demo, refreshing: !!this.inflight, clock: this.now(), lastRefreshedAt: this.lastRefreshedAt, slots, traySlots: tray.filter(s => s.provider !== "openRouter"), notchSlots: tray, quotas, archived: this.archived, activities: this.activities, usages: this.usages, plans: this.plans, statuses: this.statuses, appearance: { theme: p.appearanceTheme as string, accent: p.accentTheme as string, heatmap: p.showHeatmap === true, claudeHeatmap: p.showClaudeHeatmap === true, codexHeatmap: p.showCodexHeatmap === true, pacing: p.showPacingBurnRate === true, telemetry: p.showActivityTelemetry === true, chart: p.showDailyActivityChart === true, resetButton: p.showSideNotchResetButton === true, compactTray: p.menuBarCompactEnabled === true, notch: p.sideNotchPanelEnabled === true, pinned: p.sideNotchPanelPinned === true, onboarding: p.onboardingCompleted === true }, historyError: this.history.error, archiveWriteFailed: this.archiveWriteFailed, clearingCache: this.clearingCache });
+    const statuses = { ...this.statuses };
+    for (const source of this.sources) if (source.status && !statuses[source.slot.provider]) statuses[source.slot.provider] = { status: "idle" };
+    return structuredClone({ demo: this.launch.demo, refreshing: !!this.inflight, clock: this.now(), lastRefreshedAt: this.lastRefreshedAt, slots, traySlots: tray.filter(s => s.provider !== "openRouter"), notchSlots: tray, quotas, archived: this.archived, accountActivities: Object.fromEntries(this.sources.filter(s => s.accountActivity).map(s => [slotKey(s.slot), this.accountActivities[slotKey(s.slot)] ?? { status: "idle" }])), activities: this.activities, usages: this.usages, plans: this.plans, statuses, appearance: { theme: p.appearanceTheme as string, accent: p.accentTheme as string, heatmap: p.showHeatmap === true, claudeHeatmap: p.showClaudeHeatmap === true, codexHeatmap: p.showCodexHeatmap === true, pacing: p.showPacingBurnRate === true, telemetry: p.showActivityTelemetry === true, chart: p.showDailyActivityChart === true, resetButton: p.showSideNotchResetButton === true, compactTray: p.menuBarCompactEnabled === true, notch: p.sideNotchPanelEnabled === true, pinned: false, onboarding: p.onboardingCompleted === true }, historyError: this.history.error, archiveWriteFailed: this.archiveWriteFailed, clearingCache: this.clearingCache });
   }
   subscribe(observer: (state: Snapshot) => void) { this.observers.add(observer); return () => this.observers.delete(observer); }
   publish() { const state = this.snapshot(); for (const observe of this.observers) observe(state); }
   start() { this.stopped = false; this.restartTimer(); return this.refresh(); }
   restartTimer() { if (this.timer) clearInterval(this.timer); this.timer = setInterval(() => { void this.refresh(true); }, this.preferences.refreshInterval * 1000); }
-  stop() { this.stopped = true; if (this.timer) clearInterval(this.timer); this.timer = undefined; this.pendingForced = false; for (const c of this.controllers) c.abort(); this.confirmations.clear(); }
+  stop() { this.stopped = true; if (this.timer) clearInterval(this.timer); this.timer = undefined; this.pendingForced = false; for (const c of this.controllers) c.abort(); for (const c of this.resets.values()) c.abort(); this.confirmations.clear(); }
   refreshIfStale() { return this.lastRefreshedAt === undefined || this.now() - this.lastRefreshedAt > 20000 ? this.refresh() : Promise.resolve(); }
   refresh(scheduled = false, onlyKey?: string): Promise<void> {
     if (this.stopped) return Promise.resolve();
@@ -93,6 +98,7 @@ export class Coordinator {
     for (const source of this.sources) {
       const key = slotKey(source.slot); if (onlyKey && key !== onlyKey) continue;
       if (this.visible(source)) {
+        if (source.accountActivity) tasks.push(this.load("accountActivity", source, force, source.accountActivity, this.accountActivities));
         if (source.quota) tasks.push(this.load("quota", source, force, source.quota, this.quotas));
         if (source.activity) tasks.push(this.load("activity", source, force, source.activity, this.activities));
         if (source.usage) tasks.push(this.load("usage", source, force, source.usage, this.usages));
@@ -129,7 +135,7 @@ export class Coordinator {
     } catch { this.archiveWriteFailed = true; }
   }
   forgetQuota(key: string) {
-    delete this.quotas[key]; delete this.archived[key]; delete this.plans[key];
+    delete this.accountActivities[key]; delete this.quotas[key]; delete this.archived[key]; delete this.plans[key];
     this.evaluator.forgetSlot(key);
     this.backoffs.delete(`quota-${key}`); this.persistArchive();
   }
@@ -154,7 +160,13 @@ export class Coordinator {
         result = value(resetPacing(q, previous, previous.resetPacingSince, q.capturedAt) as T);
       }
     }
-    target[key] = result;
+    const priorStatus = kind === "status" ? target[key] as Loaded<ServiceStatus> | undefined : undefined;
+    if (kind === "status" && result.status === "missing") {
+      const failure = "Service status unavailable";
+      target[key] = priorStatus?.status === "value"
+        ? value({ ...priorStatus.value, stale: true, refreshError: failure }) as Loaded<T>
+        : { ...result, reason: failure };
+    } else target[key] = result;
     if (kind === "quota" && source.accountBound && result.status === "missing" && (controller.signal.aborted || ["notSignedIn", "noData"].includes(result.code))) delete this.archived[key];
     if (result.status === "missing" && ["failed", "offline"].includes(result.code)) { const failures = (prior?.failures ?? 0) + 1; this.backoffs.set(backoffKey, { failures, next: this.now() + backoffDelay(failures) }); }
     else this.backoffs.delete(backoffKey);
@@ -172,9 +184,9 @@ export class Coordinator {
     if (!intent || intent.expires <= this.now() || this.resets.has(intent.key)) throw new Error("Reset confirmation expired");
     const source = this.sources.find(s => slotKey(s.slot) === intent.key && this.visible(s)); const q = this.quotas[intent.key];
     if (source !== intent.source || !source?.consumeReset || q?.status !== "value" || !q.value.resetCredits.some(c => c.id === intent.creditID && resetCreditAvailable(c, this.now()))) throw new Error("Reset credit unavailable");
-    this.resets.add(intent.key);
+    const controller = new AbortController(); this.resets.set(intent.key, controller);
     try {
-      if (!await source.consumeReset(intent.creditID)) throw new Unavailable("failed", "Codex");
+      if (!await source.consumeReset(intent.creditID, controller.signal)) throw new Unavailable("failed", "Codex");
       if (this.stopped || !this.sources.includes(source) || !this.visible(source)) throw new Error("Reset source replaced");
       const acceptedAt = this.now();
       const latest = this.quotas[intent.key];
@@ -197,10 +209,12 @@ export class Coordinator {
   }
   diagnostics(): string {
     const describe = <T>(s: Loaded<T> | undefined) => !s || s.status === "idle" ? "not checked yet" : s.status === "value" ? "ok" : `unavailable (${s.code})`;
+    const describeStatus = (s: Loaded<ServiceStatus> | undefined) => s?.status === "value" && s.value.stale
+      ? `stale (last successful check: ${Math.max(0, Math.trunc((this.now() - s.value.checkedAt) / 1000))}s ago; Service status unavailable)` : describe(s);
     const slots = this.slots, lines = ["MeterUsage 0.2.41", `mode: ${this.launch.demo ? "demo" : "live"}`, `refresh interval: ${this.preferences.refreshInterval}s`, `last refresh: ${this.lastRefreshedAt === undefined ? "never" : Math.max(0, Math.trunc((this.now() - this.lastRefreshedAt) / 1000)) + "s ago"}`, `enabled: ${slots.map(s => s.provider + (s.slotID ? "#additional" : "")).join(", ")}`];
     if (this.history.error) lines.push(`history: ${this.history.error}`);
     if (this.archiveWriteFailed) lines.push("archive: writeFailed");
-    for (const [index, s] of slots.entries()) { const key = slotKey(s); lines.push(`\n[${s.provider}${s.slotID ? ` account ${index + 1}` : ""}]`, `  quota: ${describe(this.quotas[key])}`, `  activity: ${describe(this.activities[key])}`, `  usage: ${describe(this.usages[key])}`, `  status: ${describe(this.statuses[s.provider])}`, `  plan: ${describe(this.plans[key])}`); }
+    for (const [index, s] of slots.entries()) { const key = slotKey(s); lines.push(`\n[${s.provider}${s.slotID ? ` account ${index + 1}` : ""}]`, `  quota: ${describe(this.quotas[key])}`, `  activity: ${describe(this.activities[key])}`, `  usage: ${describe(this.usages[key])}`, `  status: ${describeStatus(this.statuses[s.provider])}`, `  plan: ${describe(this.plans[key])}`); }
     return lines.join("\n");
   }
   json() { return canonicalJSON(limitsReport(this.slots.filter(s => this.sources.some(src => src.quota && slotKey(src.slot) === slotKey(s))), this.quotas, this.burns, this.now())); }

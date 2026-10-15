@@ -2,11 +2,36 @@
 
 Port the macOS app and headless JSON CLI to TypeScript without changing provider or persisted-data contracts. Completion requires fixture parity and a native candidate, with each unproven native path recorded explicitly.
 
+Current direction, 2026-10-14: [ADR 0024](../adr/0024-electron-primary-swift-retirement.md)
+makes Electron the sole active feature target. The legacy Swift app is frozen
+for new features and remains the published download and rollback until the
+retirement conditions pass. Earlier execution receipts below describe their
+recorded artifacts; the [candidate guide](../electron/README.md) lists current
+source capabilities and remaining acceptance gaps.
+
 ## Human review
 
 ### Goal
 
 A macOS Electron app and headless CLI provide the current quota, usage, pacing, accounts, history, alerts, settings and update behavior. Windows development is paused.
+
+### Staged Swift retirement
+
+- Freeze legacy feature development now; route new work to Electron. Verify
+  contributor and edition guidance against ADR 0024.
+- Finish agreed setup/parity work and the existing source/native acceptance
+  gates. Reuse exact matching receipts; verify changed inputs and open paths.
+- Verify the deliberate Swift-to-Electron update and rollback with preserved
+  accounts, preferences and history before public cutover. Existing release
+  holds remain; a documentation decision does not publish the app.
+- After a retrievable legacy source revision and matching release are preserved,
+  remove old-app-only source, tests, build steps and CI references in a reviewed
+  change. Verify Electron build, packaging and affected native behavior after
+  removal. Keep the Swift Keychain helper, asset exporter and required assets.
+
+These retirement steps are pending beyond the documentation freeze. The
+intended end state is one app; no permanent dual-edition feature roadmap is
+required.
 
 ### Diagram
 
@@ -127,7 +152,7 @@ Windows source, installers, CI, tests and releases; studio guidance and future a
 
 Independent plan review round 1 requested five revisions: typed UserDefaults compatibility, enforced candidate isolation, explicit native parity inventory, structural selective parsing, and separate source/native/cutover gates. The plan now specifies each mechanism. Round 2 passed all review axes against the revised mechanisms. This is plan approval only; implementation and native proof remain open. Review completeness, strategic scope, privacy, native UI invariants, operational safety and security in one bounded pass. Existing owner authorization permits execution after concerns are resolved.
 
-### Current execution state
+### Historical execution receipts
 
 S1 through S3 have synthetic fixture and TypeScript-check proof. All 128
 current fixtures have matching passing execution receipts, including refreshed

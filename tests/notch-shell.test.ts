@@ -1,6 +1,6 @@
 import { it, expect, afterEach, vi } from "vite-plus/test";
 import { NotchFold } from "../src/main/notch-fold";
-import { effectiveWindows, notchEntries, minimumShareSize, notchFrame } from "../src/domain/notch";
+import { effectiveWindows, notchEntries, minimumShareSize, notchFrame, stripWidth, cardWidth } from "../src/domain/notch";
 import { shareSnapshot } from "../src/main/ipc";
 import { quota, primary, window } from "../src/domain/models";
 import { launchConfiguration } from "../src/main/launch";
@@ -32,12 +32,13 @@ it("stops polling and reset actions when a configured account directory disappea
     await expect(c.confirmReset(intent.token)).rejects.toThrow("unavailable"); expect(consumes).toBe(0);
   } finally { c.stop(); }
 });
-it("rechecks pinning at fold time and resumes folding after an action", () => {
-  vi.useFakeTimers(); let pinned = false, busy = false, folds = 0;
-  const f = new NotchFold(() => pinned || busy, () => folds++);
-  f.changed(); vi.advanceTimersByTime(200); pinned = true; vi.advanceTimersByTime(300); expect(folds).toBe(0);
-  pinned = false; busy = true; f.changed(); vi.advanceTimersByTime(500); expect(folds).toBe(0);
-  busy = false; f.changed(); vi.advanceTimersByTime(450); expect(folds).toBe(1);
+it.each(["share", "reset", "drag"])("resumes folding after the temporary %s guard clears", () => {
+  vi.useFakeTimers(); let busy = false, folds = 0;
+  const f = new NotchFold(() => busy, () => folds++);
+  f.changed(); vi.advanceTimersByTime(200); busy = true; vi.advanceTimersByTime(300); expect(folds).toBe(0);
+  f.changed(); vi.advanceTimersByTime(500); expect(folds).toBe(0);
+  busy = false; f.changed(); vi.advanceTimersByTime(449); expect(folds).toBe(0);
+  vi.advanceTimersByTime(1); expect(folds).toBe(1);
   f.changed(); f.hovered = true; vi.advanceTimersByTime(500); expect(folds).toBe(1);
   f.hovered = false; f.changed(); f.cancel(); vi.advanceTimersByTime(500); expect(folds).toBe(1);
 });
@@ -72,9 +73,10 @@ it("captures tall cards in full and rejects oversized images without cropping", 
 it("bounds oversized notch content to the work area without changing normal anchors", () => {
   const screen = { x: 0, y: 60, width: 1200, height: 800 }, anchor = { x: 700, y: 100 };
   for (const right of [true, false]) {
-    const frame = notchFrame(anchor, { width: 294, height: 1200 }, right, screen);
+    const panelWidth = stripWidth + cardWidth;
+    const frame = notchFrame(anchor, { width: panelWidth, height: 1200 }, right, screen);
     expect(frame.height).toBe(800); expect(frame.y).toBe(60); expect(frame.y + frame.height).toBe(860);
-    const short = notchFrame(anchor, { width: 294, height: 200 }, right, screen), taller = notchFrame(anchor, { width: 294, height: 350 }, right, screen);
+    const short = notchFrame(anchor, { width: panelWidth, height: 200 }, right, screen), taller = notchFrame(anchor, { width: panelWidth, height: 350 }, right, screen);
     expect(short.y).toBe(100); expect(taller.y).toBe(100); expect(short.x).toBe(taller.x);
   }
 });
