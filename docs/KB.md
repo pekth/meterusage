@@ -2,6 +2,33 @@
 
 Last source review: 2026-10-10
 
+## Edition documentation
+
+- [ADR 0024](adr/0024-electron-primary-swift-retirement.md) makes Electron the
+  sole active feature-development target. Freeze the legacy Swift app for new
+  features; retain critical maintenance, compatibility and rollback until
+  native acceptance, deliberate cutover and retrievable archive checks pass.
+  Source retirement is pending. Electron-required Swift helpers and assets stay.
+- [Swift 0.2.41](swift/README.md) is the published default install route.
+  [Electron source 0.2.41](electron/README.md) is an unpublished candidate with
+  private build/installation receipts and incomplete native acceptance.
+- Both implementations remain in their current source trees. Shared app name,
+  bundle ID and default data/preferences prevent safe normal-profile coexistence.
+  Use only documented isolated QA profiles.
+- [Versions](VERSIONS.md) records the accepted one-app development direction
+  and staged retirement. It makes no layout, version, CI, identity or cutover
+  change. ADR 0010's acceptance and compatibility requirements remain in force.
+- Both updaters use GitHub's latest-release endpoint and the same versioned ZIP
+  name. Electron rejects prerelease tags. Separate beta/edition update channels
+  require code and asset-routing changes; see the
+  [update-channel prerequisites](VERSIONS.md#update-channel-prerequisites).
+- Candidate gaps include Settings account overview, seven-day sparkline, reset
+  timing display, update feedback and tray refresh. Smaller display omissions,
+  OpenCode Bun fallback discovery, pending AGY/OpenCode onboarding and unresolved
+  notch-dimension/grid-geometry feedback remain distinct. See the candidate guide.
+- Edition documentation was reconciled against revision
+  `605f1c4328eed6d4f793fcee0937a8d2e1659f6d` and its accompanying candidate changes.
+
 ## Repository state
 
 - Default branch: `main`.
@@ -9,6 +36,93 @@ Last source review: 2026-10-10
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
+
+- Onboarding and Settings offer provider-specific source choices: Codex browser
+  sign-in or CLI, Claude Desktop or Claude Code CLI, and Grok CLI only. Choosing
+  an option does not change collection until its action is used. Use CLI waits
+  for MeterUsage-owned connection cleanup before selecting existing local
+  collection. Ordinary Disconnect still prevents automatic local fallback.
+  CLI data covers this Mac; Claude CLI allowance needs a companion usage file.
+  Done follows the source choices and remains optional. Demo and isolated live
+  test profiles cannot switch to local collection. See
+  [ADR 0023](adr/0023-onboarding-source-choice.md).
+
+- Candidate Settings uses category navigation for Connections, Appearance,
+  General, Providers, Side notch, Usage details and Diagnostics. Connection
+  summaries show the current source, collection state and reading availability;
+  Configure reveals the existing setup actions. Category changes preserve pending
+  source selection, and choosing a method still requires its explicit action.
+  Existing preferences and additional-account controls remain. Demo account
+  restrictions appear before disabled connection actions. Provider column
+  headings replace repeated visual labels on wide windows; at 450 pixels or
+  narrower, each provider has two labelled control columns below its name.
+  Input accessible names and full label hit areas remain. Settings action
+  errors retain their alert role, message and dismissal in a sticky banner.
+  Advanced account rows wrap without changing their save/remove behavior.
+- Candidate Usage keeps Service status first and visible, before provider usage.
+  Provider/account tabs show one usage card at a time in saved provider order.
+  Arrow keys and Home/End switch tabs; removing a selected slot falls back to
+  the first available slot. Local summary metrics and measured burn remain in
+  the All-provider activity breakdown disclosure. Summary metrics use three
+  equal columns, with two columns at 360 pixels or narrower. Recorded
+  activity labels distinguish telemetry counters from account/local totals
+  without changing values or adding a time scope. Archived quota retains its
+  timestamp and failure reason in a warning well. Long labels and metadata
+  wrap; percentages and reset actions stay together. This is resilience
+  polish, not a reproduced overflow fix.
+- Live menu and side-notch cards show the first two available recorded metrics,
+  with the remainder under More activity. Usage by period and active-window burn
+  also use closed disclosures. Quota, eligible reset actions and heatmaps stay
+  visible. Spacing and sparkline height are reduced without changing font-size
+  choices or source values. Static exports retain all recorded metrics and full
+  period/burn data without those disclosures.
+- Static shared cards omit footer actions, reset buttons and the heatmap
+  selector. Credit details and the 26 weeks label remain. Export heatmaps omit
+  the unused hover readout space. Live readouts also use only their text height. Full-height capture,
+  frozen account selection and the 250-pixel export width remain unchanged.
+  Dark secondary text uses `#b0b0b8`; light text and semantic colors retain their
+  existing rules. Usage, Settings and notch detail buttons use 120 ms background
+  feedback only for enabled fine-pointer hover with reduced motion off. Press
+  and keyboard focus remain immediate. Renderer fixture and build proof does
+  not establish rendered layout, sticky alerts, motion or native export proof.
+
+- Electron heatmaps show exact grouped counts and readable dates for daily,
+  weekly or cumulative scope on hover and keyboard focus, tooltips and accessible
+  labels. Each live heatmap has one Tab entry; arrow keys move between days and
+  Home/End reach the first/last available cell. Tab leaves the heatmap. Shared
+  images have no focusable cells. Account, local-token and session-only
+  providers share the same heading, caption, cells and intensity legend.
+  Hover and keyboard focus replace the legend with the exact dated readout
+  in a natural-height row. Long readouts can grow the card; the top and rail stay anchored. Unreported account days have subtle solid
+  outlines; reported zeroes have filled neutral cells. Each source retains its
+  own time range and units. Count-only providers report token totals unavailable.
+  Reset buttons use the compact control size. An open notch
+  interaction checks the native cursor to recover a missed pointer exit, then
+  closes details through the existing delay and temporary action guards.
+  The strip always shows usage rings and percentages, with no design selector
+  or dots option. Disable/hide clears expanded state before re-enabling.
+  Legacy pin data has no effect and pin controls are removed.
+  Notch sizes use integer pixel text and spacing instead of CSS zoom.
+  [ADR 0019](adr/0019-single-design-notch.md) records this candidate correction.
+  Source fixtures do not prove native pointer events, keyboard access in the
+  non-activating panel or rendered anchors. [Side notch](SIDE-NOTCH.md) records
+  the behavior and native checks.
+
+- Connected Codex menu cards expose **Use reset** for available, unexpired
+  credits. The existing validated IPC and native confirmation use the captured
+  connection profile. Confirmation rereads allowance before one helper consume;
+  disconnect, stopped connections and profile changes reject the action.
+  Coordinator source replacement, including Clear local scan cache, and stop
+  abort active resets through the existing consumer signal. Cancellation during
+  fresh eligibility prevents consume dispatch; a request already sent cannot be
+  undone. The late-result guard still prevents an obsolete reset from changing
+  pacing or refreshing its replacement. These cancellation checks use synthetic
+  fixtures, with native and live account proof pending.
+  Success collects fresh quota under the reset-pacing rules. This also applies
+  in `--codex-test-profile`; other collection and system-effect restrictions
+  remain. [ADR 0017](adr/0017-connected-codex-menu-reset.md) narrowly supersedes
+  ADR 0012's reset prohibition. Synthetic proof is separate from native display,
+  native confirmation and user-owned live redemption.
 
 - Candidate onboarding lives in Settings and reuses its account connections.
   Incomplete setup opens Settings on launch or app activation. Done persists
@@ -44,13 +158,13 @@ Last source review: 2026-10-10
 - Windows implementation, installers, CI, testing and releases are paused until a test machine is available. The former RN/Tauri Windows-first plan is superseded; shared portable source does not establish Windows support.
 - Candidate checks use synthetic fixtures. Demo/candidate selection isolates preferences, history, caches and Electron state before composition. Live provider/key discovery, updater installation and login-item changes are disabled in demo. `pnpm package:mac` creates a separate candidate with publication disabled, using existing macOS tools.
 - Candidate account visibility rechecks directory presence. Sharing freezes the displayed account key. Pacing-off hides forecasts; notch details reuse window-scoped burn metrics and have a bounded scroller. These contracts have synthetic/static-markup proof; native UI acceptance remains open.
-- The browser-demo notch uses viewport height when no native work-area height is supplied. The card and strip scroll independently; the strip retains all 44 pixels for its rings. Synthetic browser checks at 294x500 and 294x900 cover scrolling, two card heights and both CSS card sides. These checks do not verify native window placement or display changes.
+- The browser-demo notch uses viewport height when no native work-area height is supplied. The card and strip scroll independently; the 36-pixel charcoal strip has 22-pixel rings containing provider marks, percentages below. Settings is available in each expanded card footer, with no strip button or reserved slot. The 220-pixel detail card plus strip use 256 pixels total. Synthetic browser checks cover scrolling, two card heights and both CSS card sides, but do not verify native window placement or display changes.
 - Candidate state publication returns before touching a destroyed tray. A synthetic Electron entrypoint regression emits display and theme events after tray destruction; native shutdown/display behavior remains an acceptance check.
 - Candidate window cleanup uses the document ID captured while the window is alive. Closing a destroyed window cannot read its web contents or remove a replacement window for the same surface. The synthetic lifecycle regression exercises this path; native shutdown remains an acceptance check.
 - Candidate Quit removes the display subscription before stopping collection and waiting for authentication cleanup. A late collection publication cannot recreate the notch or restart update checks. Lifecycle regressions cover flyout and tray Quit, repeated Quit during cleanup, and notch enabled or disabled. These tests do not establish native process termination.
 - Candidate macOS GUI startup validates Electron's three direct singleton links as one coherent metadata set before requesting the native lock. Other profile symlinks remain rejected, and JSON entrypoints retain strict validation. A second instance exits before collection starts and asks the primary instance to reveal its panel. Startup failures emit a fixed error; activation during Quit cannot reopen windows. [ADR 0013](adr/0013-candidate-single-instance-startup.md) records the bounded exception and native acceptance requirements.
-- Candidate Appearance includes a saved Small, Medium or Large panel size, defaulting to Medium. Main-panel widths are 336, 420 and 483 points before display clamping. Main-panel and Settings content scale together; the Settings frame, side-notch, tray and shared-card geometry retain their existing sizes. Ctrl/Cmd plus or minus selects the next size; Ctrl/Cmd 0 restores Medium. These shortcuts use the same saved preference and main-panel resizing as Settings. Window loads normalize retained Chromium zoom to avoid applying a second scale. The main panel measures natural content height, shrinks when content gets shorter, and scrolls within available display space without visible indicators. Synthetic tests cover persistence, invalid values, write failure, rapid keys and display clamping; actual native sizing acceptance is separate.
-- Candidate Settings places Appearance directly below account connections, followed by General, Providers, Side notch, Usage details and Diagnostics. Related options use grouped rows. Panel size uses visible Small, Medium and Large choices; accent color uses six labelled radio swatches. Aligned provider controls distinguish collection from menu-bar and side-notch display; stopping primary collection preserves the saved display preference. The display control stays available when an additional account has an active source slot. Advanced local accounts remain available. Scrollbar indicators are hidden throughout candidate windows, with scrolling and keyboard access retained. These renderer contracts do not establish native UI parity.
+- Candidate Appearance includes a saved Small, Medium or Large panel size, defaulting to Medium. Main-panel widths are 336, 420 and 483 points before display clamping. Main-panel and Settings content use the same scale. Side-notch detail content uses explicit integer pixel sizes without CSS zoom. The notch card is 220 pixels wide beside the fixed 36-pixel strip; its height follows the size-specific content within the work area. Settings measures the scaled content height and fits its active category and expanded controls within the display work area, accounting for native title-bar height. Width and top position remain when on screen. Tray and 250-pixel shared-card capture remain unchanged. Ctrl/Cmd plus or minus selects the next size; Ctrl/Cmd 0 restores Medium. These shortcuts use the same saved preference and main-panel resizing as Settings. Window loads normalize retained Chromium zoom to avoid applying a second scale. The main panel measures natural content height, shrinks when content gets shorter, and scrolls within available display space without visible indicators. Synthetic tests cover persistence, invalid values, write failure, rapid keys and display clamping; actual native sizing acceptance is separate.
+- Candidate Settings gives Appearance, General, Providers, Side notch, Usage details and Diagnostics direct category access beside Connections. Related options use grouped rows. Panel size uses a compact row of visible Small, Medium and Large choices; accent color uses six labelled radio swatches. Aligned provider controls distinguish collection from menu-bar and side-notch display; stopping primary collection preserves the saved display preference. The display control stays available when an additional account has an active source slot. Advanced local accounts remain available. Scrollbar indicators are hidden throughout candidate windows, with scrolling and keyboard access retained. These renderer contracts do not establish native UI parity.
 - Codex login, allowance and own-profile logout select `app-server --listen stdio://`. Connection subprocesses keep interpreter search paths while excluding inherited credential variables. Connection tests restrict app-helper discovery to generated fixture roots. These are source contracts, not proof of a live helper or cloud account.
 - The desktop-connection candidate has matching passing source proof for 165 synthetic TypeScript tests, TypeScript checking and production bundling on Linux. Its connection cleanup, account verification, cache/JSON readers, reset capability, alerts and locality labels have regression coverage. Disconnect blocks Claude's post-request credential reread; account-bound collection timeout removes unverified allowance; explicit Codex sign-in retry recovers retained cleanup before a new login. The unchanged migration baseline's headless demo comparison preserves stable schema-1 fields against the Swift demo oracle; that older native receipt does not verify the new connections. Source checks do not establish native parity or a published Electron release.
 - The first macOS fixture attempt passed 90 cases and failed 29 due to temporary-path aliases and a case-sensitive filename assertion. Canonical roots and exact directory-entry checks now pass all 128 current fixtures on macOS, along with TypeScript checking and production bundling. Candidate symlink rejection is unchanged.
@@ -65,12 +179,29 @@ Last source review: 2026-10-10
 - Archive reads validate optional plan, group, credit and reset metadata, retain Swift date/null compatibility and project only known fields. Reset preparation, confirmation and UI actions share the same reported-available and unexpired rule; absent status is unavailable.
 - Primary Claude quota discovery prioritizes the app-support `claude-usage.json`, then `.claude/claudewatch-usage.json`, then `.claude/meterusage-usage.json`. Additional accounts read only their configured directory. Without `updated_at`, capture time comes from the selected file's modification time. Optional OpenRouter credits have a five-second deadline starting with the required quota request. Malformed optional Codex additional limits never discard valid base windows.
 - Usage cards show current-day session/message counts and capture age without inventing token totals. Tray tooltips include non-operational status, reset countdown, stale capture age and last refresh. Claude, Antigravity, OpenCode Go, OpenRouter and Grok keep the Swift light/dark identity pairs, with semantic status overrides. These display contracts have synthetic/static-markup proof; native acceptance remains open.
-- Flyout service health uses reported statuses independently of usage visibility. Its status buttons ask main to open only the existing fixed public provider pages. Notch ambient ETA uses raw window pace, including dated archive readings, without requiring recent burn; disabling pacing hides it. Native rendering and page opening remain unverified.
+- Flyout service health uses reported statuses independently of usage visibility. Failed refreshes retain the last successful status as last known, with its age and refresh failure shown in the status panel, notch card and tray tooltip. Copied diagnostics marks the reading stale with its successful-check age and a fixed service-status error; successful retry clears the marker. Public-feed failures use service-status wording while keeping their failure code for retry behavior. Status buttons ask main to open only the existing fixed public provider pages. The compact notch rail shows only provider marks and percentages; pacing and reset timing remain in details. Native rendering and page opening remain unverified.
 - Replacing an account source invalidates its live quota, activity, usage, plan and pending reset confirmation. Late reads and reset completion from that source cannot update its replacement. Dated slot archives and durable history remain available; reset requires a current source reading.
 - Shared-card sizing uses the full measured height, separate from visible-window bounds. The candidate rejects capture heights above 8,192 pixels, or 4,096 CSS pixels at 2x, with `Card too tall to share`. Native image completeness remains unverified.
 
 
-- The `--codex-test-profile` candidate mode runs the existing Codex connection UI with isolated preferences, app data and Electron state. It excludes synthetic readings, other providers, local activity and status feeds; updates, login-item changes and notifications are blocked. [ADR 0012](adr/0012-codex-live-test-profile.md) amends the demo-only candidate restriction. Native and provider acceptance remain separate.
+- The `--codex-test-profile` candidate mode runs the existing Codex connection UI with isolated preferences, app data and Electron state. It excludes synthetic readings, other provider sources, local activity and Claude status. It reads the public OpenAI status feed without credentials; updates, login-item changes and notifications are blocked. [ADR 0012](adr/0012-codex-live-test-profile.md) amends the demo-only candidate restriction; [ADR 0015](adr/0015-codex-test-public-status.md) permits this public status request. Native and provider acceptance remain separate.
+- The separate `--claude-test-profile` candidate mode starts without consent and runs only the existing Claude Desktop allowance flow. It uses isolated JSON preferences and Electron state, blocks Codex access and cleanup, and retains the candidate system-effect guards. A Claude connection call without a consent callback denies access. Synthetic fixtures cover consent, relaunch, disconnect and profile isolation; native Keychain, Desktop format and live-provider acceptance remain open. See [ADR 0016](adr/0016-claude-live-test-profile.md).
+
+- Electron notch secondary labels use a scoped `#b0b0b8`; semantic provider and quota colors retain their existing rules. Telemetry adds a border and size-specific top padding. Enabled detail buttons use 120 ms background feedback for fine-pointer hover with reduced motion off. Press and keyboard focus stay immediate; reduced motion disables transitions. Card/window/ring geometry and the 450 ms close delay retain their source behavior. Rendered feedback, scrolling and native anchors still need target proof. See [SIDE-NOTCH.md](SIDE-NOTCH.md).
+
+- Electron Settings persists provider group order through validated IPC. Drag handles, arrow keys and move buttons use the same saved order for usage cards, service health, menu bar and side notch. Stored lists retain known providers once and append missing providers in default order. Additional accounts remain grouped, with independent Collect and Show settings. Failed saves and canceled drags retain the saved order. Synthetic proof does not establish rendered or native drag, focus, VoiceOver or notch-anchor behavior. See [ADR 0021](adr/0021-provider-group-order.md).
+
+- Connected Codex account history uses `account/usage/read` without `threadId`
+  through the existing managed ChatGPT helper and effective keyring guard. It
+  publishes only valid unique calendar labels, safe nonnegative token counts
+  and capture time in separate in-memory state. Main, notch and shared cards
+  show "Account token activity" under existing heatmap preferences. Null or
+  absent history and unreported days remain unavailable; reported zero stays
+  zero. Profile replacement, disconnect and failed reads clear the reading;
+  late results cannot update a replacement source. Account history is excluded
+  from local rollups, durable history and schema-1 quota JSON. Source and
+  synthetic proof do not establish live availability or universal cloud,
+  device or product coverage. See [ADR 0022](adr/0022-codex-account-token-history.md).
 
 ## Verification gaps
 
@@ -104,3 +235,9 @@ Last source review: 2026-10-10
 - Obsolete runs for the same pull request or branch are cancelled. Existing timeout caps are preserved.
 
 Reviewed Swift base: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. Source checks do not prove runtime, deployment or device behavior.
+
+- Electron Diagnostics restores explicit **Send report** through the existing private support relay. Main generates the same allowlisted status summary used by Copy diagnostics with the running app version; renderer IPC accepts intent only. In-flight clicks are deduplicated, uncertain retries reuse the report UUID/snapshot, and a matching HTTP201 receipt supplies the support reference. No raw logs, account labels/IDs, paths, credentials or transcripts are uploaded. See [REPORTING.md](REPORTING.md). Transport fixtures do not prove live Linear delivery.
+
+- Grok is labeled **Beta** in Electron usage cards, setup and provider settings. Official-source desktop research found X Subscription per-seat shared Grok/Cursor usage, unified local Antigravity authentication and API-key-based OpenCode Go setup. These do not establish new MeterUsage connections. See [desktop login research](DESKTOP-LOGIN-RESEARCH.md).
+
+- Diagnostic report attempts have a 10-minute main-process cooldown persisted as a private native preference before HTTP. Relaunch and failed sends retain the limit. Storage failure prevents transmission; Copy diagnostics remains available. Only the timestamp persists, with no report content, account identifier or receipt. See [REPORTING.md](REPORTING.md).

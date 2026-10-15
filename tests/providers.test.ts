@@ -162,6 +162,13 @@ describe("bounded transports", () => {
     const response = await codexRPC(binary, { env: { ...process.env, CODEX_HOME: "synthetic-account" }, timeoutMs: 1000 });
     expect(JSON.parse(response).result.home).toBe("synthetic-account"); expect(response).not.toContain("PRIVATE");
   });
+  it.each(["keyring", "file"])("reads account usage only after the effective %s storage guard", async storage => {
+    const root = temp(), binary = join(root, "fake-account-codex");
+    writeFileSync(binary, `#!${process.execPath}\nconst rl=require('node:readline').createInterface({input:process.stdin});let initialized=false,guarded=false;rl.on('line',line=>{const r=JSON.parse(line);const send=result=>process.stdout.write(JSON.stringify({id:r.id,result})+'\\n');if(r.method==='initialize')send({});else if(r.method==='initialized')initialized=true;else if(r.method==='config/read'){if(!initialized)process.exit(2);guarded=true;send({config:{cli_auth_credentials_store:'${storage}'}})}else if(r.method==='account/usage/read'){if(!initialized||!guarded||Object.keys(r.params).length)process.exit(3);send({dailyUsageBuckets:[{startDate:'2026-10-06',tokens:123}]})}else process.exit(4)});`, { mode: 0o700 });
+    const read = codexRPC(binary, { timeoutMs: 1000 }, undefined, ["-c", 'cli_auth_credentials_store="keyring"'], "usage");
+    if (storage === "file") await expect(read).rejects.toThrow("Secure credential storage unavailable");
+    else expect(JSON.parse(await read).result.dailyUsageBuckets).toEqual([{ startDate: "2026-10-06", tokens: 123 }]);
+  });
   it("bounds timeout, abort and output and never propagates stderr", async () => {
     await expect(runCommand(process.execPath, ["-e", "process.stderr.write('PRIVATE');setInterval(()=>{},1000)"], { timeoutMs: 50 })).rejects.toThrow("timed out");
     const controller = new AbortController(); const pending = runCommand(process.execPath, ["-e", "setInterval(()=>{},1000)"], { signal: controller.signal }); controller.abort(); await expect(pending).rejects.toThrow("cancelled");

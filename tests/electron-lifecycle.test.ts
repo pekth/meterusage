@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, mkdirSync, symlinkSync, readlinkSync, realpathSync
 import { tmpdir, hostname } from "node:os";
 import { createServer } from "node:net";
 import { join } from "node:path";
+import { providers, type Provider } from "../src/domain/models";
 
 it.each([
   { candidate: false, keyboard: false, retainedZoom: false, onboarding: true },
@@ -11,7 +12,8 @@ it.each([
   { candidate: true, keyboard: false, retainedZoom: false },
   { candidate: true, keyboard: true, retainedZoom: false },
   { candidate: true, keyboard: false, retainedZoom: true },
-])("cleans up windows and isolates candidate effects (candidate=$candidate, keyboard=$keyboard, retainedZoom=$retainedZoom, onboarding=$onboarding)", async ({ candidate, keyboard, retainedZoom, onboarding = true }) => {
+  { candidate: true, keyboard: false, retainedZoom: false, notchTest: true },
+])("cleans up windows and isolates candidate effects (candidate=$candidate, keyboard=$keyboard, retainedZoom=$retainedZoom, onboarding=$onboarding)", async ({ candidate, keyboard, retainedZoom, onboarding = true, notchTest = false }) => {
   vi.resetModules();
   const root = mkdtempSync(join(tmpdir(), "meterusage-lifecycle-"));
   const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
@@ -22,7 +24,8 @@ it.each([
     requestSingleInstanceLock: vi.fn(() => true), getVersion: () => "0.0.0", quit: vi.fn(), exit: vi.fn(),
   });
   const workArea = { x: 0, y: 0, width: 1200, height: 900 };
-  const display = Object.assign(new EventEmitter(), { getPrimaryDisplay: () => ({ workArea }), getDisplayNearestPoint: () => ({ workArea }), getDisplayMatching: () => ({ workArea }) });
+  let cursor = { x: 0, y: 0 };
+  const display = Object.assign(new EventEmitter(), { getPrimaryDisplay: () => ({ bounds: workArea, workArea }), getDisplayNearestPoint: () => ({ bounds: workArea, workArea }), getDisplayMatching: () => ({ bounds: workArea, workArea }), getCursorScreenPoint: () => cursor });
   const theme = new EventEmitter();
   let destroyed = false;
   const tooltip = vi.fn(() => { if (destroyed) throw new Error("Tray is destroyed"); });
@@ -36,23 +39,31 @@ it.each([
   }
   const windows: TestWindow[] = [];
   const ipc = vi.fn();
+  const reportFetch = vi.fn<typeof fetch>(async (_url, init) => Response.json({ id: JSON.parse(String(init?.body)).id, identifier: "MU-123" }, { status: 201 }));
+  vi.stubGlobal("fetch", reportFetch);
   const notify = vi.fn();
   const showErrorBox = vi.fn();
+  const showMessageBox = vi.fn(async () => ({ response: 0 }));
+  const prepareReset = vi.fn(() => ({ token: "fixture-intent", account: "Codex", title: "Full reset" }));
+  const confirmReset = vi.fn(async () => {}), cancelReset = vi.fn();
   class TestWindow extends EventEmitter {
     destroyed = false;
     zoomFactor = 1;
     surface = "";
     bounds: { x: number; y: number; width: number; height: number };
     contents = Object.assign(new EventEmitter(), { id: windows.length + 1, mainFrame: { url: "" }, setFrameRate: vi.fn(), setZoomFactor: vi.fn((factor: number) => { this.zoomFactor = factor; }), send: vi.fn(), setWindowOpenHandler: vi.fn() });
-    constructor(options: { width: number; height: number }) { super(); this.bounds = { x: 0, y: 0, width: options.width, height: options.height }; windows.push(this); }
+    constructor(readonly options: { width: number; height: number; focusable?: boolean; type?: string }) { super(); this.bounds = { x: 0, y: 0, width: options.width, height: options.height }; windows.push(this); }
     get webContents() { if (this.destroyed) throw new Error("webContents is unavailable after destruction"); return this.contents; }
     static fromWebContents(contents: unknown) { return windows.find(w => w.contents === contents); }
+    close = vi.fn(() => { this.destroyed = true; this.emit("closed"); });
     isDestroyed = () => this.destroyed;
     isVisible = () => false;
     getBounds = () => this.bounds;
+    getContentBounds = () => ({ ...this.bounds, height: this.bounds.height - (this.surface === "settings" ? 28 : 0) });
     setBounds = vi.fn((bounds: typeof this.bounds) => { this.bounds = bounds; });
     setSize = vi.fn((width: number, height: number) => { this.bounds.width = width; this.bounds.height = height; });
     setPosition = vi.fn((x: number, y: number) => { this.bounds.x = x; this.bounds.y = y; }); show = vi.fn(); focus = vi.fn(); hide = vi.fn();
+    showInactive = vi.fn(); setAlwaysOnTop = vi.fn(); setVisibleOnAllWorkspaces = vi.fn();
     loadURL = (url: string) => {
       this.contents.mainFrame.url = url;
       this.surface = new URL(url).searchParams.get("surface")!;
@@ -61,26 +72,35 @@ it.each([
     };
   }
   const start = vi.fn(async () => {});
+  const connect = vi.fn(async (_provider: string, _open: unknown, consent: () => Promise<boolean>) => { await consent(); return false; });
+  const useLocal = vi.fn(async (_provider: string) => {}), disconnect = vi.fn(async (_provider: string) => {});
+  const composition = vi.fn(() => []), refresh = vi.fn(async () => {}), forgetQuota = vi.fn();
+  let connectionChanged!: () => void;
   vi.doMock("electron", () => ({ app: application, Tray: TestTray, BrowserWindow: TestWindow,
-    screen: display, nativeTheme: theme, powerMonitor: new EventEmitter(), ipcMain: { handle: ipc }, dialog: { showErrorBox },
+    screen: display, nativeTheme: theme, powerMonitor: new EventEmitter(), ipcMain: { handle: ipc }, dialog: { showErrorBox, showMessageBox },
     Notification: Object.assign(class { show = notify; }, { isSupported: () => true }),
     nativeImage: { createFromPath: () => ({ resize: () => ({ setTemplateImage: vi.fn() }) }) },
     session: { defaultSession: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } } },
   }));
   vi.doMock("../src/main/launch", () => ({ launchConfiguration: () => ({ data: root, home: root, demo: false, candidate, profile: candidate ? root : undefined }) }));
-  const values: Record<string, boolean | string> = { onboardingCompleted: onboarding, panelSize: "medium" };
-  const setPreference = vi.fn(async (key: string, value: boolean | string) => { await Promise.resolve(); values[key] = value; });
+  const values: Record<string, boolean | number | string | Provider[]> = { onboardingCompleted: onboarding, panelSize: "medium", sideNotchPanelPinned: notchTest };
+  const setPreference = vi.fn(async (key: string, value: boolean | number | string | Provider[]) => { await Promise.resolve(); values[key] = value; });
   let finishLoad!: () => void;
   const loading = new Promise<void>(resolve => { finishLoad = resolve; });
   const load = vi.fn(async () => { await loading; return { values, accounts: [], set: setPreference }; });
   vi.doMock("../src/main/preferences", () => ({ Preferences: { load } }));
-  vi.doMock("../src/main/composition", () => ({ compose: () => [] }));
+  vi.doMock("../src/main/composition", () => ({ compose: composition }));
   vi.doMock("../src/main/connections", () => ({ DesktopConnections: class {
+    constructor(_launch: unknown, _prefs: unknown, _helper: unknown, changed: () => void) { connectionChanged = changed; }
     state = []; configured = () => false; recover = async () => {}; stop = async () => {};
+    connect = connect; useLocal = useLocal; disconnect = disconnect;
   } }));
   vi.doMock("../src/main/coordinator", () => ({ Coordinator: class {
     constructor(_launch: unknown, _prefs: unknown, _sources: unknown, _clock: unknown, alert: (a: unknown) => void) { alert({ title: "Fixture", body: "Fixture" }); }
-    start = start; stop = vi.fn(); publish = vi.fn(); subscribe = vi.fn(() => vi.fn()); snapshot = () => ({ appearance: {} }); refreshIfStale = vi.fn();
+    prepareReset = prepareReset; confirmReset = confirmReset; cancelReset = cancelReset;
+    diagnostics = (version: string) => `MeterUsage ${version}\nquota: unavailable (offline)`;
+    refresh = refresh; forgetQuota = forgetQuota;
+    start = start; stop = vi.fn(); publish = vi.fn(); subscribe = vi.fn(() => vi.fn()); snapshot = () => ({ appearance: {}, quotas: { codex: { status: "value", value: { provider: "codex", windows: [{ label: "5-hour", usedPercent: 10 }] } } }, archived: {}, notchSlots: [{ provider: "codex", slotID: "" }, { provider: "claude", slotID: "" }] }); refreshIfStale = vi.fn();
   } }));
   vi.doMock("../src/main/updater", () => ({ Updater: class { reset = vi.fn(); } }));
   vi.doMock("../src/domain/overview", () => ({ trayTooltip: () => "Synthetic usage" }));
@@ -132,10 +152,118 @@ it.each([
     expect(tooltip).toHaveBeenCalledWith("Synthetic usage");
     const invoke = (w: TestWindow, request: unknown) => ipc.mock.calls[0][1]({ sender: w.contents, senderFrame: w.contents.mainFrame }, request);
     const flyout = windows[2];
+    if (keyboard) {
+      const request = { action: "reset", key: "codex", creditID: "fixture-credit" };
+      expect(await invoke(flyout, request)).toEqual({ ok: true });
+      expect(prepareReset).toHaveBeenCalledWith("codex", "fixture-credit");
+      expect(showMessageBox).toHaveBeenCalledWith(flyout, expect.objectContaining({ buttons: ["Cancel", "Use reset"], defaultId: 0, cancelId: 0, message: "Use Full reset for Codex?" }));
+      expect(confirmReset).not.toHaveBeenCalled(); expect(cancelReset).toHaveBeenCalledWith("fixture-intent");
+      let respond!: (result: { response: number }) => void;
+      showMessageBox.mockImplementationOnce(() => new Promise(resolve => { respond = resolve; }));
+      const pending = invoke(flyout, request);
+      expect(await invoke(flyout, request)).toEqual({ ok: false, error: "Could not complete action" });
+      respond({ response: 1 }); expect(await pending).toEqual({ ok: true });
+      expect(confirmReset).toHaveBeenCalledExactlyOnceWith("fixture-intent");
+      const dialogs = showMessageBox.mock.calls.length;
+      expect(await invoke(flyout, { ...request, creditID: "" })).toEqual({ ok: false, error: "Invalid request" });
+      expect(showMessageBox).toHaveBeenCalledTimes(dialogs);
+    }
     expect(await invoke(flyout, { action: "resize", height: 593 })).toEqual({ ok: true });
     expect(flyout.bounds).toMatchObject({ width: 420, height: 593 });
     await invoke(windows[2], { action: "settings" });
     const settings = windows[3];
+    expect(reportFetch).not.toHaveBeenCalled();
+    expect(await invoke(flyout, { action: "sendReport" })).toEqual({ ok: false, error: "Could not complete action" });
+    expect(reportFetch).not.toHaveBeenCalled();
+    expect(await invoke(settings, { action: "sendReport", diagnostics: "renderer text" })).toEqual({ ok: false, error: "Invalid request" });
+    expect(reportFetch).not.toHaveBeenCalled();
+    expect(await invoke(settings, { action: "sendReport" })).toEqual({ ok: true });
+    expect(reportFetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(reportFetch.mock.calls[0][1]?.body)).diagnostics).toBe("MeterUsage 0.0.0\nquota: unavailable (offline)");
+    expect((await invoke(settings, { action: "state" })).state.issueReport).toMatchObject({ sending: false, receipt: "MU-123", retryAt: expect.any(Number) });
+    expect((await invoke(flyout, { action: "state" })).state).not.toHaveProperty("issueReport");
+    await invoke(settings, { action: "sendReport" });
+    expect(reportFetch).toHaveBeenCalledOnce();
+    if (keyboard) {
+      settings.bounds = { x: 160, y: 100, width: 740, height: 680 };
+      const resizeSettings = (height: number) => invoke(settings, { action: "resize", height, width: 10000 });
+      expect(await resizeSettings(300.2)).toEqual({ ok: true });
+      expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 329 });
+      await resizeSettings(180);
+      expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 208 });
+      values.panelSize = "small";
+      await resizeSettings(700);
+      expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 728 });
+      values.panelSize = "medium";
+      await resizeSettings(1000);
+      expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 800 });
+      const fits = settings.setBounds.mock.calls.length;
+      await resizeSettings(1000);
+      expect(settings.setBounds).toHaveBeenCalledTimes(fits);
+      for (const event of ["display-metrics-changed", "display-removed"]) {
+        workArea.height = 500;
+        display.emit(event);
+        expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 400 });
+        workArea.height = 1200;
+        display.emit(event);
+        expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 1028 });
+      }
+      workArea.height = 900;
+      workArea.x = -1000; workArea.y = 30; workArea.width = 800; workArea.height = 500;
+      settings.bounds = { x: -300, y: 60, width: 740, height: 800 };
+      await resizeSettings(1000);
+      expect(settings.bounds).toEqual({ x: -940, y: 60, width: 740, height: 470 });
+      settings.bounds = { x: 160, y: 950, width: 900, height: 680 };
+      await resizeSettings(300);
+      expect(settings.bounds).toEqual({ x: -1000, y: 30, width: 800, height: 328 });
+      Object.assign(workArea, { x: 0, y: 0, width: 1200, height: 900 });
+      expect(await invoke(windows[0], { action: "connectionLocal", provider: "codex" })).toEqual({ ok: false, error: "Invalid request" });
+      expect(useLocal).not.toHaveBeenCalled();
+      for (const source of [settings, flyout]) {
+        useLocal.mockImplementationOnce(async provider => { expect(provider).toBe("codex"); values.desktopCodexConnection = ""; connectionChanged(); });
+        const compositions = composition.mock.calls.length, refreshes = refresh.mock.calls.length;
+        expect(await invoke(source, { action: "connectionLocal", provider: "codex" })).toEqual({ ok: true });
+        if (source === settings) {
+          expect(forgetQuota).toHaveBeenCalledWith("codex"); expect(composition).toHaveBeenCalledTimes(compositions + 1);
+          expect(forgetQuota.mock.invocationCallOrder.at(-1)).toBeLessThan(refresh.mock.invocationCallOrder.at(-1)!);
+        }
+        expect(refresh).toHaveBeenCalledTimes(refreshes + 1);
+        expect(source.contents.send.mock.lastCall?.[0]).toBe("meterusage:state");
+      }
+      expect(disconnect).not.toHaveBeenCalled();
+      for (const message of ["Could not disconnect Codex", "OMIT_PRIVATE_LOCAL_ERROR token=synthetic-secret account=synthetic-account path=/private/store"]) {
+        const refreshes = refresh.mock.calls.length;
+        useLocal.mockRejectedValueOnce(new Error(message));
+        expect(await invoke(settings, { action: "connectionLocal", provider: "codex" })).toEqual({ ok: false, error: message.startsWith("OMIT") ? "Could not complete action" : message });
+        expect(refresh).toHaveBeenCalledTimes(refreshes);
+      }
+      const order = ["claude" as const, ...providers.filter(p => p !== "claude")];
+      const writes = setPreference.mock.calls.length;
+      expect(await invoke(flyout, { action: "providerOrder", order })).toEqual({ ok: false, error: "Invalid request" });
+      expect(setPreference).toHaveBeenCalledTimes(writes);
+      setPreference.mockRejectedValueOnce(new Error("Synthetic order save failure"));
+      expect(await invoke(settings, { action: "providerOrder", order })).toEqual({ ok: false, error: "Could not complete action" });
+      expect(values.providerOrder).toBeUndefined();
+      expect(await invoke(settings, { action: "providerOrder", order })).toEqual({ ok: true });
+      expect(values.providerOrder).toEqual(order);
+      expect(settings.contents.send.mock.lastCall?.[1].settings.providerOrder).toEqual(order);
+      for (const message of [
+        "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.",
+        "Could not read Claude Desktop's account configuration.",
+        "Could not read Claude Desktop's active organization cookie.",
+        "Could not decrypt Claude Desktop's sign-in cache with its Keychain entry.",
+        "Claude Desktop's cache has no current allowance token for the active account and organization.",
+        "Claude Desktop's cache has multiple matching allowance tokens. MeterUsage cannot safely choose one.",
+        "Could not read Claude account allowance. Try connecting again later.",
+        "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.",
+        "Could not save the Claude Desktop connection preferences. Try connecting again.",
+        "OMIT_PRIVATE_CONNECT_ERROR token=synthetic-secret account=synthetic-account path=/private/store",
+      ]) {
+        showMessageBox.mockResolvedValueOnce({ response: 1 });
+        connect.mockImplementationOnce(async (_provider, _open, consent) => { expect(await consent()).toBe(true); throw new Error(message); });
+        expect(await invoke(settings, { action: "connect", provider: "claude" })).toEqual({ ok: false, error: message.startsWith("OMIT") ? "Could not complete action" : message });
+      }
+    }
     if (retainedZoom) {
       expect(flyout.zoomFactor).toBe(1); expect(settings.zoomFactor).toBe(1);
       flyout.zoomFactor = 1.5; flyout.contents.emit("did-finish-load");
@@ -215,6 +343,88 @@ it.each([
       expect(reply).toEqual({ ok: false, error: "Login items require an installed app" });
       expect(application.setLoginItemSettings).not.toHaveBeenCalled();
     } else expect(application.getLoginItemSettings).toHaveBeenCalledOnce();
+    if (notchTest) {
+      vi.useFakeTimers();
+      await invoke(settings, { action: "setPreference", key: "sideNotchPanelEnabled", value: true });
+      const panel = windows.find(w => w.surface === "notch")!;
+      expect(panel.options).toMatchObject({ type: "panel", focusable: false });
+      expect(panel.bounds.width).toBe(36);
+      expect(panel.showInactive).toHaveBeenCalled(); expect(panel.focus).not.toHaveBeenCalled();
+      const hover = (hovering: boolean) => invoke(panel, { action: "notchHover", hovering });
+      cursor = { x: panel.bounds.x + 10, y: panel.bounds.y + 10 };
+      await hover(true);
+      const expanded = { ...panel.bounds };
+      expect(expanded.width).toBe(256);
+      vi.advanceTimersByTime(600); expect(panel.bounds.width).toBe(256);
+      // The native cursor leaves without Chromium sending pointerleave or blur.
+      cursor = { x: 0, y: 0 };
+      vi.advanceTimersByTime(549); expect(panel.bounds.width).toBe(256);
+      vi.advanceTimersByTime(1); expect(panel.bounds.width).toBe(36);
+      expect(panel.bounds.y).toBe(expanded.y);
+      expect(panel.bounds.x + panel.bounds.width).toBe(expanded.x + expanded.width);
+      expect(panel.hide).not.toHaveBeenCalled();
+      // A legacy saved pin remains untouched and cannot keep details open.
+      expect(values.sideNotchPanelPinned).toBe(true);
+      for (const key of ["claude", "codex"]) {
+        cursor = { x: panel.bounds.x + 10, y: panel.bounds.y + 10 };
+        await hover(true); await invoke(panel, { action: "notchSelect", key });
+        expect(panel.bounds.width).toBe(256);
+        expect(panel.contents.send.mock.calls.at(-1)?.[1].notch.selected).toBe(key);
+        await hover(false); cursor = { x: 0, y: 0 };
+        vi.advanceTimersByTime(449); expect(panel.bounds.width).toBe(256);
+        vi.advanceTimersByTime(1); expect(panel.bounds.width).toBe(36);
+      }
+      cursor = { x: panel.bounds.x + 10, y: panel.bounds.y + 10 }; await hover(true);
+      let respond!: (result: { response: number }) => void;
+      showMessageBox.mockImplementationOnce(() => new Promise(resolve => { respond = resolve; }));
+      const pending = invoke(panel, { action: "reset", key: "codex", creditID: "fixture-credit" });
+      cursor = { x: 0, y: 0 }; vi.advanceTimersByTime(1000); expect(panel.bounds.width).toBe(256);
+      respond({ response: 0 }); await pending;
+      vi.advanceTimersByTime(450); expect(panel.bounds.width).toBe(36);
+      // A pending share render retains details outside the panel; failure releases it.
+      cursor = { x: panel.bounds.x + 10, y: panel.bounds.y + 10 }; await hover(true);
+      const sharing = invoke(panel, { action: "share", key: "codex" });
+      cursor = { x: 0, y: 0 }; vi.advanceTimersByTime(1000);
+      expect(panel.bounds.width).toBe(256);
+      vi.advanceTimersByTime(4000);
+      expect(await sharing).toEqual({ ok: false, error: "Could not share snapshot" });
+      vi.advanceTimersByTime(450); expect(panel.bounds.width).toBe(36);
+      expect(confirmReset).not.toHaveBeenCalled();
+      expect(showMessageBox).toHaveBeenCalledWith(panel, expect.objectContaining({ defaultId: 0, cancelId: 0 }));
+      cursor = { x: panel.bounds.x + 10, y: panel.bounds.y + 10 }; await hover(true);
+      await hover(false); vi.advanceTimersByTime(200); await hover(true);
+      vi.advanceTimersByTime(500); expect(panel.bounds.width).toBe(256);
+      await invoke(panel, { action: "dragStart" });
+      expect(panel.bounds.width).toBe(36);
+      cursor = { x: 0, y: 0 };
+      await invoke(panel, { action: "dragEnd" });
+      vi.advanceTimersByTime(1000); expect(panel.bounds.width).toBe(36);
+      expect(panel.contents.send.mock.lastCall?.[1].notch).toMatchObject({ expanded: false, dragging: false });
+      cursor = { x: panel.bounds.x + 10, y: panel.bounds.y + 10 }; await hover(true);
+      await invoke(panel, { action: "dragStart" }); await invoke(panel, { action: "dragEnd" });
+      expect(panel.bounds.width).toBe(256);
+      cursor = { x: 0, y: 0 }; vi.advanceTimersByTime(550); expect(panel.bounds.width).toBe(36);
+      cursor = { x: panel.bounds.x + 10, y: panel.bounds.y + 10 };
+      await invoke(panel, { action: "notchSelect", key: "codex" });
+      expect(panel.bounds.width).toBe(256);
+      cursor = { x: 0, y: 0 }; vi.advanceTimersByTime(550); expect(panel.bounds.width).toBe(36);
+      await hover(true);
+      await invoke(settings, { action: "setPreference", key: "sideNotchPanelEnabled", value: false });
+      expect(panel.hide).toHaveBeenCalled();
+      expect(panel.contents.send.mock.lastCall?.[1].notch.expanded).toBe(false);
+      cursor = { x: 0, y: 0 };
+      await invoke(settings, { action: "setPreference", key: "sideNotchPanelEnabled", value: true });
+      expect(panel.bounds.width).toBe(36);
+      expect(panel.contents.send.mock.lastCall?.[1].notch.expanded).toBe(false);
+      vi.advanceTimersByTime(1000); expect(panel.bounds.width).toBe(36);
+      cursor = { x: panel.bounds.x + 10, y: panel.bounds.y + 10 }; await hover(true);
+      expect(panel.bounds.width).toBe(256);
+      cursor = { x: 0, y: 0 }; await hover(false);
+      vi.advanceTimersByTime(450); expect(panel.bounds.width).toBe(36);
+      await invoke(settings, { action: "setPreference", key: "sideNotchPanelEnabled", value: false });
+      const writes = setPreference.mock.calls.length;
+      vi.advanceTimersByTime(1000); expect(setPreference).toHaveBeenCalledTimes(writes);
+    }
     destroyed = true;
     expect(() => display.emit("display-metrics-changed")).not.toThrow();
     expect(() => display.emit("display-removed")).not.toThrow();
@@ -223,6 +433,7 @@ it.each([
     finishLoad();
     application.emit("before-quit", { preventDefault: vi.fn() });
     await Promise.resolve();
+    vi.useRealTimers();
     Object.defineProperty(process, "platform", platform);
     if (resourcesPath) Object.defineProperty(process, "resourcesPath", resourcesPath); else Reflect.deleteProperty(process, "resourcesPath");
     vi.unstubAllGlobals();

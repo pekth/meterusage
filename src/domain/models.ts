@@ -48,6 +48,7 @@ export interface Session {
 export const activeUntil = (s: Session) => Math.max(s.lastActivityAt ?? s.startedAt, s.startedAt);
 export const lastBurn = (sessions: Session[]) => sessions.length ? Math.max(...sessions.map(activeUntil)) : undefined;
 export interface Daily { day: number; tokens: Tokens; estimatedCostUSD: number; sessionCount: number }
+export interface AccountActivity { dailyUsageBuckets: { startDate: string; tokens: number }[] | null; capturedAt: number }
 export interface Activity { provider: Provider; sessions: Session[]; daily: Daily[]; scannedAt: number; telemetry?: Telemetry }
 export interface UsageWindow { label: string; sessionCount: number; messageCount: number; tokens: Tokens; estimatedCostUSD: number }
 export interface Usage {
@@ -64,7 +65,7 @@ export interface Telemetry {
 }
 export type Severity = "operational" | "unknown" | "degraded" | "partialOutage" | "majorOutage";
 export const severityNames: Record<Severity, string> = { operational: "Operational", unknown: "Unknown", degraded: "Degraded", partialOutage: "Partial outage", majorOutage: "Major outage" };
-export interface ServiceStatus { provider: Provider; severity: Severity; description: string; checkedAt: number }
+export interface ServiceStatus { provider: Provider; severity: Severity; description: string; checkedAt: number; stale?: boolean; refreshError?: string }
 export type MissingCode = "cliNotFound" | "notSignedIn" | "offline" | "failed" | "noData" | "dataNotFound";
 export class Unavailable extends Error {
   constructor(public code: MissingCode, public subject?: string) {

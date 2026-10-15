@@ -7,7 +7,9 @@ import { launchConfiguration, type Launch } from "./launch";
 import { Preferences } from "./preferences";
 import { compose } from "./composition";
 import { DesktopConnections } from "./connections";
+import { desktopReadErrors } from "./providers/claude-desktop";
 import { Coordinator } from "./coordinator";
+import { IssueReports } from "./issue-reports";
 import { NotchFold } from "./notch-fold";
 import { Updater } from "./updater";
 import { runJSON } from "./cli";
@@ -16,6 +18,8 @@ import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./i
 import { providers, slotKey } from "../domain/models";
 import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize } from "../domain/notch";
 import { trayTooltip } from "../domain/overview";
+
+const shareCardWidth = 250;
 
 const args = process.argv.slice(1);
 const desktopHelper = app.isPackaged ? join(process.resourcesPath, "desktop-keychain") : join(__dirname, "../../build/desktop-keychain");
@@ -58,11 +62,12 @@ async function start(launch: Launch) {
   const coordinator = new Coordinator(launch, prefs, sources(), Date.now, alert => {
     if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
   }, sources);
+  const issueReports = new IssueReports(() => coordinator.diagnostics(app.getVersion()), publish, prefs);
   // Do not restore a legacy archive under a newly connected account.
   for (const p of ["codex", "claude"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
-  const notch = { expanded: prefs.values.sideNotchPanelPinned === true, cardOnRight: false, selected: "codex", dragging: false };
+  const notch = { expanded: false, cardOnRight: false, selected: "codex", dragging: false };
   let notchHeight = 200, anchor: { x: number; y: number } | undefined;
-  let flyoutHeight = 700;
+  let flyoutHeight = 700, settingsHeight: number | undefined;
   const panelScale = () => panelScales[prefs.values.panelSize as PanelSize] ?? 1;
   let panelSizeKeys = Promise.resolve();
   let drag: { cursor: Electron.Point; anchor: Electron.Point; timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> } | undefined;
@@ -74,11 +79,25 @@ async function start(launch: Launch) {
   tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showUsage() }, { label: "Settings…", click: () => showSettings() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
   tray.on("click", () => { const w = windows.get("flyout"); w?.isVisible() ? w.hide() : showUsage(); });
   let shareState: ViewState | undefined, shareHeight = 0, shareReady: ((image: Electron.NativeImage) => void) | undefined, shareFailed: ((error: Error) => void) | undefined;
-  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ connections: connections.state, snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
+  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ ...(surface === "settings" ? { issueReport: issueReports.state } : {}), connections: connections.state, snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
   const updater = new Updater(prefs, app.getVersion(), publish, undefined, release => {
     if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: "MeterUsage update available", body: `MeterUsage ${release.version} is ready to install.`, silent: true }).show();
   });
-  const folding = new NotchFold(() => prefs.values.sideNotchPanelPinned === true || sharing || confirmingReset || notch.dragging, () => { notch.expanded = false; placeNotch(); publish(); });
+  let hoverCheck: ReturnType<typeof setInterval> | undefined;
+  const folding = new NotchFold(() => sharing || confirmingReset || notch.dragging, () => { notch.expanded = false; placeNotch(); publish(); });
+  function stopHoverCheck() { if (hoverCheck) clearInterval(hoverCheck); hoverCheck = undefined; }
+  function pointerInNotch() {
+    const w = windows.get("notch"); if (!w || w.isDestroyed()) return false;
+    const b = w.getBounds(), p = screen.getCursorScreenPoint();
+    return p.x >= b.x && p.x < b.x + b.width && p.y >= b.y && p.y < b.y + b.height;
+  }
+  function watchNotchHover() {
+    if (hoverCheck) return;
+    // Non-activating panels cannot blur; recover a missed Chromium pointerleave.
+    hoverCheck = setInterval(() => {
+      if (!pointerInNotch()) { stopHoverCheck(); folding.hovered = false; folding.changed(); }
+    }, 100);
+  }
   function publish() {
     if (tray.isDestroyed()) return;
     const s = state();
@@ -92,13 +111,14 @@ async function start(launch: Launch) {
   function create(surface: Surface) {
     const existing = windows.get(surface); if (existing && !existing.isDestroyed()) return existing;
     const panel = surface === "notch", trayImage = surface === "tray", shareImage = surface === "share";
-    const w = new BrowserWindow({ width: shareImage ? cardWidth * 2 : trayImage ? 1000 : panel ? stripWidth : surface === "settings" ? 620 : Math.round(420 * panelScale()), height: trayImage ? 22 : panel ? notchHeight : surface === "settings" ? 680 : Math.ceil(flyoutHeight * panelScale()), show: false, frame: surface === "settings", transparent: panel || trayImage || shareImage, resizable: surface === "settings", minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, ...(panel ? { type: "panel", focusable: false, hasShadow: false } : {}), title: surface === "settings" ? "MeterUsage Settings" : "MeterUsage", backgroundColor: panel || trayImage || shareImage ? "#00000000" : "#242428", webPreferences: { preload: join(__dirname, "../preload/preload.cjs"), offscreen: trayImage || shareImage, zoomFactor: shareImage ? 2 : 1, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false } });
+    if (surface === "settings") settingsHeight = undefined;
+    const w = new BrowserWindow({ width: shareImage ? shareCardWidth * 2 : trayImage ? 1000 : panel ? stripWidth : surface === "settings" ? 620 : Math.round(420 * panelScale()), height: trayImage ? 22 : panel ? notchHeight : surface === "settings" ? 680 : Math.ceil(flyoutHeight * panelScale()), show: false, frame: surface === "settings", transparent: panel || trayImage || shareImage, resizable: surface === "settings", minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, ...(panel ? { type: "panel", focusable: false, hasShadow: false } : {}), title: surface === "settings" ? "MeterUsage Settings" : "MeterUsage", backgroundColor: panel || trayImage || shareImage ? "#00000000" : "#242428", webPreferences: { preload: join(__dirname, "../preload/preload.cjs"), offscreen: trayImage || shareImage, zoomFactor: shareImage ? 2 : 1, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false } });
     if (trayImage) { w.webContents.setFrameRate(10); w.webContents.on("paint", (_event, _rect, image) => { if (!tray.isDestroyed() && trayWidth > 0) tray.setImage(image); }); }
     if (shareImage) {
       w.webContents.setFrameRate(10);
       w.webContents.on("paint", (_event, _rect, image) => {
         const size = image.getSize();
-        if (shareReady && shareHeight > 0 && size.width >= cardWidth * 2 && size.height >= shareHeight) { const ready = shareReady; shareReady = undefined; ready(image); }
+        if (shareReady && shareHeight > 0 && size.width >= shareCardWidth * 2 && size.height >= shareHeight) { const ready = shareReady; shareReady = undefined; ready(image); }
       });
     }
     const document = pathToFileURL(join(__dirname, "../renderer/index.html")); document.searchParams.set("surface", surface);
@@ -120,7 +140,7 @@ async function start(launch: Launch) {
         }).catch(() => { dialog.showErrorBox("Could not change panel size", "Your panel size was not saved. Try again."); });
       });
     }
-    w.on("closed", () => { documents.delete(webContentsId); if (windows.get(surface) === w) windows.delete(surface); if (panel) finishDrag(); });
+    w.on("closed", () => { documents.delete(webContentsId); if (windows.get(surface) === w) windows.delete(surface); if (panel) { stopHoverCheck(); finishDrag(); } });
     if (surface === "flyout") w.on("blur", () => { if (!sharing) w.hide(); });
     if (panel) { w.setAlwaysOnTop(true, "status"); w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); }
     void w.loadURL(document.href).then(() => { publish(); if (panel) { placeNotch(); w.showInactive(); } });
@@ -137,6 +157,14 @@ async function start(launch: Launch) {
     const bounds = w.getBounds(), work = screen.getDisplayMatching(bounds).workArea;
     const width = Math.min(Math.round(420 * panelScale()), work.width), height = Math.min(Math.ceil(flyoutHeight * panelScale()), work.height);
     w.setBounds({ x: Math.round(Math.min(Math.max(bounds.x, work.x), work.x + work.width - width)), y: Math.round(Math.min(Math.max(bounds.y, work.y), work.y + work.height - height)), width, height }, false);
+  }
+  function sizeSettings() {
+    const source = windows.get("settings"); if (!source || source.isDestroyed() || settingsHeight === undefined) return;
+    const bounds = source.getBounds(), content = source.getContentBounds(), work = screen.getDisplayMatching(bounds).workArea;
+    const chrome = Math.max(0, bounds.height - content.height), width = Math.min(bounds.width, work.width);
+    const y = bounds.y >= work.y && bounds.y + chrome + 20 <= work.y + work.height ? bounds.y : work.y;
+    const next = { x: Math.round(Math.min(Math.max(bounds.x, work.x), work.x + work.width - width)), y, width, height: Math.min(Math.ceil(settingsHeight) + chrome, work.y + work.height - y) };
+    if (next.x !== bounds.x || next.y !== bounds.y || next.width !== bounds.width || next.height !== bounds.height) source.setBounds(next, false);
   }
   function showSettings() {
     if (!launch.demo && !launch.candidate && app.isPackaged) prefs.values.launchAtLogin = app.getLoginItemSettings().openAtLogin;
@@ -160,12 +188,14 @@ async function start(launch: Launch) {
   }
   function syncNotch() {
     if (prefs.values.sideNotchPanelEnabled) { create("notch"); placeNotch(); windows.get("notch")?.showInactive(); }
-    else { finishDrag(); windows.get("notch")?.hide(); }
+    else { finishDrag(); stopHoverCheck(); folding.hovered = false; folding.cancel(); notch.expanded = false; windows.get("notch")?.hide(); }
   }
   function finishDrag() {
     if (!drag) return;
     clearInterval(drag.timer); clearTimeout(drag.timeout); drag = undefined; notch.dragging = false;
-    notch.expanded = prefs.values.sideNotchPanelPinned === true || folding.hovered; folding.changed();
+    folding.hovered = pointerInNotch();
+    notch.expanded = folding.hovered; folding.changed();
+    if (folding.hovered) watchNotchHover();
     if (anchor) {
       const primary = screen.getPrimaryDisplay().bounds;
       void prefs.set("sideNotchPanelCorner", `${anchor.x},${primary.y + primary.height - anchor.y}`).catch(() => {});
@@ -175,7 +205,7 @@ async function start(launch: Launch) {
   function startDrag() {
     if (drag) return;
     const w = windows.get("notch"); if (!w) return;
-    folding.cancel(); notch.expanded = false; placeNotch();
+    stopHoverCheck(); folding.hovered = false; folding.cancel(); notch.expanded = false; placeNotch();
     const bounds = w.getBounds(); anchor = { x: bounds.x + stripWidth, y: bounds.y };
     notch.dragging = true;
     const origin = { ...anchor }, cursor = screen.getCursorScreenPoint();
@@ -210,12 +240,20 @@ async function start(launch: Launch) {
       case "connectionCancel":
         if (surface !== "settings" && surface !== "flyout") throw new Error("Invalid request");
         connections.cancel(r.provider); break;
-      case "disconnect":
+      case "disconnect": case "connectionLocal":
         if (surface !== "settings" && surface !== "flyout") throw new Error("Invalid request");
-        await connections.disconnect(r.provider);
+        if (r.action === "connectionLocal") await connections.useLocal(r.provider);
+        else await connections.disconnect(r.provider);
         await coordinator.refresh(); break;
-      case "copyDiagnostics": clipboard.writeText(coordinator.diagnostics()); break;
+      case "sendReport":
+        if (surface !== "settings" || launch.demo) throw new Error("Reporting is only available in live Settings.");
+        await issueReports.submit(); break;
+      case "copyDiagnostics": clipboard.writeText(coordinator.diagnostics(app.getVersion())); break;
       case "copyJSON": clipboard.writeText(coordinator.json()); break;
+      case "providerOrder":
+        if (surface !== "settings") throw new Error("Invalid request");
+        await prefs.set("providerOrder", r.order);
+        coordinator.publish(); break;
       case "setPreference":
         if (r.key === "launchAtLogin") {
           if (launch.demo || launch.candidate || !app.isPackaged) throw new Error("Login items require an installed app");
@@ -226,7 +264,6 @@ async function start(launch: Launch) {
         if (r.key === "onboardingCompleted" && r.value === true && surface === "settings" && !quitting && !source.isDestroyed()) { source.hide(); showFlyout(); }
         if (r.key === "panelSize") sizeFlyout();
         if (r.key === "refreshIntervalSeconds") coordinator.restartTimer();
-        if (r.key === "sideNotchPanelPinned") { notch.expanded = r.value === true || folding.hovered; folding.changed(); }
         nativeTheme.themeSource = prefs.values.appearanceTheme as "system" | "dark" | "light";
         if (r.key === "updateCheckEnabled") { if (r.value) void updater.checkIfDue(); else updater.reset(); }
         syncNotch(); coordinator.publish(); if (r.key.startsWith("showProvider")) await coordinator.refresh(); break;
@@ -263,25 +300,27 @@ async function start(launch: Launch) {
       case "notchSelect":
         if (notch.dragging) break;
         if (!coordinator.snapshot().notchSlots.some(s => slotKey(s) === r.key)) throw new Error("Unknown account");
-        notch.selected = r.key; notch.expanded = true; placeNotch(); break;
+        notch.selected = r.key; notch.expanded = true; placeNotch(); watchNotchHover(); break;
       case "notchHover":
         if (surface !== "notch" || notch.dragging) break;
         folding.hovered = r.hovering;
-        if (r.hovering) { notch.expanded = true; placeNotch(); }
+        if (r.hovering) { notch.expanded = true; placeNotch(); watchNotchHover(); }
+        else stopHoverCheck();
         folding.changed();
         break;
       case "notchContext":
         if (surface !== "notch") throw new Error("Invalid request");
-        Menu.buildFromTemplate([{ label: "Keep open", type: "checkbox", checked: prefs.values.sideNotchPanelPinned === true, click: () => { void handle({ action: "setPreference", key: "sideNotchPanelPinned", value: prefs.values.sideNotchPanelPinned !== true }, source, surface); } }, { label: "Refresh now", click: () => { void coordinator.refresh(); } }, { type: "separator" }, { label: "Hide panel", click: () => { void handle({ action: "setPreference", key: "sideNotchPanelEnabled", value: false }, source, surface); } }]).popup({ window: source });
+        Menu.buildFromTemplate([{ label: "Refresh now", click: () => { void coordinator.refresh(); } }, { type: "separator" }, { label: "Hide panel", click: () => { void handle({ action: "setPreference", key: "sideNotchPanelEnabled", value: false }, source, surface); } }]).popup({ window: source });
         break;
       case "resize":
         if (surface === "notch") { notchHeight = Math.min(2000, Math.ceil(r.height)); placeNotch(); }
         else if (surface === "tray" && r.width !== undefined) { trayWidth = Math.ceil(r.width); source.setSize(trayWidth, 22, false); }
         else if (surface === "flyout") { flyoutHeight = r.height / panelScale(); sizeFlyout(); }
+        else if (surface === "settings") { settingsHeight = r.height; sizeSettings(); }
         break;
       case "shareResize":
         if (surface !== "share" || !shareReady) throw new Error("Invalid request");
-        try { const size = minimumShareSize(cardWidth, r.height, 2); shareHeight = size.height; source.setSize(size.width, size.height, false); }
+        try { const size = minimumShareSize(shareCardWidth, r.height, 2); shareHeight = size.height; source.setSize(size.width, size.height, false); }
         catch (e) { shareFailed?.(new Error(e instanceof Error && e.message === "Card too tall to share" ? e.message : "Could not share snapshot")); }
         break;
       case "dragStart": if (surface === "notch") startDrag(); break;
@@ -324,10 +363,10 @@ async function start(launch: Launch) {
     const source = BrowserWindow.fromWebContents(event.sender), surface = [...windows].find(([, w]) => w === source)?.[0];
     if (!source || !surface) return { ok: false, error: "Unknown window" };
     try { return await handle(parseRequest(raw), source, surface); }
-    catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Connections are disabled in demo mode", "Automatic Grok connection is unavailable"].includes(e.message) ? e.message : "Could not complete action" }; }
+    catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.", ...Object.values(desktopReadErrors), "Could not read Claude account allowance. Try connecting again later.", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.", "Could not save the Claude Desktop connection preferences. Try connecting again.", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Could not disconnect Claude Desktop", "Could not select Grok CLI", "Connections are disabled in demo mode", "Automatic Grok connection is unavailable"].includes(e.message) ? e.message : "Could not complete action" }; }
   });
   const unsubscribe = coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
-  screen.on("display-metrics-changed", () => { placeNotch(); sizeFlyout(); publish(); }); screen.on("display-removed", () => { placeNotch(); sizeFlyout(); publish(); });
+  screen.on("display-metrics-changed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); }); screen.on("display-removed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); });
   powerMonitor.on("resume", () => { void coordinator.refresh(); });
   app.on("window-all-closed", () => {});
   const clockTimer = setInterval(publish, 60000);
@@ -339,7 +378,7 @@ async function start(launch: Launch) {
     if (quitting) return;
     quitting = true;
     unsubscribe();
-    coordinator.stop(); updater.reset(); clearInterval(clockTimer); if (drag) { clearInterval(drag.timer); clearTimeout(drag.timeout); } folding.cancel();
+    coordinator.stop(); updater.reset(); stopHoverCheck(); clearInterval(clockTimer); if (drag) { clearInterval(drag.timer); clearTimeout(drag.timeout); } folding.cancel();
     void connections.stop().finally(() => {
       if (shareDirectory) rmSync(shareDirectory, { recursive: true, force: true }); for (const directory of sharedDirectories) rmSync(directory, { recursive: true, force: true }); tray.destroy();
       quitReady = true; app.quit();

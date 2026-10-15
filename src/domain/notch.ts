@@ -1,7 +1,7 @@
 import { type Quota, type QuotaWindow, window, slotKey, headlineWindow } from "./models";
 import type { Snapshot } from "../shared/state";
 export interface Rect { x: number; y: number; width: number; height: number }
-export const stripWidth = 44, cardWidth = 250;
+export const stripWidth = 36, cardWidth = 220;
 // Coordinates here use Electron's top-left origin. Persistence converts the
 // saved AppKit top-right corner at the native boundary.
 export function notchFrame(anchor: { x: number; y: number }, size: { width: number; height: number }, cardOnRight: boolean, screen: Rect): Rect {

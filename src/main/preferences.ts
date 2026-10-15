@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { providers, type Provider, type ManagedAccount } from "../domain/models";
+import { normalizeProviderOrder, validProviderOrder } from "../domain/provider-order";
 import { atomicJSON } from "./history";
 import { runCommand, type Command } from "./providers/transport";
 import { type Launch } from "./launch";
@@ -9,16 +10,16 @@ export const defaultsDomain = "dev.meterusage.app";
 const suffix = (p: Provider) => p[0].toUpperCase() + p.slice(1);
 export const providerPreference = (p: Provider) => `showProvider${suffix(p)}`;
 export const trayPreference = (p: Provider) => `menuBarProvider${suffix(p)}`;
-export type PreferenceValue = boolean | number | string | ManagedAccount[];
+export type PreferenceValue = boolean | number | string | ManagedAccount[] | Provider[];
 type Kind = "boolean" | "number" | "string" | "data" | "date";
 const kinds: Record<string, Kind> = {
-  refreshIntervalSeconds: "number", appearanceTheme: "string", accentTheme: "string", panelSize: "string", managedAccounts: "data",
-  sideNotchPanelCorner: "string", updateLastCheckDate: "date", updateDismissedVersion: "string", updateAnnouncedVersion: "string",
+  refreshIntervalSeconds: "number", appearanceTheme: "string", accentTheme: "string", panelSize: "string", managedAccounts: "data", providerOrder: "data",
+  sideNotchPanelCorner: "string", updateLastCheckDate: "date", reportNextAllowedAt: "date", updateDismissedVersion: "string", updateAnnouncedVersion: "string",
   desktopCodexConnection: "string", desktopCodexCleanup: "string", desktopClaudeIdentity: "string",
   ...Object.fromEntries(["launchAtLogin", "showHeatmap", "showClaudeHeatmap", "showCodexHeatmap", "quotaAlertsEnabled", "sideNotchPanelEnabled", "sideNotchPanelPinned", "menuBarCompactEnabled", "onboardingCompleted", "updateCheckEnabled", "showPacingBurnRate", "showActivityTelemetry", "showDailyActivityChart", "showSideNotchResetButton", ...providers.flatMap(p => [providerPreference(p), trayPreference(p)])].map(k => [k, "boolean" as const])),
 };
 export const initialPreferences: Record<string, PreferenceValue> = {
-  refreshIntervalSeconds: 60, appearanceTheme: "system", accentTheme: "blue", panelSize: PanelSize.Medium, managedAccounts: [], sideNotchPanelCorner: "",
+  refreshIntervalSeconds: 60, appearanceTheme: "system", accentTheme: "blue", panelSize: PanelSize.Medium, managedAccounts: [], providerOrder: [...providers], sideNotchPanelCorner: "",
   launchAtLogin: false, showHeatmap: true, showClaudeHeatmap: true, showCodexHeatmap: true, quotaAlertsEnabled: false,
   sideNotchPanelEnabled: false, sideNotchPanelPinned: false, menuBarCompactEnabled: true, onboardingCompleted: false,
   updateCheckEnabled: true, showPacingBurnRate: true, showActivityTelemetry: true, showDailyActivityChart: true, showSideNotchResetButton: true,
@@ -30,11 +31,16 @@ const codexTestPreferences: Record<string, PreferenceValue> = {
   launchAtLogin: false, updateCheckEnabled: false, desktopClaudeIdentity: "off",
   ...Object.fromEntries(providers.filter(p => p !== "codex").map(p => [providerPreference(p), false])),
 };
+const claudeTestPreferences: Record<string, PreferenceValue> = {
+  launchAtLogin: false, updateCheckEnabled: false, desktopCodexConnection: "off", desktopCodexCleanup: "",
+  ...Object.fromEntries(providers.filter(p => p !== "claude").map(p => [providerPreference(p), false])),
+};
 export function validAccounts(raw: unknown): raw is ManagedAccount[] {
   return Array.isArray(raw) && raw.every(a => a && typeof a === "object" && typeof a.id === "string" && /^[A-Za-z0-9-]{1,80}$/.test(a.id) && ["codex", "claude"].includes(a.provider) && typeof a.label === "string" && a.label.length <= 100 && !/[\r\n]/.test(a.label) && typeof a.path === "string" && a.path.length <= 4096 && !/[\r\n\0]/.test(a.path) && typeof a.enabled === "boolean") && new Set(raw.map(a => a.id)).size === raw.length;
 }
 function validate(key: string, v: unknown): v is PreferenceValue {
   const kind = kinds[key]; if (!kind) return false;
+  if (key === "providerOrder") return validProviderOrder(v);
   if (kind === "data") return validAccounts(v);
   if (kind === "date" || kind === "number") return typeof v === "number" && Number.isFinite(v);
   if (kind === "boolean") return typeof v === "boolean";
@@ -54,9 +60,10 @@ export class Preferences {
   static async load(launch: Launch, command: Command = runCommand, domain = defaultsDomain): Promise<Preferences> {
     const prefs = new Preferences(launch, command, domain);
     if (launch.codexTest) prefs.values.desktopCodexConnection = "off";
-    if (launch.demo || launch.codexTest) {
+    if (launch.claudeTest) { prefs.values.desktopClaudeIdentity = "off"; prefs.values.showProviderClaude = true; }
+    if (launch.demo || launch.codexTest || launch.claudeTest) {
       const path = join(launch.data, "preferences.json");
-      if (existsSync(path)) { try { const raw = JSON.parse(readFileSync(path, "utf8")); for (const [key, v] of Object.entries(raw)) if (validate(key, v)) prefs.values[key] = v; } catch { /* Keep known defaults for a damaged candidate file. */ } }
+      if (existsSync(path)) { try { const raw = JSON.parse(readFileSync(path, "utf8")); for (const [key, v] of Object.entries(raw)) if (key === "providerOrder") prefs.values[key] = normalizeProviderOrder(v); else if (validate(key, v)) prefs.values[key] = v; } catch { /* Keep known defaults for a damaged candidate file. */ } }
       else if (launch.demo) for (const p of providers) prefs.values[providerPreference(p)] = true;
     } else {
       await Promise.all(Object.keys(kinds).map(async key => {
@@ -69,16 +76,18 @@ export class Preferences {
           else if (kind === "number" && /integer|float|double/i.test(type)) value = Number(raw);
           else if (kind === "date" && /date/i.test(type)) value = Date.parse(raw);
           else if (kind === "string" && /string/i.test(type)) value = raw;
-          if (validate(key, value)) prefs.values[key] = value;
+          if (key === "providerOrder") prefs.values[key] = normalizeProviderOrder(value); else if (validate(key, value)) prefs.values[key] = value;
         } catch { /* An absent or mismatched key retains its registered default. */ }
       }));
     }
     if (launch.codexTest) Object.assign(prefs.values, codexTestPreferences);
+    if (launch.claudeTest) Object.assign(prefs.values, claudeTestPreferences);
     prefs.values.refreshIntervalSeconds = prefs.refreshInterval; return prefs;
   }
   get refreshInterval() { const stored = this.values.refreshIntervalSeconds as number; return Math.max(30, stored > 0 ? stored : 60); }
+  get providerOrder() { return normalizeProviderOrder(this.values.providerOrder); }
   get accounts() { return this.values.managedAccounts as ManagedAccount[]; }
-  enabled(p: Provider) { return (!this.launch.codexTest || p === "codex") && this.values[providerPreference(p)] === true; }
+  enabled(p: Provider) { return (!this.launch.codexTest || p === "codex") && (!this.launch.claudeTest || p === "claude") && this.values[providerPreference(p)] === true; }
   private enqueue(write: () => Promise<void>) {
     const result = this.writes.then(write); this.writes = result.catch(() => {}); return result;
   }
@@ -89,8 +98,9 @@ export class Preferences {
   private async write(key: string, value: unknown) {
     if (!validate(key, value)) throw new Error("Invalid preference");
     if (this.launch.codexTest && key in codexTestPreferences && value !== codexTestPreferences[key]) throw new Error("Preference unavailable in Codex test mode");
+    if (this.launch.claudeTest && key in claudeTestPreferences && value !== claudeTestPreferences[key]) throw new Error("Preference unavailable in Claude test mode");
     if (key === "refreshIntervalSeconds") value = Math.max(30, (value as number) > 0 ? value as number : 60);
-    if (this.launch.demo || this.launch.codexTest) {
+    if (this.launch.demo || this.launch.codexTest || this.launch.claudeTest) {
       const next = { ...this.values, [key]: value as PreferenceValue }; atomicJSON(join(this.launch.data, "preferences.json"), next);
     } else {
       const kind = kinds[key]; const typed = kind === "data" ? ["-data", Buffer.from(JSON.stringify(value)).toString("hex")] : kind === "date" ? ["-date", new Date(value as number).toISOString()] : kind === "boolean" ? ["-bool", value ? "true" : "false"] : kind === "number" ? ["-float", String(value)] : ["-string", value as string];

@@ -3,9 +3,10 @@ import type { ManagedAccount } from "../domain/models";
 import type { PreferenceValue } from "./preferences";
 import type { Surface, SettingsState, ViewState } from "../shared/ipc";
 import { notchEntries } from "../domain/notch";
+import { normalizeProviderOrder, validProviderOrder } from "../domain/provider-order";
 import { providers } from "../domain/models";
 import { editableBooleans, providerKey, trayKey, statusPages, panelScales, type Request } from "../shared/ipc";
-const empty = new Set(["state", "refresh", "settings", "close", "quit", "clearCache", "copyDiagnostics", "copyJSON", "dragStart", "dragEnd", "notchContext", "updateInstall", "updateDismiss"]);
+const empty = new Set(["state", "refresh", "settings", "close", "quit", "clearCache", "copyDiagnostics", "sendReport", "copyJSON", "dragStart", "dragEnd", "notchContext", "updateInstall", "updateDismiss"]);
 const id = (v: unknown) => typeof v === "string" && /^[A-Za-z0-9-]{1,80}$/.test(v);
 const key = (v: unknown) => typeof v === "string" && providers.some(p => v === p || (v.startsWith(p + "#") && id(v.slice(p.length + 1))));
 const string = (v: unknown, max: number) => typeof v === "string" && v.length <= max && !/[\r\n\0]/.test(v);
@@ -20,8 +21,9 @@ export function parseRequest(raw: unknown): Request {
       fields = ["key", "value"];
       valid = typeof r.key === "string" && (boolKeys.has(r.key) ? typeof r.value === "boolean" : r.key === "refreshIntervalSeconds" ? typeof r.value === "number" && [30, 60, 120, 300, 900].includes(r.value) : r.key === "appearanceTheme" ? typeof r.value === "string" && ["system", "light", "dark"].includes(r.value) : r.key === "panelSize" ? typeof r.value === "string" && Object.hasOwn(panelScales, r.value) : r.key === "accentTheme" && typeof r.value === "string" && ["blue", "violet", "teal", "amber", "rose", "graphite"].includes(r.value));
       break;
+    case "providerOrder": fields = ["order"]; valid = validProviderOrder(r.order); break;
     case "accountAdd": fields = ["provider"]; valid = r.provider === "codex" || r.provider === "claude"; break;
-    case "connect": case "disconnect": case "connectionCancel": fields = ["provider"]; valid = typeof r.provider === "string" && ["codex", "claude", "grok"].includes(r.provider); break;
+    case "connect": case "disconnect": case "connectionCancel": case "connectionLocal": fields = ["provider"]; valid = typeof r.provider === "string" && ["codex", "claude", "grok"].includes(r.provider); break;
     case "statusPage": fields = ["provider"]; valid = typeof r.provider === "string" && Object.hasOwn(statusPages, r.provider); break;
     case "accountUpdate": fields = ["id", ...("label" in r ? ["label"] : []), ...("enabled" in r ? ["enabled"] : [])]; valid = id(r.id) && fields.length > 1 && (!("label" in r) || string(r.label, 100)) && (!("enabled" in r) || typeof r.enabled === "boolean"); break;
     case "accountRemove": case "accountPath": fields = ["id"]; valid = id(r.id); break;
@@ -48,6 +50,7 @@ export function shareSnapshot(view: ViewState, displayedKey: string): ViewState 
 
 export function projectSettings(values: Record<string, PreferenceValue>, accounts: ManagedAccount[], home: string, surface?: Surface): SettingsState {
   return {
+    providerOrder: normalizeProviderOrder(values.providerOrder),
     values: Object.fromEntries(["refreshIntervalSeconds", "appearanceTheme", "accentTheme", "panelSize", ...editableBooleans, ...providers.flatMap(p => [providerKey(p), trayKey(p)])].map(k => [k, values[k] as boolean | number | string])),
     accounts: accounts.map(a => {
       const sub = relative(home, a.path), pathLabel = a.path.startsWith("~") ? a.path : !sub.startsWith("..") ? `~/${sub}` : basename(a.path);

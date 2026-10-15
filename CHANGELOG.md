@@ -8,6 +8,106 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Label the Grok integration **Beta** in usage cards, setup and provider settings.
+
+- Restore **Send report** in Electron Diagnostics with sanitized status summaries,
+  duplicate-safe retries and confirmed private support references.
+
+### Fixed
+
+- Limit diagnostic report attempts to once every 10 minutes across app relaunches,
+  with a visible retry time and no transmission if the cooldown cannot be saved.
+
+- Fit Electron Settings to its active page and expanded controls within the display
+  work area. Remove the fixed-height blank space and oversized heatmap readout
+  reservation. Exact daily counts wrap below the grid on hover or focus.
+- Match the compact side-notch rail: provider marks inside 22 px usage rings,
+  small percentages below and a neutral 36 px body. Settings remains in each
+  expanded card footer; remove the duplicate strip gear and its reserved space.
+  Keep detail cards on hover and preserve the fixed top and strip anchor.
+
+- Remove the bright focus outline around the Electron usage and Settings
+  panels. Keep keyboard scrolling and focus indicators on individual controls.
+
+### Changed
+
+- Make buttons smaller throughout the Electron menu, Settings and side-notch
+  cards. Reveal the notch Settings gear on strip hover or keyboard focus.
+- Align heatmap menu labels with a fixed selection-checkmark column.
+
+- Keep Service status at the top of the Electron menu. Switch between provider
+  and account tabs instead of stacking every usage card. Preserve saved order
+  and keyboard navigation.
+- Compact menu and side-notch usage cards with tighter spacing and shorter
+  sparklines. Keep quota, reset actions and heatmaps visible. Extra activity
+  statistics, period comparisons and burn breakdowns expand on demand; shared
+  cards retain their complete data.
+
+- Organize Electron Settings into a compact category sidebar with provider
+  summaries and setup details under Configure. Keep existing settings, account
+  controls and explicit connection actions. Show the current source, collection
+  state and reading availability separately.
+- Place service health after usage cards. Use exact grouped heatmap totals on
+  hover and focus, with one Tab entry per heatmap and arrow-key navigation.
+  Keep control focus visible without highlighting the panel edge.
+
+- Make Electron the sole active feature-development target in contributor and
+  version guidance. Freeze the legacy Swift app for new features and record
+  staged retirement in ADR 0024. Keep the published Swift download, rollback
+  source and Electron-required Swift helpers until the applicable checks pass.
+
+- Split edition setup into Swift and Electron guides with root download routing
+  and compatibility links. Document source/build/release/installation boundaries,
+  candidate parity gaps and isolated QA. Record a proposed same-repository
+  strategy without changing identity, versions, layout, CI or release state.
+  Explain the updater changes required before beta or edition-specific assets.
+
+- Keep summary token metrics compact with totals such as `12.5K`, `1.2M` and
+  `2.4B`. Heatmap hover, focus, tooltips and accessible labels show exact counts.
+
+- Unify provider heatmaps with compact headings, a shared intensity legend and
+  exact hover or keyboard readouts, tooltips and accessible labels.
+  Unreported account days use quiet solid
+  outlines, distinct from reported zeroes. Keep each source's time range and
+  token or session units.
+
+- Report fixed Claude Desktop Connect errors for Keychain access, account
+  configuration, active-organization cookie, cache decryption, missing or ambiguous
+  current token, allowance request, identity recheck and preference save in the
+  existing error banner through the renderer error filter. Messages contain no
+  account identifiers or token data. Source and synthetic tests only; native and
+  live acceptance remain open.
+
+- Narrow the Electron side notch strip from 44 to 36 px and its hover card from
+  250 to 220 px. Keep the share capture at 250 px and preserve whole-pixel
+  typography and the anchored strip edge.
+
+### Added
+
+- Choose a usage source during onboarding or in Settings: Codex browser sign-in
+  or CLI, Claude Desktop or Claude Code CLI, and Grok CLI. Apply CLI selection
+  explicitly after disconnecting only the MeterUsage account connection.
+
+- Show provider-reported account token activity in connected Codex main, notch
+  and shared cards through the existing managed ChatGPT helper. Daily dates and
+  exact counts remain separate from local usage. Missing history and unreported
+  days stay unavailable; reported zero remains zero. Native and live coverage
+  acceptance remain open.
+
+- Reorder provider groups in Electron Settings with drag handles, arrow keys or
+  move buttons. The saved order applies to usage cards, menu bar and side notch;
+  additional accounts stay with their provider. Failed saves keep the saved order.
+
+- Add a separate Claude cloud test profile for the existing candidate UI.
+  It starts without consent, reads only connected account allowance, and keeps
+  preferences and Electron state separate from installed-app and Codex profiles.
+  Native Keychain, Desktop compatibility and live allowance remain unverified.
+- Show **Use reset** beside eligible Codex menu credits for the connected
+  account, including the isolated Codex test profile. Native confirmation
+  defaults to Cancel. Redemption rechecks availability and the same connection
+  profile before using the official helper, then refreshes quota. Synthetic
+  tests consume no real credits; native and live redemption proof remain open.
+
 - Add Small, Medium and Large panel sizes in candidate Settings. The choice
   persists and applies to main-panel and Settings text and controls. Main-panel
   width scales with the choice; its height fits content up to the display edge.
@@ -33,6 +133,33 @@ follows [Semantic Versioning](https://semver.org/).
   installed-app replacement is included.
 
 ### Changed
+
+- Compact candidate Settings onboarding and repeated rows. Explain demo account
+  restrictions before disabled connections, align provider controls, and stack
+  labelled controls on narrow windows. Keep action failures visible in Settings
+  and wrap long account, quota and status text.
+- Compact Service status and the three-metric local activity summary. Separate
+  recorded activity from account/local totals, retain dated quota warnings, and
+  keep controls out of static shared cards. Live heatmaps retain their exact
+  hover/focus readout; exports retain data without the unused readout space.
+- Use the existing brighter dark secondary tone and 100 ms pointer color
+  feedback across candidate Usage and Settings. Press and keyboard focus stay
+  immediate. Existing sizes, notch geometry and data/action behavior remain.
+  Renderer fixtures do not establish browser or native visual acceptance.
+
+- Brighten secondary labels in the candidate notch card, separate telemetry
+  with a border and size-specific padding, and add 100 ms color feedback on
+  enabled control hover with a fine pointer. Press and keyboard focus stay
+  immediate; reduced motion disables transitions. Card opening, provider
+  switching, the 450 ms close delay and integer text sizes are unchanged.
+
+- Require an explicit consent callback for Claude Desktop connection. Omitting
+  it denies access before the Keychain helper or allowance request runs.
+- Show Codex public service status in the isolated live Codex test profile.
+  The Service status panel, notch card, tray tooltip and copied diagnostics mark
+  retained readings as stale or last known with their age and refresh failure. Public-feed errors use
+  service-status wording while retaining their retry behavior. Requests use no
+  account credentials and add no other provider source.
 
 - Move candidate onboarding into Settings. First-time setup reuses account
   connections and allows Done without signing in. Done saves completion before
@@ -65,6 +192,30 @@ follows [Semantic Versioning](https://semver.org/).
   update checks. Provider files and credentials stay in the main process.
 
 ### Fixed
+
+- Keep Electron side-notch details open on hover and close them after the
+  existing 450 ms exit delay. Remove Pin detail card and Keep open controls;
+  legacy pin data no longer retains a card. The strip always shows usage rings
+  and percentages, with no design selector or dots option. Disable/hide clears
+  expanded state so re-enabling starts with the 44 px strip.
+- Replace side-notch CSS zoom with integer pixel text, controls and spacing.
+  Small uses an 11 px body and 10 px secondary text. Small, Medium and Large
+  keep the strip and card widths fixed. Flyout, Settings and shared cards keep
+  their existing rendering scales. Browser and native acceptance remain separate.
+
+- Match Codex Use reset buttons to compact footer controls in the Electron
+  candidate. Keep eligibility, account labels and Cancel-default confirmation.
+- Show exact heatmap counts and dates immediately on hover or keyboard focus.
+  Weekly and cumulative views name their scope. Count-only data does not claim
+  measured token totals. The readout reserves space inside the scrolling card.
+- Recover missed side-notch pointer exits through a cursor check limited to an
+  open interaction, then use the existing 450 ms fold delay. Keep the provider
+  strip anchor, drag and native share/reset guards.
+
+- Abort confirmed Codex resets when their source is replaced or the coordinator
+  stops. Replacement during the fresh eligibility check now prevents consume
+  dispatch, including after Clear local scan cache. Cancellation cannot undo a
+  request already sent to the provider.
 
 - Handle opening an already-running candidate without an uncaught startup
   popup. Validate Electron's singleton metadata before requesting its lock,

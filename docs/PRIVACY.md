@@ -2,7 +2,8 @@
 
 MeterUsage reads quota and usage from existing local provider stores, provider
 CLIs and aggregate endpoints. It has no telemetry service, analytics or
-crash-upload endpoint. The Electron candidate adds opt-in account connections;
+automatic crash-upload endpoint. Electron Diagnostics has an explicit optional
+**Send report** action described below. The Electron candidate adds opt-in account connections;
 Codex sign-in occurs in the provider browser page, not a MeterUsage password form. It does not ask for credentials or send
 prompts, code or tool payloads to a provider.
 
@@ -54,6 +55,14 @@ The candidate offers connection buttons in setup and Settings. No terminal,
 folder picker or credential copying is part of the primary connection flow.
 Existing local account directories remain an advanced option.
 
+Setup also offers the existing CLI sources through an explicit **Use CLI**
+action. Selecting an option alone performs no account access. Applying CLI
+selection disconnects only MeterUsage-owned account state and waits for its
+logout cleanup before enabling local collection. Cleanup failure prevents the
+switch. Ordinary Disconnect never silently falls back to local data. The
+selector adds no credential store, provider endpoint or authentication flow;
+CLI sources retain the input and coverage limits above.
+
 Codex browser sign-in uses the official app-server helper discovered in an
 existing Codex app, with existing command installations as a compatibility path.
 MeterUsage creates a separate generated profile under its own support directory
@@ -61,17 +70,32 @@ and checks effective `cli_auth_credentials_store=keyring` before login or
 polling. Any other mode is refused. It never opens the user's Codex `auth.json`.
 Login opens only an approved HTTPS OpenAI host and uses the helper's local
 callback. Requests are initialization, effective config read, account login,
-rate-limit read and own-profile logout. No model session or prompt is started.
+rate-limit read, account daily-token read, explicitly confirmed reset redemption and own-profile logout. No model session or prompt is started.
 The provider helper handles tokens in OS storage; no plaintext fallback is
 permitted. Cancelling login attempts own-profile logout and reports cleanup
 failure. Disconnect does not sign out the user's Codex desktop session.
 Unfinished sign-in profiles are retained only for cleanup and cannot enable
 collection. Cancellation and disconnect disable collection before logout.
 GUI startup and explicit sign-in retry recover owned-profile cleanup before
-starting another login. Normal quit waits up to five seconds. Headless reports
+starting another login. Normal quit gives authentication helpers up to five
+seconds, then cancels them. Pending CLI-selection preference saves and rollback
+must settle before the app exits. Headless reports
 do not sign in or perform cleanup logout.
 
-Claude requires an explicit explanation and consent before access. The bundled
+Connected Codex daily history uses `account/usage/read` without `threadId`
+through that same managed ChatGPT profile and keyring guard. The main process
+projects only valid unique date labels, safe nonnegative integer token counts
+and a capture timestamp before publication. Summary fields, unknown fields and
+provider error text are discarded. No raw response, account identifier or
+credential reaches the renderer or a new durable cache. Account token history
+stays in memory, clears after failed reads, replacement or disconnect, and never
+enters local rollups or durable daily history. Captured-profile and cancellation
+checks reject late results. Missing history and unreported dates remain
+unavailable. The provider contract does not establish complete product, device
+or cloud coverage. See [ADR 0022](adr/0022-codex-account-token-history.md).
+
+Claude requires an explicit explanation and consent before access. A connection
+call without a consent callback denies access. The bundled
 native helper reads only the `Claude Safe Storage` / `Claude Key` item. Background
 reads disable interaction. Its stdout goes only to the main-process bounded
 transport; do not run the helper interactively or record its output. The main
@@ -191,9 +215,21 @@ untouched.
 The separate `--codex-test-profile` mode uses the real UI and opt-in Codex
 connection with isolated JSON preferences, app data and Electron state. It
 retains the OS home for Keychain and helper discovery. It excludes all other
-provider sources, local activity, status feeds and reset redemption, and blocks
-updates, login-item changes and notifications. Its Codex credential boundary
-is the same keyring-only boundary described above.
+provider sources, local activity and Claude status. Its only status request is
+an unauthenticated GET to the public OpenAI status feed above. It blocks updates,
+login-item changes and notifications. Explicitly confirmed Codex reset redemption
+uses the same captured keyring-only connection profile and a fresh eligibility
+check. [ADR 0017](adr/0017-connected-codex-menu-reset.md) supersedes only ADR 0012's
+reset prohibition. Its Codex credential boundary is the same keyring-only boundary
+described above.
+
+`--claude-test-profile` uses a separate profile marker and the existing Claude
+consent and allowance flow. It starts without consent and collects only Claude
+account allowance. It cannot use a Codex or demo profile. JSON preferences and
+Electron state remain isolated; OS home is retained for the read-only Desktop
+reader. Codex access and cleanup, other providers, local activity, status feeds
+and reset redemption are blocked. Candidate update, login-item and notification
+guards apply. It adds no credential source, refresh flow or provider request.
 
 ## Installation and enforcement
 
@@ -212,3 +248,23 @@ provider authentication, live payload correctness or native UI behavior.
 Cost figures are local estimates from the pricing table. A recorded zero is a
 value; missing tokens or cost stay unknown. Provider dashboards remain the
 billing source of record.
+
+## Optional diagnostic reports
+
+Only clicking **Send report** in live Settings submits a generated diagnostic
+summary to the existing HTTPS support relay, which creates a private Linear
+issue. There is no automatic upload or login requirement. The summary includes
+the app version, mode, refresh interval/age, enabled provider names and bounded
+status codes for quota, activity, usage, service status, plan and history/cache
+failures. It excludes raw logs and errors, personal paths, account labels and
+identifiers, credentials, usage contents, prompts and transcripts.
+
+Main generates the summary; renderer requests cannot supply report text, IDs or
+URLs. Reports have a random UUID for duplicate-safe retries. Pending summaries
+and confirmed references remain in memory for the app session. A next-allowed
+submission time is saved locally to enforce a 10-minute cooldown across app
+relaunches. No report content or receipt is persisted. Requests omit
+cookies and stored credentials, reject redirects, and enforce byte limits and a
+timeout. The relay sees the network source IP for rate limiting; Cloudflare and
+Linear process the submission. MeterUsage does not attach provider credentials.
+See [REPORTING.md](REPORTING.md) for the delivery contract and proof limits.

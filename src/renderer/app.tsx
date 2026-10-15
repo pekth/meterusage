@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { type Bridge, type ViewState, type Request, type Surface, PanelSize, panelScales, providerKey, trayKey, statusPages } from "../shared/ipc";
-import { type Slot, type Provider, type QuotaWindow, type Telemetry, type Daily, type Loaded, type Session, type UsageWindow, clamp, providers, providerNames, primary, slotKey, slotName, headlineWindow, lastBurn, totalTokens, localDay, shiftDay, tokens, resetCreditAvailable, severityNames } from "../domain/models";
+import { normalizeProviderOrder } from "../domain/provider-order";
+import { ProviderOrder } from "./provider-order";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { type Bridge, type ViewState, type Request, type Surface, type ConnectionState, PanelSize, panelScales, providerKey, trayKey, statusPages } from "../shared/ipc";
+import { type AccountActivity, type Slot, type Provider, type QuotaWindow, type Telemetry, type Daily, type Loaded, type Session, type UsageWindow, clamp, providerNames, primary, slotKey, slotName, headlineWindow, lastBurn, totalTokens, localDay, shiftDay, tokens, resetCreditAvailable, severityNames } from "../domain/models";
 import { pace, burnActive, etaSeconds, formatETA, paceText } from "../domain/pacing";
 import { attributionSessions, stripTotals, failoverNudge, heatmapCells, type HeatmapMode } from "../domain/overview";
 import { effectiveWindows, notchEntries } from "../domain/notch";
@@ -15,18 +17,22 @@ const extract = <T,>(s?: Loaded<T>) => s?.status === "value" ? s.value : undefin
 const reason = (s?: Loaded<unknown>) => s?.status === "missing" ? s.reason : "Not checked yet";
 const headroom = (used: number) => used >= 95 ? "var(--alert)" : used >= 80 ? "var(--warn)" : "var(--good)";
 function Mark({ slot, state }: { slot: Slot; state: ViewState }) {
+  const id = useId();
   const status = extract(state.snapshot.statuses[slot.provider])?.severity;
   const tint = status === undefined || status === "operational" ? colours[slot.provider] : status === "degraded" ? "var(--warn)" : status === "unknown" ? "var(--muted)" : "var(--alert)";
   if (logos[slot.provider]) return <span aria-hidden="true" className="mark" style={{ background: tint, maskImage: `url(./${logos[slot.provider]})`, WebkitMaskImage: `url(./${logos[slot.provider]})` }} />;
-  if (slot.provider === "claude") return <svg aria-hidden="true" className="mark" viewBox="0 0 1 1" style={{ color: tint }}><defs><mask id={`eyes-${slotKey(slot)}`}><rect width="1" height="1" fill="white" /><rect x=".27" y=".28" width=".15" height=".20" fill="black" /><rect x=".58" y=".28" width=".15" height=".20" fill="black" /></mask></defs><g fill="currentColor" mask={`url(#eyes-${slotKey(slot)})`}><rect x=".08" y=".10" width=".84" height=".60" rx=".16" />{[.16, .35, .54, .73].map((x, i) => <rect key={x} x={x} y=".66" width=".11" height={i === 0 || i === 3 ? .22 : .24} />)}</g></svg>;
+  if (slot.provider === "claude") return <svg aria-hidden="true" className="mark" viewBox="0 0 1 1" style={{ color: tint }}><defs><mask id={`eyes-${id}`}><rect width="1" height="1" fill="white" /><rect x=".27" y=".28" width=".15" height=".20" fill="black" /><rect x=".58" y=".28" width=".15" height=".20" fill="black" /></mask></defs><g fill="currentColor" mask={`url(#eyes-${id})`}><rect x=".08" y=".10" width=".84" height=".60" rx=".16" />{[.16, .35, .54, .73].map((x, i) => <rect key={x} x={x} y=".66" width=".11" height={i === 0 || i === 3 ? .22 : .24} />)}</g></svg>;
   return <span aria-hidden="true" className="mark" style={{ background: tint, maskImage: `url(./${slot.provider}-symbol.png)`, WebkitMaskImage: `url(./${slot.provider}-symbol.png)` }} />;
 }
 function ServiceStatuses({ state, action }: { state: ViewState; action: (r: Request) => Promise<void> }) {
-  const rows = providers.flatMap(provider => { const status = extract(state.snapshot.statuses[provider]); return status ? [status] : []; });
-  return <section className="provider-card service-status" aria-label="Service status"><h2>Service status</h2>{rows.length ? rows.map(status => {
-    const provider = status.provider, page = Object.hasOwn(statusPages, provider) ? provider as keyof typeof statusPages : undefined;
-    const badge = <span className="badge">{severityNames[status.severity]}</span>;
-    return <div className="row status" key={provider}><div className="provider-heading"><Mark slot={primary(provider)} state={state} /><div><strong>{providerNames[provider]}</strong><p className="secondary">{status.description}</p></div></div><div>{page ? <button aria-label={`Open ${providerNames[provider]} status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{badge}</button> : badge}<p className="secondary">Checked {formatETA((state.snapshot.clock - status.checkedAt) / 1000, true)} ago</p></div></div>;
+  const rows = normalizeProviderOrder(state.settings.providerOrder).flatMap(provider => { const status = state.snapshot.statuses[provider]; return status ? [{ provider, status }] : []; });
+  return <section className="provider-card service-status" aria-label="Service status"><h2>Service status</h2>{rows.length ? rows.map(({ provider, status: loaded }) => {
+    if (loaded.status === "idle") return <div className="row status" key={provider}><div className="provider-heading"><Mark slot={primary(provider)} state={state} /><strong>{providerNames[provider]}</strong></div><p className="secondary">{state.snapshot.refreshing ? "Checking…" : "Not checked yet"}</p></div>;
+    if (loaded.status === "missing") return <div className="row status" key={provider}><div className="provider-heading"><Mark slot={primary(provider)} state={state} /><strong>{providerNames[provider]}</strong></div><p className="secondary">{state.snapshot.refreshing ? "Checking…" : loaded.reason}</p></div>;
+    const status = loaded.value;
+    const page = Object.hasOwn(statusPages, provider) ? provider as keyof typeof statusPages : undefined;
+    const badge = <span className="badge" title={status.description}>{severityNames[status.severity]}</span>;
+    return <div className="row status" key={provider}><div className="provider-heading"><Mark slot={primary(provider)} state={state} /><div><strong>{providerNames[provider]}</strong>{(status.severity !== "operational" || status.stale) && <p className="secondary">{status.description}</p>}</div></div><div className="service-reading">{page ? <button aria-label={`Open ${providerNames[provider]} status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{badge}</button> : badge}<p className="secondary">{status.stale ? "Last known" : "Checked"} {formatETA((state.snapshot.clock - status.checkedAt) / 1000, true)} ago</p>{status.refreshError && <p className="secondary">{status.refreshError}</p>}</div></div>;
   }) : <p className="secondary">Not checked yet</p>}</section>;
 }
 export function Meter({ w, now, activityAt, pacing }: { w: QuotaWindow; now: number; activityAt?: number; pacing: boolean }) {
@@ -34,21 +40,74 @@ export function Meter({ w, now, activityAt, pacing }: { w: QuotaWindow; now: num
   const text = raw ? paceText(raw) : w.pacingBaseline ? "Collecting usage after reset" : undefined;
   return <div className="quota-window"><div className="row"><span>{w.label}</span><strong style={{ color: headroom(w.usedPercent) }}>{Math.round(w.usedPercent)}% used</strong></div><div className="meter" role="progressbar" aria-label={`${w.label} quota used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={w.usedPercent}><span style={{ width: `${w.usedPercent}%`, background: headroom(w.usedPercent) }} /></div><div className="row secondary"><span>{pacing && text}</span><span>{eta !== undefined ? formatETA(eta) : w.resetsAt !== undefined ? `Resets ${new Date(w.resetsAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "Reset not reported"}</span></div></div>;
 }
-function TelemetryView({ t, stats, chart, heatmap, daily, now }: { t: Telemetry; stats: boolean; chart: boolean; heatmap: boolean; daily?: Daily[]; now: number }) {
+export function ActivityHeatmap({ title, scope, period, label, fullHistory, unavailable = false, controls, children }: { title: string; scope: string; period?: string; label: string; fullHistory?: boolean; unavailable?: boolean; controls?: ReactNode; children?: ReactNode }) {
+  const grid = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState<string>(), [focused, setFocused] = useState<string>();
+  const readout = hovered ?? focused;
+  useEffect(() => {
+    const node = grid.current; if (!node) return;
+    const cells = Array.from(node.querySelectorAll<HTMLElement>(".heatmap-cell[tabindex]"));
+    const selected = cells.find(cell => cell === node.ownerDocument.activeElement) ?? cells.find(cell => cell.tabIndex === 0) ?? cells[0];
+    cells.forEach(cell => { cell.tabIndex = cell === selected ? 0 : -1; });
+    setFocused(cells.find(cell => cell === node.ownerDocument.activeElement)?.dataset.readout);
+    setHovered(node.querySelector<HTMLElement>(".heatmap-cell[tabindex]:hover")?.dataset.readout);
+  }, [children]);
+  return <section className="activity-heatmap"><div className="heatmap-heading"><h3>{title}</h3>{controls}</div><p className="heatmap-caption secondary">{scope}{period && <> · {period}</>}</p>{children ? <><div ref={grid} className={`heatmap${fullHistory ? " full-history" : ""}`} aria-label={label} onPointerOver={e => setHovered((e.target as HTMLElement).closest<HTMLElement>(".heatmap-cell[tabindex]")?.dataset.readout)} onPointerLeave={() => setHovered(undefined)} onBlur={() => setFocused(undefined)} onFocus={e => {
+    const target = e.target as HTMLElement;
+    if (!target.classList.contains("heatmap-cell")) return;
+    setFocused(target.dataset.readout);
+    e.currentTarget.querySelectorAll<HTMLElement>(".heatmap-cell").forEach(cell => { cell.tabIndex = cell === target ? 0 : -1; });
+  }} onKeyDown={e => {
+    const cells = Array.from(e.currentTarget.children).filter((node): node is HTMLElement => node.tagName === "SPAN"), target = e.target as HTMLElement;
+    const index = cells.indexOf(target); if (index < 0) return;
+    const step = e.key === "ArrowUp" ? fullHistory ? -1 : -15 : e.key === "ArrowDown" ? fullHistory ? 1 : 15 : e.key === "ArrowLeft" ? fullHistory ? -7 : -1 : e.key === "ArrowRight" ? fullHistory ? 7 : 1 : 0;
+    if (!step && e.key !== "Home" && e.key !== "End") return;
+    e.preventDefault();
+    let next = e.key === "Home" ? 0 : e.key === "End" ? cells.length - 1 : index + step;
+    const direction = e.key === "End" ? -1 : step || 1;
+    while (next >= 0 && next < cells.length && !cells[next].classList.contains("heatmap-cell")) next += direction;
+    if (next >= 0 && next < cells.length) cells[next].focus();
+  }}>{children}</div><div className="heatmap-readout" aria-hidden="true">{readout ? <span>{readout}</span> : <div className="heatmap-legend secondary"><span className="heatmap-scale" aria-label="Usage intensity from less to more">Less{[0, .3, .65, 1].map(level => <i key={level} aria-hidden="true" style={{ background: level ? "var(--accent)" : "var(--well)", opacity: level || 1 }} />)}More</span>{unavailable && <span className="heatmap-missing"><i aria-hidden="true" />Unavailable</span>}</div>}</div></> : <p className="heatmap-empty secondary">Account history unavailable</p>}</section>;
+}
+function HeatmapCell({ label, readout, amount, peak, first = false, staticExport = false }: { label: string; readout: string; amount?: number; peak: number; first?: boolean; staticExport?: boolean }) {
+  return <span className={`heatmap-cell${amount === undefined ? " unavailable-day" : ""}`} tabIndex={staticExport ? undefined : first ? 0 : -1} role="img" aria-label={label} title={label} data-readout={readout}><span aria-hidden="true" style={{ background: amount === undefined ? "transparent" : amount > 0 ? "var(--accent)" : "var(--well)", opacity: amount ? .3 + .7 * amount / peak : 1 }} /></span>;
+}
+function TelemetryView({ provider, t, stats, chart, heatmap, daily, now, staticExport }: { provider: Provider; t: Telemetry; stats: boolean; chart: boolean; heatmap: boolean; daily?: Daily[]; now: number; staticExport: boolean }) {
   const [mode, setMode] = useState<HeatmapMode>("daily");
   const cells = daily ? heatmapCells(daily, now, mode) : t.dailyHistory;
   const measured = t.lifetimeTokens !== undefined;
   const amount = (d: { tokens: number; sessionCount: number }) => measured ? d.tokens : d.sessionCount;
-  const metrics = [["Today tokens", t.todayTokens], ["Last 30 days", t.last30DaysTokens], ["Lifetime tokens", t.lifetimeTokens], ["Peak day", t.peakDailyTokens], ["Current streak", `${t.currentStreakDays} days`], ["Longest streak", `${t.longestStreakDays} days`], ["Sessions", t.totalSessions], ["Messages", t.totalMessages], ["Longest chat", t.longestChatSeconds === undefined ? undefined : formatETA(t.longestChatSeconds, true)]] as const;
+  const metrics = [["Today tokens", t.todayTokens], ["Last 30 days", t.last30DaysTokens], ["Lifetime tokens", t.lifetimeTokens], ["Peak day", t.peakDailyTokens], ["Current streak", `${t.currentStreakDays} days`], ["Longest streak", `${t.longestStreakDays} days`], ["Recorded sessions", t.totalSessions], ["Recorded messages", t.totalMessages], ["Longest chat", t.longestChatSeconds === undefined ? undefined : formatETA(t.longestChatSeconds, true)]] as const;
+  const availableMetrics = metrics.filter(([, v]) => v !== undefined);
+  const metricRows = (rows: typeof availableMetrics) => <dl className="metrics">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{typeof v === "number" ? n(v) : v}</dd></div>)}</dl>;
   const peak = Math.max(1, ...t.dailyHistory.map(amount)), cellPeak = Math.max(1, ...cells.flatMap(d => d ? [amount(d)] : []));
-  return <section className="telemetry">{stats && <dl className="metrics">{metrics.filter(([, v]) => v !== undefined).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{typeof v === "number" ? n(v) : v}</dd></div>)}</dl>}{chart && <svg className="sparkline" role="img" aria-label={`${measured ? "Token" : "Session"} usage in the last 30 days`} viewBox="0 0 300 50" preserveAspectRatio="none"><polyline points={t.dailyHistory.map((d, i) => `${i * 300 / 29},${48 - amount(d) / peak * 45}`).join(" ")} fill="none" stroke="var(--accent)" strokeWidth="2" /></svg>}{heatmap && daily && <label className="row secondary">26 weeks<select aria-label="Heatmap view" value={mode} onChange={e => setMode(e.target.value as HeatmapMode)}>{["daily", "weekly", "cumulative"].map(m => <option key={m}>{m}</option>)}</select></label>}{heatmap && <div className={`heatmap ${daily ? "full-history" : ""}`} aria-label={daily ? "Usage over 26 weeks" : "Daily usage"}>{cells.map((d, i) => d ? <span key={d.day} title={`${new Date(d.day).toLocaleDateString()}: ${n(d.tokens)} tokens, ${d.sessionCount} sessions`} style={{ background: amount(d) > 0 ? "var(--accent)" : "var(--well)", opacity: amount(d) > 0 ? .3 + .7 * amount(d) / cellPeak : 1 }} /> : <span key={`future-${i}`} />)}</div>}</section>;
+  const exact = new Intl.NumberFormat(), date = (day: number) => new Date(day).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", ...(provider === "openRouter" ? { timeZone: "UTC" } : {}) });
+  return <section className="telemetry">{stats && <><h3>Recorded activity</h3>{metricRows(staticExport ? availableMetrics : availableMetrics.slice(0, 2))}{!staticExport && availableMetrics.length > 2 && <details className="activity-details"><summary>More activity</summary>{metricRows(availableMetrics.slice(2))}</details>}</>}{chart && <svg className="sparkline" role="img" aria-label={`${measured ? "Token" : "Session"} usage in the last 30 days`} viewBox="0 0 300 50" preserveAspectRatio="none"><polyline points={t.dailyHistory.map((d, i) => `${i * 300 / 29},${48 - amount(d) / peak * 45}`).join(" ")} fill="none" stroke="var(--accent)" strokeWidth="2" /></svg>}{heatmap && <ActivityHeatmap title={measured ? "Token activity" : "Session activity"} scope={provider === "openRouter" ? "Provider account" : "This Mac"} period={daily ? "26 weeks" : "30 days"} label={daily ? "Usage over 26 weeks" : "Daily usage"} fullHistory={!!daily} controls={daily && !staticExport && <select aria-label="Heatmap view" value={mode} onChange={e => setMode(e.target.value as HeatmapMode)}>{["daily", "weekly", "cumulative"].map(m => <option key={m} value={m}>{m[0].toUpperCase() + m.slice(1)}</option>)}</select>}>{cells.map((d, i) => {
+    if (!d) return <span key={`future-${i}`} />;
+    const scope = !daily || mode === "daily" ? date(d.day) : mode === "weekly" ? `Week of ${date(shiftDay(d.day, -new Date(d.day).getDay()))}` : `Through ${date(d.day)}`;
+    const label = `${scope}: ${measured ? `${exact.format(d.tokens)} tokens, ${exact.format(d.sessionCount)} sessions` : `${exact.format(d.sessionCount)} sessions, token totals unavailable`}`;
+    const readout = `${scope} · ${measured ? `${exact.format(d.tokens)} tokens · ${exact.format(d.sessionCount)} sessions` : `${exact.format(d.sessionCount)} sessions · token totals unavailable`}`;
+    return <HeatmapCell key={d.day} first={i === 0} staticExport={staticExport} label={label} readout={readout} amount={amount(d)} peak={cellPeak} />;
+  })}</ActivityHeatmap>}</section>;
 }
-export function ProviderCard({ slot, state, action, detail = false }: { slot: Slot; state: ViewState; action: (r: Request) => Promise<void>; detail?: boolean }) {
-  const s = state.snapshot, key = slotKey(slot), fresh = extract(s.quotas[key]), q = fresh ?? s.archived[key], activity = extract(s.activities[key]), usage = extract(s.usages[key]), plan = extract(s.plans[key]) ?? q?.planType;
+function AccountHeatmap({ reading, staticExport }: { reading: Loaded<AccountActivity>; staticExport: boolean }) {
+  const buckets = extract(reading)?.dailyUsageBuckets;
+  if (!buckets?.length) return <section className="telemetry"><ActivityHeatmap title="Account token activity" scope="Provider account" label="Account daily tokens" /></section>;
+  const sorted = [...buckets].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const end = Date.parse(sorted[sorted.length - 1].startDate), byDate = new Map(sorted.map(b => [b.startDate, b.tokens]));
+  const cells = Array.from({ length: 182 }, (_, i) => {
+    const date = new Date(end - (181 - i) * 86400000).toISOString().slice(0, 10);
+    return { date, tokens: byDate.get(date) };
+  });
+  const peak = Math.max(1, ...cells.map(c => c.tokens ?? 0));
+  return <section className="telemetry"><ActivityHeatmap title="Account token activity" scope="Provider account" period={`26 weeks through ${sorted[sorted.length - 1].startDate}`} label="Account daily tokens over 26 weeks" fullHistory unavailable={cells.some(c => c.tokens === undefined)}>{cells.map((c, i) => <HeatmapCell key={c.date} first={i === 0} staticExport={staticExport} label={`${c.date}: ${c.tokens === undefined ? "Unavailable" : `${new Intl.NumberFormat("en").format(c.tokens)} tokens`}`} readout={`${new Date(c.date).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })} · ${c.tokens === undefined ? "Unavailable" : `${new Intl.NumberFormat("en").format(c.tokens)} tokens`}`} amount={c.tokens} peak={peak} />)}</ActivityHeatmap></section>;
+}
+export function ProviderCard({ slot, state, action, detail = false, staticExport = false }: { slot: Slot; state: ViewState; action: (r: Request) => Promise<void>; detail?: boolean; staticExport?: boolean }) {
+  const s = state.snapshot, key = slotKey(slot), fresh = extract(s.quotas[key]), q = fresh ?? s.archived[key], activity = extract(s.activities[key]), usage = extract(s.usages[key]), plan = extract(s.plans[key]) ?? q?.planType, accountActivity = s.accountActivities?.[key];
   const t = activity?.telemetry ?? usage?.telemetry, at = activity && lastBurn(activity.sessions), status = extract(s.statuses[slot.provider]);
   const activeWindow = detail && q && activity ? headlineWindow(slot.provider, effectiveWindows(q)) : undefined;
   const heatmap = s.appearance.heatmap && (slot.provider !== "claude" || s.appearance.claudeHeatmap) && (slot.provider !== "codex" || s.appearance.codexHeatmap);
-  return <article className={`provider-card ${detail ? "detail-card" : ""}`} aria-label={slotName(slot)}><header className="row"><div className="provider-heading"><Mark slot={slot} state={state} /><h2>{slotName(slot)}</h2></div>{plan && <span className="badge">{plan}</span>}</header>{status && <p className="secondary status">{status.severity === "operational" ? "Operational" : status.description}</p>}{q ? <>{!fresh && <p className="stale">Last known · {new Date(q.capturedAt).toLocaleString()}<br />{reason(s.quotas[key])}</p>}{q.groups.length ? q.groups.map(g => <section key={g.id}><h3>{g.title}</h3>{g.windows.map(w => <Meter key={w.label} w={w} now={s.clock} activityAt={at} pacing={s.appearance.pacing} />)}</section>) : (detail ? effectiveWindows(q) : q.windows).map(w => <Meter key={w.label} w={w} now={s.clock} activityAt={at} pacing={s.appearance.pacing} />)}{q.credits && <div className="credit well"><div className="row"><span>{q.credits.unit === "dollars" ? "Balance" : "Credits"}</span><strong>{q.credits.unlimited ? "Unlimited" : q.credits.unit === "dollars" ? money(q.credits.balance) : n(q.credits.balance)}</strong></div>{q.credits.dollarBalance !== undefined && <p className="secondary">≈ {money(q.credits.dollarBalance)} equivalent</p>}{q.credits.usedDollars !== undefined && <p className="secondary">{money(q.credits.usedDollars)} used{q.credits.limitDollars === undefined ? "" : ` of ${money(q.credits.limitDollars)}`}</p>}</div>}{q.resetCreditCount !== undefined && <section className="reset-credits"><h3>{q.resetCreditCount} earned reset credits</h3>{q.resetCredits.map(c => <div key={c.id} className="reset-credit"><div className="row"><span>{c.title}</span>{fresh?.canConsumeReset === true && (!detail || s.appearance.resetButton) && resetCreditAvailable(c, s.clock) && <button disabled={!fresh} onClick={() => void action({ action: "reset", key, creditID: c.id })}>Use reset…</button>}</div><p className="secondary">{c.status ?? "Status not reported"}{c.expiresAt !== undefined && c.expiresAt <= s.clock ? " · expired" : ""} · {c.expiresAt === undefined ? "Expiry not reported" : `Expires ${new Date(c.expiresAt).toLocaleDateString()}`}</p></div>)}</section>}</> : <p className="empty">{reason(s.quotas[key])}</p>}{usage && <section><h3>{slot.provider === "openRouter" ? "Account activity" : "Activity on this Mac"}</h3><dl className="metrics"><div><dt>Sessions</dt><dd>{n(usage.sessionCount)}</dd></div><div><dt>Messages</dt><dd>{n(usage.messageCount)}</dd></div>{usage.tokens !== undefined && <div><dt>Measured tokens</dt><dd>{n(totalTokens(usage.tokens))}</dd></div>}{usage.estimatedCostUSD !== undefined && <div><dt>Estimated cost</dt><dd>{money(usage.estimatedCostUSD)}</dd></div>}</dl><p className="secondary">{usage.todayMessageCount > 0 || usage.todaySessionCount > 0 ? `Today: ${n(usage.todaySessionCount)} session${usage.todaySessionCount === 1 ? "" : "s"} · ${n(usage.todayMessageCount)} messages · updated ${formatETA((s.clock - usage.capturedAt) / 1000, true)} ago` : `Updated ${formatETA((s.clock - usage.capturedAt) / 1000, true)} ago · ${usage.tokens !== undefined ? "measured token totals" : "token totals unavailable"}`}</p>{usage.usageWindows && <RollingUsage windows={usage.usageWindows} provider={slot.provider} />}</section>}{t && (s.appearance.telemetry || s.appearance.chart || heatmap) && <TelemetryView t={t} stats={s.appearance.telemetry} chart={s.appearance.chart} heatmap={heatmap} daily={activity?.daily} now={s.clock} />}{activeWindow && activity && <WindowBurn sessions={activity.sessions} w={activeWindow} now={s.clock} />}{activity && activity.sessions.length > 0 && <details><summary>Recent sessions ({activity.sessions.length})</summary>{activity.sessions.slice(-8).reverse().map(session => <div key={session.id} className="session"><div className="row"><span>{session.projectName}</span><strong>{n(totalTokens(session.tokens))}</strong></div><p className="secondary">{session.model} · {session.messageCount} turns · estimated {money(session.estimatedCostUSD)}</p></div>)}</details>}{!activity && !usage && (s.activities[key] || s.usages[key]) && <p className="secondary">{reason(s.activities[key] ?? s.usages[key])}</p>}{detail && <footer className="row"><button onClick={() => void action({ action: "share", key })}>Share card</button><button onClick={() => void action({ action: "settings" })}>Settings</button></footer>}</article>;
+  return <article className={`provider-card usage-card ${detail ? "detail-card" : ""}`} aria-label={slotName(slot)}><header className="row"><div className="provider-heading"><Mark slot={slot} state={state} /><h2>{slotName(slot)}{slot.provider === "grok" && <> <span className="badge">Beta</span></>}</h2></div>{plan && <span className="badge">{plan}</span>}</header>{status && <p className="secondary status">{status.stale ? `Last known ${status.severity === "operational" ? "Operational" : status.description} · ${formatETA((s.clock - status.checkedAt) / 1000, true)} ago · ${status.refreshError}` : status.severity === "operational" ? "Operational" : status.description}</p>}{q ? <>{!fresh && <p className="stale quota-stale">Last known · {new Date(q.capturedAt).toLocaleString()}<br />{reason(s.quotas[key])}</p>}{q.groups.length ? q.groups.map(g => <section key={g.id}><h3>{g.title}</h3>{g.windows.map(w => <Meter key={w.label} w={w} now={s.clock} activityAt={at} pacing={s.appearance.pacing} />)}</section>) : (detail ? effectiveWindows(q) : q.windows).map(w => <Meter key={w.label} w={w} now={s.clock} activityAt={at} pacing={s.appearance.pacing} />)}{q.credits && <div className="credit well"><div className="row"><span>{q.credits.unit === "dollars" ? "Balance" : "Credits"}</span><strong>{q.credits.unlimited ? "Unlimited" : q.credits.unit === "dollars" ? money(q.credits.balance) : n(q.credits.balance)}</strong></div>{q.credits.dollarBalance !== undefined && <p className="secondary">≈ {money(q.credits.dollarBalance)} equivalent</p>}{q.credits.usedDollars !== undefined && <p className="secondary">{money(q.credits.usedDollars)} used{q.credits.limitDollars === undefined ? "" : ` of ${money(q.credits.limitDollars)}`}</p>}</div>}{q.resetCreditCount !== undefined && <section className="reset-credits"><h3>{q.resetCreditCount} earned reset credits</h3>{q.resetCredits.map(c => <div key={c.id} className="reset-credit"><div className="row"><span>{c.title}</span>{!staticExport && fresh?.canConsumeReset === true && (!detail || s.appearance.resetButton) && resetCreditAvailable(c, s.clock) && <button aria-label={`Use reset: ${c.title} for ${slotName(slot)}`} onClick={() => void action({ action: "reset", key, creditID: c.id })}>Use reset</button>}</div><p className="secondary">{c.status ?? "Status not reported"}{c.expiresAt !== undefined && c.expiresAt <= s.clock ? " · expired" : ""} · {c.expiresAt === undefined ? "Expiry not reported" : `Expires ${new Date(c.expiresAt).toLocaleDateString()}`}</p></div>)}</section>}</> : <p className="empty">{reason(s.quotas[key])}</p>}{usage && <section><h3>{slot.provider === "openRouter" ? "Account activity" : "Activity on this Mac"}</h3><dl className="metrics"><div><dt>Sessions</dt><dd>{n(usage.sessionCount)}</dd></div><div><dt>Messages</dt><dd>{n(usage.messageCount)}</dd></div>{usage.tokens !== undefined && <div><dt>Measured tokens</dt><dd>{n(totalTokens(usage.tokens))}</dd></div>}{usage.estimatedCostUSD !== undefined && <div><dt>Estimated cost</dt><dd>{money(usage.estimatedCostUSD)}</dd></div>}</dl><p className="secondary">{usage.todayMessageCount > 0 || usage.todaySessionCount > 0 ? `Today: ${n(usage.todaySessionCount)} session${usage.todaySessionCount === 1 ? "" : "s"} · ${n(usage.todayMessageCount)} messages · updated ${formatETA((s.clock - usage.capturedAt) / 1000, true)} ago` : `Updated ${formatETA((s.clock - usage.capturedAt) / 1000, true)} ago · ${usage.tokens !== undefined ? "measured token totals" : "token totals unavailable"}`}</p>{usage.usageWindows && (staticExport ? <RollingUsage windows={usage.usageWindows} provider={slot.provider} /> : <details className="rolling-details"><summary>Usage by period</summary><RollingUsage windows={usage.usageWindows} provider={slot.provider} /></details>)}</section>}{accountActivity && heatmap && <AccountHeatmap reading={accountActivity} staticExport={staticExport} />}{t && (s.appearance.telemetry || s.appearance.chart || heatmap) && <TelemetryView provider={slot.provider} t={t} stats={s.appearance.telemetry} chart={s.appearance.chart} heatmap={heatmap} daily={activity?.daily} now={s.clock} staticExport={staticExport} />}{activeWindow && activity && (staticExport ? <WindowBurn sessions={activity.sessions} w={activeWindow} now={s.clock} /> : <details className="burn-details"><summary>Active window breakdown</summary><WindowBurn sessions={activity.sessions} w={activeWindow} now={s.clock} /></details>)}{activity && activity.sessions.length > 0 && <details><summary>Recent sessions ({activity.sessions.length})</summary>{activity.sessions.slice(-8).reverse().map(session => <div key={session.id} className="session"><div className="row"><span>{session.projectName}</span><strong>{n(totalTokens(session.tokens))}</strong></div><p className="secondary">{session.model} · {session.messageCount} turns · estimated {money(session.estimatedCostUSD)}</p></div>)}</details>}{!activity && !usage && (s.activities[key] || s.usages[key]) && <p className="secondary">{reason(s.activities[key] ?? s.usages[key])}</p>}{detail && !staticExport && <footer className="row"><button onClick={() => void action({ action: "share", key })}>Share card</button><button onClick={() => void action({ action: "settings" })}>Settings</button></footer>}</article>;
 }
 function RollingUsage({ windows, provider }: { windows: UsageWindow[]; provider: Provider }) {
   const reference = windows.find(w => w.label === "last 30d"), cost = (reference?.estimatedCostUSD ?? 0) > 0;
@@ -74,51 +133,91 @@ function UnifiedStrip({ state }: { state: ViewState }) {
   const s = state.snapshot, localSlots = s.slots.filter(slot => slot.provider !== "openRouter"), activities = localSlots.flatMap(slot => { const a = extract(s.activities[slotKey(slot)]); return a ? [a] : []; }), usages = localSlots.flatMap(slot => { const u = extract(s.usages[slotKey(slot)]); return u ? [u] : []; });
   const totals = stripTotals(activities, usages, s.clock), nudge = failoverNudge(s.slots, s.quotas, s.activities, s.clock);
   if (totals.todayTokens === undefined && !nudge) return null;
-  return <section className="provider-card"><h2>AI activity on this Mac</h2>{totals.todayTokens !== undefined && <dl className="metrics"><div><dt>Tokens today</dt><dd>{n(totals.todayTokens)}</dd></div><div><dt>Last 7 days</dt><dd>{n(totals.weekTokens!)}</dd></div><div><dt>Estimated cost today</dt><dd>{money(totals.todayCost!)}</dd></div></dl>}{nudge && <p className="stale">{nudge}</p>}</section>;
+  return <section className="provider-card activity-summary"><h2>AI activity on this Mac</h2>{totals.todayTokens !== undefined && <dl className="metrics"><div><dt>Tokens today</dt><dd>{n(totals.todayTokens)}</dd></div><div><dt>Last 7 days</dt><dd>{n(totals.weekTokens!)}</dd></div><div><dt>Estimated cost today</dt><dd>{money(totals.todayCost!)}</dd></div></dl>}{nudge && <p className="stale">{nudge}</p>}</section>;
 }
-const labels: Record<string, string> = { launchAtLogin: "Launch at login", quotaAlertsEnabled: "Quota alerts", updateCheckEnabled: "Check for updates", sideNotchPanelEnabled: "Show side notch", sideNotchPanelPinned: "Pin detail card", menuBarCompactEnabled: "Compact menu bar", showHeatmap: "Daily heatmaps", showClaudeHeatmap: "Claude heatmap", showCodexHeatmap: "Codex heatmap", showPacingBurnRate: "Pacing and burn rate", showActivityTelemetry: "Activity statistics", showDailyActivityChart: "Daily activity chart", showSideNotchResetButton: "Codex limit resets in the side notch" };
+const labels: Record<string, string> = { launchAtLogin: "Launch at login", quotaAlertsEnabled: "Quota alerts", updateCheckEnabled: "Check for updates", sideNotchPanelEnabled: "Show side notch", menuBarCompactEnabled: "Compact menu bar", showHeatmap: "Daily heatmaps", showClaudeHeatmap: "Claude heatmap", showCodexHeatmap: "Codex heatmap", showPacingBurnRate: "Pacing and burn rate", showActivityTelemetry: "Activity statistics", showDailyActivityChart: "Daily activity chart", showSideNotchResetButton: "Codex limit resets in the side notch" };
+function ConnectionRow({ connection: c, state, action }: { connection: ConnectionState; state: ViewState; action: (r: Request) => Promise<void> }) {
+  const [method, setMethod] = useState<ConnectionState["source"]>(!c.localAvailable && c.provider !== "grok" && c.status !== "unsupported" ? "account" : c.source);
+  const [expanded, setExpanded] = useState(false);
+  const busy = c.status === "connecting", collected = state.settings.values[providerKey(c.provider)] === true;
+  const localActive = c.source === "cli" && collected;
+  const localName = c.provider === "claude" ? "Claude Code CLI" : `${providerNames[c.provider]} CLI`;
+  const accountName = c.provider === "claude" ? "Claude Desktop" : "Browser sign-in";
+  const help = method === "cli"
+    ? c.provider === "claude" ? "Reads Claude Code activity on this Mac. Allowance needs a companion usage file."
+      : c.provider === "grok" ? "Reads your existing Grok CLI allowance and local session counts. Grok website and mobile usage are not supported."
+      : "Uses your existing Codex CLI sign-in for allowance and reads token activity on this Mac."
+    : c.provider === "claude" ? "Uses the account signed in to Claude Desktop. You approve access in macOS; allowance depends on your plan."
+      : "Sign in through your browser for account allowance and provider-reported token history. Requires an existing Codex app or CLI.";
+  const reading = state.snapshot.quotas[c.provider];
+  const status = busy ? "Updating connection…" : c.source === "cli" ? localActive ? "CLI selected. Data appears when available." : "CLI selected. Collection is off."
+    : c.status === "connected" ? reading?.status === "value" ? "Connected · Account allowance" : "Connected. Account allowance is unavailable."
+      : c.status === "failed" ? "Connection failed. Check the message above and try again." : "Not connected.";
+  const currentSource = c.source === "cli" ? localName : accountName;
+  return <div className="provider-setting connection-row">
+    <div className="connection-summary"><div className="connection-identity"><Mark slot={primary(c.provider)} state={state} /><div><strong className="connection-title">{providerNames[c.provider]}{c.provider === "grok" && <> <span className="badge">Beta</span></>}</strong><p className="secondary">Current source: {currentSource}</p><p className="secondary connection-state">Collection: {collected ? "On" : "Off"} · Allowance: {reading?.status === "value" ? "Available" : reading?.status === "missing" ? reading.reason : "Not checked yet"}</p><p className="secondary connection-state" role="status">{status}</p></div></div><button aria-label={`Configure ${providerNames[c.provider]}`} aria-expanded={expanded} aria-controls={`connection-${c.provider}`} onClick={() => setExpanded(!expanded)}>{expanded ? "Close" : "Configure"}</button></div>
+    <div className="connection-detail" id={`connection-${c.provider}`} hidden={!expanded}>
+    {c.provider === "grok" ? <p className="setting connection-method"><span>Connect using</span><span>Grok CLI</span></p> : <label className="setting connection-method"><span>Connect using</span><select aria-label={`${providerNames[c.provider]} connection method`} value={method} disabled={busy} onChange={e => setMethod(e.target.value as ConnectionState["source"])}>
+      <option value="account" disabled={c.status === "unsupported"}>{accountName}</option>
+      <option value="cli" disabled={!c.localAvailable}>{localName}</option>
+    </select></label>}
+    <p className="secondary connection-help">{help}</p>
+    {method === "cli" && c.source === "account" && <p className="secondary connection-help">Use CLI disconnects this MeterUsage account connection. Your other apps stay signed in.</p>}
+    {!c.localAvailable && method === "cli" && !state.snapshot.demo && <p className="secondary">CLI selection is unavailable in this isolated test.</p>}
+    <div className="connection-actions">
+      <p className="secondary">{status}</p>
+      {busy ? <button aria-label={`Cancel ${providerNames[c.provider]} connection`} onClick={() => void action({ action: "connectionCancel", provider: c.provider })}>Cancel</button>
+        : method === "cli" ? <button disabled={!c.localAvailable || localActive} onClick={() => void action({ action: "connectionLocal", provider: c.provider })}>{localActive ? "CLI selected" : "Use CLI"}</button>
+          : c.status === "connected" ? <button aria-label={`Disconnect ${providerNames[c.provider]}`} disabled={state.snapshot.demo} onClick={() => void action({ action: "disconnect", provider: c.provider })}>Disconnect</button>
+            : c.status !== "unsupported" && <button className="connect-button" disabled={state.snapshot.demo} onClick={() => void action({ action: "connect", provider: c.provider })}>{c.provider === "claude" ? "Connect Claude Desktop" : "Sign in to Codex"}</button>}
+    </div>
+    </div>
+  </div>;
+}
 export function Connections({ state, action }: { state: ViewState; action: (r: Request) => Promise<void> }) {
-  const connections = state.connections ?? ["codex", "claude", "grok"].map(provider => ({ provider: provider as "codex" | "claude" | "grok", status: provider === "grok" ? "unsupported" as const : "disconnected" as const }));
+  const connections: ConnectionState[] = state.connections ?? ["codex", "claude", "grok"].map(provider => ({ provider: provider as ConnectionState["provider"], source: provider === "grok" ? "cli" : "account", localAvailable: !state.snapshot.demo, status: provider === "grok" ? "unsupported" : "disconnected" }));
   return <section className="connections" aria-label="Account connections">
-    <h2>Connect your accounts</h2>
-    <p className="secondary section-description">Choose an account once. Allowance comes from the provider account and refreshes automatically.</p>
-    <div className="settings-group">{connections.map(c => <div className="provider-setting connection-row" key={c.provider}>
-      <div className="row"><strong>{providerNames[c.provider]}</strong>
-        {c.status === "connecting" ? <button aria-label={`Cancel ${providerNames[c.provider]} connection`} onClick={() => void action({ action: "connectionCancel", provider: c.provider })}>Cancel</button> : c.status === "connected" ? <button aria-label={`Disconnect ${providerNames[c.provider]}`} onClick={() => void action({ action: "disconnect", provider: c.provider })}>Disconnect</button> : c.status !== "unsupported" && <button className="connect-button" disabled={state.snapshot.demo} onClick={() => void action({ action: "connect", provider: c.provider })}>{c.provider === "claude" ? "Connect Claude Desktop" : "Sign in to Codex"}</button>}
-      </div>
-      <p className="secondary" role="status">{c.status === "connecting" ? "Waiting for your approval…" : c.status === "connected" ? state.snapshot.quotas[c.provider]?.status === "missing" ? "Usage unavailable. Disconnect, then connect again." : "Connected · Account allowance" : c.status === "failed" ? "Usage unavailable. Open the desktop app and try again." : c.status === "unsupported" ? "Automatic connection is not available yet." : c.provider === "claude" ? "Uses the account signed in to Claude Desktop on this Mac." : "Sign in in your browser. Your Codex app stays signed in."}</p>
-    </div>)}</div>
-    {state.snapshot.demo && <p className="secondary">Demo uses sample data. Account access is disabled.</p>}
+    <h2>Choose how to connect</h2>
+    <p className="secondary section-description">Choose a method for each provider. Changing the selection takes effect when you use its button.</p>
+    {state.snapshot.demo && <p className="secondary connection-demo">Demo uses sample data. Account access is disabled.</p>}
+    <div className="settings-group">{connections.map(c => <ConnectionRow key={`${c.provider}:${c.source}`} connection={c} state={state} action={action} />)}</div>
+    {!state.snapshot.appearance.onboarding && <div className="onboarding-finish"><p className="secondary">You can skip setup and change these choices in Settings later.</p><button onClick={() => void action({ action: "setPreference", key: "onboardingCompleted", value: true })}>Done</button></div>}
   </section>;
 }
-function Settings({ state, action }: { state: ViewState; action: (r: Request) => Promise<void> }) {
+export function Settings({ state, action, saveOrder }: { state: ViewState; action: (r: Request) => Promise<void>; saveOrder: (order: Provider[]) => Promise<boolean> }) {
+  const [category, setCategory] = useState("Connections");
+  const categories = ["Connections", "Appearance", "General", "Providers", "Side notch", "Usage details", "Diagnostics"];
   const values = state.settings.values;
+  const reportCoolingDown = (state.issueReport?.retryAt ?? 0) > state.snapshot.clock;
   const set = (key: string, value: string | boolean | number) => void action({ action: "setPreference", key, value });
   const toggle = (key: string, text: string, ariaLabel?: string, disabled = false) => <label className="setting" key={key}><span>{text}</span><input type="checkbox" aria-label={ariaLabel} checked={values[key] === true} disabled={disabled || (key === "launchAtLogin" && state.snapshot.demo)} onChange={e => set(key, e.target.checked)} /></label>;
   return <main className="settings">
     <header className="settings-header"><h1>Settings</h1><p className="secondary">Accounts, appearance and usage preferences.</p></header>
-    {!state.snapshot.appearance.onboarding && <section className="provider-card onboarding"><h2>Your usage, at a glance</h2><p>Connect an account below to see its allowance. Sign-in is optional.</p><button onClick={() => void action({ action: "setPreference", key: "onboardingCompleted", value: true })}>Done</button></section>}
+    <div className="settings-workspace"><nav className="settings-nav" aria-label="Settings categories">{categories.map(name => <button key={name} aria-current={category === name ? "page" : undefined} onClick={() => setCategory(name)}>{name}</button>)}</nav><div className="settings-content">
+    <section hidden={category !== "Connections"}>
+    {!state.snapshot.appearance.onboarding && <section className="provider-card onboarding"><h2>Your usage, at a glance</h2><p>Choose your existing CLI setup, browser sign-in or Desktop connection below. Each provider shows the methods it supports. Sign-in is optional.</p></section>}
     <Connections state={state} action={action} />
-    <section><h2>Appearance</h2><div className="settings-group">
+    </section>
+    <section hidden={category !== "Appearance"}><h2>Appearance</h2><div className="settings-group">
       <fieldset className="size-picker" aria-describedby="panel-size-help"><legend>Usage-panel size</legend>
         <div className="size-options">{Object.values(PanelSize).map(size => <label key={size}><input type="radio" name="panelSize" value={size} checked={String(values.panelSize ?? PanelSize.Medium) === size} onChange={() => set("panelSize", size)} /><span>{size[0].toUpperCase() + size.slice(1)}</span></label>)}</div>
-        <p id="panel-size-help" className="secondary">Sizes the usage panel and scales Settings content. The Settings window stays the same size.</p>
+        <p id="panel-size-help" className="secondary">Sizes the usage panel, notch details and Settings content. Settings fits the selected page and scrolls when needed.</p>
       </fieldset>
       <label className="setting"><span>Theme</span><select value={String(values.appearanceTheme)} onChange={e => set("appearanceTheme", e.target.value)}>{["system", "light", "dark"].map(x => <option key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</option>)}</select></label>
       <fieldset className="accent-picker"><legend>Accent color</legend>{Object.entries(accents).map(([name, color]) => <label key={name}><input type="radio" name="accentTheme" value={name} checked={values.accentTheme === name} onChange={() => set("accentTheme", name)} /><span className="accent-swatch" style={{ background: color }} aria-hidden="true" /><span>{name}</span></label>)}</fieldset>
     </div></section>
-    <section><h2>General</h2><div className="settings-group">
+    <section hidden={category !== "General"}><h2>General</h2><div className="settings-group">
       {["launchAtLogin", "quotaAlertsEnabled", "updateCheckEnabled"].map(k => toggle(k, labels[k]))}
       <label className="setting"><span>Refresh interval</span><select value={Number(values.refreshIntervalSeconds)} onChange={e => set("refreshIntervalSeconds", Number(e.target.value))}>{[30, 60, 120, 300, 900].map(x => <option key={x} value={x}>{x < 60 ? `${x}s` : `${x / 60}m`}</option>)}</select></label>
     </div></section>
-    <section><h2>Providers</h2><p className="secondary section-description">Choose what to collect and where to show it.</p><div className="settings-group">
-      <div className="provider-setting provider-columns"><span>Provider</span><span>Collect usage</span><span>Show in menu bar and side notch</span></div>
-      {providers.map(p => { const enabled = values[providerKey(p)] === true || state.snapshot.slots.some(slot => slot.provider === p && slot.slotID); return <div key={p} className="provider-setting"><span className="provider-name">{providerNames[p]}</span>{toggle(providerKey(p), "Collect", `Collect ${providerNames[p]} usage`)}{toggle(trayKey(p), "Show", `Show ${providerNames[p]} in menu bar and side notch`, !enabled)}</div>; })}
+    <section className="providers" hidden={category !== "Providers"}><h2>Providers</h2><p className="secondary section-description">Choose what to collect and where to show it.</p><p id="provider-order-help" className="secondary section-description">Drag a handle or use its arrow keys to reorder. Move up and down buttons also work. Additional accounts stay with their provider.</p><div className="settings-group">
+      <ProviderOrder mark={p => <Mark slot={primary(p)} state={state} />} order={state.settings.providerOrder} save={saveOrder} controls={p => { const enabled = values[providerKey(p)] === true || state.snapshot.slots.some(slot => slot.provider === p && slot.slotID); return <>{toggle(providerKey(p), "Collect", `Collect ${providerNames[p]} usage`)}{toggle(trayKey(p), "Show", `Show ${providerNames[p]} in menu bar and side notch`, !enabled)}</>; }} />
       <details className="local-accounts"><summary>Advanced: local accounts</summary>{state.settings.accounts.map(a => <AccountRow key={a.id} account={a} action={action} />)}<div className="row"><button onClick={() => void action({ action: "accountAdd", provider: "codex" })}>Add Codex account…</button><button onClick={() => void action({ action: "accountAdd", provider: "claude" })}>Add Claude account…</button></div><p className="secondary">Choose a separate config directory. Each account keeps its own quota and history.</p></details>
     </div></section>
-    <section><h2>Side notch</h2><div className="settings-group">{["sideNotchPanelEnabled", "sideNotchPanelPinned", "showSideNotchResetButton"].map(k => toggle(k, labels[k]))}</div></section>
-    <section><h2>Usage details</h2><div className="settings-group">{["menuBarCompactEnabled", "showHeatmap", "showClaudeHeatmap", "showCodexHeatmap", "showPacingBurnRate", "showActivityTelemetry", "showDailyActivityChart"].map(k => toggle(k, labels[k]))}</div></section>
-    <section><h2>Diagnostics</h2><div className="settings-group diagnostics-actions"><div className="row"><button onClick={() => void action({ action: "copyDiagnostics" })}>Copy diagnostics</button><button disabled={state.snapshot.clearingCache} onClick={() => void action({ action: "clearCache" })}>{state.snapshot.clearingCache ? "Clearing…" : "Clear local scan cache"}</button></div><p className="secondary">Provider files and durable history stay intact.</p></div></section>
+    <section hidden={category !== "Side notch"}><h2>Side notch</h2><div className="settings-group">{["sideNotchPanelEnabled", "showSideNotchResetButton"].map(k => toggle(k, labels[k]))}</div></section>
+    <section hidden={category !== "Usage details"}><h2>Usage details</h2><div className="settings-group">{["menuBarCompactEnabled", "showHeatmap", "showClaudeHeatmap", "showCodexHeatmap", "showPacingBurnRate", "showActivityTelemetry", "showDailyActivityChart"].map(k => toggle(k, labels[k]))}</div></section>
+    <section hidden={category !== "Diagnostics"}><h2>Diagnostics</h2><div className="settings-group diagnostics-actions"><p className="secondary">Sends a sanitized diagnostic report privately to MeterUsage support in Linear. No login needed. Credentials and chat content are excluded.</p><div className="row"><button disabled={state.issueReport?.sending || !!state.issueReport?.receipt || reportCoolingDown} onClick={() => void action({ action: "sendReport" })}>{state.issueReport?.sending ? "Sending…" : state.issueReport?.receipt ? "Sent" : "Send report"}</button><button onClick={() => void action({ action: "copyDiagnostics" })}>Copy diagnostics</button><button disabled={state.snapshot.clearingCache} onClick={() => void action({ action: "clearCache" })}>{state.snapshot.clearingCache ? "Clearing…" : "Clear local scan cache"}</button></div>{state.issueReport?.receipt && <p className="secondary" role="status">Report sent. Reference: {state.issueReport.receipt}</p>}{state.issueReport?.error && <p className="secondary" role="alert">{state.issueReport.error}</p>}{reportCoolingDown && !state.issueReport?.receipt && <p className="secondary" role="status">Next report attempt after {new Date(state.issueReport!.retryAt!).toLocaleTimeString()}. Please wait 10 minutes between attempts.</p>}<p className="secondary">Provider files and durable history stay intact.</p></div></section>
+    </div></div>
     <p className="secondary settings-footer">MeterUsage 0.2.41 · Cost figures are local estimates.</p>
   </main>;
 }
@@ -147,31 +246,50 @@ function Notch({ state, action }: { state: ViewState; action: (r: Request) => Pr
     onPointerEnter={() => void action({ action: "notchHover", hovering: true })}
     onPointerLeave={() => void action({ action: "notchHover", hovering: false })}
     onPointerDown={e => {
-      if (e.button !== 0 || (e.target as Element).closest(".detail-card button,.detail-card input,.detail-card select,.detail-card summary,.strip-settings")) return;
+      if (e.button !== 0 || (e.target as Element).closest(".detail-card button,.detail-card input,.detail-card select,.detail-card summary")) return;
       suppressClick.current = false; e.currentTarget.setPointerCapture(e.pointerId);
       drag.current = { id: e.pointerId, x: e.screenX, y: e.screenY, started: false };
     }}
     onPointerMove={e => { const d = drag.current; if (d && !d.started && Math.hypot(e.screenX - d.x, e.screenY - d.y) > 4) { d.started = true; void action({ action: "dragStart" }); } }}
     onPointerUp={e => { const d = drag.current; drag.current = null; if (d?.started) { suppressClick.current = true; void action({ action: "dragEnd" }); } if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
     onLostPointerCapture={() => { if (drag.current?.started) void action({ action: "dragEnd" }); drag.current = null; }}>
-    {open ? <div className="strip"><button className="strip-settings" aria-label="Open Settings" onClick={() => void action({ action: "settings" })}>☷</button>{entries.map(entry => {
+    <div className="strip">{entries.map(entry => {
       const { slot, key, window: w, fresh, digit } = entry;
       const name = slot.slotID ? `${providerNames[slot.provider]} · ${slot.label || `Account ${digit}`}` : providerNames[slot.provider];
-      const p = state.snapshot.appearance.pacing ? pace(w, state.snapshot.clock) : undefined, eta = p && etaSeconds(p, w.resetsAt, state.snapshot.clock), ambient = p && (p.status === "deficit" || (eta !== undefined && eta < 7200));
       return <button className="strip-provider" style={{ opacity: fresh ? 1 : .55 }} key={key}
         aria-label={`Show ${name} details, ${Math.round(w.usedPercent)}% used${fresh ? "" : ", last known reading"}`}
-        aria-pressed={selected?.key === key}
+        aria-pressed={open && selected?.key === key}
         onPointerEnter={() => { if (!drag.current?.started) void action({ action: "notchSelect", key }); }}
         onClick={() => { if (!suppressClick.current) void action({ action: "notchSelect", key }); }}>
-        <Mark slot={slot} state={state} /><span className="ring" style={{ background: `conic-gradient(${headroom(w.usedPercent)} ${w.usedPercent}%, var(--well) 0)` }}><span>{Math.round(w.usedPercent)}</span></span>
-        {ambient && eta !== undefined && <span className="notch-eta" aria-label={`${formatETA(eta)} ${p?.status === "deficit" ? "until projected exhaustion" : "until reset"}`} style={{ color: p?.status === "deficit" ? "var(--warn)" : "var(--muted)" }}>{formatETA(eta, true)}</span>}
+        <span className="usage-ring" aria-hidden="true" style={{ background: `conic-gradient(${headroom(w.usedPercent)} ${w.usedPercent}%, var(--well) 0)` }}><span><Mark slot={slot} state={state} /></span></span>
+        <span className="strip-percent" style={{ color: headroom(w.usedPercent) }}>{Math.round(w.usedPercent)}%</span>
         {digit && <small>{digit}</small>}
       </button>;
-    })}</div> : <div className="folded-strip"><button className="folded-pill" aria-label="Show provider details" onClick={() => { if (selected && !suppressClick.current) void action({ action: "notchSelect", key: selected.key }); }}>
-      {entries.length ? entries.slice(0, 5).map(e => <span key={e.key} style={{ background: headroom(e.window.usedPercent), opacity: e.fresh ? 1 : .55, border: e.digit ? "1px solid var(--text)" : undefined }} />) : <span style={{ background: "var(--muted)" }} />}
-    </button></div>}
+    })}</div>
     {open && selected && <ProviderCard slot={selected.slot} state={state} action={action} detail />}
   </div>;
+}
+export function UsagePanel({ state, action }: { state: ViewState; action: (r: Request) => Promise<void> }) {
+  const [selected, setSelected] = useState("");
+  const id = useId(), slots = state.snapshot.slots;
+  const slot = slots.find(slot => slotKey(slot) === selected) ?? slots[0];
+  if (!slot) return <p className="empty">Enable a provider in Settings.</p>;
+  const index = slots.indexOf(slot), tabs = slots.length > 1;
+  return <section className="usage-panel">
+    {tabs && <div className="provider-tabs" role="tablist" aria-label="Usage provider" onKeyDown={e => {
+      const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+      const current = buttons.indexOf(e.target as HTMLButtonElement);
+      if (current < 0) return;
+      const next = e.key === "ArrowRight" ? (current + 1) % buttons.length : e.key === "ArrowLeft" ? (current - 1 + buttons.length) % buttons.length : e.key === "Home" ? 0 : e.key === "End" ? buttons.length - 1 : undefined;
+      if (next === undefined) return;
+      e.preventDefault(); buttons[next].focus(); buttons[next].click();
+    }}>{slots.map((item, i) => {
+      const digit = item.slotID ? slots.filter(s => s.provider === item.provider).indexOf(item) + 1 : undefined;
+      const name = slotName(item) + (digit && !item.label ? ` ${digit}` : "");
+      return <button key={slotKey(item)} id={`${id}-tab-${i}`} role="tab" type="button" aria-label={name} title={name} aria-selected={i === index} aria-controls={`${id}-panel`} tabIndex={i === index ? 0 : -1} onClick={() => setSelected(slotKey(item))}><Mark slot={item} state={state} />{digit && <small>{digit}</small>}</button>;
+    })}</div>}
+    <div id={`${id}-panel`} role={tabs ? "tabpanel" : undefined} aria-labelledby={tabs ? `${id}-tab-${index}` : undefined}><ProviderCard key={slotKey(slot)} slot={slot} state={state} action={action} /></div>
+  </section>;
 }
 export function App({ bridge }: { bridge: Bridge }) {
   const [state, setState] = useState<ViewState>(), [error, setError] = useState("");
@@ -180,17 +298,22 @@ export function App({ bridge }: { bridge: Bridge }) {
   const content = useRef<HTMLDivElement>(null);
   useEffect(() => { const unsubscribe = bridge.subscribe(setState); void bridge.request({ action: "state" }).then(r => { if (r.ok && r.state) setState(r.state); else if (!r.ok) setError(r.error); }); return unsubscribe; }, [bridge]);
   useEffect(() => {
-    const node = content.current; if (!node || !state || surface === "settings") return;
+    const node = content.current; if (!node || !state) return;
     let last = 0;
     const observer = new ResizeObserver(() => {
-      const height = Math.max(20, Math.ceil(surface === "flyout" ? node.getBoundingClientRect().height : node.scrollHeight)), width = surface === "tray" ? Math.ceil(node.scrollWidth) : undefined, size = width ?? height;
-      if (size !== last) { last = size; void bridge.request(surface === "share" ? { action: "shareResize", height } : { action: "resize", height: surface === "flyout" ? height : Math.min(2000, height), ...(width === undefined ? {} : { width }) }); }
+      const height = Math.max(20, Math.ceil(panel ? node.getBoundingClientRect().height : node.scrollHeight)), width = surface === "tray" ? Math.ceil(node.scrollWidth) : undefined, size = width ?? height;
+      if (size !== last) { last = size; void bridge.request(surface === "share" ? { action: "shareResize", height } : { action: "resize", height: panel ? height : Math.min(2000, height), ...(width === undefined ? {} : { width }) }); }
     }); observer.observe(node); return () => observer.disconnect();
   }, [bridge, !!state, surface, panel ? state?.settings.values.panelSize : undefined]);
   const action = async (r: Request) => { setError(""); try { const reply = await bridge.request(r); if (!reply.ok) setError(reply.error); } catch { setError("Could not complete action"); } };
+  const saveOrder = async (order: Provider[]) => {
+    setError("");
+    try { const reply = await bridge.request({ action: "providerOrder", order }); if (!reply.ok) setError(reply.error); return reply.ok; }
+    catch { setError("Could not save provider order"); return false; }
+  };
   if (!state) return <p className="empty" role="status">{error || "Loading usage…"}</p>;
-  const s = state.snapshot;
-  const style = { ...(panel ? { zoom: panelScales[state.settings.values.panelSize as PanelSize] ?? 1 } : {}), "--accent": accents[s.appearance.accent] ?? accents.blue, "--notch-max-height": state.notch.maxHeight === undefined ? "100dvh" : `${state.notch.maxHeight}px` } as CSSProperties;
-  const app = <div ref={content} className={`app theme-${surface === "tray" ? state.systemDark ? "dark" : "light" : surface === "notch" || surface === "share" ? "dark" : s.appearance.theme} surface-${surface}`} style={style}>{error && <div className="action-error" role="alert">{error}<button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{surface === "share" ? (() => { const slot = notchEntries(s).find(e => e.key === state.notch.selected)?.slot; return slot ? <ProviderCard slot={slot} state={state} action={action} detail /> : <p className="empty">Card unavailable</p>; })() : surface === "tray" ? <TrayImage state={state} /> : surface === "settings" ? <Settings state={state} action={action} /> : surface === "notch" ? <Notch state={state} action={action} /> : <main className="flyout"><header className="app-header row"><h1>MeterUsage {s.demo && <small>Demo</small>}</h1><div><button disabled={s.refreshing} onClick={() => void action({ action: "refresh" })}>{s.refreshing ? "Refreshing…" : "Refresh"}</button><button onClick={() => void action({ action: "settings" })}>Settings</button></div></header>{state.update && <section className="provider-card"><div className="row"><span>MeterUsage {state.update.version} available</span><button onClick={() => void action({ action: "updateInstall" })}>{state.update.state === "failed" ? "Retry update" : "Install update…"}</button><button onClick={() => void action({ action: "updateDismiss" })}>Dismiss</button></div></section>}{s.historyError && <p className="stale">History could not be {s.historyError === "loadFailed" ? "read. Repair the file and relaunch to resume saving" : "saved. Live readings remain available"}.</p>}{s.archiveWriteFailed && <p className="stale">Last known quota could not be saved.</p>}<ServiceStatuses state={state} action={action} /><UnifiedStrip state={state} />{s.slots.length ? s.slots.map(slot => <ProviderCard key={slotKey(slot)} slot={slot} state={state} action={action} />) : <p className="empty">Enable a provider in Settings.</p>}<BurnCard state={state} /><footer className="row secondary"><span>{s.lastRefreshedAt === undefined ? "Not refreshed yet" : `Updated ${new Date(s.lastRefreshedAt).toLocaleTimeString()}`}</span><button onClick={() => void action({ action: "copyJSON" })}>Copy JSON</button><button onClick={() => void action({ action: "quit" })}>Quit</button></footer></main>}</div>;
-  return panel ? <div className="panel-viewport" tabIndex={0} role="region" aria-label={surface === "settings" ? "Settings" : "MeterUsage panel"}>{app}</div> : app;
+  const s = state.snapshot, scale = panelScales[state.settings.values.panelSize as PanelSize] ?? 1;
+  const style = { ...(panel ? { zoom: scale } : {}), "--panel-scale": scale, "--accent": accents[s.appearance.accent] ?? accents.blue, "--notch-max-height": state.notch.maxHeight === undefined ? "100dvh" : `${state.notch.maxHeight}px` } as CSSProperties;
+  const app = <div ref={content} className={`app theme-${surface === "tray" ? state.systemDark ? "dark" : "light" : surface === "notch" || surface === "share" ? "dark" : s.appearance.theme} surface-${surface} size-${state.settings.values.panelSize ?? PanelSize.Medium}`} style={style}>{error && <div className="action-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{surface === "share" ? (() => { const slot = notchEntries(s).find(e => e.key === state.notch.selected)?.slot; return slot ? <ProviderCard slot={slot} state={state} action={action} detail staticExport /> : <p className="empty">Card unavailable</p>; })() : surface === "tray" ? <TrayImage state={state} /> : surface === "settings" ? <Settings state={state} action={action} saveOrder={saveOrder} /> : surface === "notch" ? <Notch state={state} action={action} /> : <main className="flyout"><header className="app-header row"><h1>MeterUsage {s.demo && <small>Demo</small>}</h1><div className="header-actions"><button disabled={s.refreshing} onClick={() => void action({ action: "refresh" })}>{s.refreshing ? "Refreshing…" : "Refresh"}</button><button onClick={() => void action({ action: "settings" })}>Settings</button></div></header>{state.update && <section className="provider-card"><div className="row update-actions"><span>MeterUsage {state.update.version} available</span><button onClick={() => void action({ action: "updateInstall" })}>{state.update.state === "failed" ? "Retry update" : "Install update…"}</button><button onClick={() => void action({ action: "updateDismiss" })}>Dismiss</button></div></section>}{s.historyError && <p className="stale">History could not be {s.historyError === "loadFailed" ? "read. Repair the file and relaunch to resume saving" : "saved. Live readings remain available"}.</p>}{s.archiveWriteFailed && <p className="stale">Last known quota could not be saved.</p>}<ServiceStatuses state={state} action={action} /><UsagePanel state={state} action={action} /><details className="overview-details provider-card"><summary>All-provider activity breakdown</summary><UnifiedStrip state={state} /><BurnCard state={state} /></details><footer className="row secondary"><span>{s.lastRefreshedAt === undefined ? "Not refreshed yet" : `Updated ${new Date(s.lastRefreshedAt).toLocaleTimeString()}`}</span><button onClick={() => void action({ action: "copyJSON" })}>Copy JSON</button><button onClick={() => void action({ action: "quit" })}>Quit</button></footer></main>}</div>;
+  return panel ? <div className={`panel-viewport app theme-${s.appearance.theme}`} role="region" aria-label={surface === "settings" ? "Settings" : "MeterUsage panel"}>{app}</div> : app;
 }

@@ -7,32 +7,68 @@ provider acceptance remain unverified.
 
 ## Setup
 
-Before setup is complete, launch or app activation opens Settings. Connect an
-account there, or choose **Done** to continue without signing in. Done saves the
+Before setup is complete, launch or app activation opens Settings. Choose a
+connection method for each provider, or choose **Done** below the choices to
+continue without signing in. Done saves the
 existing setup-completion preference before opening usage. If saving fails,
 Settings keeps the setup guidance and reports the error. Account connections
 remain in Settings after setup; the main usage panel has no welcome card.
 See [ADR 0014](adr/0014-settings-onboarding.md).
+
+The **Connect using** selector offers the methods supported by each provider.
+Selecting a method does not start sign-in or change collection. Use the button
+below it to apply the choice. Existing profiles keep their current source.
 
 - Codex: choose **Sign in to Codex** and complete browser sign-in. The candidate
   finds the helper in an existing Codex app in Applications, with existing
   command installations as a compatibility path. Users do not open a terminal
   or choose a configuration folder. A missing helper produces an unavailable
   message. The Codex app's authentication is not changed.
+  Alternatively, choose **Codex CLI** and **Use CLI** to use an existing CLI
+  sign-in for allowance and read local token activity.
 - Claude: sign in to Claude Desktop on the Mac, choose **Connect Claude
   Desktop**, and approve MeterUsage's access explanation and any macOS
   Keychain prompt. The candidate requests account allowance using Desktop's
   current access token. This interface can change and is not a documented
   third-party consumer API contract.
+  Alternatively, choose **Claude Code CLI** and **Use CLI** to read local Claude
+  Code activity. CLI allowance requires a companion usage file; this option
+  does not provide Claude website token history.
 - Grok: automatic consumer connection is unavailable. Existing command-based
   collection remains available for existing users. It does not establish
   browser/mobile consumer support. The setup does not ask for manual numbers.
+
+**Use CLI** first disconnects only the MeterUsage-owned account connection and
+waits for any Codex logout cleanup to succeed. A failed cleanup keeps local
+collection off and reports an error. The source choice survives relaunch. The
+ordinary **Disconnect** action still keeps account collection off without
+switching to local data. Demo and isolated live test profiles cannot select
+local collection. [ADR 0023](adr/0023-onboarding-source-choice.md) records this
+explicit transition.
 
 The normal refresh interval applies after connection. An expired login,
 unsupported cache format, missing permission or provider failure keeps usage
 unavailable. Open the relevant desktop app, disconnect the MeterUsage
 connection, then connect again. Disconnect removes MeterUsage's own connection;
 it does not sign out or erase data in another app.
+
+Claude Desktop **Connect** failures use fixed messages in the existing error
+banner. They distinguish foreground Keychain access, account configuration,
+the active organization cookie, cache decryption, missing or ambiguous current
+tokens, allowance request or response validation, post-request identity verification,
+or saving MeterUsage's connection preferences. An identity recheck failure
+can include a failed background Keychain or cache read. Messages contain no
+raw exceptions, responses, tokens, account identifiers or paths. Cancellation
+keeps its existing message. Background collection keeps its existing
+unavailable and not-signed-in results.
+The renderer error filter permits only these fixed diagnostics. Unknown
+exceptions still produce the generic action error. Missing or ambiguous current
+tokens keep collection disabled.
+
+These diagnostics have source and synthetic-fixture proof only. They do not
+identify the cause of a live connection failure or prove that Claude Desktop
+connection works. Packaged banner display, Keychain access, Desktop compatibility
+and live allowance still require native acceptance.
 
 ## Data coverage
 
@@ -45,7 +81,7 @@ Local activity charts are labelled as activity on this Mac. OpenRouter's
 remote usage is labelled as account activity and excluded from local totals. Connected
 Codex/Claude account cards omit the separate local CLI activity source because
 MeterUsage cannot establish that it belongs to the connected account. No local
-and account total is added together. Detailed account token history, ordinary
+and account total is added together. Claude account token history, ordinary
 Claude chat tokens and Grok consumer history are outside this implementation.
 
 ## Authentication and isolation
@@ -67,10 +103,17 @@ retry. Retry completes cleanup before starting another login. Normal quit waits
 up to five seconds for authentication cleanup. Headless reports only read existing
 connections; they never start sign-in, show a permission prompt or perform
 cleanup logout. Clear local scan cache keeps the established connection reader.
-Connected account cards show reset-credit details without redemption controls;
-redemption stays limited to existing sources that support it.
+Connected Codex cards show **Use reset** beside available, unexpired credits in
+the menu. The existing native confirmation names the account and credit and
+defaults to Cancel. After confirmation, the candidate rereads allowance and
+rejects a missing, spent or expired credit or a changed/disconnected profile.
+The official helper consumes once under the same keyring-only profile, then
+quota refreshes. Cancelling makes no consume call. A disconnect aborts pending
+work; a request already sent to the provider cannot be undone. See
+[ADR 0017](adr/0017-connected-codex-menu-reset.md).
 
-Claude access requires explicit consent. A bundled native helper performs one
+Claude access requires explicit consent; a connection call without a consent
+callback denies access. A bundled native helper performs one
 fixed Keychain read. Background calls forbid interactive authentication. The
 main process decrypts the Desktop cache, reads the active organization cookie
 from a read-only database, and selects one valid account-scoped access token.
@@ -95,6 +138,32 @@ Synthetic tests cover protocol, consent, token selection, account switching,
 disconnect, numeric validation, stale source results and IPC boundaries.
 See [privacy](PRIVACY.md) and [ADR 0011](adr/0011-desktop-account-connections.md).
 
+## Codex account daily tokens
+
+A connected Codex account also reads `account/usage/read` through the same
+managed ChatGPT helper. The request omits `threadId`. The helper must support
+this method and pass the existing effective keyring-storage guard. A failed or
+unsupported read shows "Account history unavailable" and leaves quota separate.
+
+The main, notch and shared card label this grid "Account token activity" with
+"Provider-reported account scope". It shows 26 weeks ending at the latest
+reported date. Hover or focus a day for its exact token count. Dashed days are
+unavailable, including gaps before or between reported dates. A reported zero
+is a measured value. The existing Daily heatmaps and Codex heatmap settings
+control this grid. Provider dates remain calendar labels; no timezone is assumed.
+
+Null or absent daily buckets cannot be reconstructed from summary statistics.
+Invalid, duplicate or unsafe buckets fail closed. No token-category breakdown,
+session count or cost is invented. History stays in memory and is cleared on
+failed reads, source replacement or disconnect. It never merges with local
+profile history or local totals. Collection uses the existing deadline and
+bounded backoff, with no new retry loop.
+
+The public contract does not establish complete Codex-only, cross-device or
+cloud coverage, day timezone, retention or service polling limits. Live account
+availability and coverage require separate proof. Additional local profiles
+retain their existing readers. See [ADR 0022](adr/0022-codex-account-token-history.md).
+
 ## Isolated live Codex validation
 
 The candidate accepts `--codex-test-profile` with an absolute test directory.
@@ -117,12 +186,54 @@ The app starts disconnected, so an unavailable reading before sign-in is
 expected. Successful connections remain available across normal quit and
 relaunch; **Disconnect** signs out only that MeterUsage connection.
 
-This mode reads only Codex account allowance. It has no local activity, status
-feed, reset redemption or other-provider collection. Update checks, update
+This mode reads Codex account allowance, provider-reported daily tokens and the public OpenAI service-status
+feed, and permits explicitly confirmed Codex reset redemption. Status requests
+use no account credentials. It has no local activity or other-provider collection.
+See [ADR 0015](adr/0015-codex-test-public-status.md) and
+[ADR 0017](adr/0017-connected-codex-menu-reset.md). Update checks, update
 installation, login-item changes and notifications are disabled. It does not
 change the primary setup for users or replace an installed app.
+
+After a failed refresh, the Service status panel, notch card and tray tooltip
+keep the last successful reading marked as last known with its age and the
+refresh failure. Public-feed errors do not use account or quota error text.
+Copied diagnostics also marks retained status as stale, with the time since its
+last successful check and a fixed service-status error. A successful retry clears
+that stale marker.
 
 Synthetic isolation tests do not prove native sign-in or visible cloud usage.
 Live acceptance requires the packaged app, human browser sign-in, fresh
 allowance in its actual UI and comparison with the same provider account.
 See [ADR 0012](adr/0012-codex-live-test-profile.md).
+
+## Isolated live Claude validation
+
+Use `--claude-test-profile` with a separate absolute test directory. It reuses
+the existing Settings consent dialog, fixed Keychain helper, read-only Desktop
+reader and allowance request. The directory must be empty on first use. Its
+marker differs from Codex and demo markers; those profiles cannot be reused.
+The same protected-path, symlink and Electron singleton checks apply.
+Do not combine the flag with another test profile, `--demo` or
+`--candidate-profile`.
+
+The app starts disconnected with Claude collection visible. Cancel the access
+dialog to leave consent off. After approval, only Claude account allowance is
+collected. JSON preferences, archives and Electron state stay in the test
+directory; OS home remains available only to the existing Desktop reader.
+Codex sign-in, polling and cleanup are blocked. Other providers, local activity,
+status feeds and reset redemption are excluded. Updates, login-item changes
+and notifications remain blocked by candidate mode.
+
+Normal quit retains an approved account fingerprint for relaunch. Background
+reads cannot prompt. Disconnect saves consent off, clears allowance and leaves
+Claude Desktop signed in. An unavailable reading must not fall back to local
+CLI or companion files.
+
+Synthetic tests prove isolation and consent/connection/relaunch/disconnect
+against invented Desktop data. Native acceptance still requires a separately
+packaged candidate: cancel consent, approve access, compare fresh allowance
+with the same Desktop account, relaunch without a prompt, then disconnect and
+confirm allowance is removed. Test denied access and account/organization
+switches only with the account owner's approval. Never run the Keychain helper
+directly or capture its output. See
+[ADR 0016](adr/0016-claude-live-test-profile.md).

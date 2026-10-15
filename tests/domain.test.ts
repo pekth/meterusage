@@ -7,7 +7,7 @@ import { pace, effectivePace, burnActive, etaSeconds, formatETA, paceText } from
 import { limitsReport, canonicalJSON } from "../src/domain/report";
 import { estimate } from "../src/domain/pricing";
 import { burnBreakdown, telemetry } from "../src/domain/telemetry";
-import { notchFrame } from "../src/domain/notch";
+import { notchFrame, stripWidth, cardWidth } from "../src/domain/notch";
 import { HistoryStore, readArchive, saveArchive } from "../src/main/history";
 
 const now = Date.UTC(2026, 9, 6, 12), day = 86400000;
@@ -130,10 +130,14 @@ describe("Swift durable history/archive compatibility", () => {
   }));
 });
 describe("ADR 0004 notch geometry", () => {
+  it("uses the accepted strip and detail widths", () => {
+    expect(stripWidth).toBe(36); expect(cardWidth).toBe(220);
+  });
   it.each([false, true])("keeps top and strip anchor across different card heights (right=%s)", right => {
     const screen = { x: 0, y: 0, width: 1600, height: 1000 }, anchor = { x: 800, y: 40 };
-    const a = notchFrame(anchor, { width: 294, height: 213.5 }, right, screen), b = notchFrame(anchor, { width: 294, height: 453.2 }, right, screen);
+    const panelWidth = stripWidth + cardWidth;
+    const a = notchFrame(anchor, { width: panelWidth, height: 213.5 }, right, screen), b = notchFrame(anchor, { width: panelWidth, height: 453.2 }, right, screen);
     expect(a.y).toBe(b.y); expect(a.x).toBe(b.x); expect(a.height).toBe(214); expect(b.height).toBe(454);
-    expect(right ? a.x + 44 : a.x + a.width).toBe(anchor.x);
+    expect(right ? a.x + stripWidth : a.x + a.width).toBe(anchor.x);
   });
 });
