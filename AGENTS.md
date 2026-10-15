@@ -39,11 +39,8 @@ public repository.
 - Update `README.md` or the relevant file under `docs/` when behavior or setup
   changes.
 
-## Repository-owned knowledge
+## Docs
 
-- Read [`docs/KB.md`](docs/KB.md) for public repository facts and known gaps.
-- Read [`docs/adr/README.md`](docs/adr/README.md) when a task changes or relies on a repository decision.
-- Keep project facts in `docs/KB.md` and decisions in `docs/adr/`.
-- Update those files in the same agent change when the change alters a documented fact or decision.
-- Keep public documentation safe. Do not add credentials, personal data, private agent or orchestration instructions, private repository references, or local absolute paths.
-- Do not add scheduled knowledge-sync workflows. Repository knowledge is maintained beside the project through ordinary agent changes.
+- Facts and known gaps: [`docs/KB.md`](docs/KB.md). Decisions: [`docs/adr/`](docs/adr/README.md). Update them in the same change when a documented fact or decision changes.
+- Keep public docs free of credentials, personal data, private repository references, and absolute local paths.
+- Issue forms in `.github/ISSUE_TEMPLATE/` apply the `bug`, `feature`, and `chore` labels.
