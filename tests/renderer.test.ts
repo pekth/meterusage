@@ -1,7 +1,7 @@
 import { it, expect, vi } from "vite-plus/test";
 import { createElement, useEffect, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { App, Connections, Meter, ProviderCard } from "../src/renderer/app";
+import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings } from "../src/renderer/app";
 import { tokens, providers, primary, quota, value, window, localDay, shiftDay } from "../src/domain/models";
 import type { ViewState } from "../src/shared/ipc";
 import { openRouterUsage } from "../src/main/providers/usage";
@@ -28,7 +28,8 @@ it("passes the saved size to notch details without scaling the strip or share su
     for (const surface of ["flyout", "settings"]) {
       const markup = renderApp(view, surface);
       expect(markup).toContain(`zoom:${scale}`);
-      expect(markup).toMatch(/class="panel-viewport"[^>]*tabindex="0"/);
+      expect(markup).toMatch(/class="panel-viewport"[^>]*role="region"/);
+      expect(markup).not.toMatch(/class="panel-viewport"[^>]*tabindex/);
       if (surface === "settings") {
         expect(markup).toContain("<legend>Usage-panel size</legend>");
         expect(markup).toContain("The Settings window stays the same size.");
@@ -137,13 +138,14 @@ it("offers only supported methods and puts Done after the source choices", () =>
   const markup = renderApp(view, "settings");
   expect(markup).toContain('aria-label="Codex connection method"');
   expect(markup).toContain('aria-label="Claude connection method"');
-  expect(markup).toContain('aria-label="Grok connection method"');
+  expect(markup).not.toContain('aria-label="Grok connection method"');
+  expect(markup).toContain('<span>Grok CLI</span>');
   expect(markup).toContain('>Browser sign-in</option>');
   expect(markup).toContain('>Claude Desktop</option>');
   expect(markup).toContain('>Claude Code CLI</option>');
-  const grok = markup.slice(markup.indexOf('aria-label="Grok connection method"')).split('</select>')[0];
-  expect(grok).toContain('>Grok CLI</option>'); expect(grok).not.toContain('value="account"');
-  expect(markup.indexOf('>Done</button>')).toBeGreaterThan(markup.indexOf('aria-label="Grok connection method"'));
+  const grok = markup.slice(markup.indexOf('id="connection-grok"')).split('</div>')[0];
+  expect(grok).not.toContain("<select");
+  expect(markup.indexOf('>Done</button>')).toBeGreaterThan(markup.indexOf('id="connection-grok"'));
 });
 it("keeps a selected CLI switch explicit while showing the still-connected account", () => {
   const view = state(); view.snapshot.demo = false;
@@ -341,7 +343,7 @@ it("keeps reported service health visible when all usage providers are hidden", 
   const markup = renderApp(view);
   expect(markup).toContain('aria-label="Service status"'); expect(markup).toContain("Synthetic service outage"); expect(markup).toContain("All systems operational");
   expect(markup).toContain("var(--alert)"); expect(markup).toContain("Enable a provider in Settings");
-  expect(markup.indexOf("Service status")).toBeLessThan(markup.indexOf("Enable a provider"));
+  expect(markup.indexOf("Service status")).toBeGreaterThan(markup.indexOf("Enable a provider"));
 });
 
 it("shows idle and failed public status sources without inventing unsupported providers", () => {
@@ -417,14 +419,14 @@ it.each(["daily", "weekly", "cumulative"])("exposes exact heatmap values on hove
   const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, detail: true }));
   const date = (at: number) => new Date(at).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
   const scope = mode === "weekly" ? `Week of ${date(shiftDay(day, -new Date(day).getDay()))}` : mode === "cumulative" ? `Through ${date(day)}` : date(day);
-  expect(markup).toContain(`tabindex="0" role="img" aria-label="${scope}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
+  expect(markup).toContain(`tabindex="-1" role="img" aria-label="${scope}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
   expect(markup).toContain(`title="${scope}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
-  expect(markup).toContain(`data-readout="${scope} · 1.2M tokens · 2 sessions"`);
+  expect(markup).toContain(`data-readout="${scope} · ${new Intl.NumberFormat().format(1234567)} tokens · 2 sessions"`);
   for (const name of ["daily", "weekly", "cumulative"]) expect(markup).toMatch(new RegExp(`<option value="${name}"[^>]*>${name[0].toUpperCase() + name.slice(1)}</option>`));
   const css = readFileSync("src/renderer/style.css", "utf8");
   expect(css).toContain('content: attr(data-readout)');
   expect(css).toContain('.heatmap-cell:hover::after'); expect(css).toContain('.heatmap-cell:focus::after');
-  expect(css).toContain('padding-bottom: 4.5em');
+  expect(css).toContain('padding-bottom: var(--readout-height)');
 });
 
 it("labels count-only heatmap days without inventing measured zero tokens", () => {
@@ -446,7 +448,7 @@ it("keeps OpenRouter ledger dates in UTC when the local date is a day earlier", 
     const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("openRouter"), state: view, action: async () => {} }));
     const date = new Date(Date.UTC(2026, 9, 6)).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
     expect(markup).toContain(`aria-label="${date}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
-    expect(markup).toContain(`data-readout="${date} · 1.2M tokens · 2 sessions"`);
+    expect(markup).toContain(`data-readout="${date} · ${new Intl.NumberFormat().format(1234567)} tokens · 2 sessions"`);
   } finally { vi.unstubAllEnvs(); }
 });
 
@@ -497,7 +499,7 @@ it("explains disabled demo connections before their actions and preserves labell
   expect(explanation).toBeGreaterThan(-1);
   expect(explanation).toBeLessThan(markup.indexOf("Sign in to Codex"));
   expect(explanation).toBeLessThan(markup.indexOf("Connect Claude Desktop"));
-  expect(markup).toContain('<section class="providers">');
+  expect(markup).toContain('<section class="providers" hidden="">');
   expect(markup).toMatch(/<label class="setting"><span>Collect<\/span><input type="checkbox" aria-label="Collect Codex usage"[^>]*\/><\/label>/);
   expect(markup).toMatch(/<label class="setting"><span>Show<\/span><input type="checkbox" aria-label="Show Codex in menu bar and side notch"[^>]*\/><\/label>/);
   view.snapshot.demo = false;
@@ -588,7 +590,9 @@ it("renders provider account buckets beside quota without local activity", () =>
     const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, ...props }));
     expect(markup).toContain("Account token activity");
     expect(markup).toContain("Provider account");
-    expect(markup).toContain('tabindex="0" role="img" aria-label="2026-10-04: 1,234,567 tokens"');
+    expect(markup).toContain('aria-label="2026-10-04: 1,234,567 tokens"');
+    expect((markup.match(/tabindex="0"/g) ?? []).length).toBe(props.staticExport ? 0 : 1);
+    if (props.staticExport) expect(markup).not.toContain("tabindex=");
     expect(markup).toContain('aria-label="2026-10-05: Unavailable"');
     expect(markup).toContain('aria-label="2026-10-06: 0 tokens"');
     expect(markup).not.toContain("Recorded activity");
@@ -618,7 +622,7 @@ it("keeps unavailable account history explicit and respects global and Codex hea
   expect(css).toContain(".heatmap .unavailable-day > span");
 });
 
-it.each([[0, "0"], [42, "42"], [12500, "12.5K"], [1234567, "1.2M"], [499543210, "499.5M"], [2400000000, "2.4B"]])("makes %s account tokens readable without losing the exact count", (count, compact) => {
+it.each([0, 42, 12500, 1234567, 499543210, 2400000000])("shows %s account tokens exactly in the visible readout", count => {
   vi.stubEnv("TZ", "America/Los_Angeles");
   try {
     const view = state(); view.snapshot.activities = {};
@@ -628,7 +632,7 @@ it.each([[0, "0"], [42, "42"], [12500, "12.5K"], [1234567, "1.2M"], [499543210, 
     for (const props of [{}, { detail: true }, { detail: true, staticExport: true }]) {
       const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, ...props }));
       const exact = `2026-10-11: ${new Intl.NumberFormat("en").format(count as number)} tokens`;
-      expect(markup).toContain(`aria-label="${exact}" title="${exact}" data-readout="${date} · ${compact} tokens"`);
+      expect(markup).toContain(`aria-label="${exact}" title="${exact}" data-readout="${date} · ${new Intl.NumberFormat("en").format(count)} tokens"`);
       expect(markup).toContain('aria-label="2026-10-10: Unavailable"');
     }
   } finally { vi.unstubAllEnvs(); }
@@ -644,5 +648,101 @@ it.each(providers)("uses the shared heatmap design for %s activity", provider =>
   expect(markup).toContain('class="heatmap-legend secondary"');
   expect(markup).toContain('aria-label="Usage intensity from less to more"');
   expect(markup).toContain(`${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions`);
-  expect(markup).toContain('1.2M tokens · 2 sessions');
+  expect(markup).toContain(`${new Intl.NumberFormat().format(1234567)} tokens · 2 sessions`);
+});
+
+it("keeps every Settings category mounted and selects categories without dispatching an action", () => {
+  const view = state(), action = vi.fn(async () => {}), select = vi.fn();
+  vi.mocked(useState).mockReturnValueOnce(["Connections", select]);
+  const settings = Settings({ state: view, action, saveOrder: async () => true });
+  const nav = settings.props.children[1].props.children[0];
+  expect(nav.props["aria-label"]).toBe("Settings categories");
+  const buttons = nav.props.children;
+  expect(buttons.map((button: { props: { children: string } }) => button.props.children)).toEqual(["Connections", "Appearance", "General", "Providers", "Side notch", "Usage details", "Diagnostics"]);
+  buttons[1].props.onClick();
+  expect(select).toHaveBeenCalledWith("Appearance"); expect(action).not.toHaveBeenCalled();
+  for (const category of ["Connections", "Appearance", "Providers"]) {
+    vi.mocked(useState).mockReturnValueOnce([category, select]);
+    const markup = renderToStaticMarkup(createElement(Settings, { state: view, action, saveOrder: async () => true }));
+    expect(markup).toContain(`aria-current="page">${category}</button>`);
+    expect((markup.match(/<section(?: class="providers")? hidden="">/g) ?? []).length).toBe(6);
+    for (const control of ["Codex connection method", "Collect Codex usage", "Add Claude account…", "Usage-panel size", "Clear local scan cache"]) expect(markup).toContain(control);
+    const masks = [...markup.matchAll(/<mask id="([^"]+)"/g)].map(match => match[1]);
+    expect(masks.length).toBeGreaterThan(1); expect(new Set(masks).size).toBe(masks.length);
+  }
+});
+
+it("keeps provider setup mounted behind Configure and method selection inert", () => {
+  const view = state(), action = vi.fn(async () => {}), method = vi.fn(), expanded = vi.fn();
+  view.connections = [{ provider: "codex", source: "account", localAvailable: true, status: "connected" }];
+  const row = Connections({ state: view, action }).props.children[3].props.children[0];
+  vi.mocked(useState).mockReturnValueOnce(["account", method]).mockReturnValueOnce([false, expanded]);
+  const rendered = row.type(row.props), summary = rendered.props.children[0], detail = rendered.props.children[1];
+  expect(detail.props.hidden).toBe(true); expect(detail.props.id).toBe("connection-codex");
+  summary.props.children[1].props.onClick(); expect(expanded).toHaveBeenCalledWith(true);
+  detail.props.children[0].props.children[1].props.onChange({ target: { value: "cli" } });
+  expect(method).toHaveBeenCalledWith("cli"); expect(action).not.toHaveBeenCalled();
+});
+
+it.each(["idle", "missing", "value"] as const)("separates connected source, collection and %s allowance readings", status => {
+  const view = state(); view.connections = [{ provider: "codex", source: "account", localAvailable: true, status: "connected" }];
+  view.snapshot.quotas.codex = status === "value" ? value(quota("codex", [], now)) : status === "missing" ? { status, code: "offline", reason: "Synthetic unavailable" } : { status };
+  for (const collected of [false, true]) {
+    view.settings.values.showProviderCodex = collected;
+    const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+    expect(markup).toContain("Current source: Browser sign-in");
+    expect(markup).toContain(`Collection: ${collected ? "On" : "Off"} · Allowance: ${status === "value" ? "Available" : status === "missing" ? "Synthetic unavailable" : "Not checked yet"}`);
+    expect(markup.includes("Connected · Account allowance")).toBe(status === "value");
+    expect(markup).toContain('aria-label="Configure Codex" aria-expanded="false" aria-controls="connection-codex"');
+  }
+});
+
+it.each([false, true])("uses one heatmap Tab stop and navigates full-history %s calendar positions", fullHistory => {
+  const count = fullHistory ? 182 : 30, last = fullHistory ? 178 : 29;
+  let active = 0;
+  vi.mocked(useRef).mockReturnValueOnce({ current: null }); vi.mocked(useEffect).mockImplementationOnce(() => {});
+  const grid = ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Test calendar", fullHistory, children: "cells" }).props.children[2];
+  const cells = Array.from({ length: count }, (_, index) => ({
+    tagName: "SPAN", tabIndex: index === 0 ? 0 : -1,
+    classList: { contains: (name: string) => name === "heatmap-cell" && index <= last },
+    focus: () => { active = index; grid.props.onFocus({ target: cells[index], currentTarget: container }); },
+  }));
+  const container = { children: [...cells, { tagName: "DIV" }], querySelectorAll: () => cells.filter(cell => cell.classList.contains("heatmap-cell")) };
+  const press = (key: string) => { const preventDefault = vi.fn(); grid.props.onKeyDown({ key, target: cells[active], currentTarget: container, preventDefault }); return preventDefault; };
+  cells[0].focus();
+  expect(press("ArrowRight")).toHaveBeenCalled(); expect(active).toBe(fullHistory ? 7 : 1);
+  press("ArrowDown"); expect(active).toBe(fullHistory ? 8 : 16);
+  press("ArrowUp"); press("ArrowLeft"); expect(active).toBe(0);
+  press("ArrowUp"); expect(active).toBe(0);
+  press("End"); expect(active).toBe(last);
+  press("ArrowDown"); expect(active).toBe(last);
+  expect(cells.filter(cell => cell.tabIndex === 0)).toEqual([cells[last]]);
+  expect(press("Tab")).not.toHaveBeenCalled(); expect(active).toBe(last);
+  press("Home"); expect(active).toBe(0);
+  expect(cells.filter(cell => cell.tabIndex === 0)).toEqual([cells[0]]);
+});
+
+it.each(["codex", "grok"] as const)("omits all %s heatmap Tab stops in static shares", provider => {
+  const view = state(), day = localDay(now), daily = [{ day, tokens: tokens(), sessionCount: 12345, estimatedCostUSD: 0 }];
+  view.snapshot.activities = {}; view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = true;
+  view.snapshot.usages[provider] = value({ provider, capturedAt: now, sessionCount: 12345, messageCount: 0, todaySessionCount: 12345, todayMessageCount: 0, telemetry: telemetry([], daily, now) });
+  for (const staticExport of [false, true]) {
+    const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary(provider), state: view, action: async () => {}, staticExport }));
+    expect((markup.match(/tabindex="0"/g) ?? []).length).toBe(staticExport ? 0 : 1);
+    if (staticExport) expect(markup).not.toContain("tabindex=");
+    expect(markup).toContain("12,345 sessions · token totals unavailable");
+  }
+});
+
+
+it("keeps a single heatmap Tab entry when a calendar shift introduces a new first cell", () => {
+  const cells = [{ tabIndex: 0 }, { tabIndex: 0 }, { tabIndex: -1 }];
+  const node = { querySelectorAll: () => cells, ownerDocument: { activeElement: cells[1] as object } };
+  let reconcile: (() => void) | undefined;
+  vi.mocked(useRef).mockReturnValueOnce({ current: node });
+  vi.mocked(useEffect).mockImplementationOnce(effect => { reconcile = effect as () => void; });
+  ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Shifted calendar", children: "cells" });
+  reconcile?.(); expect(cells.map(cell => cell.tabIndex)).toEqual([-1, 0, -1]);
+  node.ownerDocument.activeElement = {}; cells[0].tabIndex = 0;
+  reconcile?.(); expect(cells.map(cell => cell.tabIndex)).toEqual([0, -1, -1]);
 });

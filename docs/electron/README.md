@@ -75,6 +75,13 @@ scales and height fits within the display. Ctrl/Cmd plus or minus changes size;
 Ctrl/Cmd 0 restores Medium. Refresh interval, theme/accent, collection/display,
 heatmap, pacing, telemetry, chart, alerts, login and update preferences remain.
 
+Settings has a compact category sidebar: Connections, Appearance, General,
+Providers, Side notch, Usage details and Diagnostics. Provider summaries show the
+current source, collection state and reading availability. Choose Configure for
+setup actions; selecting a method still requires its explicit connection action.
+The category controls wrap above the content in narrow windows. Service health
+appears after the primary usage cards in the Usage panel.
+
 Provider groups can be reordered with drag handles, arrow keys or move buttons.
 Saved order applies to Usage, service status, menu bar and side notch. Additional
 accounts stay with their provider. Failed saves retain saved order. See
@@ -100,8 +107,10 @@ in memory and is excluded from local rollups, durable history and schema-1 JSON.
 Live availability and coverage remain unverified. See
 [ADR 0022](../adr/0022-codex-account-token-history.md).
 
-Hover and keyboard focus expose dated compact readouts; tooltips and accessible
-labels retain exact counts. Feedback about 30-day versus 26-week grid geometry
+Hover and keyboard focus expose dated exact grouped counts. Each live heatmap
+has one Tab entry. Use arrow keys to move between days, Home/End for the first
+or last cell, and Tab to leave the grid. Shared images omit focusable cells.
+Feedback about 30-day versus 26-week grid geometry
 remains pending. These source contracts do not establish native keyboard access,
 layout or anchor acceptance.
 

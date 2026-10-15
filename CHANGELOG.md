@@ -13,6 +13,14 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Organize Electron Settings into a compact category sidebar with provider
+  summaries and setup details under Configure. Keep existing settings, account
+  controls and explicit connection actions. Show the current source, collection
+  state and reading availability separately.
+- Place service health after usage cards. Use exact grouped heatmap totals on
+  hover and focus, with one Tab entry per heatmap and arrow-key navigation.
+  Keep control focus visible without highlighting the panel edge.
+
 - Make Electron the sole active feature-development target in contributor and
   version guidance. Freeze the legacy Swift app for new features and record
   staged retirement in ADR 0024. Keep the published Swift download, rollback
@@ -24,12 +32,11 @@ follows [Semantic Versioning](https://semver.org/).
   strategy without changing identity, versions, layout, CI or release state.
   Explain the updater changes required before beta or edition-specific assets.
 
-- Shorten heatmap readouts with readable dates and compact totals such as
-  `12.5K`, `1.2M` and `2.4B` tokens. Keep exact counts in tooltips and accessible
-  labels across providers.
+- Keep summary token metrics compact with totals such as `12.5K`, `1.2M` and
+  `2.4B`. Heatmap hover, focus, tooltips and accessible labels show exact counts.
 
 - Unify provider heatmaps with compact headings, a shared intensity legend and
-  compact hover or keyboard readouts with exact tooltips and accessible labels.
+  exact hover or keyboard readouts, tooltips and accessible labels.
   Unreported account days use quiet solid
   outlines, distinct from reported zeroes. Keep each source's time range and
   token or session units.

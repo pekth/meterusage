@@ -47,14 +47,19 @@ Last source review: 2026-10-10
   test profiles cannot switch to local collection. See
   [ADR 0023](adr/0023-onboarding-source-choice.md).
 
-- Candidate Settings uses compact onboarding and grouped rows. Demo account
+- Candidate Settings uses category navigation for Connections, Appearance,
+  General, Providers, Side notch, Usage details and Diagnostics. Connection
+  summaries show the current source, collection state and reading availability;
+  Configure reveals the existing setup actions. Category changes preserve pending
+  source selection, and choosing a method still requires its explicit action.
+  Existing preferences and additional-account controls remain. Demo account
   restrictions appear before disabled connection actions. Provider column
   headings replace repeated visual labels on wide windows; at 450 pixels or
   narrower, each provider has two labelled control columns below its name.
   Input accessible names and full label hit areas remain. Settings action
   errors retain their alert role, message and dismissal in a sticky banner.
   Advanced account rows wrap without changing their save/remove behavior.
-- Candidate Usage compacts Service status and shows local summary metrics in
+- Candidate Usage places Service status after usage and burn cards and shows local summary metrics in
   three equal columns, with two columns at 360 pixels or narrower. Recorded
   activity labels distinguish telemetry counters from account/local totals
   without changing values or adding a time scope. Archived quota retains its
@@ -71,11 +76,13 @@ Last source review: 2026-10-10
   and keyboard focus remain immediate. Renderer fixture and build proof does
   not establish rendered layout, sticky alerts, motion or native export proof.
 
-- Electron heatmaps show compact counts and readable dates for daily, weekly
-  or cumulative scope on hover and keyboard focus. Exact counts remain in
-  tooltips and accessible labels. Account, local-token and session-only
+- Electron heatmaps show exact grouped counts and readable dates for daily,
+  weekly or cumulative scope on hover and keyboard focus, tooltips and accessible
+  labels. Each live heatmap has one Tab entry; arrow keys move between days and
+  Home/End reach the first/last available cell. Tab leaves the heatmap. Shared
+  images have no focusable cells. Account, local-token and session-only
   providers share the same heading, caption, cells and intensity legend.
-  Hover and keyboard focus replace the legend with the compact dated readout
+  Hover and keyboard focus replace the legend with the exact dated readout
   without changing the card height. Unreported account days have subtle solid
   outlines; reported zeroes have filled neutral cells. Each source retains its
   own time range and units. Count-only providers report token totals unavailable.
@@ -147,7 +154,7 @@ Last source review: 2026-10-10
 - Candidate Quit removes the display subscription before stopping collection and waiting for authentication cleanup. A late collection publication cannot recreate the notch or restart update checks. Lifecycle regressions cover flyout and tray Quit, repeated Quit during cleanup, and notch enabled or disabled. These tests do not establish native process termination.
 - Candidate macOS GUI startup validates Electron's three direct singleton links as one coherent metadata set before requesting the native lock. Other profile symlinks remain rejected, and JSON entrypoints retain strict validation. A second instance exits before collection starts and asks the primary instance to reveal its panel. Startup failures emit a fixed error; activation during Quit cannot reopen windows. [ADR 0013](adr/0013-candidate-single-instance-startup.md) records the bounded exception and native acceptance requirements.
 - Candidate Appearance includes a saved Small, Medium or Large panel size, defaulting to Medium. Main-panel widths are 336, 420 and 483 points before display clamping. Main-panel and Settings content use the same scale. Side-notch detail content uses explicit integer pixel sizes without CSS zoom. The notch card is 220 pixels wide beside the fixed 36-pixel strip; its height follows the size-specific content within the work area. The Settings frame, tray and 250-pixel shared-card capture remain unchanged. Ctrl/Cmd plus or minus selects the next size; Ctrl/Cmd 0 restores Medium. These shortcuts use the same saved preference and main-panel resizing as Settings. Window loads normalize retained Chromium zoom to avoid applying a second scale. The main panel measures natural content height, shrinks when content gets shorter, and scrolls within available display space without visible indicators. Synthetic tests cover persistence, invalid values, write failure, rapid keys and display clamping; actual native sizing acceptance is separate.
-- Candidate Settings places Appearance directly below account connections, followed by General, Providers, Side notch, Usage details and Diagnostics. Related options use grouped rows. Panel size uses visible Small, Medium and Large choices; accent color uses six labelled radio swatches. Aligned provider controls distinguish collection from menu-bar and side-notch display; stopping primary collection preserves the saved display preference. The display control stays available when an additional account has an active source slot. Advanced local accounts remain available. Scrollbar indicators are hidden throughout candidate windows, with scrolling and keyboard access retained. These renderer contracts do not establish native UI parity.
+- Candidate Settings gives Appearance, General, Providers, Side notch, Usage details and Diagnostics direct category access beside Connections. Related options use grouped rows. Panel size uses a compact row of visible Small, Medium and Large choices; accent color uses six labelled radio swatches. Aligned provider controls distinguish collection from menu-bar and side-notch display; stopping primary collection preserves the saved display preference. The display control stays available when an additional account has an active source slot. Advanced local accounts remain available. Scrollbar indicators are hidden throughout candidate windows, with scrolling and keyboard access retained. These renderer contracts do not establish native UI parity.
 - Codex login, allowance and own-profile logout select `app-server --listen stdio://`. Connection subprocesses keep interpreter search paths while excluding inherited credential variables. Connection tests restrict app-helper discovery to generated fixture roots. These are source contracts, not proof of a live helper or cloud account.
 - The desktop-connection candidate has matching passing source proof for 165 synthetic TypeScript tests, TypeScript checking and production bundling on Linux. Its connection cleanup, account verification, cache/JSON readers, reset capability, alerts and locality labels have regression coverage. Disconnect blocks Claude's post-request credential reread; account-bound collection timeout removes unverified allowance; explicit Codex sign-in retry recovers retained cleanup before a new login. The unchanged migration baseline's headless demo comparison preserves stable schema-1 fields against the Swift demo oracle; that older native receipt does not verify the new connections. Source checks do not establish native parity or a published Electron release.
 - The first macOS fixture attempt passed 90 cases and failed 29 due to temporary-path aliases and a case-sensitive filename assertion. Canonical roots and exact directory-entry checks now pass all 128 current fixtures on macOS, along with TypeScript checking and production bundling. Candidate symlink rejection is unchanged.
