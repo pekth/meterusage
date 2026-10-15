@@ -71,7 +71,7 @@ Last source review: 2026-10-10
   the unused hover readout space; live cards retain it. Full-height capture,
   frozen account selection and the 250-pixel export width remain unchanged.
   Dark secondary text uses `#b0b0b8`; light text and semantic colors retain their
-  existing rules. Usage and Settings reuse the notch's 100 ms background/border
+  existing rules. Usage, Settings and notch detail buttons use 120 ms background
   feedback only for enabled fine-pointer hover with reduced motion off. Press
   and keyboard focus remain immediate. Renderer fixture and build proof does
   not establish rendered layout, sticky alerts, motion or native export proof.
@@ -177,7 +177,7 @@ Last source review: 2026-10-10
 - The `--codex-test-profile` candidate mode runs the existing Codex connection UI with isolated preferences, app data and Electron state. It excludes synthetic readings, other provider sources, local activity and Claude status. It reads the public OpenAI status feed without credentials; updates, login-item changes and notifications are blocked. [ADR 0012](adr/0012-codex-live-test-profile.md) amends the demo-only candidate restriction; [ADR 0015](adr/0015-codex-test-public-status.md) permits this public status request. Native and provider acceptance remain separate.
 - The separate `--claude-test-profile` candidate mode starts without consent and runs only the existing Claude Desktop allowance flow. It uses isolated JSON preferences and Electron state, blocks Codex access and cleanup, and retains the candidate system-effect guards. A Claude connection call without a consent callback denies access. Synthetic fixtures cover consent, relaunch, disconnect and profile isolation; native Keychain, Desktop format and live-provider acceptance remain open. See [ADR 0016](adr/0016-claude-live-test-profile.md).
 
-- Electron notch secondary labels use a scoped `#b0b0b8`; semantic provider and quota colors retain their existing rules. Telemetry adds a border and size-specific top padding. Enabled detail buttons and strip Settings use 100 ms color feedback for fine-pointer hover with reduced motion off. Press and keyboard focus stay immediate; reduced motion disables transitions. Card/window/ring geometry and the 450 ms close delay retain their source behavior. Rendered feedback, scrolling and native anchors still need target proof. See [SIDE-NOTCH.md](SIDE-NOTCH.md).
+- Electron notch secondary labels use a scoped `#b0b0b8`; semantic provider and quota colors retain their existing rules. Telemetry adds a border and size-specific top padding. Enabled detail buttons use 120 ms background feedback for fine-pointer hover with reduced motion off. Strip Settings color, press and keyboard focus stay immediate; reduced motion disables transitions. Card/window/ring geometry and the 450 ms close delay retain their source behavior. Rendered feedback, scrolling and native anchors still need target proof. See [SIDE-NOTCH.md](SIDE-NOTCH.md).
 
 - Electron Settings persists provider group order through validated IPC. Drag handles, arrow keys and move buttons use the same saved order for usage cards, service health, menu bar and side notch. Stored lists retain known providers once and append missing providers in default order. Additional accounts remain grouped, with independent Collect and Show settings. Failed saves and canceled drags retain the saved order. Synthetic proof does not establish rendered or native drag, focus, VoiceOver or notch-anchor behavior. See [ADR 0021](adr/0021-provider-group-order.md).
 

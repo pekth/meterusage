@@ -130,9 +130,9 @@ Shared cards keep their original scale. Eligibility, account labels and Cancel-d
 Secondary labels in the Electron notch card use `#b0b0b8`, without changing
 provider status or quota colors. Telemetry starts with a border and 6/8/10 px
 of top padding for Small/Medium/Large. Existing metric margins remain.
-Enabled detail buttons transition only background and border colors for
-100 ms on fine-pointer hover when reduced motion is off. The strip Settings
-button transitions only its text color. Press and keyboard focus stay
+Enabled detail buttons transition only the background color for 120 ms on
+fine-pointer hover when reduced motion is off. Strip Settings text color
+changes immediately. Press and keyboard focus stay
 immediate, and reduced motion disables transitions. Card, window, ring and
 provider-switch states do not animate. Browser and native checks must verify
 these rendered states and scrolling after the added telemetry spacing.
