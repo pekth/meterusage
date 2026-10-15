@@ -20,6 +20,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Make buttons smaller throughout the Electron menu, Settings and side-notch
+  cards. Reveal the notch Settings gear on strip hover or keyboard focus.
+- Align heatmap menu labels with a fixed selection-checkmark column.
+
 - Keep Service status at the top of the Electron menu. Switch between provider
   and account tabs instead of stacking every usage card. Preserve saved order
   and keyboard navigation.

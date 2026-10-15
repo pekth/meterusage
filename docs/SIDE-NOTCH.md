@@ -97,7 +97,9 @@ quit. It does not install a global input hook.
 
 The Electron strip is a neutral charcoal 36 px rail. Each 22 px usage ring
 contains its provider mark, with the used percentage below. Settings is a gear
-at the bottom. The rail stays visible while details are closed or open. There is one design, with no dots markup or design selector.
+at the bottom, hidden until strip hover or keyboard focus on pointer devices.
+It remains visible on touch devices. Revealing it keeps the rail geometry fixed.
+The rail stays visible while details are closed or open. There is one design, with no dots markup or design selector.
 Small, Medium and Large change size only. Hover opens details, ring hover
 switches providers, and pointer exit closes details after 450 ms.
 Disable/hide clears expanded state, so re-enabling with the pointer outside
@@ -120,8 +122,10 @@ uses a natural-height row below the grid. Long exact counts wrap and may grow
 the card without moving its top edge or rail. No blank readout area is reserved.
 Keyboard focus has a visible outline. The non-activating native notch's keyboard
 access still needs native proof; source fixtures cover focus labels and styles.
-Codex Use reset uses the same base 11 px font and padding as compact footer
-buttons. Settings panel size uses explicit integer pixel sizes for notch
+Notch card actions, including Codex Use reset, use compact 20 px minimum-height buttons with 2 px vertical
+and 5 px horizontal padding. Labels use 10 px text in the menu and Small/Medium
+notch cards, and 12 px in Large. Heatmap menu options share a fixed checkmark
+column and aligned labels. Settings panel size uses explicit integer pixel sizes for notch
 text, buttons and spacing, without CSS zoom. Small uses an 11 px body and
 10 px secondary text; Medium uses 13 px and 10 px; Large uses 15 px and
 12 px. The visible card stays 220 pixels wide and the strip stays 36 pixels
