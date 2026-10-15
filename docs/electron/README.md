@@ -79,7 +79,9 @@ Settings has a compact category sidebar: Connections, Appearance, General,
 Providers, Side notch, Usage details and Diagnostics. Provider summaries show the
 current source, collection state and reading availability. Choose Configure for
 setup actions; selecting a method still requires its explicit connection action.
-The category controls wrap above the content in narrow windows. Service health
+The category controls wrap above the content in narrow windows. Settings fits
+the active page and expanded setup content, retains its width and top position
+while on screen, and scrolls when content exceeds the available work area. Service health
 appears after the primary usage cards in the Usage panel.
 
 Provider groups can be reordered with drag handles, arrow keys or move buttons.
@@ -87,12 +89,12 @@ Saved order applies to Usage, service status, menu bar and side notch. Additiona
 accounts stay with their provider. Failed saves retain saved order. See
 [ADR 0021](../adr/0021-provider-group-order.md).
 
-The notch has one usage-ring and percentage strip. Details open on hover and
+The notch has one 36-pixel charcoal rail with provider marks inside 22-pixel
+usage rings, percentages below and a Settings gear at the bottom. Details open on hover and
 close through the existing delay and temporary action guards. Pin, dots and
 multiple-design controls are removed. Current source uses a 220-pixel card and
 36-pixel strip; retained Swift uses 250/44 points. Shared-image capture remains
-250 pixels wide. ADR 0019 still names the older dimensions; that documented
-mismatch remains unresolved. Native fixed-edge captures for two different-height
+250 pixels wide. ADR 0019 records the current dimensions. Native fixed-edge captures for two different-height
 cards are still required. See [side notch](../SIDE-NOTCH.md) and
 [ADR 0019](../adr/0019-single-design-notch.md).
 

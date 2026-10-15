@@ -42,15 +42,20 @@ export function Meter({ w, now, activityAt, pacing }: { w: QuotaWindow; now: num
 }
 export function ActivityHeatmap({ title, scope, period, label, fullHistory, unavailable = false, controls, children }: { title: string; scope: string; period?: string; label: string; fullHistory?: boolean; unavailable?: boolean; controls?: ReactNode; children?: ReactNode }) {
   const grid = useRef<HTMLDivElement>(null);
+  const [hovered, setHovered] = useState<string>(), [focused, setFocused] = useState<string>();
+  const readout = hovered ?? focused;
   useEffect(() => {
     const node = grid.current; if (!node) return;
     const cells = Array.from(node.querySelectorAll<HTMLElement>(".heatmap-cell[tabindex]"));
     const selected = cells.find(cell => cell === node.ownerDocument.activeElement) ?? cells.find(cell => cell.tabIndex === 0) ?? cells[0];
     cells.forEach(cell => { cell.tabIndex = cell === selected ? 0 : -1; });
+    setFocused(cells.find(cell => cell === node.ownerDocument.activeElement)?.dataset.readout);
+    setHovered(node.querySelector<HTMLElement>(".heatmap-cell[tabindex]:hover")?.dataset.readout);
   }, [children]);
-  return <section className="activity-heatmap"><div className="heatmap-heading"><h3>{title}</h3>{controls}</div><p className="heatmap-caption secondary">{scope}{period && <> · {period}</>}</p>{children ? <div ref={grid} className={`heatmap${fullHistory ? " full-history" : ""}`} aria-label={label} onFocus={e => {
+  return <section className="activity-heatmap"><div className="heatmap-heading"><h3>{title}</h3>{controls}</div><p className="heatmap-caption secondary">{scope}{period && <> · {period}</>}</p>{children ? <><div ref={grid} className={`heatmap${fullHistory ? " full-history" : ""}`} aria-label={label} onPointerOver={e => setHovered((e.target as HTMLElement).closest<HTMLElement>(".heatmap-cell[tabindex]")?.dataset.readout)} onPointerLeave={() => setHovered(undefined)} onBlur={() => setFocused(undefined)} onFocus={e => {
     const target = e.target as HTMLElement;
     if (!target.classList.contains("heatmap-cell")) return;
+    setFocused(target.dataset.readout);
     e.currentTarget.querySelectorAll<HTMLElement>(".heatmap-cell").forEach(cell => { cell.tabIndex = cell === target ? 0 : -1; });
   }} onKeyDown={e => {
     const cells = Array.from(e.currentTarget.children).filter((node): node is HTMLElement => node.tagName === "SPAN"), target = e.target as HTMLElement;
@@ -62,7 +67,7 @@ export function ActivityHeatmap({ title, scope, period, label, fullHistory, unav
     const direction = e.key === "End" ? -1 : step || 1;
     while (next >= 0 && next < cells.length && !cells[next].classList.contains("heatmap-cell")) next += direction;
     if (next >= 0 && next < cells.length) cells[next].focus();
-  }}>{children}<div className="heatmap-legend secondary"><span className="heatmap-scale" aria-label="Usage intensity from less to more">Less{[0, .3, .65, 1].map(level => <i key={level} aria-hidden="true" style={{ background: level ? "var(--accent)" : "var(--well)", opacity: level || 1 }} />)}More</span>{unavailable && <span className="heatmap-missing"><i aria-hidden="true" />Unavailable</span>}</div></div> : <p className="heatmap-empty secondary">Account history unavailable</p>}</section>;
+  }}>{children}</div><div className="heatmap-readout" aria-hidden="true">{readout ? <span>{readout}</span> : <div className="heatmap-legend secondary"><span className="heatmap-scale" aria-label="Usage intensity from less to more">Less{[0, .3, .65, 1].map(level => <i key={level} aria-hidden="true" style={{ background: level ? "var(--accent)" : "var(--well)", opacity: level || 1 }} />)}More</span>{unavailable && <span className="heatmap-missing"><i aria-hidden="true" />Unavailable</span>}</div>}</div></> : <p className="heatmap-empty secondary">Account history unavailable</p>}</section>;
 }
 function HeatmapCell({ label, readout, amount, peak, first = false, staticExport = false }: { label: string; readout: string; amount?: number; peak: number; first?: boolean; staticExport?: boolean }) {
   return <span className={`heatmap-cell${amount === undefined ? " unavailable-day" : ""}`} tabIndex={staticExport ? undefined : first ? 0 : -1} role="img" aria-label={label} title={label} data-readout={readout}><span aria-hidden="true" style={{ background: amount === undefined ? "transparent" : amount > 0 ? "var(--accent)" : "var(--well)", opacity: amount ? .3 + .7 * amount / peak : 1 }} /></span>;
@@ -193,7 +198,7 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
     <section hidden={category !== "Appearance"}><h2>Appearance</h2><div className="settings-group">
       <fieldset className="size-picker" aria-describedby="panel-size-help"><legend>Usage-panel size</legend>
         <div className="size-options">{Object.values(PanelSize).map(size => <label key={size}><input type="radio" name="panelSize" value={size} checked={String(values.panelSize ?? PanelSize.Medium) === size} onChange={() => set("panelSize", size)} /><span>{size[0].toUpperCase() + size.slice(1)}</span></label>)}</div>
-        <p id="panel-size-help" className="secondary">Sizes the usage panel, notch details and Settings content. The Settings window stays the same size.</p>
+        <p id="panel-size-help" className="secondary">Sizes the usage panel, notch details and Settings content. Settings fits the selected page and scrolls when needed.</p>
       </fieldset>
       <label className="setting"><span>Theme</span><select value={String(values.appearanceTheme)} onChange={e => set("appearanceTheme", e.target.value)}>{["system", "light", "dark"].map(x => <option key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</option>)}</select></label>
       <fieldset className="accent-picker"><legend>Accent color</legend>{Object.entries(accents).map(([name, color]) => <label key={name}><input type="radio" name="accentTheme" value={name} checked={values.accentTheme === name} onChange={() => set("accentTheme", name)} /><span className="accent-swatch" style={{ background: color }} aria-hidden="true" /><span>{name}</span></label>)}</fieldset>
@@ -245,20 +250,19 @@ function Notch({ state, action }: { state: ViewState; action: (r: Request) => Pr
     onPointerMove={e => { const d = drag.current; if (d && !d.started && Math.hypot(e.screenX - d.x, e.screenY - d.y) > 4) { d.started = true; void action({ action: "dragStart" }); } }}
     onPointerUp={e => { const d = drag.current; drag.current = null; if (d?.started) { suppressClick.current = true; void action({ action: "dragEnd" }); } if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
     onLostPointerCapture={() => { if (drag.current?.started) void action({ action: "dragEnd" }); drag.current = null; }}>
-    <div className="strip"><button className="strip-settings" aria-label="Open Settings" onClick={() => void action({ action: "settings" })}>☷</button>{entries.map(entry => {
+    <div className="strip">{entries.map(entry => {
       const { slot, key, window: w, fresh, digit } = entry;
       const name = slot.slotID ? `${providerNames[slot.provider]} · ${slot.label || `Account ${digit}`}` : providerNames[slot.provider];
-      const p = state.snapshot.appearance.pacing ? pace(w, state.snapshot.clock) : undefined, eta = p && etaSeconds(p, w.resetsAt, state.snapshot.clock), ambient = p && (p.status === "deficit" || (eta !== undefined && eta < 7200));
       return <button className="strip-provider" style={{ opacity: fresh ? 1 : .55 }} key={key}
         aria-label={`Show ${name} details, ${Math.round(w.usedPercent)}% used${fresh ? "" : ", last known reading"}`}
         aria-pressed={open && selected?.key === key}
         onPointerEnter={() => { if (!drag.current?.started) void action({ action: "notchSelect", key }); }}
         onClick={() => { if (!suppressClick.current) void action({ action: "notchSelect", key }); }}>
-        <Mark slot={slot} state={state} /><span className="ring" style={{ background: `conic-gradient(${headroom(w.usedPercent)} ${w.usedPercent}%, var(--well) 0)` }}><span>{Math.round(w.usedPercent)}</span></span>
-        {ambient && eta !== undefined && <span className="notch-eta" aria-label={`${formatETA(eta)} ${p?.status === "deficit" ? "until projected exhaustion" : "until reset"}`} style={{ color: p?.status === "deficit" ? "var(--warn)" : "var(--muted)" }}>{formatETA(eta, true)}</span>}
+        <span className="usage-ring" aria-hidden="true" style={{ background: `conic-gradient(${headroom(w.usedPercent)} ${w.usedPercent}%, var(--well) 0)` }}><span><Mark slot={slot} state={state} /></span></span>
+        <span className="strip-percent" style={{ color: headroom(w.usedPercent) }}>{Math.round(w.usedPercent)}%</span>
         {digit && <small>{digit}</small>}
       </button>;
-    })}</div>
+    })}<button className="strip-settings" aria-label="Open Settings" onClick={() => void action({ action: "settings" })}><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="m9 3-.6 2.2-2 .9-2-.6-2 3.4 1.6 1.6v2.3l-1.6 1.6 2 3.4 2-.6 2 .9L9 21h4l.6-2.2 2-.9 2 .6 2-3.4-1.6-1.6v-2.3l1.6-1.6-2-3.4-2 .6-2-.9L13 3Z"/><circle cx="11" cy="12" r="3"/></svg></button></div>
     {open && selected && <ProviderCard slot={selected.slot} state={state} action={action} detail />}
   </div>;
 }
@@ -269,11 +273,11 @@ export function App({ bridge }: { bridge: Bridge }) {
   const content = useRef<HTMLDivElement>(null);
   useEffect(() => { const unsubscribe = bridge.subscribe(setState); void bridge.request({ action: "state" }).then(r => { if (r.ok && r.state) setState(r.state); else if (!r.ok) setError(r.error); }); return unsubscribe; }, [bridge]);
   useEffect(() => {
-    const node = content.current; if (!node || !state || surface === "settings") return;
+    const node = content.current; if (!node || !state) return;
     let last = 0;
     const observer = new ResizeObserver(() => {
-      const height = Math.max(20, Math.ceil(surface === "flyout" ? node.getBoundingClientRect().height : node.scrollHeight)), width = surface === "tray" ? Math.ceil(node.scrollWidth) : undefined, size = width ?? height;
-      if (size !== last) { last = size; void bridge.request(surface === "share" ? { action: "shareResize", height } : { action: "resize", height: surface === "flyout" ? height : Math.min(2000, height), ...(width === undefined ? {} : { width }) }); }
+      const height = Math.max(20, Math.ceil(panel ? node.getBoundingClientRect().height : node.scrollHeight)), width = surface === "tray" ? Math.ceil(node.scrollWidth) : undefined, size = width ?? height;
+      if (size !== last) { last = size; void bridge.request(surface === "share" ? { action: "shareResize", height } : { action: "resize", height: panel ? height : Math.min(2000, height), ...(width === undefined ? {} : { width }) }); }
     }); observer.observe(node); return () => observer.disconnect();
   }, [bridge, !!state, surface, panel ? state?.settings.values.panelSize : undefined]);
   const action = async (r: Request) => { setError(""); try { const reply = await bridge.request(r); if (!reply.ok) setError(reply.error); } catch { setError("Could not complete action"); } };
@@ -286,5 +290,5 @@ export function App({ bridge }: { bridge: Bridge }) {
   const s = state.snapshot, scale = panelScales[state.settings.values.panelSize as PanelSize] ?? 1;
   const style = { ...(panel ? { zoom: scale } : {}), "--panel-scale": scale, "--accent": accents[s.appearance.accent] ?? accents.blue, "--notch-max-height": state.notch.maxHeight === undefined ? "100dvh" : `${state.notch.maxHeight}px` } as CSSProperties;
   const app = <div ref={content} className={`app theme-${surface === "tray" ? state.systemDark ? "dark" : "light" : surface === "notch" || surface === "share" ? "dark" : s.appearance.theme} surface-${surface} size-${state.settings.values.panelSize ?? PanelSize.Medium}`} style={style}>{error && <div className="action-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{surface === "share" ? (() => { const slot = notchEntries(s).find(e => e.key === state.notch.selected)?.slot; return slot ? <ProviderCard slot={slot} state={state} action={action} detail staticExport /> : <p className="empty">Card unavailable</p>; })() : surface === "tray" ? <TrayImage state={state} /> : surface === "settings" ? <Settings state={state} action={action} saveOrder={saveOrder} /> : surface === "notch" ? <Notch state={state} action={action} /> : <main className="flyout"><header className="app-header row"><h1>MeterUsage {s.demo && <small>Demo</small>}</h1><div className="header-actions"><button disabled={s.refreshing} onClick={() => void action({ action: "refresh" })}>{s.refreshing ? "Refreshing…" : "Refresh"}</button><button onClick={() => void action({ action: "settings" })}>Settings</button></div></header>{state.update && <section className="provider-card"><div className="row update-actions"><span>MeterUsage {state.update.version} available</span><button onClick={() => void action({ action: "updateInstall" })}>{state.update.state === "failed" ? "Retry update" : "Install update…"}</button><button onClick={() => void action({ action: "updateDismiss" })}>Dismiss</button></div></section>}{s.historyError && <p className="stale">History could not be {s.historyError === "loadFailed" ? "read. Repair the file and relaunch to resume saving" : "saved. Live readings remain available"}.</p>}{s.archiveWriteFailed && <p className="stale">Last known quota could not be saved.</p>}<UnifiedStrip state={state} />{s.slots.length ? s.slots.map(slot => <ProviderCard key={slotKey(slot)} slot={slot} state={state} action={action} />) : <p className="empty">Enable a provider in Settings.</p>}<BurnCard state={state} /><ServiceStatuses state={state} action={action} /><footer className="row secondary"><span>{s.lastRefreshedAt === undefined ? "Not refreshed yet" : `Updated ${new Date(s.lastRefreshedAt).toLocaleTimeString()}`}</span><button onClick={() => void action({ action: "copyJSON" })}>Copy JSON</button><button onClick={() => void action({ action: "quit" })}>Quit</button></footer></main>}</div>;
-  return panel ? <div className="panel-viewport" role="region" aria-label={surface === "settings" ? "Settings" : "MeterUsage panel"}>{app}</div> : app;
+  return panel ? <div className={`panel-viewport app theme-${s.appearance.theme}`} role="region" aria-label={surface === "settings" ? "Settings" : "MeterUsage panel"}>{app}</div> : app;
 }

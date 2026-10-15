@@ -13,8 +13,11 @@ Do not migrate or reset real preferences.
 
 Keep hover-only details and the 450 ms leave-close delay. Legacy pin data
 cannot retain details. Small, Medium and Large remain size choices with
-explicit integer pixel text and controls. Preserve logos, the 44 px strip,
-the 250 px detail card and ADR 0004's fixed top and strip edges.
+explicit integer pixel text and controls. Preserve provider logos and ADR 0004's fixed top and strip edges. The current
+compact design uses a 36 px neutral charcoal rail with 22 px rings containing
+provider marks, percentages below and a Settings gear at the bottom. Details
+are 220 px wide; shared captures remain 250 px wide. Pacing stays in details
+instead of adding ETA chips to the rail.
 
 Clear expanded state in the shared disable/hide path. Re-enabling with the
 pointer outside must show only the strip; subsequent hover must still open

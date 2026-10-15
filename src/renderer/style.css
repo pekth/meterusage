@@ -7,7 +7,6 @@
 .panel-viewport { height: 100dvh; overflow: auto; }
 [hidden] { display: none !important; }
 .surface-flyout, .surface-settings { display: flow-root; }
-.surface-settings { min-height: calc(100dvh / var(--panel-scale, 1)); }
 @media (prefers-color-scheme: dark) { .theme-system { --grok: #ebebf0; --claude: #d97706; --antigravity: #60a5fa; --opencode: #2dd4bf; --openrouter: #a78bfa; --canvas: #1c1c1e; --surface: #262629; --well: #343438; --border: #ffffff19; --text: #efeff2; --muted: #b0b0b8; --good: #30d158; --warn: #ffb340; --alert: #ff6961; } }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; } .secondary { color: var(--muted); font-size: 11px; } .stale { font-size: 11px; color: var(--warn); margin: 8px 0; } .empty { padding: 20px; color: var(--muted); } .badge { color: var(--muted); background: var(--well); padding: 2px 6px; border-radius: 5px; font-size: 10px; } .app-header { margin-bottom: 12px; flex-wrap: wrap; } .header-actions { display: flex; flex-wrap: wrap; gap: 6px; } .app-header small { color: var(--warn); font-size: 11px; font-weight: 400; } .flyout { padding: 14px; } .provider-card { padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); margin-bottom: 10px; } .provider-heading { display: flex; align-items: center; gap: 7px; min-width: 0; } .provider-heading h2 { overflow-wrap: anywhere; } .mark { flex-shrink: 0; width: 16px; height: 16px; display: inline-block; mask-size: contain; mask-repeat: no-repeat; mask-position: center; } .pending-symbol { text-align: center; font-weight: 650; } .status { margin: 5px 0; } .quota-window { margin: 10px 0; } .meter { background: var(--well); height: 5px; border-radius: 4px; overflow: hidden; margin: 5px 0; } .meter span { display: block; height: 100%; border-radius: inherit; } .quota-window .secondary { align-items: flex-start; } .quota-window .secondary > :last-child { text-align: right; } .well { background: var(--well); padding: 8px; border-radius: 6px; } .credit { margin: 10px 0; } .metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 10px 0; } dt { font-size: 10px; color: var(--muted); } dd { font-size: 13px; margin: 0; } .sparkline { width: 100%; height: 45px; margin: 6px 0; } .heatmap { display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px; margin: 8px 0; } .heatmap > span { aspect-ratio: 1; border-radius: 2px; } .session { padding: 7px 0; border-bottom: 1px solid var(--border); } .session span { overflow-wrap: anywhere; } summary { color: var(--muted); font-size: 11px; cursor: pointer; padding-top: 8px; } .reset-credit { padding: 6px 0; } footer { margin-top: 12px; }
 .provider-setting { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -135,7 +134,7 @@
 .update-actions > span { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
 .update-actions button { flex-shrink: 0; }
 @media (max-width: 360px) { .surface-flyout .activity-summary .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.surface-notch { width: max-content; background: transparent; } .notch { display: flex; align-items: flex-start; width: max-content; background: transparent; } .strip { width: 36px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-radius: 8px; padding: 6px 0; flex-shrink: 0; touch-action: none; user-select: none; } .strip-settings { display: block; background: none; border: none; padding: 3px; width: 100%; color: var(--muted); } .strip-provider { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 36px; padding: 6px 3px; border: none; background: none; border-radius: 0; } .strip-provider[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 15%, transparent); } .strip-provider .mark { width: 13px; height: 13px; } .strip-provider small { font-size: 8px; max-width: 30px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ring { width: 28px; height: 28px; border-radius: 50%; padding: 3px; } .ring > span { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--surface); font-size: 9px; } .detail-card { width: 250px; flex-shrink: 0; border-radius: 10px; margin: 0; padding: 14px;  overflow: auto; } .detail-card h2 { font-size: 12px; } .detail-card .row { gap: 5px; } .detail-card .badge { font-size: 9px; } .detail-card .quota-window strong { font-size: 11px; } .detail-card .secondary { font-size: 10px; } .card-left .detail-card { order: -1; } .detail-card footer button, .reset-credit button { font-size: 11px; }
+.surface-notch { width: max-content; background: transparent; } .notch { display: flex; align-items: flex-start; width: max-content; background: transparent; } .strip { display: flex; flex-direction: column; width: 36px; background: #262629; border-radius: 10px; padding: 6px 0; flex-shrink: 0; touch-action: none; user-select: none; } .strip-settings { display: grid; place-items: center; order: 1; background: none; border: none; padding: 7px 0 3px; width: 100%; color: var(--muted); } .strip-provider { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 36px; padding: 5px 0; border: none; background: none; border-radius: 6px; } .strip-provider[aria-pressed="true"] { background: #ffffff08; } .strip-provider .mark { width: 13px; height: 13px; } .strip-percent { font-size: 8px; line-height: 1.25; } .strip-provider small { position: absolute; top: 3px; right: 2px; font-size: 7px; line-height: 1; border-radius: 3px; background: var(--surface); padding: 1px; } .usage-ring { width: 22px; height: 22px; border-radius: 50%; padding: 2px; } .usage-ring > span { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #262629; } .detail-card { width: 250px; flex-shrink: 0; border-radius: 10px; margin: 0; padding: 14px;  overflow: auto; } .detail-card h2 { font-size: 12px; } .detail-card .row { gap: 5px; } .detail-card .badge { font-size: 9px; } .detail-card .quota-window strong { font-size: 11px; } .detail-card .secondary { font-size: 10px; } .card-left .detail-card { order: -1; } .detail-card footer button, .reset-credit button { font-size: 11px; }
 @media (hover: hover) and (pointer: fine) { button:hover:not(:disabled) { border-color: var(--accent); } }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation: none !important; transition: none !important; } }
 
@@ -168,30 +167,22 @@
 .surface-notch .detail-card .telemetry { border-top: 1px solid var(--border); padding-top: var(--notch-gap); }
 .surface-notch .detail-card .well { padding: var(--notch-gap); }
 .surface-notch .detail-card footer { margin-top: var(--notch-space); }
-.notch-eta { font-size: 8px; line-height: 1.2; white-space: nowrap; border-radius: 5px; padding: 1px 2px; background: var(--well); }
-.strip-provider .notch-eta { max-width: 30px; overflow: hidden; text-overflow: ellipsis; }
-
 .activity-heatmap { margin-top: 12px; }
 .heatmap-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .heatmap-heading h3 { margin: 0; color: var(--text); }
 .heatmap-heading select { font-size: 10px; padding: 2px 5px; }
 .heatmap-caption { margin-top: 4px; line-height: 1.4; }
 .heatmap-empty { padding-top: 8px; }
-.heatmap { --readout-height: 76px; position: relative; font-size: 11px; line-height: 1.4; padding-bottom: var(--readout-height); }
+.heatmap { font-size: 11px; line-height: 1.4; }
 .heatmap-cell { min-width: 0; }
-.heatmap-legend { position: absolute; inset: auto 0 0; height: var(--readout-height); padding-top: 8px; display: flex; align-content: flex-start; align-items: center; flex-wrap: wrap; column-gap: 12px; row-gap: 4px; font-size: inherit; pointer-events: none; }
+.heatmap-readout { margin-top: 6px; font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.heatmap-legend { display: flex; align-items: center; flex-wrap: wrap; column-gap: 12px; row-gap: 4px; font-size: inherit; }
 .heatmap-scale, .heatmap-missing { display: inline-flex; align-items: center; gap: 4px; }
 .heatmap-legend i { width: 7px; height: 7px; border-radius: 2px; }
 .heatmap-missing i, .heatmap .unavailable-day > span { box-shadow: inset 0 0 0 1px var(--border); }
 .heatmap-cell > span { display: block; width: 100%; height: 100%; border-radius: inherit; }
-.heatmap-cell::after { content: attr(data-readout); display: none; position: absolute; left: 0; right: 0; bottom: 0; height: var(--readout-height); padding-top: 8px; color: var(--text); line-height: 1.4; overflow-wrap: anywhere; pointer-events: none; }
-.heatmap-cell:hover::after, .heatmap-cell:focus::after { display: block; }
-.heatmap:has(.heatmap-cell:is(:hover, :focus)) .heatmap-legend { visibility: hidden; }
-.heatmap:has(.heatmap-cell:hover) .heatmap-cell:focus:not(:hover)::after { display: none; }
 .heatmap-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.surface-share .heatmap { padding-bottom: 3em; }
-.surface-share .heatmap-legend { height: 3em; visibility: visible !important; }
-.surface-share .heatmap-cell::after { display: none; }
+.surface-notch .heatmap-readout { font-size: var(--notch-secondary); }
 
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
   .surface-flyout button:not(:disabled):not(:focus-visible), .surface-settings button:not(:disabled):not(:focus-visible), .surface-notch .detail-card button:not(:disabled):not(:focus-visible) { transition: background-color 120ms ease; }

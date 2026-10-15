@@ -65,7 +65,7 @@ async function start(launch: Launch) {
   for (const p of ["codex", "claude"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
   const notch = { expanded: false, cardOnRight: false, selected: "codex", dragging: false };
   let notchHeight = 200, anchor: { x: number; y: number } | undefined;
-  let flyoutHeight = 700;
+  let flyoutHeight = 700, settingsHeight: number | undefined;
   const panelScale = () => panelScales[prefs.values.panelSize as PanelSize] ?? 1;
   let panelSizeKeys = Promise.resolve();
   let drag: { cursor: Electron.Point; anchor: Electron.Point; timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> } | undefined;
@@ -109,6 +109,7 @@ async function start(launch: Launch) {
   function create(surface: Surface) {
     const existing = windows.get(surface); if (existing && !existing.isDestroyed()) return existing;
     const panel = surface === "notch", trayImage = surface === "tray", shareImage = surface === "share";
+    if (surface === "settings") settingsHeight = undefined;
     const w = new BrowserWindow({ width: shareImage ? shareCardWidth * 2 : trayImage ? 1000 : panel ? stripWidth : surface === "settings" ? 620 : Math.round(420 * panelScale()), height: trayImage ? 22 : panel ? notchHeight : surface === "settings" ? 680 : Math.ceil(flyoutHeight * panelScale()), show: false, frame: surface === "settings", transparent: panel || trayImage || shareImage, resizable: surface === "settings", minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, ...(panel ? { type: "panel", focusable: false, hasShadow: false } : {}), title: surface === "settings" ? "MeterUsage Settings" : "MeterUsage", backgroundColor: panel || trayImage || shareImage ? "#00000000" : "#242428", webPreferences: { preload: join(__dirname, "../preload/preload.cjs"), offscreen: trayImage || shareImage, zoomFactor: shareImage ? 2 : 1, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false } });
     if (trayImage) { w.webContents.setFrameRate(10); w.webContents.on("paint", (_event, _rect, image) => { if (!tray.isDestroyed() && trayWidth > 0) tray.setImage(image); }); }
     if (shareImage) {
@@ -154,6 +155,14 @@ async function start(launch: Launch) {
     const bounds = w.getBounds(), work = screen.getDisplayMatching(bounds).workArea;
     const width = Math.min(Math.round(420 * panelScale()), work.width), height = Math.min(Math.ceil(flyoutHeight * panelScale()), work.height);
     w.setBounds({ x: Math.round(Math.min(Math.max(bounds.x, work.x), work.x + work.width - width)), y: Math.round(Math.min(Math.max(bounds.y, work.y), work.y + work.height - height)), width, height }, false);
+  }
+  function sizeSettings() {
+    const source = windows.get("settings"); if (!source || source.isDestroyed() || settingsHeight === undefined) return;
+    const bounds = source.getBounds(), content = source.getContentBounds(), work = screen.getDisplayMatching(bounds).workArea;
+    const chrome = Math.max(0, bounds.height - content.height), width = Math.min(bounds.width, work.width);
+    const y = bounds.y >= work.y && bounds.y + chrome + 20 <= work.y + work.height ? bounds.y : work.y;
+    const next = { x: Math.round(Math.min(Math.max(bounds.x, work.x), work.x + work.width - width)), y, width, height: Math.min(Math.ceil(settingsHeight) + chrome, work.y + work.height - y) };
+    if (next.x !== bounds.x || next.y !== bounds.y || next.width !== bounds.width || next.height !== bounds.height) source.setBounds(next, false);
   }
   function showSettings() {
     if (!launch.demo && !launch.candidate && app.isPackaged) prefs.values.launchAtLogin = app.getLoginItemSettings().openAtLogin;
@@ -302,6 +311,7 @@ async function start(launch: Launch) {
         if (surface === "notch") { notchHeight = Math.min(2000, Math.ceil(r.height)); placeNotch(); }
         else if (surface === "tray" && r.width !== undefined) { trayWidth = Math.ceil(r.width); source.setSize(trayWidth, 22, false); }
         else if (surface === "flyout") { flyoutHeight = r.height / panelScale(); sizeFlyout(); }
+        else if (surface === "settings") { settingsHeight = r.height; sizeSettings(); }
         break;
       case "shareResize":
         if (surface !== "share" || !shareReady) throw new Error("Invalid request");
@@ -351,7 +361,7 @@ async function start(launch: Launch) {
     catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.", ...Object.values(desktopReadErrors), "Could not read Claude account allowance. Try connecting again later.", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.", "Could not save the Claude Desktop connection preferences. Try connecting again.", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Could not disconnect Claude Desktop", "Could not select Grok CLI", "Connections are disabled in demo mode", "Automatic Grok connection is unavailable"].includes(e.message) ? e.message : "Could not complete action" }; }
   });
   const unsubscribe = coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
-  screen.on("display-metrics-changed", () => { placeNotch(); sizeFlyout(); publish(); }); screen.on("display-removed", () => { placeNotch(); sizeFlyout(); publish(); });
+  screen.on("display-metrics-changed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); }); screen.on("display-removed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); });
   powerMonitor.on("resume", () => { void coordinator.refresh(); });
   app.on("window-all-closed", () => {});
   const clockTimer = setInterval(publish, 60000);

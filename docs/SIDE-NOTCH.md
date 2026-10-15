@@ -95,8 +95,9 @@ against the panel bounds every 100 ms. A missed renderer exit therefore enters
 the same fold path on the next cursor check. The check stops on exit, hide, close, drag or
 quit. It does not install a global input hook.
 
-The Electron strip always shows usage rings and used percentages while details
-are closed or open. There is one design, with no dots markup or design selector.
+The Electron strip is a neutral charcoal 36 px rail. Each 22 px usage ring
+contains its provider mark, with the used percentage below. Settings is a gear
+at the bottom. The rail stays visible while details are closed or open. There is one design, with no dots markup or design selector.
 Small, Medium and Large change size only. Hover opens details, ring hover
 switches providers, and pointer exit closes details after 450 ms.
 Disable/hide clears expanded state, so re-enabling with the pointer outside
@@ -115,7 +116,8 @@ cumulative cells name the date through which the displayed history is summed.
 Counts use the existing history scope and full numeric formatting. OpenRouter
 ledger dates retain their UTC calendar day. Count-only
 providers show session counts and report token totals unavailable. The readout
-has reserved space inside the card to avoid overlay clipping or hover resizing.
+uses a natural-height row below the grid. Long exact counts wrap and may grow
+the card without moving its top edge or rail. No blank readout area is reserved.
 Keyboard focus has a visible outline. The non-activating native notch's keyboard
 access still needs native proof; source fixtures cover focus labels and styles.
 Codex Use reset uses the same base 11 px font and padding as compact footer
@@ -137,7 +139,7 @@ immediate, and reduced motion disables transitions. Card, window, ring and
 provider-switch states do not animate. Browser and native checks must verify
 these rendered states and scrolling after the added telemetry spacing.
 
-Live cards keep the reserved heatmap readout and show Daily, Weekly and
+Live cards use the natural-height heatmap readout and show Daily, Weekly and
 Cumulative choices with their existing values. Recorded activity headings and
 Recorded sessions/messages labels distinguish telemetry from account/local
 summary counts. Static shared cards omit footer actions, reset buttons and the
@@ -152,7 +154,7 @@ The Electron candidate bounds the card and strip independently. The native
 window supplies the display work-area height; the browser demo uses the viewport
 height when that value is absent. Tall content scrolls inside each column. The
 candidate hides scrollbar indicators throughout its windows while retaining
-scrolling. The strip is 36 pixels wide around the existing ring. The shared-card
+scrolling. The strip is 36 pixels wide around the provider marks and rings. The shared-card
 capture keeps its 250-pixel width, full height and does not use the notch's scrolling bounds.
 
 Automated tests cover geometry and in-process drag events, but cannot see the

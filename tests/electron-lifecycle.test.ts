@@ -57,6 +57,7 @@ it.each([
     isDestroyed = () => this.destroyed;
     isVisible = () => false;
     getBounds = () => this.bounds;
+    getContentBounds = () => ({ ...this.bounds, height: this.bounds.height - (this.surface === "settings" ? 28 : 0) });
     setBounds = vi.fn((bounds: typeof this.bounds) => { this.bounds = bounds; });
     setSize = vi.fn((width: number, height: number) => { this.bounds.width = width; this.bounds.height = height; });
     setPosition = vi.fn((x: number, y: number) => { this.bounds.x = x; this.bounds.y = y; }); show = vi.fn(); focus = vi.fn(); hide = vi.fn();
@@ -169,6 +170,38 @@ it.each([
     await invoke(windows[2], { action: "settings" });
     const settings = windows[3];
     if (keyboard) {
+      settings.bounds = { x: 160, y: 100, width: 740, height: 680 };
+      const resizeSettings = (height: number) => invoke(settings, { action: "resize", height, width: 10000 });
+      expect(await resizeSettings(300.2)).toEqual({ ok: true });
+      expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 329 });
+      await resizeSettings(180);
+      expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 208 });
+      values.panelSize = "small";
+      await resizeSettings(700);
+      expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 728 });
+      values.panelSize = "medium";
+      await resizeSettings(1000);
+      expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 800 });
+      const fits = settings.setBounds.mock.calls.length;
+      await resizeSettings(1000);
+      expect(settings.setBounds).toHaveBeenCalledTimes(fits);
+      for (const event of ["display-metrics-changed", "display-removed"]) {
+        workArea.height = 500;
+        display.emit(event);
+        expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 400 });
+        workArea.height = 1200;
+        display.emit(event);
+        expect(settings.bounds).toEqual({ x: 160, y: 100, width: 740, height: 1028 });
+      }
+      workArea.height = 900;
+      workArea.x = -1000; workArea.y = 30; workArea.width = 800; workArea.height = 500;
+      settings.bounds = { x: -300, y: 60, width: 740, height: 800 };
+      await resizeSettings(1000);
+      expect(settings.bounds).toEqual({ x: -940, y: 60, width: 740, height: 470 });
+      settings.bounds = { x: 160, y: 950, width: 900, height: 680 };
+      await resizeSettings(300);
+      expect(settings.bounds).toEqual({ x: -1000, y: 30, width: 800, height: 328 });
+      Object.assign(workArea, { x: 0, y: 0, width: 1200, height: 900 });
       expect(await invoke(windows[0], { action: "connectionLocal", provider: "codex" })).toEqual({ ok: false, error: "Invalid request" });
       expect(useLocal).not.toHaveBeenCalled();
       for (const source of [settings, flyout]) {

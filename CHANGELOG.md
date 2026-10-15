@@ -8,6 +8,13 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Fit Electron Settings to its active page and expanded controls within the display
+  work area. Remove the fixed-height blank space and oversized heatmap readout
+  reservation. Exact daily counts wrap below the grid on hover or focus.
+- Match the compact side-notch rail: provider marks inside 22 px usage rings,
+  small percentages below, neutral 36 px body and Settings gear at the bottom.
+  Keep detail cards on hover and preserve the fixed top and strip anchor.
+
 - Remove the bright focus outline around the Electron usage and Settings
   panels. Keep keyboard scrolling and focus indicators on individual controls.
 

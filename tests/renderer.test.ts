@@ -28,11 +28,11 @@ it("passes the saved size to notch details without scaling the strip or share su
     for (const surface of ["flyout", "settings"]) {
       const markup = renderApp(view, surface);
       expect(markup).toContain(`zoom:${scale}`);
-      expect(markup).toMatch(/class="panel-viewport"[^>]*role="region"/);
-      expect(markup).not.toMatch(/class="panel-viewport"[^>]*tabindex/);
+      expect(markup).toMatch(/class="panel-viewport[^"]*"[^>]*role="region"/);
+      expect(markup).not.toMatch(/class="panel-viewport[^"]*"[^>]*tabindex/);
       if (surface === "settings") {
         expect(markup).toContain("<legend>Usage-panel size</legend>");
-        expect(markup).toContain("The Settings window stays the same size.");
+        expect(markup).toContain("Settings fits the selected page and scrolls when needed.");
         expect(markup).toMatch(new RegExp(`type="radio" name="panelSize"(?=[^>]*value="${size}")(?=[^>]*checked)`));
         for (const label of ["Small", "Medium", "Large"]) expect(markup).toContain(`>${label}</span>`);
       }
@@ -48,7 +48,7 @@ it("passes the saved size to notch details without scaling the strip or share su
   expect(renderApp(view, "settings")).toMatch(/type="radio" name="panelSize"(?=[^>]*value="medium")(?=[^>]*checked)/);
 });
 
-it("reports the scaled natural content box when scrollHeight retains the taller viewport", () => {
+it.each(["flyout", "settings"])("reports %s scaled natural height and deduplicates resize requests", surface => {
   const view = state(), request = vi.fn(async () => ({ ok: true as const }));
   let measure!: ResizeObserverCallback;
   const lifecycle: { cleanup?: void | (() => void) } = {};
@@ -60,7 +60,7 @@ it("reports the scaled natural content box when scrollHeight retains the taller 
     constructor(callback: ResizeObserverCallback) { measure = callback; }
     observe = vi.fn(); disconnect = disconnect;
   });
-  vi.stubGlobal("location", { search: "?surface=flyout" });
+  vi.stubGlobal("location", { search: `?surface=${surface}` });
   vi.mocked(useState).mockReturnValueOnce([view, () => {}]);
   try {
     renderToStaticMarkup(createElement(App, { bridge: { request, subscribe: () => () => {} } }));
@@ -373,16 +373,17 @@ it("marks retained service status as last known in notch cards and tray tooltips
   expect(trayTooltip(view.snapshot)).toContain("Major outage");
 });
 
-it("shows raw-window ambient notch ETA without recent burn and hides it when pacing is off", () => {
-  const view = state(); view.snapshot.notchSlots = [primary("codex")]; view.snapshot.activities = {};
+it("keeps the rail compact with provider marks inside rings and percentages below", () => {
+  const view = state(); view.snapshot.notchSlots = [primary("codex")];
   const row = () => { const markup = renderApp(view, "notch"), start = markup.indexOf('class="strip-provider"'); return markup.slice(start, markup.indexOf("</button>", start)); };
-  expect(row()).toContain("15m"); expect(row()).toContain('class="notch-eta"');
-  view.snapshot.appearance.pacing = false; expect(row()).not.toContain('class="notch-eta"');
-  view.snapshot.appearance.pacing = true; view.snapshot.quotas.codex = value(quota("codex", [window("5-hour", 1, now + 3600000, 300)], now));
-  expect(row()).toContain("1h");
-  view.snapshot.quotas.codex = value(quota("codex", [window("5-hour", 1, now + 4 * 3600000, 300)], now)); expect(row()).not.toContain('class="notch-eta"');
+  expect(row()).toMatch(/class="usage-ring"[^>]*><span><span[^>]*class="mark"/);
+  expect(row()).toContain('class="strip-percent"'); expect(row()).toContain('80%</span>');
+  expect(row()).not.toContain('class="notch-eta"');
+  const markup = renderApp(view, "notch");
+  expect(markup.indexOf('class="strip-settings"')).toBeGreaterThan(markup.indexOf('class="strip-provider"'));
+  expect(markup).toContain('aria-label="Open Settings"><svg');
   view.snapshot.quotas.codex = { status: "missing", code: "offline", reason: "Offline" }; view.snapshot.archived.codex = quota("codex", [w], now - 60000);
-  expect(row()).toContain("15m"); expect(row()).toContain("last known reading");
+  expect(row()).toContain("last known reading"); expect(row()).toContain("opacity:0.55");
 });
 
 it("keeps eligible menu resets accessible at Small, Medium and Large and hides archived actions", () => {
@@ -424,9 +425,8 @@ it.each(["daily", "weekly", "cumulative"])("exposes exact heatmap values on hove
   expect(markup).toContain(`data-readout="${scope} · ${new Intl.NumberFormat().format(1234567)} tokens · 2 sessions"`);
   for (const name of ["daily", "weekly", "cumulative"]) expect(markup).toMatch(new RegExp(`<option value="${name}"[^>]*>${name[0].toUpperCase() + name.slice(1)}</option>`));
   const css = readFileSync("src/renderer/style.css", "utf8");
-  expect(css).toContain('content: attr(data-readout)');
-  expect(css).toContain('.heatmap-cell:hover::after'); expect(css).toContain('.heatmap-cell:focus::after');
-  expect(css).toContain('padding-bottom: var(--readout-height)');
+  expect(markup).toContain('class="heatmap-readout"');
+  expect(css).not.toContain("--readout-height");
 });
 
 it("labels count-only heatmap days without inventing measured zero tokens", () => {
@@ -460,7 +460,7 @@ it("always shows usage rings and percentages, with hover-only details and no des
     for (const key of ["codex", "claude"]) {
       view.notch.expanded = expanded; view.notch.selected = key;
       const markup = renderApp(view, "notch");
-      expect(markup).toContain('class="ring"'); expect(markup).toContain('<span>42</span>');
+      expect(markup).toContain('class="usage-ring"'); expect(markup).toMatch(/class="strip-percent"[^>]*>42%<\/span>/);
       expect(markup.includes('class="provider-card detail-card"')).toBe(expanded);
       expect(markup).not.toContain("folded-pill"); expect(markup).not.toContain("folded-strip");
       expect(markup).toContain(key === "codex" ? "Codex" : "Claude");
@@ -618,7 +618,7 @@ it("keeps unavailable account history explicit and respects global and Codex hea
   const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: { provider: "codex", slotID: "local", label: "Local" }, state: view, action: async () => {} }));
   expect(markup).not.toContain("Account token activity");
   const css = readFileSync("src/renderer/style.css", "utf8");
-  expect(css).toContain(".heatmap-cell:hover::after"); expect(css).toContain(".heatmap-cell:focus::after");
+  expect(css).toContain(".heatmap-readout");
   expect(css).toContain(".heatmap .unavailable-day > span");
 });
 
@@ -701,9 +701,10 @@ it.each([false, true])("uses one heatmap Tab stop and navigates full-history %s 
   const count = fullHistory ? 182 : 30, last = fullHistory ? 178 : 29;
   let active = 0;
   vi.mocked(useRef).mockReturnValueOnce({ current: null }); vi.mocked(useEffect).mockImplementationOnce(() => {});
-  const grid = ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Test calendar", fullHistory, children: "cells" }).props.children[2];
+  vi.mocked(useState).mockReturnValueOnce([undefined, () => {}]).mockReturnValueOnce([undefined, () => {}]);
+  const grid = ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Test calendar", fullHistory, children: "cells" }).props.children[2].props.children[0];
   const cells = Array.from({ length: count }, (_, index) => ({
-    tagName: "SPAN", tabIndex: index === 0 ? 0 : -1,
+    tagName: "SPAN", dataset: {}, tabIndex: index === 0 ? 0 : -1,
     classList: { contains: (name: string) => name === "heatmap-cell" && index <= last },
     focus: () => { active = index; grid.props.onFocus({ target: cells[index], currentTarget: container }); },
   }));
@@ -736,13 +737,45 @@ it.each(["codex", "grok"] as const)("omits all %s heatmap Tab stops in static sh
 
 
 it("keeps a single heatmap Tab entry when a calendar shift introduces a new first cell", () => {
-  const cells = [{ tabIndex: 0 }, { tabIndex: 0 }, { tabIndex: -1 }];
-  const node = { querySelectorAll: () => cells, ownerDocument: { activeElement: cells[1] as object } };
+  const cells = [{ tabIndex: 0, dataset: {} }, { tabIndex: 0, dataset: {} }, { tabIndex: -1, dataset: {} }];
+  const node = { querySelectorAll: () => cells, querySelector: () => null, ownerDocument: { activeElement: cells[1] as object } };
   let reconcile: (() => void) | undefined;
   vi.mocked(useRef).mockReturnValueOnce({ current: node });
   vi.mocked(useEffect).mockImplementationOnce(effect => { reconcile = effect as () => void; });
+  vi.mocked(useState).mockReturnValueOnce([undefined, () => {}]).mockReturnValueOnce([undefined, () => {}]);
   ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Shifted calendar", children: "cells" });
   reconcile?.(); expect(cells.map(cell => cell.tabIndex)).toEqual([-1, 0, -1]);
   node.ownerDocument.activeElement = {}; cells[0].tabIndex = 0;
   reconcile?.(); expect(cells.map(cell => cell.tabIndex)).toEqual([0, -1, -1]);
+});
+
+it("shows exact heatmap hover and focus readings in a natural-height row", () => {
+  const hover = vi.fn(), focus = vi.fn();
+  vi.mocked(useRef).mockReturnValueOnce({ current: null }); vi.mocked(useEffect).mockImplementationOnce(() => {});
+  vi.mocked(useState).mockReturnValueOnce([undefined, hover]).mockReturnValueOnce([undefined, focus]);
+  const content = ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Calendar", children: "cells" }).props.children[2];
+  const grid = content.props.children[0];
+  const cell = { dataset: { readout: "Oct 15, 2026 · 123,456,789 tokens · 12,345 sessions" }, classList: { contains: () => true }, tabIndex: 0 };
+  grid.props.onPointerOver({ target: { closest: () => cell } });
+  expect(hover).toHaveBeenLastCalledWith(cell.dataset.readout);
+  grid.props.onPointerLeave(); expect(hover).toHaveBeenLastCalledWith(undefined);
+  grid.props.onFocus({ target: cell, currentTarget: { querySelectorAll: () => [cell] } });
+  expect(focus).toHaveBeenLastCalledWith(cell.dataset.readout);
+  grid.props.onBlur(); expect(focus).toHaveBeenLastCalledWith(undefined);
+  vi.mocked(useState).mockReturnValueOnce([cell.dataset.readout, hover]).mockReturnValueOnce([undefined, focus]);
+  const markup = renderToStaticMarkup(createElement(ActivityHeatmap, { title: "Activity", scope: "Synthetic", label: "Calendar", children: "cells" }));
+  expect(markup).toContain(`<div class="heatmap-readout" aria-hidden="true"><span>${cell.dataset.readout}</span></div>`);
+});
+
+it("refreshes visible focused and hovered readings when the same calendar cells receive new totals", () => {
+  const focused = { tabIndex: 0, dataset: { readout: "Oct 15 · 100 tokens" } }, hovered = { tabIndex: -1, dataset: { readout: "Oct 14 · 200 tokens" } };
+  const node = { querySelectorAll: () => [focused, hovered], querySelector: () => hovered, ownerDocument: { activeElement: focused } };
+  const hover = vi.fn(), focus = vi.fn(); let refresh: (() => void) | undefined;
+  vi.mocked(useRef).mockReturnValueOnce({ current: node });
+  vi.mocked(useState).mockReturnValueOnce([undefined, hover]).mockReturnValueOnce([undefined, focus]);
+  vi.mocked(useEffect).mockImplementationOnce(effect => { refresh = effect as () => void; });
+  ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Calendar", children: "cells" });
+  refresh?.(); expect(focus).toHaveBeenLastCalledWith("Oct 15 · 100 tokens"); expect(hover).toHaveBeenLastCalledWith("Oct 14 · 200 tokens");
+  focused.dataset.readout = "Oct 15 · 1,000 tokens"; hovered.dataset.readout = "Week of Oct 11 · 2,000 tokens";
+  refresh?.(); expect(focus).toHaveBeenLastCalledWith(focused.dataset.readout); expect(hover).toHaveBeenLastCalledWith(hovered.dataset.readout);
 });
