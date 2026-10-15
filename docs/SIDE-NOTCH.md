@@ -96,9 +96,9 @@ the same fold path on the next cursor check. The check stops on exit, hide, clos
 quit. It does not install a global input hook.
 
 The Electron strip is a neutral charcoal 36 px rail. Each 22 px usage ring
-contains its provider mark, with the used percentage below. Settings is a gear
-at the bottom, hidden until strip hover or keyboard focus on pointer devices.
-It remains visible on touch devices. Revealing it keeps the rail geometry fixed.
+contains its provider mark, with the used percentage below. The strip has no
+Settings button or reserved button slot. Open Settings from the expanded
+usage card footer or the menu-bar context menu.
 The rail stays visible while details are closed or open. There is one design, with no dots markup or design selector.
 Small, Medium and Large change size only. Hover opens details, ring hover
 switches providers, and pointer exit closes details after 450 ms.
@@ -137,8 +137,7 @@ Secondary labels in the Electron notch card use `#b0b0b8`, without changing
 provider status or quota colors. Telemetry starts with a border and 6/8/10 px
 of top padding for Small/Medium/Large. Existing metric margins remain.
 Enabled detail buttons transition only the background color for 120 ms on
-fine-pointer hover when reduced motion is off. Strip Settings text color
-changes immediately. Press and keyboard focus stay
+fine-pointer hover when reduced motion is off. Press and keyboard focus stay
 immediate, and reduced motion disables transitions. Card, window, ring and
 provider-switch states do not animate. Browser and native checks must verify
 these rendered states and scrolling after the added telemetry spacing.

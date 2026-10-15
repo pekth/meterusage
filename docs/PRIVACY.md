@@ -2,7 +2,8 @@
 
 MeterUsage reads quota and usage from existing local provider stores, provider
 CLIs and aggregate endpoints. It has no telemetry service, analytics or
-crash-upload endpoint. The Electron candidate adds opt-in account connections;
+automatic crash-upload endpoint. Electron Diagnostics has an explicit optional
+**Send report** action described below. The Electron candidate adds opt-in account connections;
 Codex sign-in occurs in the provider browser page, not a MeterUsage password form. It does not ask for credentials or send
 prompts, code or tool payloads to a provider.
 
@@ -247,3 +248,21 @@ provider authentication, live payload correctness or native UI behavior.
 Cost figures are local estimates from the pricing table. A recorded zero is a
 value; missing tokens or cost stay unknown. Provider dashboards remain the
 billing source of record.
+
+## Optional diagnostic reports
+
+Only clicking **Send report** in live Settings submits a generated diagnostic
+summary to the existing HTTPS support relay, which creates a private Linear
+issue. There is no automatic upload or login requirement. The summary includes
+the app version, mode, refresh interval/age, enabled provider names and bounded
+status codes for quota, activity, usage, service status, plan and history/cache
+failures. It excludes raw logs and errors, personal paths, account labels and
+identifiers, credentials, usage contents, prompts and transcripts.
+
+Main generates the summary; renderer requests cannot supply report text, IDs or
+URLs. Reports have a random UUID for duplicate-safe retries. Pending summaries
+and confirmed references remain in memory for the app session. Requests omit
+cookies and stored credentials, reject redirects, and enforce byte limits and a
+timeout. The relay sees the network source IP for rate limiting; Cloudflare and
+Linear process the submission. MeterUsage does not attach provider credentials.
+See [REPORTING.md](REPORTING.md) for the delivery contract and proof limits.

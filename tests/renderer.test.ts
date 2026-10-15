@@ -381,8 +381,10 @@ it("keeps the rail compact with provider marks inside rings and percentages belo
   expect(row()).toContain('class="strip-percent"'); expect(row()).toContain('80%</span>');
   expect(row()).not.toContain('class="notch-eta"');
   const markup = renderApp(view, "notch");
-  expect(markup.indexOf('class="strip-settings"')).toBeGreaterThan(markup.indexOf('class="strip-provider"'));
-  expect(markup).toContain('aria-label="Open Settings"><svg');
+  expect(markup).not.toContain('class="strip-settings"');
+  expect(markup).not.toContain('aria-label="Open Settings"');
+  view.notch.expanded = true;
+  expect(renderApp(view, "notch")).toContain(">Settings</button>");
   view.snapshot.quotas.codex = { status: "missing", code: "offline", reason: "Offline" }; view.snapshot.archived.codex = quota("codex", [w], now - 60000);
   expect(row()).toContain("last known reading"); expect(row()).toContain("opacity:0.55");
 });
@@ -560,6 +562,19 @@ it("preserves action alerts and dated archive reasons across the shared cards", 
     expect(card).toContain(`<p class="stale quota-stale">Last known · ${new Date(now - 60000).toLocaleString()}<br/>Synthetic offline reason</p>`);
     expect(card).toContain("80% used"); expect(card).not.toContain("Use reset");
   }
+});
+
+it("shows reporting progress, confirmed references and safe failures in Diagnostics", () => {
+  const view = state();
+  expect(renderApp(view, "settings")).toContain('>Send report</button>');
+  view.issueReport = { sending: true };
+  expect(renderApp(view, "settings")).toContain('<button disabled="">Sending…</button>');
+  view.issueReport = { sending: false, receipt: "MU-123" };
+  const sent = renderApp(view, "settings");
+  expect(sent).toContain('<button disabled="">Sent</button>');
+  expect(sent).toContain('role="status">Report sent. Reference: MU-123');
+  view.issueReport = { sending: false, error: "Delivery could not be confirmed. Try again or copy diagnostics." };
+  expect(renderApp(view, "settings")).toContain('role="alert">Delivery could not be confirmed. Try again or copy diagnostics.');
 });
 
 it("renders the preferred provider groups in Settings, usage, tray and notch", () => {
@@ -828,4 +843,17 @@ it("keeps service status above the usage overview and selected provider", () => 
   const markup = renderApp(view);
   expect(markup.indexOf('aria-label="Service status"')).toBeLessThan(markup.indexOf("AI activity on this Mac"));
   expect(markup.indexOf('aria-label="Service status"')).toBeLessThan(markup.indexOf('class="usage-panel"'));
+});
+
+
+it("labels Grok as Beta in usage, notch, sharing, setup and provider settings", () => {
+  const view = state();
+  for (const detail of [false, true]) {
+    const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("grok"), state: view, action: async () => {}, detail }));
+    expect(markup).toContain('Grok <span class="badge">Beta</span>');
+  }
+  const setup = renderApp(view, "settings");
+  expect(setup).toContain('connection-title">Grok <span class="badge">Beta</span>');
+  expect(setup).toContain('<span>Grok <span class="badge">Beta</span></span>');
+  expect(setup).toContain('Configure Grok');
 });

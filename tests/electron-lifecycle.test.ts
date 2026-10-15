@@ -39,6 +39,8 @@ it.each([
   }
   const windows: TestWindow[] = [];
   const ipc = vi.fn();
+  const reportFetch = vi.fn<typeof fetch>(async (_url, init) => Response.json({ id: JSON.parse(String(init?.body)).id, identifier: "MU-123" }, { status: 201 }));
+  vi.stubGlobal("fetch", reportFetch);
   const notify = vi.fn();
   const showErrorBox = vi.fn();
   const showMessageBox = vi.fn(async () => ({ response: 0 }));
@@ -96,6 +98,7 @@ it.each([
   vi.doMock("../src/main/coordinator", () => ({ Coordinator: class {
     constructor(_launch: unknown, _prefs: unknown, _sources: unknown, _clock: unknown, alert: (a: unknown) => void) { alert({ title: "Fixture", body: "Fixture" }); }
     prepareReset = prepareReset; confirmReset = confirmReset; cancelReset = cancelReset;
+    diagnostics = (version: string) => `MeterUsage ${version}\nquota: unavailable (offline)`;
     refresh = refresh; forgetQuota = forgetQuota;
     start = start; stop = vi.fn(); publish = vi.fn(); subscribe = vi.fn(() => vi.fn()); snapshot = () => ({ appearance: {}, quotas: { codex: { status: "value", value: { provider: "codex", windows: [{ label: "5-hour", usedPercent: 10 }] } } }, archived: {}, notchSlots: [{ provider: "codex", slotID: "" }, { provider: "claude", slotID: "" }] }); refreshIfStale = vi.fn();
   } }));
@@ -169,6 +172,18 @@ it.each([
     expect(flyout.bounds).toMatchObject({ width: 420, height: 593 });
     await invoke(windows[2], { action: "settings" });
     const settings = windows[3];
+    expect(reportFetch).not.toHaveBeenCalled();
+    expect(await invoke(flyout, { action: "sendReport" })).toEqual({ ok: false, error: "Could not complete action" });
+    expect(reportFetch).not.toHaveBeenCalled();
+    expect(await invoke(settings, { action: "sendReport", diagnostics: "renderer text" })).toEqual({ ok: false, error: "Invalid request" });
+    expect(reportFetch).not.toHaveBeenCalled();
+    expect(await invoke(settings, { action: "sendReport" })).toEqual({ ok: true });
+    expect(reportFetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(reportFetch.mock.calls[0][1]?.body)).diagnostics).toBe("MeterUsage 0.0.0\nquota: unavailable (offline)");
+    expect((await invoke(settings, { action: "state" })).state.issueReport).toEqual({ sending: false, receipt: "MU-123" });
+    expect((await invoke(flyout, { action: "state" })).state).not.toHaveProperty("issueReport");
+    await invoke(settings, { action: "sendReport" });
+    expect(reportFetch).toHaveBeenCalledOnce();
     if (keyboard) {
       settings.bounds = { x: 160, y: 100, width: 740, height: 680 };
       const resizeSettings = (height: number) => invoke(settings, { action: "resize", height, width: 10000 });

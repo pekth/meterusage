@@ -12,14 +12,16 @@ export interface SettingsState {
   values: Record<string, boolean | number | string>;
   accounts: { id: string; provider: "codex" | "claude"; label: string; pathLabel?: string; enabled: boolean }[];
 }
+export interface IssueReportState { sending: boolean; receipt?: string; error?: string }
 export interface ViewState {
+  issueReport?: IssueReportState;
   connections?: ConnectionState[];
   snapshot: Snapshot; settings: SettingsState; systemDark: boolean;
   notch: { expanded: boolean; cardOnRight: boolean; selected: string; dragging: boolean; maxHeight?: number };
   update?: { version: string; state: "idle" | "downloading" | "installing" | "failed" };
 }
 export type Request =
-  | { action: "state" | "refresh" | "settings" | "close" | "quit" | "clearCache" | "copyDiagnostics" | "copyJSON" | "dragStart" | "dragEnd" | "notchContext" | "updateInstall" | "updateDismiss" }
+  | { action: "state" | "refresh" | "settings" | "close" | "quit" | "clearCache" | "copyDiagnostics" | "sendReport" | "copyJSON" | "dragStart" | "dragEnd" | "notchContext" | "updateInstall" | "updateDismiss" }
   | { action: "share"; key: string }
   | { action: "statusPage"; provider: keyof typeof statusPages }
   | { action: "setPreference"; key: string; value: boolean | number | string }

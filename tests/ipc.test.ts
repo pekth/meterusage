@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vite-plus/test";
 import { parseRequest, trustedSender, projectSettings } from "../src/main/ipc";
 describe("renderer boundary", () => {
+  it("accepts report intent without renderer-selected content or destination", () => {
+    expect(parseRequest({ action: "sendReport" })).toEqual({ action: "sendReport" });
+    for (const extra of [{ diagnostics: "private" }, { url: "https://example.invalid" }, { id: "chosen" }, { consent: true }, { body: {} }]) expect(() => parseRequest({ action: "sendReport", ...extra })).toThrow();
+  });
   it("accepts and publishes only Small, Medium and Large panel sizes", () => {
     for (const value of ["small", "medium", "large"]) {
       const request = { action: "setPreference", key: "panelSize", value };

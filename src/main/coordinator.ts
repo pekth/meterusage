@@ -207,11 +207,11 @@ export class Coordinator {
       this.sources = this.sourceFactory(); this.backoffs.clear(); await this.refresh();
     } finally { this.clearingCache = false; this.publish(); }
   }
-  diagnostics(): string {
+  diagnostics(version = "0.2.41"): string {
     const describe = <T>(s: Loaded<T> | undefined) => !s || s.status === "idle" ? "not checked yet" : s.status === "value" ? "ok" : `unavailable (${s.code})`;
     const describeStatus = (s: Loaded<ServiceStatus> | undefined) => s?.status === "value" && s.value.stale
       ? `stale (last successful check: ${Math.max(0, Math.trunc((this.now() - s.value.checkedAt) / 1000))}s ago; Service status unavailable)` : describe(s);
-    const slots = this.slots, lines = ["MeterUsage 0.2.41", `mode: ${this.launch.demo ? "demo" : "live"}`, `refresh interval: ${this.preferences.refreshInterval}s`, `last refresh: ${this.lastRefreshedAt === undefined ? "never" : Math.max(0, Math.trunc((this.now() - this.lastRefreshedAt) / 1000)) + "s ago"}`, `enabled: ${slots.map(s => s.provider + (s.slotID ? "#additional" : "")).join(", ")}`];
+    const slots = this.slots, lines = [`MeterUsage ${version}`, `mode: ${this.launch.demo ? "demo" : "live"}`, `refresh interval: ${this.preferences.refreshInterval}s`, `last refresh: ${this.lastRefreshedAt === undefined ? "never" : Math.max(0, Math.trunc((this.now() - this.lastRefreshedAt) / 1000)) + "s ago"}`, `enabled: ${slots.map(s => s.provider + (s.slotID ? "#additional" : "")).join(", ")}`];
     if (this.history.error) lines.push(`history: ${this.history.error}`);
     if (this.archiveWriteFailed) lines.push("archive: writeFailed");
     for (const [index, s] of slots.entries()) { const key = slotKey(s); lines.push(`\n[${s.provider}${s.slotID ? ` account ${index + 1}` : ""}]`, `  quota: ${describe(this.quotas[key])}`, `  activity: ${describe(this.activities[key])}`, `  usage: ${describe(this.usages[key])}`, `  status: ${describeStatus(this.statuses[s.provider])}`, `  plan: ${describe(this.plans[key])}`); }

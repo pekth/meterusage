@@ -23,7 +23,7 @@ Usage. See [ADR 0023](../adr/0023-onboarding-source-choice.md).
 | Codex CLI | Existing authenticated CLI supplies quota/reset metadata; local rollouts supply tokens, sessions and estimated cost. | Activity on this Mac only. |
 | Claude Desktop | Explicit consent permits a fixed Keychain helper and read-only Desktop cache/cookie access for current account allowance. | Allowance only. No Desktop chat/token history, local cost, tier or extra-usage credit projection. Endpoint compatibility and live acceptance remain open. |
 | Claude Code CLI | Local transcript counters, tier metadata and optional companion quota files. | Local activity; allowance requires the [companion](../COMPANION.md). |
-| Grok CLI | Existing CLI authentication and local session summaries. | Consumer website/mobile sign-in is unsupported. Session/message counts do not establish token totals. |
+| Grok CLI (Beta) | Existing CLI authentication and local session summaries. | Consumer website/mobile sign-in is unsupported. Session/message counts do not establish token totals. |
 
 **Use CLI** ends only MeterUsage-owned account state and waits for successful
 cleanup before enabling local collection. Failed cleanup blocks the switch.
@@ -79,6 +79,9 @@ Settings has a compact category sidebar: Connections, Appearance, General,
 Providers, Side notch, Usage details and Diagnostics. Provider summaries show the
 current source, collection state and reading availability. Choose Configure for
 setup actions; selecting a method still requires its explicit connection action.
+Diagnostics offers **Send report** for an explicit private support submission,
+with progress, a confirmed reference and safe retry feedback. **Copy diagnostics**
+remains available. See [reporting](../REPORTING.md) for content and privacy limits.
 The category controls wrap above the content in narrow windows. Settings fits
 the active page and expanded setup content, retains its width and top position
 while on screen, and scrolls when content exceeds the available work area.
@@ -97,7 +100,8 @@ accounts stay with their provider. Failed saves retain saved order. See
 [ADR 0021](../adr/0021-provider-group-order.md).
 
 The notch has one 36-pixel charcoal rail with provider marks inside 22-pixel
-usage rings, percentages below and a Settings gear at the bottom. Details open on hover and
+usage rings and percentages below. Settings stays in each usage card footer;
+the strip has no Settings button. Details open on hover and
 close through the existing delay and temporary action guards. Pin, dots and
 multiple-design controls are removed. Current source uses a 220-pixel card and
 36-pixel strip; retained Swift uses 250/44 points. Shared-image capture remains
@@ -208,3 +212,7 @@ reference and rollback path. No automatic cutover, data migration, release or
 installed-app replacement follows from these docs. The [repository strategy](../VERSIONS.md#proposed-same-repository-strategy)
 records the accepted development direction and the checks still required for
 source retirement and release. Electron's required Swift helpers remain.
+
+Desktop account research for Grok/Cursor, Antigravity and OpenCode Go is recorded
+in [DESKTOP-LOGIN-RESEARCH.md](../DESKTOP-LOGIN-RESEARCH.md). It separates
+documented sign-in from implemented quota collection.

@@ -6,13 +6,21 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Label the Grok integration **Beta** in usage cards, setup and provider settings.
+
+- Restore **Send report** in Electron Diagnostics with sanitized status summaries,
+  duplicate-safe retries and confirmed private support references.
+
 ### Fixed
 
 - Fit Electron Settings to its active page and expanded controls within the display
   work area. Remove the fixed-height blank space and oversized heatmap readout
   reservation. Exact daily counts wrap below the grid on hover or focus.
 - Match the compact side-notch rail: provider marks inside 22 px usage rings,
-  small percentages below, neutral 36 px body and Settings gear at the bottom.
+  small percentages below and a neutral 36 px body. Settings remains in each
+  expanded card footer; remove the duplicate strip gear and its reserved space.
   Keep detail cards on hover and preserve the fixed top and strip anchor.
 
 - Remove the bright focus outline around the Electron usage and Settings

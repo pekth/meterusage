@@ -9,6 +9,7 @@ import { compose } from "./composition";
 import { DesktopConnections } from "./connections";
 import { desktopReadErrors } from "./providers/claude-desktop";
 import { Coordinator } from "./coordinator";
+import { IssueReports } from "./issue-reports";
 import { NotchFold } from "./notch-fold";
 import { Updater } from "./updater";
 import { runJSON } from "./cli";
@@ -61,6 +62,7 @@ async function start(launch: Launch) {
   const coordinator = new Coordinator(launch, prefs, sources(), Date.now, alert => {
     if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
   }, sources);
+  const issueReports = new IssueReports(() => coordinator.diagnostics(app.getVersion()), publish);
   // Do not restore a legacy archive under a newly connected account.
   for (const p of ["codex", "claude"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
   const notch = { expanded: false, cardOnRight: false, selected: "codex", dragging: false };
@@ -77,7 +79,7 @@ async function start(launch: Launch) {
   tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showUsage() }, { label: "Settings…", click: () => showSettings() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
   tray.on("click", () => { const w = windows.get("flyout"); w?.isVisible() ? w.hide() : showUsage(); });
   let shareState: ViewState | undefined, shareHeight = 0, shareReady: ((image: Electron.NativeImage) => void) | undefined, shareFailed: ((error: Error) => void) | undefined;
-  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ connections: connections.state, snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
+  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ ...(surface === "settings" ? { issueReport: issueReports.state } : {}), connections: connections.state, snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
   const updater = new Updater(prefs, app.getVersion(), publish, undefined, release => {
     if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: "MeterUsage update available", body: `MeterUsage ${release.version} is ready to install.`, silent: true }).show();
   });
@@ -243,7 +245,10 @@ async function start(launch: Launch) {
         if (r.action === "connectionLocal") await connections.useLocal(r.provider);
         else await connections.disconnect(r.provider);
         await coordinator.refresh(); break;
-      case "copyDiagnostics": clipboard.writeText(coordinator.diagnostics()); break;
+      case "sendReport":
+        if (surface !== "settings" || launch.demo) throw new Error("Reporting is only available in live Settings.");
+        await issueReports.submit(); break;
+      case "copyDiagnostics": clipboard.writeText(coordinator.diagnostics(app.getVersion())); break;
       case "copyJSON": clipboard.writeText(coordinator.json()); break;
       case "providerOrder":
         if (surface !== "settings") throw new Error("Invalid request");

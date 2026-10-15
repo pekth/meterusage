@@ -24,6 +24,14 @@ afterEach(() => { for (const c of controllers.splice(0)) c.stop(); vi.useRealTim
 const now = Date.parse("2026-10-06T12:00:00Z");
 async function setup(sources?: Source[], time = () => now) { const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], {}), prefs = await Preferences.load(launch); const c = new Coordinator(launch, prefs, sources ?? compose(launch, prefs, { now: time }), time); controllers.push(c); return { c, root, prefs }; }
 describe("coordinator refresh journey", () => {
+  it("reports the current app version and status codes without account labels, paths or raw failures", async () => {
+    const { c } = await setup([{ slot: { provider: "codex", slotID: "demo-second", label: "private-account-label" }, quota: async () => { throw new Error("private-token /private/provider/path"); } }]);
+    await c.refresh();
+    const text = c.diagnostics("0.3.0-beta.1");
+    expect(text).toContain("MeterUsage 0.3.0-beta.1\n");
+    expect(text).toContain("quota: unavailable (");
+    for (const secret of ["demo-second", "private-account-label", "private-token", "/private/provider/path"]) expect(text).not.toContain(secret);
+  });
   it.each(["switch", "revoke"])("discards unverified account quota on deadline after a Claude %s", async action => {
     const { c: initial, root, prefs } = await setup([]), launch = { ...initial.launch, demo: false };
     let identity = "a".repeat(64), denied = false, hold = false, release!: () => void, started!: () => void;
