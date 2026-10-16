@@ -1,5 +1,9 @@
 # Demo mode
 
+This default-branch guide describes the stable Swift app. For the current beta,
+use the [Electron demo instructions](https://github.com/pekth/meterusage/blob/v0.3.0-beta.1/docs/DEMO.md) and
+[current beta screenshots](SCREENSHOTS.md). Old product captures are removed.
+
 Demo mode runs the real app against synthetic, invented data.
 
 ---

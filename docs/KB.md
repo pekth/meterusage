@@ -1,5 +1,17 @@
 # Project knowledge
 
+## Public beta
+
+Electron **0.3.0-beta.1, build 54** is an opt-in Apple silicon prerelease.
+[Installation and limits](BETA.md) and [current screenshots](SCREENSHOTS.md)
+describe it. Swift 0.2.41 remains stable. The default branch retains Swift
+source; Electron source and its full documentation are published at
+[`v0.3.0-beta.1`](https://github.com/pekth/meterusage/tree/v0.3.0-beta.1).
+The source PR stack is unmerged. The beta is a manual download, not an updater
+cutover. New feature development targets Electron. Native acceptance is incomplete
+and Settings has a known cosmetic 0.2.41 footer.
+
+
 Last verified: 2026-09-29
 
 ## Repository state
