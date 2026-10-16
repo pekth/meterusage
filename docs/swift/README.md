@@ -59,7 +59,7 @@ Swift guide retains its behavior and installation reference without old images.
 
 | Provider | Live Cloud Quota | Local Activity & Tokens | Reset Countdowns | 26-Week Heatmap | Source Mechanism |
 |---|:---:|:---:|:---:|:---:|---|
-| **Codex** | ✅ | ✅ | ✅ | ✅ | Local JSON-RPC via `codex app-server --listen stdio://` |
+| **Codex** | ✅ | ✅ | ✅ | ✅ | Local JSON-RPC via `codex app-server --stdio` |
 | **Antigravity** | ✅ | ✅ | ✅ |. | CLI `/usage` & local conversation SQLite |
 | **Claude Code** | Optional* | ✅ | ✅* | ✅ | Local session JSONL streams (`limits[]` file optional) |
 | **OpenRouter** | ✅ | ✅ | ✅ |. | Public account API & `/api/v1/activity` telemetry |

@@ -139,8 +139,13 @@ See [Swift behavior](docs/swift/README.md#key-features).
 <a id="privacy--architecture"></a><a id="-privacy--architecture"></a>
 See [privacy and data handling](docs/PRIVACY.md).
 
+<a id="download-and-installation"></a>
 <a id="install-the-prebuilt-app"></a><a id="from-a-git-checkout-no-swift"></a>
 See [installation details](docs/swift/README.md#download-and-installation).
+
+<a id="report-a-problem"></a>
+See [beta diagnostics and bug reports](docs/BETA.md#known-limits) and the
+[reporting guide](docs/REPORTING.md).
 
 <a id="-tldr"></a><a id="tldr"></a>
 See [downloads](#download).
