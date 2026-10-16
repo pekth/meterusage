@@ -11,7 +11,7 @@ import { pricingSnapshot } from "../domain/pricing";
 const accents: Record<string, string> = { blue: "#0a84ff", violet: "#a78bfa", teal: "#2dd4bf", amber: "#fbbf24", rose: "#fb7185", graphite: "#aeaeb2" };
 const colours: Record<Provider, string> = { codex: "var(--accent)", claude: "var(--claude)", antigravity: "var(--antigravity)", grok: "var(--grok)", openCodeGo: "var(--opencode)", openRouter: "var(--openrouter)", cursor: "#1ab3e6", copilot: "#6699ff", gemini: "#4d80f2" };
 const logos: Partial<Record<Provider, string>> = { codex: "codex-logo.png", grok: "grok-logo.png", antigravity: "antigravity-logo.png", openCodeGo: "opencode-logo.png" };
-const n = (x: number) => new Intl.NumberFormat("en", { notation: x >= 10000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(x);
+const n = (x: number) => new Intl.NumberFormat("en", { notation: x >= 1000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(x);
 const money = (x: number) => new Intl.NumberFormat("en", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(x);
 const extract = <T,>(s?: Loaded<T>) => s?.status === "value" ? s.value : undefined;
 const reason = (s?: Loaded<unknown>) => s?.status === "missing" ? s.reason : "Not checked yet";
@@ -86,7 +86,7 @@ function TelemetryView({ provider, t, stats, chart, heatmap, daily, now, staticE
     if (!d) return <span key={`future-${i}`} />;
     const scope = !daily || mode === "daily" ? date(d.day) : mode === "weekly" ? `Week of ${date(shiftDay(d.day, -new Date(d.day).getDay()))}` : `Through ${date(d.day)}`;
     const label = `${scope}: ${measured ? `${exact.format(d.tokens)} tokens, ${exact.format(d.sessionCount)} sessions` : `${exact.format(d.sessionCount)} sessions, token totals unavailable`}`;
-    const readout = `${scope} · ${measured ? `${exact.format(d.tokens)} tokens · ${exact.format(d.sessionCount)} sessions` : `${exact.format(d.sessionCount)} sessions · token totals unavailable`}`;
+    const readout = `${scope} · ${measured ? `${n(d.tokens)} tokens · ${n(d.sessionCount)} sessions` : `${n(d.sessionCount)} sessions · token totals unavailable`}`;
     return <HeatmapCell key={d.day} first={i === 0} staticExport={staticExport} label={label} readout={readout} amount={amount(d)} peak={cellPeak} />;
   })}</ActivityHeatmap>}</section>;
 }
@@ -100,7 +100,7 @@ function AccountHeatmap({ reading, staticExport }: { reading: Loaded<AccountActi
     return { date, tokens: byDate.get(date) };
   });
   const peak = Math.max(1, ...cells.map(c => c.tokens ?? 0));
-  return <section className="telemetry"><ActivityHeatmap title="Account token activity" scope="Provider account" period={`26 weeks through ${sorted[sorted.length - 1].startDate}`} label="Account daily tokens over 26 weeks" fullHistory unavailable={cells.some(c => c.tokens === undefined)}>{cells.map((c, i) => <HeatmapCell key={c.date} first={i === 0} staticExport={staticExport} label={`${c.date}: ${c.tokens === undefined ? "Unavailable" : `${new Intl.NumberFormat("en").format(c.tokens)} tokens`}`} readout={`${new Date(c.date).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })} · ${c.tokens === undefined ? "Unavailable" : `${new Intl.NumberFormat("en").format(c.tokens)} tokens`}`} amount={c.tokens} peak={peak} />)}</ActivityHeatmap></section>;
+  return <section className="telemetry"><ActivityHeatmap title="Account token activity" scope="Provider account" period={`26 weeks through ${sorted[sorted.length - 1].startDate}`} label="Account daily tokens over 26 weeks" fullHistory unavailable={cells.some(c => c.tokens === undefined)}>{cells.map((c, i) => <HeatmapCell key={c.date} first={i === 0} staticExport={staticExport} label={`${c.date}: ${c.tokens === undefined ? "Unavailable" : `${new Intl.NumberFormat("en").format(c.tokens)} tokens`}`} readout={`${new Date(c.date).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })} · ${c.tokens === undefined ? "Unavailable" : `${n(c.tokens)} tokens`}`} amount={c.tokens} peak={peak} />)}</ActivityHeatmap></section>;
 }
 export function ProviderCard({ slot, state, action, detail = false, staticExport = false }: { slot: Slot; state: ViewState; action: (r: Request) => Promise<void>; detail?: boolean; staticExport?: boolean }) {
   const s = state.snapshot, key = slotKey(slot), fresh = extract(s.quotas[key]), q = fresh ?? s.archived[key], activity = extract(s.activities[key]), usage = extract(s.usages[key]), plan = extract(s.plans[key]) ?? q?.planType, accountActivity = s.accountActivities?.[key];
@@ -218,7 +218,7 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
     <section hidden={category !== "Usage details"}><h2>Usage details</h2><div className="settings-group">{["menuBarCompactEnabled", "showHeatmap", "showClaudeHeatmap", "showCodexHeatmap", "showPacingBurnRate", "showActivityTelemetry", "showDailyActivityChart"].map(k => toggle(k, labels[k]))}</div></section>
     <section hidden={category !== "Diagnostics"}><h2>Diagnostics</h2><div className="settings-group diagnostics-actions"><p className="secondary">Sends a sanitized diagnostic report privately to MeterUsage support in Linear. No login needed. Credentials and chat content are excluded.</p><div className="row"><button disabled={state.issueReport?.sending || !!state.issueReport?.receipt || reportCoolingDown} onClick={() => void action({ action: "sendReport" })}>{state.issueReport?.sending ? "Sending…" : state.issueReport?.receipt ? "Sent" : "Send report"}</button><button onClick={() => void action({ action: "copyDiagnostics" })}>Copy diagnostics</button><button disabled={state.snapshot.clearingCache} onClick={() => void action({ action: "clearCache" })}>{state.snapshot.clearingCache ? "Clearing…" : "Clear local scan cache"}</button></div>{state.issueReport?.receipt && <p className="secondary" role="status">Report sent. Reference: {state.issueReport.receipt}</p>}{state.issueReport?.error && <p className="secondary" role="alert">{state.issueReport.error}</p>}{reportCoolingDown && !state.issueReport?.receipt && <p className="secondary" role="status">Next report attempt after {new Date(state.issueReport!.retryAt!).toLocaleTimeString()}. Please wait 10 minutes between attempts.</p>}<p className="secondary">Provider files and durable history stay intact.</p></div></section>
     </div></div>
-    <p className="secondary settings-footer">MeterUsage 0.2.41 · Cost figures are local estimates.</p>
+    <p className="secondary settings-footer">MeterUsage{state.appVersion ? ` ${state.appVersion}` : ""} · Cost figures are local estimates.</p>
   </main>;
 }
 function AccountRow({ account: a, action }: { account: ViewState["settings"]["accounts"][number]; action: (r: Request) => Promise<void> }) {

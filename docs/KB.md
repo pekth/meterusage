@@ -1,6 +1,6 @@
 # Project knowledge
 
-Last source review: 2026-10-10
+Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 ## Edition documentation
 
@@ -10,8 +10,10 @@ Last source review: 2026-10-10
   native acceptance, deliberate cutover and retrievable archive checks pass.
   Source retirement is pending. Electron-required Swift helpers and assets stay.
 - [Swift 0.2.41](swift/README.md) is the published default install route.
-  [Electron source 0.2.41](electron/README.md) is an unpublished candidate with
-  private build/installation receipts and incomplete native acceptance.
+  [Electron 0.3.0-beta.1, build 54](BETA.md) is an opt-in public prerelease,
+  signed and notarized for Apple silicon. Native acceptance remains incomplete.
+  Source manifests and its cosmetic Settings footer still say 0.2.41; packaging
+  explicitly sets the beta version. Stable updaters do not offer the beta.
 - Both implementations remain in their current source trees. Shared app name,
   bundle ID and default data/preferences prevent safe normal-profile coexistence.
   Use only documented isolated QA profiles.
@@ -27,7 +29,9 @@ Last source review: 2026-10-10
   OpenCode Bun fallback discovery, pending AGY/OpenCode onboarding and unresolved
   notch-dimension/grid-geometry feedback remain distinct. See the candidate guide.
 - Edition documentation was reconciled against revision
-  `605f1c4328eed6d4f793fcee0937a8d2e1659f6d` and its accompanying candidate changes.
+  build source `6ce695324e54bb09bf6e5ab36fd4733875c94427`.
+- Current product screenshots use build 54's renderer and synthetic demo data.
+  Old product captures are removed; see [capture provenance](SCREENSHOTS.md).
 
 ## Repository state
 
@@ -36,6 +40,11 @@ Last source review: 2026-10-10
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
 ## Product and source facts
+
+- Heatmap hover/focus readouts use compact token and session totals, including
+  local, account, session-only, daily, weekly and cumulative grids. Exact grouped
+  counts remain in tooltips and accessible labels. Summary counts compact from
+  1,000. This follow-up is separate from the published build 54 artifact.
 
 - Onboarding and Settings offer provider-specific source choices: Codex browser
   sign-in or CLI, Claude Desktop or Claude Code CLI, and Grok CLI only. Choosing
@@ -59,6 +68,9 @@ Last source review: 2026-10-10
   Input accessible names and full label hit areas remain. Settings action
   errors retain their alert role, message and dismissal in a sticky banner.
   Advanced account rows wrap without changing their save/remove behavior.
+- Settings displays the running Electron bundle version supplied by the main
+  process. Source previews without bundle metadata omit the version instead
+  of showing the legacy Swift version.
 - Candidate Usage keeps Service status first and visible, before provider usage.
   Provider/account tabs show one usage card at a time in saved provider order.
   Arrow keys and Home/End switch tabs; removing a selected slot falls back to
@@ -86,13 +98,13 @@ Last source review: 2026-10-10
   and keyboard focus remain immediate. Renderer fixture and build proof does
   not establish rendered layout, sticky alerts, motion or native export proof.
 
-- Electron heatmaps show exact grouped counts and readable dates for daily,
-  weekly or cumulative scope on hover and keyboard focus, tooltips and accessible
-  labels. Each live heatmap has one Tab entry; arrow keys move between days and
+- Electron heatmaps show compact counts and readable dates for daily,
+  weekly or cumulative scope on hover and keyboard focus. Tooltips and accessible
+  labels retain exact grouped counts. Each live heatmap has one Tab entry; arrow keys move between days and
   Home/End reach the first/last available cell. Tab leaves the heatmap. Shared
   images have no focusable cells. Account, local-token and session-only
   providers share the same heading, caption, cells and intensity legend.
-  Hover and keyboard focus replace the legend with the exact dated readout
+  Hover and keyboard focus replace the legend with the compact dated readout
   in a natural-height row. Long readouts can grow the card; the top and rail stay anchored. Unreported account days have subtle solid
   outlines; reported zeroes have filled neutral cells. Each source retains its
   own time range and units. Count-only providers report token totals unavailable.

@@ -6,6 +6,29 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Shorten heatmap hover/focus totals to values such as `42.4B tokens` and
+  `1.6K sessions` across local and account history. Keep exact grouped counts
+  in tooltips and accessibility labels. Summary counts compact from 1,000.
+
+### Fixed
+
+- Show the running app bundle's version in Settings instead of the legacy
+  hardcoded version. Source previews omit the version when none is supplied.
+
+## [0.3.0-beta.1] - 2026-10-16
+
+### Release
+
+- Publish Electron build 54 as an opt-in Apple silicon beta. Keep Swift 0.2.41
+  as the stable download and preserve its updater and installer contracts.
+- Replace old product screenshots with current synthetic Codex, Claude, notch
+  and Settings captures. Refresh download, source-choice and beta-limit docs.
+- Disclose the cosmetic 0.2.41 Settings footer and incomplete native acceptance.
+  The signed build is unchanged; Antigravity/Grok desktop login is follow-up work.
+
+
 ### Added
 
 - Label the Grok integration **Beta** in usage cards, setup and provider settings.
@@ -32,7 +55,7 @@ follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Make buttons smaller throughout the Electron menu, Settings and side-notch
-  cards. Reveal the notch Settings gear on strip hover or keyboard focus.
+  cards. Keep Settings in each card footer and remove the duplicate strip gear.
 - Align heatmap menu labels with a fixed selection-checkmark column.
 
 - Keep Service status at the top of the Electron menu. Switch between provider
@@ -47,7 +70,7 @@ follows [Semantic Versioning](https://semver.org/).
   summaries and setup details under Configure. Keep existing settings, account
   controls and explicit connection actions. Show the current source, collection
   state and reading availability separately.
-- Place service health after usage cards. Use exact grouped heatmap totals on
+- Keep service health above usage cards. Use exact grouped heatmap totals on
   hover and focus, with one Tab entry per heatmap and arrow-key navigation.
   Keep control focus visible without highlighting the panel edge.
 

@@ -8,20 +8,39 @@ MeterUsage monitors AI coding allowance and usage in a macOS menu bar and
 floating side notch. Electron is the active development target. The legacy
 Swift app remains the stable download and rollback option during migration.
 
-## Choose an edition
+## Download
 
 | Edition | Current status | Setup and behavior |
 | --- | --- | --- |
-| Electron 0.2.41 source candidate | Active feature development; unpublished; native acceptance is incomplete | [Electron guide](docs/electron/README.md) |
+| Electron 0.3.0-beta.1, build 54 | Public beta for Apple silicon, macOS 13+; signed and notarized | [Download beta](https://github.com/pekth/meterusage/releases/tag/v0.3.0-beta.1) · [Beta guide](docs/BETA.md) |
 | Legacy Swift 0.2.41 | Frozen for new features; published stable download and migration rollback | [Swift guide](docs/swift/README.md) |
 
-Both implementations are already in this repository. The shared version number
-does not make the candidate the published download, and it is not a released
-v2.1. New contributions target Electron. Swift receives critical maintenance
-only until verified cutover. See the [staged retirement decision](docs/adr/0024-electron-primary-swift-retirement.md)
-and [version strategy](docs/VERSIONS.md).
+Electron is the active app for new features. Swift remains the stable download
+and rollback reference. The beta is installed manually; the stable updater does
+not offer it. Quit the existing MeterUsage before replacing it, and keep a copy
+for rollback. Both apps share their identity and saved data, so do not run them
+together against a normal profile. See [beta installation and limits](docs/BETA.md)
+and the [version strategy](docs/VERSIONS.md).
 
-## Download and installation
+## Current beta UI
+
+<p>
+  <img src="docs/images/beta-usage-claude.png" alt="Electron beta Claude usage demo with service status and token heatmap" width="300">
+  <img src="docs/images/beta-notch-claude.png" alt="Electron beta hover card and compact side-notch usage rail" width="256">
+</p>
+
+Synthetic demo captures of build 54's renderer. Claude Desktop provides allowance,
+not a chat-history heatmap. See the [full screenshot gallery and capture details](docs/SCREENSHOTS.md)
+for Codex, Claude, side notch and Settings.
+
+The beta includes Codex browser sign-in/account history, optional Claude Desktop
+allowance, existing CLI sources, compact provider tabs and hover cards, provider
+reordering and readable token totals. Account coverage depends on the source.
+Grok remains Beta and CLI-only; Antigravity desktop login is follow-up work.
+Build 54's Settings footer incorrectly says `0.2.41`; the packaged version is
+`0.3.0-beta.1`. See [known beta limits](docs/BETA.md#known-limits).
+
+## Stable Swift installation
 
 The default installation is the published Swift app for Apple silicon Macs
 with macOS 13 or later. No Swift, Xcode, Command Line Tools or Git is required.
@@ -68,8 +87,10 @@ there is no automatic cutover. See [ADR 0010](docs/adr/0010-macos-typescript-ele
 
 ## Documentation
 
-- [Swift guide and older demo screenshots](docs/swift/README.md)
-- [Electron candidate guide and known gaps](docs/electron/README.md)
+- [Beta download, verification and limits](docs/BETA.md)
+- [Current beta screenshots](docs/SCREENSHOTS.md)
+- [Swift guide](docs/swift/README.md)
+- [Electron guide and known gaps](docs/electron/README.md)
 - [Versions and staged Swift retirement](docs/VERSIONS.md)
 - [Contributing](CONTRIBUTING.md)
 - [Project knowledge](docs/KB.md) and [decision index](docs/adr/README.md)
@@ -79,8 +100,11 @@ there is no automatic cutover. See [ADR 0010](docs/adr/0010-macos-typescript-ele
 
 ## Compatibility links
 
-Older root README links continue below. Detailed Swift descriptions and images
-now live in the Swift guide.
+Older root README links continue below. Detailed Swift descriptions remain in
+the Swift guide; product screenshots now show the Electron beta.
+
+<a id="choose-an-edition"></a>
+See [downloads](#download).
 
 <a id="macos-electron-migration-candidate"></a>
 See the [Electron candidate guide](docs/electron/README.md).
@@ -103,7 +127,7 @@ See the [Swift Agent Budget CLI](docs/swift/README.md#agent-budget-cli) and
 <a id="ambient-time-to-empty--side-notch-hud"></a>
 <a id="menu-bar--popover-dashboard"></a>
 <a id="settings-accounts--providers"></a>
-See [older Swift demo screenshots](docs/swift/README.md#showcase).
+See [current beta screenshots](docs/SCREENSHOTS.md).
 
 <a id="provider-matrix"></a><a id="-provider-matrix"></a>
 See the [Swift provider matrix](docs/swift/README.md#provider-matrix).
@@ -118,7 +142,7 @@ See [privacy and data handling](docs/PRIVACY.md).
 See [installation details](docs/swift/README.md#download-and-installation).
 
 <a id="-tldr"></a><a id="tldr"></a>
-See [edition choice](#choose-an-edition).
+See [downloads](#download).
 
 <a id="license--disclaimer"></a><a id="-license--disclaimer"></a>
 ## License and disclaimer
