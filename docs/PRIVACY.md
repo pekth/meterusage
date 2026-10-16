@@ -60,8 +60,9 @@ action. Selecting an option alone performs no account access. Applying CLI
 selection disconnects only MeterUsage-owned account state and waits for its
 logout cleanup before enabling local collection. Cleanup failure prevents the
 switch. Ordinary Disconnect never silently falls back to local data. The
-selector adds no credential store, provider endpoint or authentication flow;
-CLI sources retain the input and coverage limits above.
+CLI transition adds no credential store, provider endpoint or authentication flow;
+CLI sources retain the input and coverage limits above. The separately consented
+Cursor Beta account option is described below.
 
 Codex browser sign-in uses the official app-server helper discovered in an
 existing Codex app, with existing command installations as a compatibility path.
@@ -125,9 +126,39 @@ account. Quota archives are cleared on connection changes and candidate launch;
 authentication or absent-data failures clear the connected archive. Tokens,
 passwords, raw caches, account identifiers and responses are not logged or
 persisted by MeterUsage. In-memory strings remain subject to garbage collection.
-Demo mode blocks live connection code before helper or key discovery. Grok has
-no new consumer connection in this candidate. [ADR 0011](adr/0011-desktop-account-connections.md)
-amends the candidate boundary; it does not change the published Swift release.
+Demo mode blocks live connection code before helper or key discovery.
+[ADR 0011](adr/0011-desktop-account-connections.md) amends the Codex/Claude
+candidate boundary; it does not change the published Swift release.
+
+Grok Bot offers a separate opt-in **Connect via Cursor (Beta)** connection under
+[ADR 0027](adr/0027-grok-cursor-closed-reader.md). Sign in to Cursor, check Bot
+allowance, then quit Cursor. Pre/post process and filesystem guards reject
+active Cursor, unavailable or ambiguous evidence, nonempty WAL/journal files
+and observed changes. These snapshots detect races; they do not exclude other
+processes or prove Cursor never ran. The original SQLite database is opened
+with `immutable=1&mode=ro`, which disables reader writes, locking and sidecar
+bookkeeping regardless of other processes. No credential stores are copied to
+temporary files. Read access times are controlled by the filesystem.
+
+The main process selects only `ItemTable`'s `cursorAuth/accessToken`, requires
+JWT expiry beyond 60 seconds, constructs the established
+`WorkosCursorSessionToken` cookie, verifies the exact subject through fixed
+`https://cursor.com/api/auth/me`, then sends POST `{}` to fixed
+`https://cursor.com/api/dashboard/get-sand-usage-status` with
+`Origin: https://cursor.com`. Redirects are refused; each request has a
+30-second timeout and 1 MiB response cap. Token strings stay in memory and
+request headers. They are never rendered, logged or persisted. No refresh or
+model requests occur. Only an opaque account fingerprint/source preference and
+projected aggregate quota persist; store fingerprints stay in memory.
+
+The account and store are checked before allowance and after each attempt.
+Cancellation or disconnect prevents further credential reads and rejects late
+results. Revoked access, missing quota and expiry clear account-bound archives;
+ordinary transport failures can retain dated quota only after account/store
+verification. Reopen Cursor, quit it, then reconnect after expiry. No local CLI
+history is attached. Trial expiry is not a replenishment timestamp. Universal
+Grok Desktop, X and shared-pool coverage is unverified, as are native/live
+compatibility and packaged acceptance. See [setup](DESKTOP-CONNECTIONS.md).
 
 ## Selective parsing and display boundary
 

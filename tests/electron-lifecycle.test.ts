@@ -43,7 +43,7 @@ it.each([
   vi.stubGlobal("fetch", reportFetch);
   const notify = vi.fn();
   const showErrorBox = vi.fn();
-  const showMessageBox = vi.fn(async () => ({ response: 0 }));
+  const showMessageBox = vi.fn(async (_window: unknown, _options: { title: string; detail: string; defaultId: number; cancelId: number }) => ({ response: 0 }));
   const prepareReset = vi.fn(() => ({ token: "fixture-intent", account: "Codex", title: "Full reset" }));
   const confirmReset = vi.fn(async () => {}), cancelReset = vi.fn();
   class TestWindow extends EventEmitter {
@@ -247,6 +247,20 @@ it.each([
       expect(await invoke(settings, { action: "providerOrder", order })).toEqual({ ok: true });
       expect(values.providerOrder).toEqual(order);
       expect(settings.contents.send.mock.lastCall?.[1].settings.providerOrder).toEqual(order);
+      for (const response of [0, 1]) {
+        showMessageBox.mockResolvedValueOnce({ response });
+        connect.mockImplementationOnce(async (provider, _open, consent) => { expect(provider).toBe("grok"); expect(await consent()).toBe(response === 1); return false; });
+        expect(await invoke(settings, { action: "connect", provider: "grok" })).toEqual({ ok: true });
+        expect(showMessageBox.mock.lastCall?.[1]).toMatchObject({ title: "Beta Connect via Cursor?", defaultId: 0, cancelId: 0 });
+        expect(showMessageBox.mock.lastCall?.[1].detail).toContain("quit Cursor before connecting");
+      }
+      connect.mockImplementationOnce(async () => { throw new Error("Could not connect Grok Bot via Cursor. Sign in to Cursor, check Bot allowance, then quit Cursor and reconnect."); });
+      expect(await invoke(settings, { action: "connect", provider: "grok" })).toEqual({ ok: false, error: "Could not connect Grok Bot via Cursor. Sign in to Cursor, check Bot allowance, then quit Cursor and reconnect." });
+      useLocal.mockImplementationOnce(async () => { values.desktopGrokIdentity = ""; connectionChanged(); });
+      values.desktopGrokIdentity = "a".repeat(64); connectionChanged();
+      expect(forgetQuota).toHaveBeenCalledWith("grok");
+      expect(await invoke(settings, { action: "connectionLocal", provider: "grok" })).toEqual({ ok: true });
+      expect(forgetQuota).toHaveBeenCalledWith("grok");
       for (const message of [
         "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.",
         "Could not read Claude Desktop's account configuration.",

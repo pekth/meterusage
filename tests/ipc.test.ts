@@ -76,3 +76,9 @@ it("rejects removed strip and legacy pin edits and excludes strip mode from sett
   }
   expect(() => parseRequest({ action: "setPreference", key: "sideNotchPanelPinned", value: true })).toThrow();
 });
+
+it("keeps Grok Cursor credentials and identity outside renderer-controlled connection requests", () => {
+  for (const extra of [{ token: "synthetic" }, { cookie: "synthetic" }, { identity: "a".repeat(64) }, { path: "/synthetic" }, { url: "https://example.invalid" }, { consent: true }]) expect(() => parseRequest({ action: "connect", provider: "grok", ...extra })).toThrow("Invalid request");
+  expect(() => parseRequest({ action: "setPreference", key: "desktopGrokIdentity", value: "a".repeat(64) })).toThrow("Invalid request");
+  expect(projectSettings({ desktopGrokIdentity: "a".repeat(64) }, [], "/synthetic").values).not.toHaveProperty("desktopGrokIdentity");
+});

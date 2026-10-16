@@ -137,17 +137,18 @@ function UnifiedStrip({ state }: { state: ViewState }) {
 }
 const labels: Record<string, string> = { launchAtLogin: "Launch at login", quotaAlertsEnabled: "Quota alerts", updateCheckEnabled: "Check for updates", sideNotchPanelEnabled: "Show side notch", menuBarCompactEnabled: "Compact menu bar", showHeatmap: "Daily heatmaps", showClaudeHeatmap: "Claude heatmap", showCodexHeatmap: "Codex heatmap", showPacingBurnRate: "Pacing and burn rate", showActivityTelemetry: "Activity statistics", showDailyActivityChart: "Daily activity chart", showSideNotchResetButton: "Codex limit resets in the side notch" };
 function ConnectionRow({ connection: c, state, action }: { connection: ConnectionState; state: ViewState; action: (r: Request) => Promise<void> }) {
-  const [method, setMethod] = useState<ConnectionState["source"]>(!c.localAvailable && c.provider !== "grok" && c.status !== "unsupported" ? "account" : c.source);
+  const [method, setMethod] = useState<ConnectionState["source"]>(!c.localAvailable && c.status !== "unsupported" ? "account" : c.source);
   const [expanded, setExpanded] = useState(false);
   const busy = c.status === "connecting", collected = state.settings.values[providerKey(c.provider)] === true;
   const localActive = c.source === "cli" && collected;
   const localName = c.provider === "claude" ? "Claude Code CLI" : `${providerNames[c.provider]} CLI`;
-  const accountName = c.provider === "claude" ? "Claude Desktop" : "Browser sign-in";
+  const accountName = c.provider === "claude" ? "Claude Desktop" : c.provider === "grok" ? "Grok Bot via Cursor (Beta)" : "Browser sign-in";
   const help = method === "cli"
     ? c.provider === "claude" ? "Reads Claude Code activity on this Mac. Allowance needs a companion usage file."
       : c.provider === "grok" ? "Reads your existing Grok CLI allowance and local session counts. Grok website and mobile usage are not supported."
       : "Uses your existing Codex CLI sign-in for allowance and reads token activity on this Mac."
     : c.provider === "claude" ? "Uses the account signed in to Claude Desktop. You approve access in macOS; allowance depends on your plan."
+      : c.provider === "grok" ? "Sign in to Cursor, check Bot allowance, then quit Cursor before connecting. No CLI required. Grok Desktop, X and shared-pool coverage are unverified. When access expires, reopen Cursor, then quit and reconnect."
       : "Sign in through your browser for account allowance and provider-reported token history. Requires an existing Codex app or CLI.";
   const reading = state.snapshot.quotas[c.provider];
   const status = busy ? "Updating connection…" : c.source === "cli" ? localActive ? "CLI selected. Data appears when available." : "CLI selected. Collection is off."
@@ -157,10 +158,10 @@ function ConnectionRow({ connection: c, state, action }: { connection: Connectio
   return <div className="provider-setting connection-row">
     <div className="connection-summary"><div className="connection-identity"><Mark slot={primary(c.provider)} state={state} /><div><strong className="connection-title">{providerNames[c.provider]}{c.provider === "grok" && <> <span className="badge">Beta</span></>}</strong><p className="secondary">Current source: {currentSource}</p><p className="secondary connection-state">Collection: {collected ? "On" : "Off"} · Allowance: {reading?.status === "value" ? "Available" : reading?.status === "missing" ? reading.reason : "Not checked yet"}</p><p className="secondary connection-state" role="status">{status}</p></div></div><button aria-label={`Configure ${providerNames[c.provider]}`} aria-expanded={expanded} aria-controls={`connection-${c.provider}`} onClick={() => setExpanded(!expanded)}>{expanded ? "Close" : "Configure"}</button></div>
     <div className="connection-detail" id={`connection-${c.provider}`} hidden={!expanded}>
-    {c.provider === "grok" ? <p className="setting connection-method"><span>Connect using</span><span>Grok CLI</span></p> : <label className="setting connection-method"><span>Connect using</span><select aria-label={`${providerNames[c.provider]} connection method`} value={method} disabled={busy} onChange={e => setMethod(e.target.value as ConnectionState["source"])}>
+    <label className="setting connection-method"><span>Connect using</span><select aria-label={`${providerNames[c.provider]} connection method`} value={method} disabled={busy} onChange={e => setMethod(e.target.value as ConnectionState["source"])}>
       <option value="account" disabled={c.status === "unsupported"}>{accountName}</option>
       <option value="cli" disabled={!c.localAvailable}>{localName}</option>
-    </select></label>}
+    </select></label>
     <p className="secondary connection-help">{help}</p>
     {method === "cli" && c.source === "account" && <p className="secondary connection-help">Use CLI disconnects this MeterUsage account connection. Your other apps stay signed in.</p>}
     {!c.localAvailable && method === "cli" && !state.snapshot.demo && <p className="secondary">CLI selection is unavailable in this isolated test.</p>}
@@ -169,13 +170,13 @@ function ConnectionRow({ connection: c, state, action }: { connection: Connectio
       {busy ? <button aria-label={`Cancel ${providerNames[c.provider]} connection`} onClick={() => void action({ action: "connectionCancel", provider: c.provider })}>Cancel</button>
         : method === "cli" ? <button disabled={!c.localAvailable || localActive} onClick={() => void action({ action: "connectionLocal", provider: c.provider })}>{localActive ? "CLI selected" : "Use CLI"}</button>
           : c.status === "connected" ? <button aria-label={`Disconnect ${providerNames[c.provider]}`} disabled={state.snapshot.demo} onClick={() => void action({ action: "disconnect", provider: c.provider })}>Disconnect</button>
-            : c.status !== "unsupported" && <button className="connect-button" disabled={state.snapshot.demo} onClick={() => void action({ action: "connect", provider: c.provider })}>{c.provider === "claude" ? "Connect Claude Desktop" : "Sign in to Codex"}</button>}
+            : c.status !== "unsupported" && <button className="connect-button" disabled={state.snapshot.demo} onClick={() => void action({ action: "connect", provider: c.provider })}>{c.provider === "claude" ? "Connect Claude Desktop" : c.provider === "grok" ? "Beta Connect via Cursor" : "Sign in to Codex"}</button>}
     </div>
     </div>
   </div>;
 }
 export function Connections({ state, action }: { state: ViewState; action: (r: Request) => Promise<void> }) {
-  const connections: ConnectionState[] = state.connections ?? ["codex", "claude", "grok"].map(provider => ({ provider: provider as ConnectionState["provider"], source: provider === "grok" ? "cli" : "account", localAvailable: !state.snapshot.demo, status: provider === "grok" ? "unsupported" : "disconnected" }));
+  const connections: ConnectionState[] = state.connections ?? ["codex", "claude", "grok"].map(provider => ({ provider: provider as ConnectionState["provider"], source: provider === "grok" ? "cli" : "account", localAvailable: !state.snapshot.demo, status: "disconnected" }));
   return <section className="connections" aria-label="Account connections">
     <h2>Choose how to connect</h2>
     <p className="secondary section-description">Choose a method for each provider. Changing the selection takes effect when you use its button.</p>
