@@ -281,7 +281,7 @@ it("shows rolling cost shares before token shares and handles an empty 30-day re
     usageWindows: [{ label: "last 24h", sessionCount: 1, messageCount: 2, tokens: tokens({ input: 200 }), estimatedCostUSD: 8 }, { label: "last 30d", sessionCount: 10, messageCount: 50, tokens: tokens({ input: 1000 }), estimatedCostUSD: 10 }] };
   view.snapshot.usages.openCodeGo = value(usage);
   const cost = renderApp(view); expect(cost).toContain("80%"); expect(cost).toContain('aria-valuenow="80"'); expect(cost).toContain("Share of last 30d usage"); expect(cost).toContain("200 tokens · 2 messages");
-  expect(cost).toContain("10 sessions · 50 messages · 1,000 tokens · ~$10.00");
+  expect(cost).toContain("10 sessions · 50 messages · 1K tokens · ~$10.00");
   usage.usageWindows[0].estimatedCostUSD = 20; expect(renderApp(view)).toContain('aria-valuenow="100"');
   usage.usageWindows[1].estimatedCostUSD = 0;
   const token = renderApp(view); expect(token).toContain("20%"); expect(token).toContain('aria-valuenow="20"'); expect(token).toContain("Share of last 30d tokens");
@@ -425,7 +425,7 @@ it.each(["daily", "weekly", "cumulative"])("exposes exact heatmap values on hove
   const scope = mode === "weekly" ? `Week of ${date(shiftDay(day, -new Date(day).getDay()))}` : mode === "cumulative" ? `Through ${date(day)}` : date(day);
   expect(markup).toContain(`tabindex="-1" role="img" aria-label="${scope}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
   expect(markup).toContain(`title="${scope}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
-  expect(markup).toContain(`data-readout="${scope} · ${new Intl.NumberFormat().format(1234567)} tokens · 2 sessions"`);
+  expect(markup).toContain(`data-readout="${scope} · 1.2M tokens · 2 sessions"`);
   for (const name of ["daily", "weekly", "cumulative"]) expect(markup).toMatch(new RegExp(`<option value="${name}"[^>]*>${name[0].toUpperCase() + name.slice(1)}</option>`));
   const css = readFileSync("src/renderer/style.css", "utf8");
   expect(markup).toContain('class="heatmap-readout"');
@@ -451,7 +451,7 @@ it("keeps OpenRouter ledger dates in UTC when the local date is a day earlier", 
     const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("openRouter"), state: view, action: async () => {} }));
     const date = new Date(Date.UTC(2026, 9, 6)).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
     expect(markup).toContain(`aria-label="${date}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
-    expect(markup).toContain(`data-readout="${date} · ${new Intl.NumberFormat().format(1234567)} tokens · 2 sessions"`);
+    expect(markup).toContain(`data-readout="${date} · 1.2M tokens · 2 sessions"`);
   } finally { vi.unstubAllEnvs(); }
 });
 
@@ -645,7 +645,7 @@ it("keeps unavailable account history explicit and respects global and Codex hea
   expect(css).toContain(".heatmap .unavailable-day > span");
 });
 
-it.each([0, 42, 12500, 1234567, 499543210, 2400000000])("shows %s account tokens exactly in the visible readout", count => {
+it.each([[0, "0"], [42, "42"], [999, "999"], [1000, "1K"], [1611, "1.6K"], [12500, "12.5K"], [1234567, "1.2M"], [499543210, "499.5M"], [2400000000, "2.4B"], [42413255594, "42.4B"]])("compacts %s account tokens to %s while preserving exact labels", (count, compact) => {
   vi.stubEnv("TZ", "America/Los_Angeles");
   try {
     const view = state(); view.snapshot.activities = {};
@@ -655,14 +655,14 @@ it.each([0, 42, 12500, 1234567, 499543210, 2400000000])("shows %s account tokens
     for (const props of [{}, { detail: true }, { detail: true, staticExport: true }]) {
       const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {}, ...props }));
       const exact = `2026-10-11: ${new Intl.NumberFormat("en").format(count as number)} tokens`;
-      expect(markup).toContain(`aria-label="${exact}" title="${exact}" data-readout="${date} · ${new Intl.NumberFormat("en").format(count)} tokens"`);
+      expect(markup).toContain(`aria-label="${exact}" title="${exact}" data-readout="${date} · ${compact} tokens"`);
       expect(markup).toContain('aria-label="2026-10-10: Unavailable"');
     }
   } finally { vi.unstubAllEnvs(); }
 });
 
 it.each(providers)("uses the shared heatmap design for %s activity", provider => {
-  const view = state(), day = localDay(now), daily = [{ day, tokens: tokens({ output: 1234567 }), sessionCount: 2, estimatedCostUSD: 0 }];
+  const view = state(), day = localDay(now), daily = [{ day, tokens: tokens({ output: 42413255594 }), sessionCount: 1611, estimatedCostUSD: 0 }];
   view.snapshot.activities = { [provider]: value({ provider, scannedAt: now, sessions: [], daily, telemetry: telemetry([], daily, now) }) };
   view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = view.snapshot.appearance.claudeHeatmap = true;
   const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary(provider), state: view, action: async () => {} }));
@@ -670,8 +670,8 @@ it.each(providers)("uses the shared heatmap design for %s activity", provider =>
   expect(markup).toContain('class="heatmap-heading"');
   expect(markup).toContain('class="heatmap-legend secondary"');
   expect(markup).toContain('aria-label="Usage intensity from less to more"');
-  expect(markup).toContain(`${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions`);
-  expect(markup).toContain(`${new Intl.NumberFormat().format(1234567)} tokens · 2 sessions`);
+  expect(markup).toContain(`${new Intl.NumberFormat().format(42413255594)} tokens, ${new Intl.NumberFormat().format(1611)} sessions`);
+  expect(markup).toContain(`42.4B tokens · 1.6K sessions`);
 });
 
 it("keeps every Settings category mounted and selects categories without dispatching an action", () => {
@@ -754,7 +754,7 @@ it.each(["codex", "grok"] as const)("omits all %s heatmap Tab stops in static sh
     const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary(provider), state: view, action: async () => {}, staticExport }));
     expect((markup.match(/tabindex="0"/g) ?? []).length).toBe(staticExport ? 0 : 1);
     if (staticExport) expect(markup).not.toContain("tabindex=");
-    expect(markup).toContain("12,345 sessions · token totals unavailable");
+    expect(markup).toContain("12.3K sessions · token totals unavailable");
   }
 });
 

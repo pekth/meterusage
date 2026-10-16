@@ -41,6 +41,11 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 ## Product and source facts
 
+- Heatmap hover/focus readouts use compact token and session totals, including
+  local, account, session-only, daily, weekly and cumulative grids. Exact grouped
+  counts remain in tooltips and accessible labels. Summary counts compact from
+  1,000. This follow-up is separate from the published build 54 artifact.
+
 - Onboarding and Settings offer provider-specific source choices: Codex browser
   sign-in or CLI, Claude Desktop or Claude Code CLI, and Grok CLI only. Choosing
   an option does not change collection until its action is used. Use CLI waits
@@ -90,13 +95,13 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   and keyboard focus remain immediate. Renderer fixture and build proof does
   not establish rendered layout, sticky alerts, motion or native export proof.
 
-- Electron heatmaps show exact grouped counts and readable dates for daily,
-  weekly or cumulative scope on hover and keyboard focus, tooltips and accessible
-  labels. Each live heatmap has one Tab entry; arrow keys move between days and
+- Electron heatmaps show compact counts and readable dates for daily,
+  weekly or cumulative scope on hover and keyboard focus. Tooltips and accessible
+  labels retain exact grouped counts. Each live heatmap has one Tab entry; arrow keys move between days and
   Home/End reach the first/last available cell. Tab leaves the heatmap. Shared
   images have no focusable cells. Account, local-token and session-only
   providers share the same heading, caption, cells and intensity legend.
-  Hover and keyboard focus replace the legend with the exact dated readout
+  Hover and keyboard focus replace the legend with the compact dated readout
   in a natural-height row. Long readouts can grow the card; the top and rail stay anchored. Unreported account days have subtle solid
   outlines; reported zeroes have filled neutral cells. Each source retains its
   own time range and units. Count-only providers report token totals unavailable.

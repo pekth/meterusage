@@ -122,7 +122,9 @@ in memory and is excluded from local rollups, durable history and schema-1 JSON.
 Live Codex account history has been observed; complete device/product coverage remains unverified. See
 [ADR 0022](../adr/0022-codex-account-token-history.md).
 
-Hover and keyboard focus expose dated exact grouped counts. Each live heatmap
+Compact hover/focus readouts are an unreleased source change; published build 54
+retains exact readouts. Hover and keyboard focus show dated compact totals such as `42.4B tokens` and
+`1.6K sessions`. Tooltips and accessible labels retain exact grouped counts. Each live heatmap
 has one Tab entry. Use arrow keys to move between days, Home/End for the first
 or last cell, and Tab to leave the grid. Shared images omit focusable cells.
 Feedback about 30-day versus 26-week grid geometry
