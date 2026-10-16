@@ -88,3 +88,24 @@ it("persists the report cooldown as a native date and blocks requests after rela
   expect(afterRestart.state.retryAt).toBe(now + 600000);
   expect(writes).toEqual([["write", "dev.meterusage.fixture", "reportNextAllowedAt", "-date", "2026-10-15T12:10:00.000Z"]]);
 });
+
+it("validates the Grok Cursor account fingerprint without accepting tokens or raw identity", async () => {
+  const root = mkdtempSync(join(tmpdir(), "meterusage-grok-preferences-"));
+  const launch = { home: root, data: root, demo: true, candidate: true, env: {} };
+  try {
+    const prefs = await Preferences.load(launch);
+    for (const value of ["a".repeat(64), "off", ""]) { await prefs.set("desktopGrokIdentity", value); expect((await Preferences.load(launch)).values.desktopGrokIdentity).toBe(value); }
+    for (const value of ["synthetic-account", "WorkosCursorSessionToken=synthetic", "A".repeat(64), 1]) await expect(prefs.set("desktopGrokIdentity", value)).rejects.toThrow("Invalid preference");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it("defaults saved Grok source to Cursor and accepts only fixed internal methods", async () => {
+  const root = mkdtempSync(join(tmpdir(), "meterusage-grok-source-"));
+  try {
+    const launch = { home: root, data: root, env: {}, demo: true, candidate: true };
+    const prefs = await Preferences.load(launch);
+    expect(prefs.values.desktopGrokSource).toBe("cursor");
+    for (const source of ["bot", "cursor"]) { await prefs.set("desktopGrokSource", source); expect((await Preferences.load(launch)).values.desktopGrokSource).toBe(source); }
+    for (const source of ["", "unknown", "Bot", 1]) await expect(prefs.set("desktopGrokSource", source)).rejects.toThrow("Invalid preference");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

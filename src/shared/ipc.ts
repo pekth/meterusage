@@ -5,8 +5,8 @@ export const statusPages = { codex: "https://status.openai.com/", claude: "https
 export type Surface = "flyout" | "settings" | "notch" | "tray" | "share";
 export enum PanelSize { Small = "small", Medium = "medium", Large = "large" }
 export const panelScales = { [PanelSize.Small]: 0.8, [PanelSize.Medium]: 1, [PanelSize.Large]: 1.15 };
-export type ConnectionProvider = "codex" | "claude" | "grok";
-export interface ConnectionState { provider: ConnectionProvider; status: "disconnected" | "connecting" | "connected" | "failed" | "unsupported"; source: "cli" | "account"; localAvailable: boolean }
+export type ConnectionProvider = "codex" | "claude" | "antigravity" | "grok";
+export interface ConnectionState { provider: ConnectionProvider; status: "disconnected" | "connecting" | "connected" | "failed" | "unsupported"; source: "cli" | "account"; accountMethod?: "cursor" | "bot"; localAvailable: boolean }
 export interface SettingsState {
   providerOrder?: Provider[];
   values: Record<string, boolean | number | string>;

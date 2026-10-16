@@ -3,7 +3,7 @@ export type Selection = true | { [key: string]: Selection };
 // Walk syntax without decoding values outside the declared selection. In
 // particular, Claude identity fields and transcript content are never passed
 // to JSON.parse or materialized as JavaScript values.
-export function selectJSON(source: string, selection: Selection, onScalar?: (raw: string) => void): unknown {
+export function selectJSON(source: string, selection: Selection, onScalar?: (raw: string) => void, rejectDuplicateKeys = false): unknown {
   let i = 0;
   const scalar = /(?:null|true|false|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/y;
   const bad = (): never => { throw new Error("Invalid selected JSON"); };
@@ -31,13 +31,16 @@ export function selectJSON(source: string, selection: Selection, onScalar?: (raw
       const object = c === "{", end = object ? "}" : "]";
       const selected = typeof shape === "object";
       const result: Record<string, unknown> | unknown[] | undefined = selected ? object ? Object.create(null) : [] : undefined;
+      const keys = object && rejectDuplicateKeys ? new Set<string>() : undefined;
       ws(); if (source[i] === end) { i++; return result; }
       while (true) {
         ws(); let key: string | undefined;
         if (object) {
           const keyStart = i; stringEnd();
           // Object keys describe the selection; unknown values are skipped.
-          key = selected ? JSON.parse(source.slice(keyStart, i)) as string : undefined;
+          key = selected || keys ? JSON.parse(source.slice(keyStart, i)) as string : undefined;
+          if (keys?.has(key!)) return bad();
+          keys?.add(key!);
           ws(); if (source[i++] !== ":") return bad();
         }
         const child = selected ? object ? Object.hasOwn(shape, key!) ? shape[key!] : shape["*"] : shape["*"] : undefined;

@@ -43,7 +43,7 @@ it.each([
   vi.stubGlobal("fetch", reportFetch);
   const notify = vi.fn();
   const showErrorBox = vi.fn();
-  const showMessageBox = vi.fn(async () => ({ response: 0 }));
+  const showMessageBox = vi.fn(async (_window: unknown, _options: { title: string; detail: string; defaultId: number; cancelId: number }) => ({ response: 0 }));
   const prepareReset = vi.fn(() => ({ token: "fixture-intent", account: "Codex", title: "Full reset" }));
   const confirmReset = vi.fn(async () => {}), cancelReset = vi.fn();
   class TestWindow extends EventEmitter {
@@ -247,6 +247,28 @@ it.each([
       expect(await invoke(settings, { action: "providerOrder", order })).toEqual({ ok: true });
       expect(values.providerOrder).toEqual(order);
       expect(settings.contents.send.mock.lastCall?.[1].settings.providerOrder).toEqual(order);
+      for (const request of [
+        { action: "connect", provider: "antigravity", message: "Open one Antigravity Desktop account and sign in, then try connecting again" },
+        { action: "disconnect", provider: "antigravity", message: "Could not disconnect Antigravity Desktop" },
+      ] as const) {
+        if (request.action === "connect") connect.mockRejectedValueOnce(new Error(request.message));
+        else disconnect.mockRejectedValueOnce(new Error(request.message));
+        expect(await invoke(settings, { action: request.action, provider: request.provider })).toEqual({ ok: false, error: request.message });
+      }
+      for (const response of [0, 1]) {
+        showMessageBox.mockResolvedValueOnce({ response });
+        connect.mockImplementationOnce(async (provider, _open, consent) => { expect(provider).toBe("grok"); expect(await consent()).toBe(response === 1); return false; });
+        expect(await invoke(settings, { action: "connect", provider: "grok" })).toEqual({ ok: true });
+        expect(showMessageBox.mock.lastCall?.[1]).toMatchObject({ title: "Connect Grok Bot Desktop (Beta)?", defaultId: 0, cancelId: 0 });
+        expect(showMessageBox.mock.lastCall?.[1].detail).toContain("fixed Grok Bot Safe Storage Keychain item");
+      }
+      connect.mockImplementationOnce(async () => { throw new Error("Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect."); });
+      expect(await invoke(settings, { action: "connect", provider: "grok" })).toEqual({ ok: false, error: "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect." });
+      useLocal.mockImplementationOnce(async () => { values.desktopGrokIdentity = ""; connectionChanged(); });
+      values.desktopGrokIdentity = "a".repeat(64); connectionChanged();
+      expect(forgetQuota).toHaveBeenCalledWith("grok");
+      expect(await invoke(settings, { action: "connectionLocal", provider: "grok" })).toEqual({ ok: true });
+      expect(forgetQuota).toHaveBeenCalledWith("grok");
       for (const message of [
         "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.",
         "Could not read Claude Desktop's account configuration.",

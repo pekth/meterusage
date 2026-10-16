@@ -99,7 +99,7 @@ function savedPreferences(): Command {
 }
 
 it("allows only fixed provider connection requests and approved HTTPS login hosts", () => {
-  for (const provider of ["codex", "claude", "grok"]) expect(parseRequest({ action: "connect", provider })).toEqual({ action: "connect", provider });
+  for (const provider of ["codex", "claude", "antigravity", "grok"]) expect(parseRequest({ action: "connect", provider })).toEqual({ action: "connect", provider });
   for (const raw of [{ action: "connect", provider: "claude", path: "/tmp" }, { action: "connect", provider: "other" }, { action: "setPreference", key: "desktopClaudeIdentity", value: "off" }]) expect(() => parseRequest(raw)).toThrow();
   expect(codexLoginURL("https://auth.openai.com/authorize?state=fixture")).toContain("auth.openai.com");
   for (const raw of ["http://auth.openai.com", "https://auth.openai.com.evil.invalid", "https://user@chatgpt.com", "https://chatgpt.com:444", "file:///tmp"]) expect(() => codexLoginURL(raw)).toThrow();
@@ -141,10 +141,11 @@ it("publishes CLI versus account choice without exposing saved identities", asyn
   expect(connections.state).toEqual([
     { provider: "codex", status: "disconnected", source: "cli", localAvailable: true },
     { provider: "claude", status: "disconnected", source: "cli", localAvailable: true },
-    { provider: "grok", status: "unsupported", source: "cli", localAvailable: true },
+    { provider: "antigravity", status: "disconnected", source: "cli", localAvailable: true },
+    { provider: "grok", status: "disconnected", source: "cli", localAvailable: true },
   ]);
   preferences.values.desktopCodexConnection = "off"; preferences.values.desktopClaudeIdentity = "a".repeat(64);
-  expect(connections.state.map(s => s.source)).toEqual(["account", "account", "cli"]);
+  expect(connections.state.map(s => s.source)).toEqual(["account", "account", "cli", "cli"]);
   expect(JSON.stringify(connections.state)).not.toContain("a".repeat(64));
 });
 
@@ -286,7 +287,7 @@ it("enables only existing Grok local collection without auth or cleanup", async 
   const processes = vi.mocked(spawn).mock.calls.length;
   await connections.useLocal("grok"); await connections.useLocal("grok");
   expect(preferences.values).toEqual({ ...before, showProviderGrok: true });
-  expect(connections.state.find(s => s.provider === "grok")).toEqual({ provider: "grok", status: "unsupported", source: "cli", localAvailable: true });
+  expect(connections.state.find(s => s.provider === "grok")).toEqual({ provider: "grok", status: "disconnected", source: "cli", localAvailable: true });
   expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled(); expect(spawn).toHaveBeenCalledTimes(processes);
 });
 
@@ -341,12 +342,13 @@ it("keeps Grok collection disabled in memory if cancelled selection rollback can
 
 it("waits past the helper deadline for a queued Grok rollback before completing stop", async () => {
   const stored = savedPreferences(), launch = launchConfiguration([], {}, temp());
-  let releaseSelection!: () => void, releaseQueued!: () => void, queuedStarted!: () => void;
+  let releaseSelection!: () => void, releaseQueued!: () => void, queuedStarted!: () => void, selectionStarted!: () => void;
+  const selecting = new Promise<void>(resolve => { selectionStarted = resolve; });
   const selection = new Promise<void>(resolve => { releaseSelection = resolve; });
   const queued = new Promise<void>(resolve => { releaseQueued = resolve; });
   const ready = new Promise<void>(resolve => { queuedStarted = resolve; });
   const command: Command = async (binary, args, options) => {
-    if (args[0] === "write" && args[2] === "showProviderGrok" && args[4] === "true") await selection;
+    if (args[0] === "write" && args[2] === "showProviderGrok" && args[4] === "true") { selectionStarted(); await selection; }
     if (args[0] === "write" && args[2] === "menuBarCompactEnabled") { queuedStarted(); await queued; }
     return stored(binary, args, options);
   };
@@ -354,6 +356,7 @@ it("waits past the helper deadline for a queued Grok rollback before completing 
   await preferences.set("showProviderGrok", false);
   const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
   const local = connections.useLocal("grok").catch(e => e);
+  await selecting;
   const other = preferences.set("menuBarCompactEnabled", false);
   let finished = false; const stopped = connections.stop(1).then(() => { finished = true; });
   releaseSelection(); await ready;
@@ -657,13 +660,13 @@ it("requires an explicit consent callback before Claude access", async () => {
   expect(command).not.toHaveBeenCalled(); expect(http).not.toHaveBeenCalled();
   expect(connections.enabled("claude")).toBe(false); expect(preferences.values.desktopClaudeIdentity).toBe("");
 });
-it("blocks demo and unavailable Grok access and never falls back after a configured disconnect", async () => {
+it("blocks demo and unconsented Grok access and never falls back after a configured disconnect", async () => {
   const { launch, preferences } = await prefs(undefined, true);
   const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {}, async () => { throw new Error("must not read"); });
   await expect(connections.connect("claude", async () => {})).rejects.toThrow("demo mode");
   await expect(connections.disconnect("codex")).rejects.toThrow("demo mode");
   const live = await prefs(), real = new DesktopConnections(live.launch, live.preferences, "/not-a-helper", () => {});
-  await expect(real.connect("grok", async () => {})).rejects.toThrow("unavailable");
+  expect(await real.connect("grok", async () => {})).toBe(false);
   await real.disconnect("codex");
   const source = compose(live.launch, live.preferences, { connections: real }).find(s => s.slot.provider === "codex")!;
   expect(source.activity).toBeUndefined(); expect(source.consumeReset).toBeUndefined();
@@ -679,8 +682,8 @@ it("denies non-Codex connections and quota in a live test profile even with pers
   const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http);
   const consent = vi.fn(async () => true), open = vi.fn(async () => {});
   expect(connections.enabled("claude")).toBe(false);
-  expect(connections.state).toEqual([{ provider: "codex", status: "disconnected", source: "account", localAvailable: false }, { provider: "claude", status: "unsupported", source: "account", localAvailable: false }, { provider: "grok", status: "unsupported", source: "cli", localAvailable: false }]);
-  for (const provider of ["claude", "grok"] as const) {
+  expect(connections.state).toEqual([{ provider: "codex", status: "disconnected", source: "account", localAvailable: false }, { provider: "claude", status: "unsupported", source: "account", localAvailable: false }, { provider: "antigravity", status: "unsupported", source: "cli", localAvailable: false }, { provider: "grok", status: "unsupported", source: "account", localAvailable: false }]);
+  for (const provider of ["claude", "antigravity", "grok"] as const) {
     await expect(connections.connect(provider, open, consent)).rejects.toThrow("unavailable");
     await expect(connections.quota(provider)).rejects.toMatchObject({ code: "notSignedIn" });
     await expect(connections.disconnect(provider)).rejects.toThrow("unavailable");
@@ -698,8 +701,8 @@ it("denies non-Claude connections, quota and cleanup in a Claude test profile", 
   const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http);
   const consent = vi.fn(async () => true), open = vi.fn(async () => {});
   expect(connections.enabled("codex")).toBe(false);
-  expect(connections.state).toEqual([{ provider: "codex", status: "unsupported", source: "account", localAvailable: false }, { provider: "claude", status: "disconnected", source: "account", localAvailable: false }, { provider: "grok", status: "unsupported", source: "cli", localAvailable: false }]);
-  for (const provider of ["codex", "grok"] as const) {
+  expect(connections.state).toEqual([{ provider: "codex", status: "unsupported", source: "account", localAvailable: false }, { provider: "claude", status: "disconnected", source: "account", localAvailable: false }, { provider: "antigravity", status: "unsupported", source: "cli", localAvailable: false }, { provider: "grok", status: "unsupported", source: "account", localAvailable: false }]);
+  for (const provider of ["codex", "antigravity", "grok"] as const) {
     await expect(connections.connect(provider, open, consent)).rejects.toThrow("unavailable");
     await expect(connections.quota(provider)).rejects.toMatchObject({ code: "notSignedIn" });
     await expect(connections.disconnect(provider)).rejects.toThrow("unavailable");

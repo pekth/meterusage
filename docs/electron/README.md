@@ -25,6 +25,9 @@ Usage. See [ADR 0023](../adr/0023-onboarding-source-choice.md).
 | Codex CLI | Existing authenticated CLI supplies quota/reset metadata; local rollouts supply tokens, sessions and estimated cost. | Activity on this Mac only. |
 | Claude Desktop | Explicit consent permits a fixed Keychain helper and read-only Desktop cache/cookie access for current account allowance. | Allowance only. No Desktop chat/token history, local cost, tier or extra-usage credit projection. Compatibility can fail when the active account has no allowance token; paid-account live acceptance remains open. |
 | Claude Code CLI | Local transcript counters, tier metadata and optional companion quota files. | Local activity; allowance requires the [companion](../COMPANION.md). |
+| Antigravity Desktop | Explicit consent reads allowance from one running, signed-in desktop server. | Account allowance only. Local CLI activity stays separate. Live comparison was confirmed by the owner; broad compatibility is unverified. |
+| Grok Bot Desktop (Beta), unreleased source | Explicit consent reads the active scoped encrypted Bot credential and requests allowance. | Native Keychain/store and endpoint compatibility remain unverified. Existing saved Cursor connections retain their source. |
+| OpenCode Go local | **Use local OpenCode** enables local Go sessions without a sign-in or key. Existing Go authentication also supplies allowance. | Go sessions only. Other providers used through OpenCode are excluded. |
 | Grok CLI (Beta) | Existing CLI authentication and local session summaries. | Consumer website/mobile sign-in is unsupported. Session/message counts do not establish token totals. |
 
 **Use CLI** ends only MeterUsage-owned account state and waits for successful
@@ -37,10 +40,10 @@ to local collection. See [desktop connections](../DESKTOP-CONNECTIONS.md) and
 ### Existing provider inputs
 
 All nine adapters remain wired in [composition](../../src/main/composition.ts).
-Antigravity and OpenCode onboarding guidance/actions remain requested work;
-their collection exists without a connection row.
+The current source adds an OpenCode Go local setup action and Antigravity
+Desktop connection. These changes are separate from the published build 54.
 
-- Antigravity quota uses existing authenticated `agy` container state, Docker or
+- Antigravity CLI quota uses existing authenticated `agy` container state, Docker or
   Podman, image `antigravity-cli:local` and volumes `antigravity-config` and
   `antigravity-bin`. Native database/history usage is independent of that quota
   runtime. No separate MeterUsage browser login or API-key form exists.
@@ -48,9 +51,8 @@ their collection exists without a connection row.
   `/connect` in `~/.local/share/opencode/auth.json`. Independently, token history
   reads `~/.local/share/opencode/opencode.db`, with read-only CLI SQL fallback.
   Only `opencode-go` sessions count, not every provider used through OpenCode.
-  A quota key alone cannot supply local history. The candidate fallback omits
-  the legacy explicit `~/.bun/bin/opencode` probe; when direct DB reads fail and
-  Bun is absent from the GUI PATH, CLI fallback discovery can fail.
+  A quota key alone cannot supply local history. The OpenCode-only CLI fallback
+  checks executable `~/.bun/bin/opencode` installs as well as the existing paths.
 - OpenRouter uses existing keys for account quota/credit and aggregate activity.
   That activity is provider account scope, not a local chat count.
 - Cursor, Copilot CLI and Gemini CLI use optional existing local quota snapshots.
@@ -148,10 +150,10 @@ The source comparison identifies five primary UI omissions/reductions:
 Smaller display gaps include today's session count in token-unavailable
 telemetry, average tokens/turn and aggregate long-chat count on the main burn
 card, provider-specific recovery hints, diagnostics copy feedback and a timestamp
-on fresh quota-only notch cards. OpenCode Bun fallback discovery is a separate
-provider regression. These findings do not establish how many users are affected.
-AGY/OpenCode onboarding is pending requested scope, and pin/dots removals are
-intentional. This documentation implements none of the proposed fixes.
+on fresh quota-only notch cards. These findings do not establish how many users
+are affected. Current source adds Antigravity Desktop and OpenCode local setup,
+restores Bun discovery and matches heatmap geometry. Pin/dots removals are
+intentional. Native and provider acceptance remain separate.
 
 ## Build and test
 
@@ -220,3 +222,18 @@ source retirement and stable cutover. This opt-in beta does not close those chec
 Desktop account research for Grok/Cursor, Antigravity and OpenCode Go is recorded
 in [DESKTOP-LOGIN-RESEARCH.md](../DESKTOP-LOGIN-RESEARCH.md). It separates
 documented sign-in from implemented quota collection.
+
+### Unreleased Antigravity Desktop setup
+
+Current source adds **Connect Antigravity Desktop** to the existing source
+selector. One running, signed-in desktop language server supplies account
+allowance without `agy`; local CLI history is excluded. Multiple matching
+servers and missing or expired data remain unavailable. **Use CLI** selects
+the existing local integration explicitly. This adapter has synthetic-fixture
+coverage only and is absent from published build 54. Native process discovery,
+local transport and live quota comparison remain acceptance gaps. See
+[desktop connections](../DESKTOP-CONNECTIONS.md#antigravity-desktop-source-boundary).
+
+All activity heatmaps use the same 26-column, seven-row grid. Feeds with only
+30 days keep older dates unavailable. The common layout does not extend the
+source history or change local versus provider-account coverage.

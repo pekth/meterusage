@@ -2,7 +2,7 @@ import { it, expect, vi } from "vite-plus/test";
 import { createElement, useEffect, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings, UsagePanel } from "../src/renderer/app";
-import { tokens, providers, primary, quota, value, window, localDay, shiftDay } from "../src/domain/models";
+import { tokens, providers, primary, quota, value, window, localDay, shiftDay, utcDay } from "../src/domain/models";
 import type { ViewState } from "../src/shared/ipc";
 import { openRouterUsage } from "../src/main/providers/usage";
 import { telemetry } from "../src/domain/telemetry";
@@ -146,13 +146,14 @@ it("offers only supported methods and puts Done after the source choices", () =>
   const markup = renderApp(view, "settings");
   expect(markup).toContain('aria-label="Codex connection method"');
   expect(markup).toContain('aria-label="Claude connection method"');
-  expect(markup).not.toContain('aria-label="Grok connection method"');
-  expect(markup).toContain('<span>Grok CLI</span>');
+  expect(markup).toContain('aria-label="Grok connection method"');
+  expect(markup).toContain('>Grok CLI</option>');
+  expect(markup).toContain('>Grok Bot Desktop (Beta)</option>');
   expect(markup).toContain('>Browser sign-in</option>');
   expect(markup).toContain('>Claude Desktop</option>');
   expect(markup).toContain('>Claude Code CLI</option>');
   const grok = markup.slice(markup.indexOf('id="connection-grok"')).split('</div>')[0];
-  expect(grok).not.toContain("<select");
+  expect(grok).toContain("<select");
   expect(markup.indexOf('>Done</button>')).toBeGreaterThan(markup.indexOf('id="connection-grok"'));
 });
 it("keeps a selected CLI switch explicit while showing the still-connected account", () => {
@@ -165,6 +166,15 @@ it("keeps a selected CLI switch explicit while showing the still-connected accou
   expect(markup).toContain('Connected · Account allowance');
   expect(markup).toContain('Use CLI disconnects this MeterUsage account connection.');
   expect(markup).not.toContain('>Disconnect</button>');
+});
+it("describes a saved account with missing allowance without claiming a live connection", () => {
+  const view = state(); view.snapshot.demo = false;
+  view.connections = [{ provider: "antigravity", source: "account", localAvailable: true, status: "connected" }];
+  view.snapshot.quotas.antigravity = { status: "missing", reason: "Not signed in to Antigravity Desktop", code: "notSignedIn" };
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(markup).toContain("Connection saved. Account allowance is unavailable.");
+  expect(markup).toContain("Allowance: Not signed in to Antigravity Desktop");
+  expect(markup).not.toContain("Connected. Account allowance is unavailable.");
 });
 it("restores the saved CLI source without claiming account sign-in", () => {
   const view = state(); view.snapshot.demo = false;
@@ -871,4 +881,76 @@ it("labels Grok as Beta in usage, notch, sharing, setup and provider settings", 
   expect(setup).toContain('connection-title">Grok <span class="badge">Beta</span>');
   expect(setup).toContain('<span>Grok <span class="badge">Beta</span></span>');
   expect(setup).toContain('Configure Grok');
+});
+
+it("keeps Antigravity Desktop explicit and dispatches only the selected connection action", () => {
+  const view = state(), action = vi.fn(async () => {}), method = vi.fn();
+  view.snapshot.demo = false;
+  view.connections = [{ provider: "antigravity", source: "cli", localAvailable: true, status: "disconnected" }];
+  const row = Connections({ state: view, action }).props.children[3].props.children[0];
+  vi.mocked(useState).mockReturnValueOnce(["account", method]).mockReturnValueOnce([true, () => {}]);
+  const rendered = row.type(row.props), detail = rendered.props.children[1];
+  detail.props.children[0].props.children[1].props.onChange({ target: { value: "account" } });
+  expect(method).toHaveBeenCalledWith("account"); expect(action).not.toHaveBeenCalled();
+  detail.props.children[4].props.children[1].props.onClick();
+  expect(action).toHaveBeenCalledWith({ action: "connect", provider: "antigravity" });
+  view.connections[0].source = "account";
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action }));
+  expect(markup).toContain('aria-label="Antigravity connection method"');
+  expect(markup).toContain('>Antigravity Desktop</option>'); expect(markup).toContain('>Antigravity CLI</option>');
+  expect(markup).toContain("Connect Antigravity Desktop"); expect(markup).not.toContain("Sign in to Codex");
+});
+
+it("explains direct Grok Bot Desktop Beta setup without requiring Cursor or a CLI", () => {
+  const view = state(); view.snapshot.demo = false;
+  view.connections = [{ provider: "grok", source: "account", localAvailable: true, status: "disconnected" }];
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  for (const text of ["Connect Grok Bot Desktop (Beta)", "Sign in through Grok Bot Desktop first", "No CLI or separate MeterUsage xAI sign-in", "shared-pool coverage remain unverified"]) expect(markup).toContain(text);
+});
+
+
+it("offers key-free local OpenCode Go setup and dispatches the existing collection preference", () => {
+  const view = state(), action = vi.fn(async () => {});
+  view.snapshot.demo = false;
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action }));
+  expect(markup).toContain('id="connection-openCodeGo"');
+  expect(markup).toContain("Use local OpenCode");
+  expect(markup).toContain("Local Go activity needs no sign-in or key.");
+  expect(markup).toContain("An existing Go key also enables allowance.");
+  const root = Connections({ state: view, action });
+  const group = root.props.children.find((node: any) => node?.props?.className === "settings-group");
+  const local = group.props.children.find((node: any) => node?.props?.id === "connection-openCodeGo");
+  local.props.children[0].props.children[1].props.onClick();
+  expect(action).toHaveBeenLastCalledWith({ action: "setPreference", key: "showProviderOpenCodeGo", value: true });
+  view.settings.values.showProviderOpenCodeGo = true;
+  expect(renderToStaticMarkup(createElement(Connections, { state: view, action }))).toContain("Local collection enabled");
+  view.snapshot.demo = true;
+  expect(renderToStaticMarkup(createElement(Connections, { state: view, action }))).toMatch(/<button(?=[^>]*disabled)[^>]*>Stop local OpenCode/);
+});
+
+it.each(providers)("gives %s a matching 26-week grid for 30-day feeds without inventing older zeros", provider => {
+  const view = state(), day = provider === "openRouter" ? utcDay(now) : localDay(now), daily = [{ day, tokens: tokens({ output: 1234 }), sessionCount: 2, estimatedCostUSD: 0 }];
+  view.snapshot.activities = {};
+  view.snapshot.usages = { [provider]: value({ provider, sessionCount: 2, messageCount: 3, todaySessionCount: 2, todayMessageCount: 3, capturedAt: now, telemetry: telemetry([], daily, now, provider === "openRouter") }) };
+  view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = view.snapshot.appearance.claudeHeatmap = true;
+  const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary(provider), state: view, action: async () => {} }));
+  expect(markup).toContain('class="heatmap full-history"');
+  expect(markup).toContain("26 weeks");
+  const unavailable = (markup.match(/class="heatmap-cell unavailable-day"/g) ?? []).length;
+  const liveDays = 182 - (6 - (provider === "openRouter" ? new Date(day).getUTCDay() : new Date(day).getDay()));
+  expect(unavailable).toBe(liveDays - 30);
+  expect((markup.match(/class="heatmap-cell"/g) ?? []).length).toBe(30);
+  expect(markup).toContain("1,234 tokens, 2 sessions");
+  const older = new Date(shiftDay(day, -31)).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", ...(provider === "openRouter" ? {timeZone:"UTC"} : {}) });
+  expect(markup).toContain(`${older}: Unavailable`);
+  expect(markup).not.toContain(`${older}: 0 tokens`);
+});
+
+
+it.each(["cursor", "bot"] as const)("names the saved Grok %s account source accurately", accountMethod => {
+  const view = state(); view.snapshot.demo = false;
+  view.connections = [{ provider: "grok", source: "account", accountMethod, localAvailable: true, status: "connected" }];
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  expect(markup).toContain(`Current source: ${accountMethod === "cursor" ? "Grok Bot via Cursor (legacy Beta)" : "Grok Bot Desktop (Beta)"}`);
+  expect(markup).toContain('>Grok Bot Desktop (Beta)</option>');
 });

@@ -36,7 +36,10 @@ for Codex, Claude, side notch and Settings.
 The beta includes Codex browser sign-in/account history, optional Claude Desktop
 allowance, existing CLI sources, compact provider tabs and hover cards, provider
 reordering and readable token totals. Account coverage depends on the source.
-Grok remains Beta and CLI-only; Antigravity desktop login is follow-up work.
+Build 54 keeps Grok Beta CLI-only; Antigravity desktop login is follow-up work.
+Current source additionally offers opt-in [Grok Bot Desktop Beta](docs/DESKTOP-CONNECTIONS.md#grok-bot-desktop-beta).
+Sign in through Grok Bot Desktop first, then approve read-only access.
+Native/live support, X and shared-pool coverage remain unverified.
 Build 54's Settings footer incorrectly says `0.2.41`; the packaged version is
 `0.3.0-beta.1`. See [known beta limits](docs/BETA.md#known-limits).
 

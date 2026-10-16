@@ -6,14 +6,45 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Add an explicit Antigravity Desktop connection in Electron setup and Settings.
+  Read account allowance from one running, signed-in desktop language server
+  without requiring `agy`. Keep CLI selection explicit and local activity
+  separate. Synthetic fixtures cover identity changes, unavailable quota,
+  transport limits and cancellation. Native and live-provider acceptance remain
+  pending; the published beta is unchanged.
+
 ### Changed
 
+- Connect new Grok Bot accounts through **Grok Bot Desktop (Beta)** after
+  explicit consent. Read only the active scoped encrypted access token and team
+  through a fixed Keychain item; use a bounded read-only allowance request with
+  MeterUsage's own headers. Reject identity/team/store changes and cancelled
+  results. Keep saved Cursor connections compatible and CLI selection explicit.
+  No token refresh, app writes or separate xAI sign-in is added. Native store,
+  Keychain and endpoint compatibility remain unverified; the published build
+  is unchanged.
 - Shorten heatmap hover/focus totals to values such as `42.4B tokens` and
   `1.6K sessions` across local and account history. Keep exact grouped counts
   in tooltips and accessibility labels. Summary counts compact from 1,000.
 
 ### Fixed
 
+- Give 30-day provider activity the same 26-column, seven-row heatmap layout.
+  Keep older unavailable dates distinct from measured zero-token days.
+- Add **Use local OpenCode** setup for key-free Go session history and restore
+  executable Bun-install discovery for the read-only SQL fallback.
+- Name saved legacy Grok connections as Cursor sources while new connections
+  use Grok Bot Desktop.
+
+- Group Antigravity Desktop limits under compact model headings and shorten
+  remaining-allowance labels to match the CLI presentation. Preserve every
+  reported bucket, its used percentage and reset. Keep account allowance
+  separate from CLI activity, and describe unavailable saved connections
+  without claiming a live connection.
+- Exclude Apple's system `CursorUIViewService` from the Cursor editor process
+  guard. Continue rejecting active Cursor processes and unsafe database state.
 - Show the running app bundle's version in Settings instead of the legacy
   hardcoded version. Source previews omit the version when none is supplied.
 

@@ -49,11 +49,12 @@ async function start(launch: Launch) {
   app.dock?.hide();
   const prefs = await Preferences.load(launch);
   const documents = new Map<number, string>(), windows = new Map<Surface, BrowserWindow>();
-  const markers = { codex: prefs.values.desktopCodexConnection, claude: prefs.values.desktopClaudeIdentity };
+  const connectionKeys = { codex: "desktopCodexConnection", claude: "desktopClaudeIdentity", antigravity: "desktopAntigravityIdentity", grok: "desktopGrokIdentity" } as const;
+  const markers = { codex: prefs.values.desktopCodexConnection, claude: prefs.values.desktopClaudeIdentity, antigravity: prefs.values.desktopAntigravityIdentity, grok: prefs.values.desktopGrokIdentity };
   const connections = new DesktopConnections(launch, prefs, desktopHelper, () => {
-    const changed = (["codex", "claude"] as const).filter(p => markers[p] !== prefs.values[p === "codex" ? "desktopCodexConnection" : "desktopClaudeIdentity"]);
+    const changed = (["codex", "claude", "antigravity", "grok"] as const).filter(p => markers[p] !== prefs.values[connectionKeys[p]]);
     if (changed.length) {
-      for (const p of changed) { markers[p] = prefs.values[p === "codex" ? "desktopCodexConnection" : "desktopClaudeIdentity"]; coordinator.forgetQuota(p); }
+      for (const p of changed) { markers[p] = prefs.values[connectionKeys[p]]; coordinator.forgetQuota(p); }
       coordinator.sources = sources();
     }
     publish();
@@ -64,7 +65,7 @@ async function start(launch: Launch) {
   }, sources);
   const issueReports = new IssueReports(() => coordinator.diagnostics(app.getVersion()), publish, prefs);
   // Do not restore a legacy archive under a newly connected account.
-  for (const p of ["codex", "claude"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
+  for (const p of ["codex", "claude", "antigravity", "grok"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
   const notch = { expanded: false, cardOnRight: false, selected: "codex", dragging: false };
   let notchHeight = 200, anchor: { x: number; y: number } | undefined;
   let flyoutHeight = 700, settingsHeight: number | undefined;
@@ -230,6 +231,10 @@ async function start(launch: Launch) {
       case "connect": {
         if (surface !== "settings" && surface !== "flyout") throw new Error("Invalid request");
         const connected = await connections.connect(r.provider, url => shell.openExternal(url), async () => {
+          if (r.provider === "grok") {
+            const consent = await dialog.showMessageBox(source, { type: "question", title: "Connect Grok Bot Desktop (Beta)?", message: "Allow MeterUsage to read Grok Bot Desktop allowance?", detail: "Sign in through Grok Bot Desktop first. MeterUsage reads its fixed Grok Bot Safe Storage Keychain item and active encrypted access token and team in memory, then requests allowance from api2.cursor.sh. It does not start a separate xAI sign-in, refresh tokens or change Bot files. This Beta compatibility interface and shared-pool coverage are unverified. When access expires, sign in through Bot and reconnect.", buttons: ["Cancel", "Allow access"], defaultId: 0, cancelId: 0, noLink: true });
+            return consent.response === 1;
+          }
           if (r.provider !== "claude") return true;
           const consent = await dialog.showMessageBox(source, { type: "question", title: "Connect Claude Desktop?", message: "Allow MeterUsage to read your Claude allowance?", detail: "MeterUsage will read Claude Desktop's current access token through macOS Keychain and request account allowance from Anthropic. It will not read chats, use refresh tokens or change Claude Desktop. This connection depends on an interface that can change.", buttons: ["Cancel", "Allow access"], defaultId: 0, cancelId: 0, noLink: true });
           return consent.response === 1;
@@ -363,7 +368,7 @@ async function start(launch: Launch) {
     const source = BrowserWindow.fromWebContents(event.sender), surface = [...windows].find(([, w]) => w === source)?.[0];
     if (!source || !surface) return { ok: false, error: "Unknown window" };
     try { return await handle(parseRequest(raw), source, surface); }
-    catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.", ...Object.values(desktopReadErrors), "Could not read Claude account allowance. Try connecting again later.", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.", "Could not save the Claude Desktop connection preferences. Try connecting again.", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Could not disconnect Claude Desktop", "Could not select Grok CLI", "Connections are disabled in demo mode", "Automatic Grok connection is unavailable"].includes(e.message) ? e.message : "Could not complete action" }; }
+    catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.", ...Object.values(desktopReadErrors), "Could not read Claude account allowance. Try connecting again later.", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.", "Could not save the Claude Desktop connection preferences. Try connecting again.", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Could not disconnect Claude Desktop", "Open one Antigravity Desktop account and sign in, then try connecting again", "Could not disconnect Antigravity Desktop", "Could not select Grok CLI", "Could not disconnect Grok Bot Desktop", "Connections are disabled in demo mode", "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect."].includes(e.message) ? e.message : "Could not complete action" }; }
   });
   const unsubscribe = coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
   screen.on("display-metrics-changed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); }); screen.on("display-removed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); });

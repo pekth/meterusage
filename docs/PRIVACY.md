@@ -60,8 +60,9 @@ action. Selecting an option alone performs no account access. Applying CLI
 selection disconnects only MeterUsage-owned account state and waits for its
 logout cleanup before enabling local collection. Cleanup failure prevents the
 switch. Ordinary Disconnect never silently falls back to local data. The
-selector adds no credential store, provider endpoint or authentication flow;
-CLI sources retain the input and coverage limits above.
+CLI transition adds no credential store, provider endpoint or authentication flow;
+CLI sources retain the input and coverage limits above. The separately consented
+Grok Bot Desktop Beta account option is described below.
 
 Codex browser sign-in uses the official app-server helper discovered in an
 existing Codex app, with existing command installations as a compatibility path.
@@ -120,14 +121,94 @@ Collection timeout also clears account-bound allowance when the identity check
 may not have completed. Disconnect removes consent metadata and prevents the
 post-request credential reread without changing Claude Desktop.
 
-Connected Codex/Claude sources do not attach local CLI activity to the connected
-account. Quota archives are cleared on connection changes and candidate launch;
+An explicit **Connect Antigravity Desktop** action permits discovery of one
+same-user desktop language server and reading only its candidate process
+arguments for the current CSRF credential. Multiple matching servers are
+rejected. MeterUsage verifies PID-owned IPv4 loopback listeners before each
+fixed `GetUserStatus` or `RetrieveUserQuotaSummary` request. HTTPS is preferred;
+a certificate exemption applies only to that request to `127.0.0.1`. HTTP is
+allowed only on the declared, PID-owned extension-server port. Redirects are
+rejected, responses are limited to 1 MiB, each request to three seconds and
+collection to fifteen seconds. No cloud credential file is opened or copied.
+
+The Antigravity account email is checked before and after quota collection.
+Only a provider-scoped SHA-256 fingerprint is saved in MeterUsage preferences,
+excluded from settings publication and diagnostics. CSRF credentials and raw
+responses stay in main-process memory and are not logged, cached or persisted.
+No provider store is changed and no credential is refreshed. Connection
+changes, cancellation and disconnect invalidate old reads. Missing or expired
+quota stays unavailable. Empty modern summaries cannot select stale legacy
+quota; legacy model fractions are allowed only for an explicitly unsupported
+modern RPC. See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
+
+Connected Codex/Claude/Antigravity sources do not attach local CLI activity to
+the connected account. Quota archives are cleared on connection changes and candidate launch;
 authentication or absent-data failures clear the connected archive. Tokens,
-passwords, raw caches, account identifiers and responses are not logged or
+passwords, raw caches, plaintext account identifiers and responses are not logged or
 persisted by MeterUsage. In-memory strings remain subject to garbage collection.
-Demo mode blocks live connection code before helper or key discovery. Grok has
-no new consumer connection in this candidate. [ADR 0011](adr/0011-desktop-account-connections.md)
-amends the candidate boundary; it does not change the published Swift release.
+Demo mode blocks live connection code before helper or key discovery.
+[ADR 0011](adr/0011-desktop-account-connections.md) amends the Codex/Claude
+candidate boundary; it does not change the published Swift release.
+
+Grok Bot Desktop offers the primary opt-in **Connect Grok Bot Desktop (Beta)**
+flow under [ADR 0028](adr/0028-grok-bot-desktop-reader.md). After consent, the main
+process opens only the fixed `Grok Bot/sand-secrets.json` store under Application
+Support and the helper's fixed `Grok Bot Safe Storage` / `Grok Bot` Keychain item.
+Only explicit Connect permits Keychain UI; polling forbids it. The bounded JSON
+reader rejects symlinks, duplicate keys, unsupported versions and changed stores.
+It selects only the active account's scoped access token and optional team;
+refresh tokens and other accounts' credential values remain skipped. Plaintext
+and legacy unscoped credentials are rejected. Decrypted byte buffers are cleared
+when projected; in-memory strings remain subject to garbage collection.
+
+The full JWT subject hash must match the active account and envelope scopes,
+and expiry must exceed sixty seconds. The optional team must be a safe
+nonnegative integer. Both account and team bind the stored opaque fingerprint.
+Connect JSON POST `{}` goes only to
+`https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus` with a
+bearer token, optional `x-cursor-team-id` and MeterUsage's own User-Agent. No Bot
+machine identity, client impersonation, app-code invocation, token refresh or
+inference is used. Redirects are refused; response and request bounds are 1 MiB
+and thirty seconds. Account, team and store stability are checked after every
+attempt while consent remains valid. Cancellation prevents further private reads.
+Only projected quota and a reported reset reach the renderer/archive. Pooled
+enterprise allowance and contradictory limit flags stay unavailable; trial expiry
+is never treated as a reset. Native store/Keychain compatibility and server
+acceptance of the own-client request remain unverified. MeterUsage does not
+initiate an xAI OAuth flow or modify Bot's account state.
+
+Previously saved Grok Bot connections via Cursor retain the legacy reader under
+[ADR 0027](adr/0027-grok-cursor-closed-reader.md). New connections always select
+Bot Desktop; no failed Bot request falls back to Cursor. Sign in to Cursor, check
+allowance, then quit Cursor before polling a saved legacy connection.
+Pre/post process and filesystem guards reject
+active Cursor, unavailable or ambiguous evidence, nonempty WAL/journal files
+and observed changes. These snapshots detect races; they do not exclude other
+processes or prove Cursor never ran. The original SQLite database is opened
+with `immutable=1&mode=ro`, which disables reader writes, locking and sidecar
+bookkeeping regardless of other processes. No credential stores are copied to
+temporary files. Read access times are controlled by the filesystem.
+
+The main process selects only `ItemTable`'s `cursorAuth/accessToken`, requires
+JWT expiry beyond 60 seconds, constructs the established
+`WorkosCursorSessionToken` cookie, verifies the exact subject through fixed
+`https://cursor.com/api/auth/me`, then sends POST `{}` to fixed
+`https://cursor.com/api/dashboard/get-sand-usage-status` with
+`Origin: https://cursor.com`. Redirects are refused; each request has a
+30-second timeout and 1 MiB response cap. Token strings stay in memory and
+request headers. They are never rendered, logged or persisted. No refresh or
+model requests occur. Only an opaque account fingerprint/source preference and
+projected aggregate quota persist; store fingerprints stay in memory.
+
+The account and store are checked before allowance and after each attempt.
+Cancellation or disconnect prevents further credential reads and rejects late
+results. Revoked access, missing quota and expiry clear account-bound archives;
+ordinary transport failures can retain dated quota only after account/store
+verification. After expiry, reopen Cursor and quit it to resume the saved source.
+Disconnect and connect again to switch to Bot Desktop. No local CLI
+history is attached. Trial expiry is not a replenishment timestamp. Universal
+Grok Desktop, X and shared-pool coverage is unverified, as are native/live
+compatibility and packaged acceptance. See [setup](DESKTOP-CONNECTIONS.md).
 
 ## Selective parsing and display boundary
 

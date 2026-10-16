@@ -19,6 +19,13 @@ The **Connect using** selector offers the methods supported by each provider.
 Selecting a method does not start sign-in or change collection. Use the button
 below it to apply the choice. Existing profiles keep their current source.
 
+- Antigravity: choose **Antigravity Desktop**, then **Connect Antigravity Desktop**.
+  Keep one desktop account open and signed in. The candidate reads account
+  allowance from its running local service without requiring `agy`. Separate
+  language servers are ambiguous, even if they belong to the same account;
+  close extra instances before connecting. **Antigravity CLI** remains an
+  explicit alternative for the existing local integration. Desktop allowance
+  includes no CLI-local history. Native and live-provider checks are pending.
 - Codex: choose **Sign in to Codex** and complete browser sign-in. The candidate
   finds the helper in an existing Codex app in Applications, with existing
   command installations as a compatibility path. Users do not open a terminal
@@ -34,9 +41,14 @@ below it to apply the choice. Existing profiles keep their current source.
   Alternatively, choose **Claude Code CLI** and **Use CLI** to read local Claude
   Code activity. CLI allowance requires a companion usage file; this option
   does not provide Claude website token history.
-- Grok: automatic consumer connection is unavailable. Existing command-based
-  collection remains available for existing users. It does not establish
-  browser/mobile consumer support. The setup does not ask for manual numbers.
+- Grok: choose **Grok Bot Desktop (Beta)**. Sign in through Grok Bot Desktop
+  on this Mac first, then choose **Connect Grok Bot Desktop (Beta)** and approve
+  access and any macOS Keychain prompt. MeterUsage reads the active encrypted
+  access token and selected team, then requests allowance. It does not initiate
+  a separate xAI sign-in or renew access. After expiry, sign in through Bot and
+  reconnect. Existing **Grok CLI** collection remains an explicit alternative.
+  Native compatibility, X and shared-pool coverage remain unverified.
+
 
 **Use CLI** first disconnects only the MeterUsage-owned account connection and
 waits for any Codex logout cleanup to succeed. A failed cleanup keeps local
@@ -237,3 +249,84 @@ confirm allowance is removed. Test denied access and account/organization
 switches only with the account owner's approval. Never run the Keychain helper
 directly or capture its output. See
 [ADR 0016](adr/0016-claude-live-test-profile.md).
+
+## Antigravity Desktop source boundary
+
+The source adapter discovers one same-user Antigravity desktop language server
+and its PID-owned IPv4 loopback listeners. It reads only the candidate process
+arguments for its current CSRF token. Fixed `GetUserStatus` and
+`RetrieveUserQuotaSummary` requests use HTTPS first; HTTP is limited to the
+declared, owned extension-server port. TLS certificate exemption is local to
+that verified loopback request. Redirects are rejected. Each reply is limited
+to 1 MiB, each request to three seconds, and collection to fifteen seconds.
+
+Account identity must match before and after allowance collection. Only an
+opaque fingerprint enters preferences. CSRF credentials, account email and raw
+replies stay in main-process memory, outside settings, diagnostics and logs.
+The integration neither writes provider stores nor refreshes credentials.
+Changed identity, provider closure, expired buckets, missing fractions and
+empty summaries leave allowance unavailable and clear prior account quota.
+An empty modern summary never falls back to legacy data. Legacy model quota
+is read only when the modern RPC explicitly reports unsupported; it cannot
+establish weekly allowance. Disconnect and cancellation reject late results.
+
+This is source and synthetic-fixture coverage. It is absent from the published
+build 54 beta. Native discovery, local transport and live allowance comparison
+remain unverified. See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
+
+## Grok Bot Desktop Beta
+
+New connections use the existing Grok Bot Desktop sign-in after explicit
+consent. No CLI, copied credential or separate MeterUsage OAuth flow is needed.
+The fixed candidate store is `Library/Application Support/Grok Bot/sand-secrets.json`
+under the user's home. MeterUsage selects only the active account's scoped
+access token and optional selected team. It rejects unsupported versions,
+legacy/plaintext envelopes, duplicate keys, expired tokens and ambiguous scope.
+Refresh tokens and other accounts' credential values are skipped.
+
+The bundled helper reads only `Grok Bot Safe Storage` / `Grok Bot` in macOS
+Keychain. Explicit connection can show a Keychain prompt; polling forbids UI.
+The reader opens no symlinks, bounds the JSON read, and checks store metadata,
+account and team before and after the request. These checks detect observed
+changes; they do not lock Bot or exclude other writers. It never modifies Bot
+stores, refreshes credentials or copies them to disk.
+
+The fixed read is Connect JSON POST `{}` to
+`https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus`, using
+MeterUsage's own User-Agent, a bearer access token and an optional selected-team
+header. Redirects are refused, each request has a 30-second timeout and a 1 MiB
+response cap. Only numeric quota percentage and a reported reset are displayed.
+Pooled enterprise allowance, missing quota and contradictory limit flags stay
+unavailable. Trials require a future expiry; trial expiry is not a reset.
+No cadence, X coverage or separate Cursor allowance is inferred from this pool.
+
+Only an opaque account/team fingerprint and internal source choice persist.
+Cancellation and disconnect prevent private rereads and reject late results.
+Connected quota has no local CLI history attached. Ordinary transport failures
+can retain dated allowance only after the account and store are reverified.
+Source changes clear account-bound quota. Disconnect changes only MeterUsage.
+
+This private compatibility contract was traced statically from Grok Bot 0.71.2
+and Electron 42.1.0. Store existence/format, the derived Keychain name, and
+server acceptance of JSON with MeterUsage's own headers remain **UNVERIFIED**
+until native checks. No app machine identity or client impersonation is used.
+See [ADR 0028](adr/0028-grok-bot-desktop-reader.md).
+
+### Saved Cursor connections
+
+Previously saved Cursor connections retain their original reader until
+explicitly disconnected or replaced. A missing internal source marker means
+legacy Cursor; all new connections select Bot Desktop. The legacy reader still
+requires closed/checkpointed Cursor, immutable SQLite, identity checks and the
+fixed Cursor dashboard endpoints. It is never selected as a failed Bot fallback.
+See [ADR 0027](adr/0027-grok-cursor-closed-reader.md).
+
+## OpenCode Go local setup
+
+Choose **Use local OpenCode** in Connections to collect local Go sessions.
+No sign-in or API key is needed for that history. Allowance separately uses an
+existing Go key saved by OpenCode. Only `opencode-go` sessions count. The SQL
+fallback also discovers executable Bun installs at `~/.bun/bin/opencode`.
+
+All provider heatmaps share a 26-column, seven-row layout. A 30-day feed keeps
+older days unavailable rather than showing invented zero-token readings.

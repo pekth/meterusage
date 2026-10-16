@@ -2,14 +2,16 @@ import Foundation
 import LocalAuthentication
 import Security
 
-// The helper has one fixed read. Background polling cannot open an auth dialog.
+// The helper has two fixed provider modes. Background polling cannot open an auth dialog.
 let context = LAContext()
 context.interactionNotAllowed = !CommandLine.arguments.contains("--allow-ui")
 SecKeychainSetUserInteractionAllowed(!context.interactionNotAllowed)
+let grok = CommandLine.arguments.contains("--grok-bot")
+guard CommandLine.arguments.dropFirst().allSatisfy({ ["--allow-ui", "--grok-bot"].contains($0) }) else { exit(1) }
 let query: [String: Any] = [
     kSecClass as String: kSecClassGenericPassword,
-    kSecAttrService as String: "Claude Safe Storage",
-    kSecAttrAccount as String: "Claude Key",
+    kSecAttrService as String: grok ? "Grok Bot Safe Storage" : "Claude Safe Storage",
+    kSecAttrAccount as String: grok ? "Grok Bot" : "Claude Key",
     kSecReturnData as String: true,
     kSecMatchLimit as String: kSecMatchLimitOne,
     kSecUseAuthenticationContext as String: context
