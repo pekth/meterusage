@@ -146,13 +146,14 @@ it("offers only supported methods and puts Done after the source choices", () =>
   const markup = renderApp(view, "settings");
   expect(markup).toContain('aria-label="Codex connection method"');
   expect(markup).toContain('aria-label="Claude connection method"');
-  expect(markup).not.toContain('aria-label="Grok connection method"');
-  expect(markup).toContain('<span>Grok CLI</span>');
+  expect(markup).toContain('aria-label="Grok connection method"');
+  expect(markup).toContain('>Grok CLI</option>');
+  expect(markup).toContain('>Grok Bot via Cursor (Beta)</option>');
   expect(markup).toContain('>Browser sign-in</option>');
   expect(markup).toContain('>Claude Desktop</option>');
   expect(markup).toContain('>Claude Code CLI</option>');
   const grok = markup.slice(markup.indexOf('id="connection-grok"')).split('</div>')[0];
-  expect(grok).not.toContain("<select");
+  expect(grok).toContain("<select");
   expect(markup.indexOf('>Done</button>')).toBeGreaterThan(markup.indexOf('id="connection-grok"'));
 });
 it("keeps a selected CLI switch explicit while showing the still-connected account", () => {
@@ -871,4 +872,11 @@ it("labels Grok as Beta in usage, notch, sharing, setup and provider settings", 
   expect(setup).toContain('connection-title">Grok <span class="badge">Beta</span>');
   expect(setup).toContain('<span>Grok <span class="badge">Beta</span></span>');
   expect(setup).toContain('Configure Grok');
+});
+
+it("explains closed-Cursor Beta setup and expiry without requiring a CLI", () => {
+  const view = state(); view.snapshot.demo = false;
+  view.connections = [{ provider: "grok", source: "account", localAvailable: true, status: "disconnected" }];
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
+  for (const text of ["Beta Connect via Cursor", "quit Cursor before connecting", "No CLI required", "shared-pool coverage are unverified", "reopen Cursor, then quit and reconnect"]) expect(markup).toContain(text);
 });

@@ -86,6 +86,7 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
   }
   codex.status = async signal => parseStatus("codex", await http(endpoints.codexStatus, "codex", undefined, signal), now());
   claude.status = async signal => parseStatus("claude", await http(endpoints.claudeStatus, "claude", undefined, signal), now());
+  const grokIdentity = String(prefs.values.desktopGrokIdentity);
   const sources: Source[] = [codex, {
     slot: primary("openRouter"), quota: async signal => {
       const key = openRouterKey(launch); if (!key) throw new Unavailable("dataNotFound", "OpenRouter API key");
@@ -108,7 +109,10 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
     },
   }, {
     slot: primary("antigravity"), quota: signal => runtime.quota(now(), signal), usage: signal => runtime.usage(join(launch.home, ".gemini/antigravity-cli"), now(), signal),
-  }, {
+  }, grokIdentity !== "" ? {
+    slot: primary("grok"), accountBound: true,
+    quota: signal => options.connections ? options.connections.quota("grok", signal, grokIdentity) : Promise.reject(new Unavailable("notSignedIn", "Grok Bot via Cursor")),
+  } : {
     slot: primary("grok"), quota: async signal => { const key = grokToken(launch); if (!key) throw new Unavailable("dataNotFound", "Grok credentials"); return parseGrok(await http(endpoints.grok, "grok", key, signal), now()); }, usage: async signal => { const configured = text(env.GROK_HOME), root = configured ? isAbsolute(configured) ? configured : join(launch.home, configured) : join(launch.home, ".grok"); return scanGrok(join(root, "sessions"), now(), signal); },
   }, claude];
   for (const p of ["cursor", "copilot", "gemini"] as const) {

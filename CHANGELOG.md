@@ -8,6 +8,14 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Add opt-in Grok Bot **Connect via Cursor (Beta)** in Electron Settings.
+  Sign in to Cursor, check Bot allowance, then quit it before connecting.
+  Immutable SQLite performs no reader writes; process/filesystem guards reject
+  active Cursor, nonempty WAL/journal files, ambiguous evidence and observable
+  changes. Verify account identity before bounded allowance requests, keep
+  credentials only in memory, and require reopening Cursor then quit/reconnect
+  after expiry. Native/live support and universal shared-pool coverage remain
+  unverified. The published build is unchanged.
 - Shorten heatmap hover/focus totals to values such as `42.4B tokens` and
   `1.6K sessions` across local and account history. Keep exact grouped counts
   in tooltips and accessibility labels. Summary counts compact from 1,000.

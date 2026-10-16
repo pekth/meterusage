@@ -47,7 +47,8 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   1,000. This follow-up is separate from the published build 54 artifact.
 
 - Onboarding and Settings offer provider-specific source choices: Codex browser
-  sign-in or CLI, Claude Desktop or Claude Code CLI, and Grok CLI only. Choosing
+  sign-in or CLI, Claude Desktop or Claude Code CLI, and Grok CLI or opt-in
+  Grok Bot via Cursor Beta. Choosing
   an option does not change collection until its action is used. Use CLI waits
   for MeterUsage-owned connection cleanup before selecting existing local
   collection. Ordinary Disconnect still prevents automatic local fallback.
@@ -143,7 +144,7 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   profiles retain their preference. [ADR 0014](adr/0014-settings-onboarding.md)
   records this placement; native acceptance is separate from source validation.
 
-- The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, read-only Desktop cache/cookie selection and the OAuth allowance endpoint after consent. Grok consumer connection remains unavailable. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md) and ADR 0011 define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
+- The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, read-only Desktop cache/cookie selection and the OAuth allowance endpoint after consent. Grok Bot adds an opt-in closed/checkpointed Cursor Beta reader using immutable SQLite, fixed identity-before-allowance requests and opaque account binding. Nonempty WAL/journal files, ambiguous evidence and observed races fail closed. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md), ADR 0011 and [ADR 0027](adr/0027-grok-cursor-closed-reader.md) define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
 
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
 - The published app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure. Its AppKit and SwiftUI imports require macOS for package build and test checks; Swift itself supports other platforms. `AGENTS.md` describes a generic macOS SSH route for Linux development without private host aliases.
@@ -250,6 +251,6 @@ Reviewed Swift base: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. Source checks d
 
 - Electron Diagnostics restores explicit **Send report** through the existing private support relay. Main generates the same allowlisted status summary used by Copy diagnostics with the running app version; renderer IPC accepts intent only. In-flight clicks are deduplicated, uncertain retries reuse the report UUID/snapshot, and a matching HTTP201 receipt supplies the support reference. No raw logs, account labels/IDs, paths, credentials or transcripts are uploaded. See [REPORTING.md](REPORTING.md). Transport fixtures do not prove live Linear delivery.
 
-- Grok is labeled **Beta** in Electron usage cards, setup and provider settings. Official-source desktop research found X Subscription per-seat shared Grok/Cursor usage, unified local Antigravity authentication and API-key-based OpenCode Go setup. These do not establish new MeterUsage connections. See [desktop login research](DESKTOP-LOGIN-RESEARCH.md).
+- Grok is labeled **Beta** in Electron usage cards, setup and provider settings. Official-source desktop research found X Subscription per-seat shared Grok/Cursor usage, unified local Antigravity authentication and API-key-based OpenCode Go setup. Those research findings alone do not establish connections. The source-only Cursor Beta implementation is separately documented in [ADR 0027](adr/0027-grok-cursor-closed-reader.md); universal shared-pool coverage remains unverified. See [desktop login research](DESKTOP-LOGIN-RESEARCH.md).
 
 - Diagnostic report attempts have a 10-minute main-process cooldown persisted as a private native preference before HTTP. Relaunch and failed sends retain the limit. Storage failure prevents transmission; Copy diagnostics remains available. Only the timestamp persists, with no report content, account identifier or receipt. See [REPORTING.md](REPORTING.md).

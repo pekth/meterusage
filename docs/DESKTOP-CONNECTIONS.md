@@ -34,9 +34,14 @@ below it to apply the choice. Existing profiles keep their current source.
   Alternatively, choose **Claude Code CLI** and **Use CLI** to read local Claude
   Code activity. CLI allowance requires a companion usage file; this option
   does not provide Claude website token history.
-- Grok: automatic consumer connection is unavailable. Existing command-based
-  collection remains available for existing users. It does not establish
-  browser/mobile consumer support. The setup does not ask for manual numbers.
+- Grok: choose **Grok Bot via Cursor (Beta)**. Sign in to Cursor on this Mac,
+  check Bot allowance, then quit Cursor before choosing **Beta Connect via
+  Cursor** and approving access. No CLI is required. Cursor must have closed
+  with its SQLite store checkpointed; an active process, nonempty WAL/journal,
+  ambiguous evidence or observed store changes prevent access. MeterUsage never
+  stops Cursor. When access expires, reopen Cursor, then quit and reconnect.
+  Existing **Grok CLI** collection remains an explicit alternative. Neither
+  method establishes universal Grok Desktop, X or shared-pool coverage.
 
 **Use CLI** first disconnects only the MeterUsage-owned account connection and
 waits for any Codex logout cleanup to succeed. A failed cleanup keeps local
@@ -237,3 +242,41 @@ confirm allowance is removed. Test denied access and account/organization
 switches only with the account owner's approval. Never run the Keychain helper
 directly or capture its output. See
 [ADR 0016](adr/0016-claude-live-test-profile.md).
+
+## Grok Bot via Cursor Beta
+
+This source-only compatibility connection uses Cursor's current desktop token
+in main-process memory. It selects only `cursorAuth/accessToken` from `ItemTable`
+in `Library/Application Support/Cursor/User/globalStorage/state.vscdb`. It opens
+the original database with SQLite `immutable=1&mode=ro`. No credential store or
+file is copied to temporary disk, no refresh occurs, and SQLite performs no
+writes or sidecar bookkeeping. Filesystem access-time metadata remains subject
+to the operating system's read policy.
+
+Pre/post process and filesystem guards require closed/checkpointed evidence.
+They detect observable races; they provide no mutual exclusion and do not prove
+Cursor never ran between observations. Immutable SQLite guarantees this reader
+does not write even if another process races it. Nonempty WAL or rollback
+journal files are rejected because immutable reads ignore uncheckpointed data.
+A changed database, sidecar, directory identity or ambiguous evidence fails
+closed. The guards run again before Bot allowance and after the request.
+
+Each request first verifies the JWT subject against fixed HTTPS
+`cursor.com/api/auth/me`, then POSTs `{}` to
+`cursor.com/api/dashboard/get-sand-usage-status` with Cursor's required Origin.
+Redirects are refused, requests have a 30-second timeout and a 1 MiB response
+limit, and credentials must remain valid for more than 60 seconds. Identity is
+case-sensitive. Only its opaque fingerprint and the source choice persist.
+The current identity and store fingerprint must match before results are used.
+
+Included quota honors `includedLimitZero` before the legacy included-limit
+flag. A trial requires a future `sandTrialExpiresAt`; trial expiry is never a
+reset timestamp. Missing data stays unavailable. Reset cadence is not inferred.
+Connected allowance has no local CLI activity attached. Disconnect and source
+changes clear account-bound quota and reject late results; ordinary failures
+use the existing coordinator backoff. There is no automatic token renewal.
+
+Synthetic tests cover the reader, guards, account binding, consent, cancellation,
+disconnect, expiry and request bounds. Native Cursor formats, Electron SQLite,
+visible setup and live provider support remain **UNVERIFIED**. This change is
+not in published build 54. See [ADR 0027](adr/0027-grok-cursor-closed-reader.md).

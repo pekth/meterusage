@@ -85,6 +85,8 @@ export const endpoints = {
   openCodeGo: "https://opencode.ai/zen/go/v1/usage",
   grok: "https://cli-chat-proxy.grok.com/v1/billing?format=credits",
   claudeAllowance: "https://api.anthropic.com/api/oauth/usage",
+  cursorIdentity: "https://cursor.com/api/auth/me",
+  cursorGrok: "https://cursor.com/api/dashboard/get-sand-usage-status",
   codexStatus: "https://status.openai.com/api/v2/components.json",
   claudeStatus: "https://status.claude.com/api/v2/components.json",
 } as const;
@@ -95,13 +97,18 @@ export function httpTransport(fetcher: typeof fetch = fetch): HTTP {
     if (!(Object.values(endpoints) as string[]).includes(url)) throw failed(provider);
     const boundedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
     try {
-      const response = await fetcher(url, { signal: boundedSignal, redirect: "error", cache: "no-store", headers: { Accept: "application/json", "User-Agent": "meterusage/0.2.41", ...(url === endpoints.claudeAllowance ? { "anthropic-beta": "oauth-2025-04-20" } : {}), ...(key ? { Authorization: `Bearer ${key}` } : {}) } });
+      boundedSignal.throwIfAborted();
+      const cursor = url === endpoints.cursorIdentity || url === endpoints.cursorGrok;
+      if (cursor && (provider !== "grok" || !key || key.length > 17000 || !/^WorkosCursorSessionToken=[A-Za-z0-9._-]+%3A%3A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(key))) throw new Unavailable("notSignedIn", "Grok Bot via Cursor");
+      const response = await fetcher(url, { signal: boundedSignal, redirect: "error", cache: "no-store", ...(url === endpoints.cursorGrok ? { method: "POST", body: "{}" } : {}), headers: { Accept: "application/json", "User-Agent": "meterusage/0.2.41", ...(url === endpoints.claudeAllowance ? { "anthropic-beta": "oauth-2025-04-20" } : {}), ...(url === endpoints.cursorGrok ? { "Content-Type": "application/json", Origin: "https://cursor.com" } : {}), ...(key ? cursor ? { Cookie: key } : { Authorization: `Bearer ${key}` } : {}) } });
+      boundedSignal.throwIfAborted();
+      if (cursor && response.status === 403) throw new Unavailable("notSignedIn", "Grok Bot via Cursor");
       if (response.status === 401 || response.status === 403 && url === endpoints.claudeAllowance) throw new Unavailable("notSignedIn", provider === "claude" ? "Claude Desktop" : provider === "openCodeGo" ? "OpenCode Go" : provider === "openRouter" ? "OpenRouter" : "Grok");
       if (response.status === 403 && url === endpoints.openRouterActivity) throw new Unavailable("dataNotFound", "OpenRouter Management Key");
       if (!response.ok || !response.body) throw failed(provider);
       const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
       try {
-        while (true) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > 16 * 1048576) throw failed(provider); chunks.push(part.value); }
+        while (true) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > (cursor ? 1048576 : 16 * 1048576)) throw failed(provider); chunks.push(part.value); }
       } finally { await reader.cancel(); }
       return Buffer.concat(chunks).toString("utf8");
     } catch (error) {
