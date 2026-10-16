@@ -12,6 +12,11 @@ follows [Semantic Versioning](https://semver.org/).
   `1.6K sessions` across local and account history. Keep exact grouped counts
   in tooltips and accessibility labels. Summary counts compact from 1,000.
 
+### Fixed
+
+- Show the running app bundle's version in Settings instead of the legacy
+  hardcoded version. Source previews omit the version when none is supplied.
+
 ## [0.3.0-beta.1] - 2026-10-16
 
 ### Release
