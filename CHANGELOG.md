@@ -6,6 +6,12 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Shorten heatmap hover/focus totals to values such as `42.4B tokens` and
+  `1.6K sessions` across local and account history. Keep exact grouped counts
+  in tooltips and accessibility labels. Summary counts compact from 1,000.
+
 ## [0.3.0-beta.1] - 2026-10-16
 
 ### Release
