@@ -6,6 +6,15 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Add an explicit Antigravity Desktop connection in Electron setup and Settings.
+  Read account allowance from one running, signed-in desktop language server
+  without requiring `agy`. Keep CLI selection explicit and local activity
+  separate. Synthetic fixtures cover identity changes, unavailable quota,
+  transport limits and cancellation. Native and live-provider acceptance remain
+  pending; the published beta is unchanged.
+
 ### Changed
 
 - Shorten heatmap hover/focus totals to values such as `42.4B tokens` and

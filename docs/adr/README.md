@@ -35,3 +35,4 @@ compatibility and acceptance requirements remain in force. The
 | [0022](0022-codex-account-token-history.md) | Read provider account daily tokens separately from local activity through the managed ChatGPT helper. | Accepted implementation direction; independent review, native and live acceptance pending |
 | [0023](0023-onboarding-source-choice.md) | Offer supported CLI and account methods in onboarding, with explicit cleanup before switching to local collection. | Accepted implementation direction; native interaction acceptance pending |
 | [0025](0025-card-settings-diagnostic-reports.md) | Keep Settings in usage cards and restore explicit sanitized support reports in Diagnostics. | Accepted implementation direction; native and live delivery acceptance separate |
+| [0026](0026-antigravity-desktop-local-quota.md) | Opt-in Antigravity Desktop quota through its owned local service. | Source implementation; native/provider acceptance pending |

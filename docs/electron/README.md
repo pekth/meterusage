@@ -37,10 +37,11 @@ to local collection. See [desktop connections](../DESKTOP-CONNECTIONS.md) and
 ### Existing provider inputs
 
 All nine adapters remain wired in [composition](../../src/main/composition.ts).
-Antigravity and OpenCode onboarding guidance/actions remain requested work;
-their collection exists without a connection row.
+OpenCode onboarding guidance/actions remain requested work; its collection
+exists without a connection row. Antigravity Desktop setup is implemented only
+in unreleased source, as noted below.
 
-- Antigravity quota uses existing authenticated `agy` container state, Docker or
+- Antigravity CLI quota uses existing authenticated `agy` container state, Docker or
   Podman, image `antigravity-cli:local` and volumes `antigravity-config` and
   `antigravity-bin`. Native database/history usage is independent of that quota
   runtime. No separate MeterUsage browser login or API-key form exists.
@@ -220,3 +221,14 @@ source retirement and stable cutover. This opt-in beta does not close those chec
 Desktop account research for Grok/Cursor, Antigravity and OpenCode Go is recorded
 in [DESKTOP-LOGIN-RESEARCH.md](../DESKTOP-LOGIN-RESEARCH.md). It separates
 documented sign-in from implemented quota collection.
+
+### Unreleased Antigravity Desktop setup
+
+Current source adds **Connect Antigravity Desktop** to the existing source
+selector. One running, signed-in desktop language server supplies account
+allowance without `agy`; local CLI history is excluded. Multiple matching
+servers and missing or expired data remain unavailable. **Use CLI** selects
+the existing local integration explicitly. This adapter has synthetic-fixture
+coverage only and is absent from published build 54. Native process discovery,
+local transport and live quota comparison remain acceptance gaps. See
+[desktop connections](../DESKTOP-CONNECTIONS.md#antigravity-desktop-source-boundary).
