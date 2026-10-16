@@ -872,3 +872,21 @@ it("labels Grok as Beta in usage, notch, sharing, setup and provider settings", 
   expect(setup).toContain('<span>Grok <span class="badge">Beta</span></span>');
   expect(setup).toContain('Configure Grok');
 });
+
+it("keeps Antigravity Desktop explicit and dispatches only the selected connection action", () => {
+  const view = state(), action = vi.fn(async () => {}), method = vi.fn();
+  view.snapshot.demo = false;
+  view.connections = [{ provider: "antigravity", source: "cli", localAvailable: true, status: "disconnected" }];
+  const row = Connections({ state: view, action }).props.children[3].props.children[0];
+  vi.mocked(useState).mockReturnValueOnce(["account", method]).mockReturnValueOnce([true, () => {}]);
+  const rendered = row.type(row.props), detail = rendered.props.children[1];
+  detail.props.children[0].props.children[1].props.onChange({ target: { value: "account" } });
+  expect(method).toHaveBeenCalledWith("account"); expect(action).not.toHaveBeenCalled();
+  detail.props.children[4].props.children[1].props.onClick();
+  expect(action).toHaveBeenCalledWith({ action: "connect", provider: "antigravity" });
+  view.connections[0].source = "account";
+  const markup = renderToStaticMarkup(createElement(Connections, { state: view, action }));
+  expect(markup).toContain('aria-label="Antigravity connection method"');
+  expect(markup).toContain('>Antigravity Desktop</option>'); expect(markup).toContain('>Antigravity CLI</option>');
+  expect(markup).toContain("Connect Antigravity Desktop"); expect(markup).not.toContain("Sign in to Codex");
+});

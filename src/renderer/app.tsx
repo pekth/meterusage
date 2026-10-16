@@ -142,12 +142,14 @@ function ConnectionRow({ connection: c, state, action }: { connection: Connectio
   const busy = c.status === "connecting", collected = state.settings.values[providerKey(c.provider)] === true;
   const localActive = c.source === "cli" && collected;
   const localName = c.provider === "claude" ? "Claude Code CLI" : `${providerNames[c.provider]} CLI`;
-  const accountName = c.provider === "claude" ? "Claude Desktop" : "Browser sign-in";
+  const accountName = c.provider === "claude" ? "Claude Desktop" : c.provider === "antigravity" ? "Antigravity Desktop" : "Browser sign-in";
   const help = method === "cli"
     ? c.provider === "claude" ? "Reads Claude Code activity on this Mac. Allowance needs a companion usage file."
+      : c.provider === "antigravity" ? "Uses your existing agy CLI for allowance and local activity on this Mac."
       : c.provider === "grok" ? "Reads your existing Grok CLI allowance and local session counts. Grok website and mobile usage are not supported."
       : "Uses your existing Codex CLI sign-in for allowance and reads token activity on this Mac."
     : c.provider === "claude" ? "Uses the account signed in to Claude Desktop. You approve access in macOS; allowance depends on your plan."
+      : c.provider === "antigravity" ? "Uses one running, signed-in Antigravity Desktop app for account allowance. Local CLI activity stays separate."
       : "Sign in through your browser for account allowance and provider-reported token history. Requires an existing Codex app or CLI.";
   const reading = state.snapshot.quotas[c.provider];
   const status = busy ? "Updating connection…" : c.source === "cli" ? localActive ? "CLI selected. Data appears when available." : "CLI selected. Collection is off."
@@ -169,13 +171,13 @@ function ConnectionRow({ connection: c, state, action }: { connection: Connectio
       {busy ? <button aria-label={`Cancel ${providerNames[c.provider]} connection`} onClick={() => void action({ action: "connectionCancel", provider: c.provider })}>Cancel</button>
         : method === "cli" ? <button disabled={!c.localAvailable || localActive} onClick={() => void action({ action: "connectionLocal", provider: c.provider })}>{localActive ? "CLI selected" : "Use CLI"}</button>
           : c.status === "connected" ? <button aria-label={`Disconnect ${providerNames[c.provider]}`} disabled={state.snapshot.demo} onClick={() => void action({ action: "disconnect", provider: c.provider })}>Disconnect</button>
-            : c.status !== "unsupported" && <button className="connect-button" disabled={state.snapshot.demo} onClick={() => void action({ action: "connect", provider: c.provider })}>{c.provider === "claude" ? "Connect Claude Desktop" : "Sign in to Codex"}</button>}
+            : c.status !== "unsupported" && <button className="connect-button" disabled={state.snapshot.demo} onClick={() => void action({ action: "connect", provider: c.provider })}>{c.provider === "claude" ? "Connect Claude Desktop" : c.provider === "antigravity" ? "Connect Antigravity Desktop" : "Sign in to Codex"}</button>}
     </div>
     </div>
   </div>;
 }
 export function Connections({ state, action }: { state: ViewState; action: (r: Request) => Promise<void> }) {
-  const connections: ConnectionState[] = state.connections ?? ["codex", "claude", "grok"].map(provider => ({ provider: provider as ConnectionState["provider"], source: provider === "grok" ? "cli" : "account", localAvailable: !state.snapshot.demo, status: provider === "grok" ? "unsupported" : "disconnected" }));
+  const connections: ConnectionState[] = state.connections ?? ["codex", "claude", "antigravity", "grok"].map(provider => ({ provider: provider as ConnectionState["provider"], source: provider === "grok" ? "cli" : "account", localAvailable: !state.snapshot.demo, status: provider === "grok" ? "unsupported" : "disconnected" }));
   return <section className="connections" aria-label="Account connections">
     <h2>Choose how to connect</h2>
     <p className="secondary section-description">Choose a method for each provider. Changing the selection takes effect when you use its button.</p>

@@ -247,6 +247,14 @@ it.each([
       expect(await invoke(settings, { action: "providerOrder", order })).toEqual({ ok: true });
       expect(values.providerOrder).toEqual(order);
       expect(settings.contents.send.mock.lastCall?.[1].settings.providerOrder).toEqual(order);
+      for (const request of [
+        { action: "connect", provider: "antigravity", message: "Open one Antigravity Desktop account and sign in, then try connecting again" },
+        { action: "disconnect", provider: "antigravity", message: "Could not disconnect Antigravity Desktop" },
+      ] as const) {
+        if (request.action === "connect") connect.mockRejectedValueOnce(new Error(request.message));
+        else disconnect.mockRejectedValueOnce(new Error(request.message));
+        expect(await invoke(settings, { action: request.action, provider: request.provider })).toEqual({ ok: false, error: request.message });
+      }
       for (const message of [
         "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.",
         "Could not read Claude Desktop's account configuration.",

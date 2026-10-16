@@ -41,14 +41,26 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 ## Product and source facts
 
+- Unreleased Antigravity Desktop setup reuses the existing connection controls,
+  preferences, IPC and account-bound source. It requires one running same-user
+  desktop language server with a CSRF token and PID-owned IPv4 loopback port.
+  Fixed quota/status RPCs use request-scoped TLS handling, redirect rejection,
+  1 MiB response limits and bounded time. Account fingerprints are opaque;
+  credentials stay in main-process memory. Empty modern quota and missing
+  fractions remain unavailable. Local CLI usage stays detached. Synthetic
+  fixtures cover account switches, closure, transport failures and connection
+  races. Native/live-provider proof and release inclusion remain pending.
+  See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
+
 - Heatmap hover/focus readouts use compact token and session totals, including
   local, account, session-only, daily, weekly and cumulative grids. Exact grouped
   counts remain in tooltips and accessible labels. Summary counts compact from
   1,000. This follow-up is separate from the published build 54 artifact.
 
 - Onboarding and Settings offer provider-specific source choices: Codex browser
-  sign-in or CLI, Claude Desktop or Claude Code CLI, and Grok CLI only. Choosing
-  an option does not change collection until its action is used. Use CLI waits
+  sign-in or CLI, Claude Desktop or Claude Code CLI, Antigravity Desktop or
+  Antigravity CLI, and Grok CLI only. Choosing an option does not change
+  collection until its action is used. Use CLI waits
   for MeterUsage-owned connection cleanup before selecting existing local
   collection. Ordinary Disconnect still prevents automatic local fallback.
   CLI data covers this Mac; Claude CLI allowance needs a companion usage file.
@@ -149,7 +161,7 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 - The published app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure. Its AppKit and SwiftUI imports require macOS for package build and test checks; Swift itself supports other platforms. `AGENTS.md` describes a generic macOS SSH route for Linux development without private host aliases.
 - `README.md` links directly to the prebuilt v0.2.41 app ZIP as the default installation path. Installing and running it does not require Swift, Xcode, Command Line Tools, or Git; its Swift runtime ships with macOS. `Scripts/make-app.sh` also downloads that pinned release by default, checks its SHA-256 and code signature, and prepares `dist/MeterUsage.app` without compiling or installing developer tools. It copies and verifies the replacement in staging on the destination filesystem before replacing existing output, so copy or verification failures preserve the previous generated app. It rejects unsupported platforms and never falls back to a source build. Source builds require `--build-from-source` and are documented in `CONTRIBUTING.md`. The v0.2.41 asset targets Apple silicon and macOS 13 or later, is ad-hoc signed, and is not notarized. GitHub's source archives contain source and scripts, not an app bundle. ADR 0009 records the script's default.
 - Swift provider data sources are implemented under `Sources/MeterUsage/Services/`; the candidate adapters live under `src/main/providers/` and `src/main/composition.ts`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
-- Antigravity quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
+- Antigravity CLI quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
 - `Resources/Info.plist` and `CHANGELOG.md` record version 0.2.41, build 46, dated 2026-10-05. This release collects fresh quota observations after an accepted manual Codex reset, derives pacing and ETA from later usage growth, and removes the redeemed reset credit from archived quota data. The previous release was 0.2.40, which added accent colour themes, Codex cost estimates, and refreshed model prices. Repository version and release-note entries do not prove that a GitHub Release or its downloadable asset has been published.
 - `CONTRIBUTING.md` requires focused changes, synthetic fixtures, and `swift build`, `swift test`, and `Scripts/make-app.sh --build-from-source` before a code pull request. `Tests/Scripts/make-app-tests.sh` covers default preparation, explicit source selection, and download, verification, argument, and platform failures without network or compiler access.

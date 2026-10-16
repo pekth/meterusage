@@ -99,7 +99,7 @@ function savedPreferences(): Command {
 }
 
 it("allows only fixed provider connection requests and approved HTTPS login hosts", () => {
-  for (const provider of ["codex", "claude", "grok"]) expect(parseRequest({ action: "connect", provider })).toEqual({ action: "connect", provider });
+  for (const provider of ["codex", "claude", "antigravity", "grok"]) expect(parseRequest({ action: "connect", provider })).toEqual({ action: "connect", provider });
   for (const raw of [{ action: "connect", provider: "claude", path: "/tmp" }, { action: "connect", provider: "other" }, { action: "setPreference", key: "desktopClaudeIdentity", value: "off" }]) expect(() => parseRequest(raw)).toThrow();
   expect(codexLoginURL("https://auth.openai.com/authorize?state=fixture")).toContain("auth.openai.com");
   for (const raw of ["http://auth.openai.com", "https://auth.openai.com.evil.invalid", "https://user@chatgpt.com", "https://chatgpt.com:444", "file:///tmp"]) expect(() => codexLoginURL(raw)).toThrow();
@@ -141,10 +141,11 @@ it("publishes CLI versus account choice without exposing saved identities", asyn
   expect(connections.state).toEqual([
     { provider: "codex", status: "disconnected", source: "cli", localAvailable: true },
     { provider: "claude", status: "disconnected", source: "cli", localAvailable: true },
+    { provider: "antigravity", status: "disconnected", source: "cli", localAvailable: true },
     { provider: "grok", status: "unsupported", source: "cli", localAvailable: true },
   ]);
   preferences.values.desktopCodexConnection = "off"; preferences.values.desktopClaudeIdentity = "a".repeat(64);
-  expect(connections.state.map(s => s.source)).toEqual(["account", "account", "cli"]);
+  expect(connections.state.map(s => s.source)).toEqual(["account", "account", "cli", "cli"]);
   expect(JSON.stringify(connections.state)).not.toContain("a".repeat(64));
 });
 
@@ -679,8 +680,8 @@ it("denies non-Codex connections and quota in a live test profile even with pers
   const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http);
   const consent = vi.fn(async () => true), open = vi.fn(async () => {});
   expect(connections.enabled("claude")).toBe(false);
-  expect(connections.state).toEqual([{ provider: "codex", status: "disconnected", source: "account", localAvailable: false }, { provider: "claude", status: "unsupported", source: "account", localAvailable: false }, { provider: "grok", status: "unsupported", source: "cli", localAvailable: false }]);
-  for (const provider of ["claude", "grok"] as const) {
+  expect(connections.state).toEqual([{ provider: "codex", status: "disconnected", source: "account", localAvailable: false }, { provider: "claude", status: "unsupported", source: "account", localAvailable: false }, { provider: "antigravity", status: "unsupported", source: "cli", localAvailable: false }, { provider: "grok", status: "unsupported", source: "cli", localAvailable: false }]);
+  for (const provider of ["claude", "antigravity", "grok"] as const) {
     await expect(connections.connect(provider, open, consent)).rejects.toThrow("unavailable");
     await expect(connections.quota(provider)).rejects.toMatchObject({ code: "notSignedIn" });
     await expect(connections.disconnect(provider)).rejects.toThrow("unavailable");
@@ -698,8 +699,8 @@ it("denies non-Claude connections, quota and cleanup in a Claude test profile", 
   const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, command, http);
   const consent = vi.fn(async () => true), open = vi.fn(async () => {});
   expect(connections.enabled("codex")).toBe(false);
-  expect(connections.state).toEqual([{ provider: "codex", status: "unsupported", source: "account", localAvailable: false }, { provider: "claude", status: "disconnected", source: "account", localAvailable: false }, { provider: "grok", status: "unsupported", source: "cli", localAvailable: false }]);
-  for (const provider of ["codex", "grok"] as const) {
+  expect(connections.state).toEqual([{ provider: "codex", status: "unsupported", source: "account", localAvailable: false }, { provider: "claude", status: "disconnected", source: "account", localAvailable: false }, { provider: "antigravity", status: "unsupported", source: "cli", localAvailable: false }, { provider: "grok", status: "unsupported", source: "cli", localAvailable: false }]);
+  for (const provider of ["codex", "antigravity", "grok"] as const) {
     await expect(connections.connect(provider, open, consent)).rejects.toThrow("unavailable");
     await expect(connections.quota(provider)).rejects.toMatchObject({ code: "notSignedIn" });
     await expect(connections.disconnect(provider)).rejects.toThrow("unavailable");

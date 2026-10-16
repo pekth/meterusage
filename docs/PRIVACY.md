@@ -120,11 +120,31 @@ Collection timeout also clears account-bound allowance when the identity check
 may not have completed. Disconnect removes consent metadata and prevents the
 post-request credential reread without changing Claude Desktop.
 
-Connected Codex/Claude sources do not attach local CLI activity to the connected
-account. Quota archives are cleared on connection changes and candidate launch;
+An explicit **Connect Antigravity Desktop** action permits discovery of one
+same-user desktop language server and reading only its candidate process
+arguments for the current CSRF credential. Multiple matching servers are
+rejected. MeterUsage verifies PID-owned IPv4 loopback listeners before each
+fixed `GetUserStatus` or `RetrieveUserQuotaSummary` request. HTTPS is preferred;
+a certificate exemption applies only to that request to `127.0.0.1`. HTTP is
+allowed only on the declared, PID-owned extension-server port. Redirects are
+rejected, responses are limited to 1 MiB, each request to three seconds and
+collection to fifteen seconds. No cloud credential file is opened or copied.
+
+The Antigravity account email is checked before and after quota collection.
+Only a provider-scoped SHA-256 fingerprint is saved in MeterUsage preferences,
+excluded from settings publication and diagnostics. CSRF credentials and raw
+responses stay in main-process memory and are not logged, cached or persisted.
+No provider store is changed and no credential is refreshed. Connection
+changes, cancellation and disconnect invalidate old reads. Missing or expired
+quota stays unavailable. Empty modern summaries cannot select stale legacy
+quota; legacy model fractions are allowed only for an explicitly unsupported
+modern RPC. See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
+
+Connected Codex/Claude/Antigravity sources do not attach local CLI activity to
+the connected account. Quota archives are cleared on connection changes and candidate launch;
 authentication or absent-data failures clear the connected archive. Tokens,
-passwords, raw caches, account identifiers and responses are not logged or
-persisted by MeterUsage. In-memory strings remain subject to garbage collection.
+passwords, raw caches, plaintext account identifiers and responses are not
+logged or persisted by MeterUsage. In-memory strings remain subject to garbage collection.
 Demo mode blocks live connection code before helper or key discovery. Grok has
 no new consumer connection in this candidate. [ADR 0011](adr/0011-desktop-account-connections.md)
 amends the candidate boundary; it does not change the published Swift release.

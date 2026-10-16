@@ -19,6 +19,13 @@ The **Connect using** selector offers the methods supported by each provider.
 Selecting a method does not start sign-in or change collection. Use the button
 below it to apply the choice. Existing profiles keep their current source.
 
+- Antigravity: choose **Antigravity Desktop**, then **Connect Antigravity Desktop**.
+  Keep one desktop account open and signed in. The candidate reads account
+  allowance from its running local service without requiring `agy`. Separate
+  language servers are ambiguous, even if they belong to the same account;
+  close extra instances before connecting. **Antigravity CLI** remains an
+  explicit alternative for the existing local integration. Desktop allowance
+  includes no CLI-local history. Native and live-provider checks are pending.
 - Codex: choose **Sign in to Codex** and complete browser sign-in. The candidate
   finds the helper in an existing Codex app in Applications, with existing
   command installations as a compatibility path. Users do not open a terminal
@@ -237,3 +244,27 @@ confirm allowance is removed. Test denied access and account/organization
 switches only with the account owner's approval. Never run the Keychain helper
 directly or capture its output. See
 [ADR 0016](adr/0016-claude-live-test-profile.md).
+
+## Antigravity Desktop source boundary
+
+The source adapter discovers one same-user Antigravity desktop language server
+and its PID-owned IPv4 loopback listeners. It reads only the candidate process
+arguments for its current CSRF token. Fixed `GetUserStatus` and
+`RetrieveUserQuotaSummary` requests use HTTPS first; HTTP is limited to the
+declared, owned extension-server port. TLS certificate exemption is local to
+that verified loopback request. Redirects are rejected. Each reply is limited
+to 1 MiB, each request to three seconds, and collection to fifteen seconds.
+
+Account identity must match before and after allowance collection. Only an
+opaque fingerprint enters preferences. CSRF credentials, account email and raw
+replies stay in main-process memory, outside settings, diagnostics and logs.
+The integration neither writes provider stores nor refreshes credentials.
+Changed identity, provider closure, expired buckets, missing fractions and
+empty summaries leave allowance unavailable and clear prior account quota.
+An empty modern summary never falls back to legacy data. Legacy model quota
+is read only when the modern RPC explicitly reports unsupported; it cannot
+establish weekly allowance. Disconnect and cancellation reject late results.
+
+This is source and synthetic-fixture coverage. It is absent from the published
+build 54 beta. Native discovery, local transport and live allowance comparison
+remain unverified. See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
