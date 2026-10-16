@@ -38,6 +38,17 @@ follows [Semantic Versioning](https://semver.org/).
   link directly to the current Apple silicon app ZIP, and keep build commands
   in the contributor guide instead of the README.
 
+## [0.3.0-beta.1] - 2026-10-16
+
+### Added
+
+- Publish signed/notarized Electron build 54 as an opt-in Apple silicon beta.
+  Keep Swift 0.2.41 stable; beta downloads are manual.
+- Replace old product screenshots with current synthetic Codex, Claude, side
+  notch and Settings captures. Document setup, artifact verification and limits.
+- Keep the known cosmetic 0.2.41 Settings footer and incomplete native acceptance
+  visible in the beta guide. Antigravity/Grok desktop login is follow-up work.
+
 ## [0.2.41] - 2026-10-05
 
 ### Fixed

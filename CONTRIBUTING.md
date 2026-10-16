@@ -1,5 +1,12 @@
 # Contributing to meterusage
 
+New MeterUsage features target Electron. The default branch currently retains
+stable Swift source; use the [beta source tag](https://github.com/pekth/meterusage/tree/v0.3.0-beta.1)
+and its [Electron contributor instructions](https://github.com/pekth/meterusage/blob/v0.3.0-beta.1/CONTRIBUTING.md#typescript-electron-candidate)
+for that implementation. Swift receives critical maintenance and compatibility
+fixes. The stable Swift guidance follows.
+
+
 > ### ⚡ TL;DR
 > 1. Fork & clone the repo.
 > 2. Enable pre-commit hook: `git config core.hooksPath .githooks`
