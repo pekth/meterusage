@@ -26,8 +26,8 @@ Swift receives only critical fixes and transition compatibility work. Keep this
 release as the stable download and rollback until the
 [retirement conditions](../adr/0024-electron-primary-swift-retirement.md#retirement-conditions)
 pass. Removing the old app source later will preserve its retrievable history.
-The screenshots below are older synthetic Swift demo captures. They are not
-Electron screenshots or evidence of the current candidate UI.
+Current product images are in the [Electron beta gallery](../SCREENSHOTS.md).
+Old Swift product captures have been removed from the active documentation.
 
 MeterUsage shows supported AI coding allowances, measured token usage, pacing
 and reset times in the menu bar, popover and floating side notch.
@@ -50,42 +50,8 @@ See [installation](#download-and-installation) for first-launch steps.
 
 ## Showcase
 
-### Ambient Time-To-Empty & Side Notch HUD
-A dockable, collapsible HUD pinned to the edge of your screen. Hovering any provider ring expands a dedicated detail card with rate limits, ambient time-to-empty, pacing diagnostics, and token telemetry. The panel is anchored by the strip's top-right corner, so switching providers never moves the strip ([`docs/SIDE-NOTCH.md`](../../docs/SIDE-NOTCH.md)):
-
-<p align="center">
-  <img src="../../docs/images/sidenotch-codex.png" alt="Codex rate limits, reset credits, and usage" width="340">
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="../../docs/images/sidenotch-v2-live.png" alt="Antigravity limits, pacing, and token telemetry" width="320">
-</p>
-
-<p align="center">
-  <img src="../../docs/images/sidenotch-grok.png" alt="Grok weekly quota, sessions, and message volume" width="320">
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="../../docs/images/sidenotch-opencode-go.png" alt="OpenCode Go rolling, weekly, and monthly quotas" width="320">
-</p>
-
-### Menu Bar & Popover Dashboard
-Click the menu bar mark anytime to inspect full rate-limit details, multi-window countdowns, and 26-week activity heatmaps:
-
-<p align="center">
-  <img src="../../docs/images/popover.png" alt="Service status, pipeline, AI coding today, and Codex quotas" width="270">
-  &nbsp;
-  <img src="../../docs/images/popover-2.png" alt="Codex heatmap, Grok quota, and OpenCode Go quota" width="270">
-  &nbsp;
-  <img src="../../docs/images/popover-3.png" alt="OpenRouter quota, Claude quota, Claude heatmap, and Antigravity" width="270">
-</p>
-
-<sub>Screenshots show the app in demo mode (`METERUSAGE_DEMO=1`). All numbers and names are synthetic.</sub>
-
-### Settings: Accounts & Providers
-Toggle providers on or off, choose refresh cadence, and switch themes and the accent colour:
-
-<p align="center">
-  <img src="../../docs/images/settings-accounts.png" alt="Settings accounts list with provider connections and appearance theme" width="270">
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="../../docs/images/settings-providers.png" alt="Settings providers list with refresh interval and side notch toggles" width="270">
-</p>
+See the [current Electron beta screenshots](../SCREENSHOTS.md). This legacy
+Swift guide retains its behavior and installation reference without old images.
 
 ---
 

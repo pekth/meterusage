@@ -1,6 +1,6 @@
 # Project knowledge
 
-Last source review: 2026-10-10
+Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 ## Edition documentation
 
@@ -10,8 +10,10 @@ Last source review: 2026-10-10
   native acceptance, deliberate cutover and retrievable archive checks pass.
   Source retirement is pending. Electron-required Swift helpers and assets stay.
 - [Swift 0.2.41](swift/README.md) is the published default install route.
-  [Electron source 0.2.41](electron/README.md) is an unpublished candidate with
-  private build/installation receipts and incomplete native acceptance.
+  [Electron 0.3.0-beta.1, build 54](BETA.md) is an opt-in public prerelease,
+  signed and notarized for Apple silicon. Native acceptance remains incomplete.
+  Source manifests and its cosmetic Settings footer still say 0.2.41; packaging
+  explicitly sets the beta version. Stable updaters do not offer the beta.
 - Both implementations remain in their current source trees. Shared app name,
   bundle ID and default data/preferences prevent safe normal-profile coexistence.
   Use only documented isolated QA profiles.
@@ -27,7 +29,9 @@ Last source review: 2026-10-10
   OpenCode Bun fallback discovery, pending AGY/OpenCode onboarding and unresolved
   notch-dimension/grid-geometry feedback remain distinct. See the candidate guide.
 - Edition documentation was reconciled against revision
-  `605f1c4328eed6d4f793fcee0937a8d2e1659f6d` and its accompanying candidate changes.
+  build source `6ce695324e54bb09bf6e5ab36fd4733875c94427`.
+- Current product screenshots use build 54's renderer and synthetic demo data.
+  Old product captures are removed; see [capture provenance](SCREENSHOTS.md).
 
 ## Repository state
 

@@ -1,14 +1,16 @@
-# MeterUsage Electron candidate
+# MeterUsage Electron beta
 
 Electron is the sole active target for new MeterUsage features. The legacy
 Swift app is frozen as the current stable download and rollback option until
 [staged retirement](../adr/0024-electron-primary-swift-retirement.md) passes.
 
-This is the unpublished macOS TypeScript/Electron/React candidate. Its source
-version is `0.2.41` in [package.json](../../package.json), matching the retained
-Swift version number. Private build and installation receipts exist. Complete
-native acceptance and public cutover remain open; this is not a released v2.1.
-Use the [published Swift app](../swift/README.md) for the default installation.
+The public beta is **0.3.0-beta.1, build 54**, for Apple silicon and macOS 13+.
+Use the [beta download and installation guide](../BETA.md). The ZIP is Developer
+ID signed and notarized. This is an opt-in manual download; Swift stays stable.
+Source manifests and build 54's cosmetic Settings footer still say `0.2.41`.
+Packaging explicitly sets the beta version. Full native acceptance remains open.
+
+See the [current beta screenshots](../SCREENSHOTS.md) for Usage, notch and Settings.
 
 ## Source choices
 
@@ -21,7 +23,7 @@ Usage. See [ADR 0023](../adr/0023-onboarding-source-choice.md).
 | --- | --- | --- |
 | Codex browser sign-in | Existing official app helper, with command-install compatibility, signs in through the provider page using a separate keyring-only profile. Reads allowance and provider-reported daily account tokens. | Account history is separate from CLI tokens. No local sessions, category split, cost or burn attribution comes from this method. Universal device/product coverage is unverified. |
 | Codex CLI | Existing authenticated CLI supplies quota/reset metadata; local rollouts supply tokens, sessions and estimated cost. | Activity on this Mac only. |
-| Claude Desktop | Explicit consent permits a fixed Keychain helper and read-only Desktop cache/cookie access for current account allowance. | Allowance only. No Desktop chat/token history, local cost, tier or extra-usage credit projection. Endpoint compatibility and live acceptance remain open. |
+| Claude Desktop | Explicit consent permits a fixed Keychain helper and read-only Desktop cache/cookie access for current account allowance. | Allowance only. No Desktop chat/token history, local cost, tier or extra-usage credit projection. Compatibility can fail when the active account has no allowance token; paid-account live acceptance remains open. |
 | Claude Code CLI | Local transcript counters, tier metadata and optional companion quota files. | Local activity; allowance requires the [companion](../COMPANION.md). |
 | Grok CLI (Beta) | Existing CLI authentication and local session summaries. | Consumer website/mobile sign-in is unsupported. Session/message counts do not establish token totals. |
 
@@ -117,7 +119,7 @@ its token or session units. The optional 30-day line chart is separate. Connecte
 Codex has a daily 26-week account-token grid ending on the latest provider date.
 Unreported dates stay unavailable; reported zero is zero. Account history stays
 in memory and is excluded from local rollups, durable history and schema-1 JSON.
-Live availability and coverage remain unverified. See
+Live Codex account history has been observed; complete device/product coverage remains unverified. See
 [ADR 0022](../adr/0022-codex-account-token-history.md).
 
 Hover and keyboard focus expose dated exact grouped counts. Each live heatmap
@@ -211,7 +213,7 @@ implementation, packaging, CI, testing and release remain paused.
 reference and rollback path. No automatic cutover, data migration, release or
 installed-app replacement follows from these docs. The [repository strategy](../VERSIONS.md#proposed-same-repository-strategy)
 records the accepted development direction and the checks still required for
-source retirement and release. Electron's required Swift helpers remain.
+source retirement and stable cutover. This opt-in beta does not close those checks. Electron's required Swift helpers remain.
 
 Desktop account research for Grok/Cursor, Antigravity and OpenCode Go is recorded
 in [DESKTOP-LOGIN-RESEARCH.md](../DESKTOP-LOGIN-RESEARCH.md). It separates

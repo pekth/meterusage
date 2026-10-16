@@ -1,98 +1,69 @@
 # Demo mode
 
-Demo mode runs the real app against synthetic, invented data.
+Demo mode uses the real app views with invented data. Use it for screenshots
+and UI inspection without exposing real accounts. The [current beta gallery](SCREENSHOTS.md)
+shows Electron build 54. Old product captures have been removed.
 
----
+## Electron browser preview
 
-### ⚡ TL;DR
-
-* 🎭 **True-to-Life UI**: Runs the real views, formatting, and pacing calculations without touching real accounts, credentials, or network services.
-* 📸 **Safe for Screenshots**: Ideal for documentation and public sharing without leaking private spend or account tiers.
-* 🚀 **One-Command Launch**:
-  ```sh
-  METERUSAGE_DEMO=1 swift run meterusage
-  ```
-  *(A **Demo** badge in the header ensures synthetic numbers are never confused with real ones).*
-
----
-
-## Why Demo Mode Exists
-
-Screenshots — for the README, an issue report, or a blog post — and contributor testing should never require a real account, a signed-in CLI, or exposing personal usage. A maintainer's real popover shows real spend, real session counts, and a real plan tier; none of that belongs in a public repository.
-
-## Launching Demo Mode
-
-The app is a bundle, and macOS `open` does **not** forward shell environment variables to bundled apps by default. Use `--env` to pass it:
+From the beta source checkout, after installing its declared dependencies:
 
 ```sh
-open -a MeterUsage --env METERUSAGE_DEMO=1
+node_modules/.bin/vp dev --mode demo --host 127.0.0.1
 ```
 
-Or execute the binary directly from the terminal:
+Open the printed address with `?surface=flyout`, `?surface=settings` or
+`?surface=notch`. This dedicated demo mode uses the actual renderer and an
+in-memory preview bridge. It has no native IPC, provider access or live network
+transport. Native-only actions return an error. It does not validate Keychain,
+window positioning, login items, sharing or other macOS behavior.
 
-```sh
-METERUSAGE_DEMO=1 /Applications/MeterUsage.app/Contents/MacOS/MeterUsage
-```
-
-From a local source checkout:
-
-```sh
-METERUSAGE_DEMO=1 swift run meterusage
-```
-
-Quit and relaunch normally without the variable to return to your real data.
-
-## What It Is — and Isn't
-
-It is **not** a mock UI. The production SwiftUI views, AppCoordinator, formatters, and pacing calculations run identically to normal execution. Only the data sources are swapped: real sources inspect local CLIs and session files, while demo sources return fixed, synthetic values from memory.
-
-## Synthetic Data Breakdown
-
-All demo data is invented and deterministic:
-
-- **Service Health**: Reports operational components for Codex and Claude public status pages.
-- **Codex Quota**: Plus plan tier, 5-hour and weekly allowance windows, a GPT-5.3-Codex-Spark window, two expiring full-reset credits, and an approximate credit balance.
-- **Antigravity Quota**: Multi-group model families:
-  - *Gemini Models*: Weekly limit (89% used, 11% left) and 5-hour limit (9% used, 91% left).
-  - *Claude and GPT models*: Weekly limit (1% used, 99% left) and 5-hour limit (0% used, 100% left).
-- **OpenRouter**: Synthetic monthly dollar spending limit, account balance meter, and 30-day token telemetry.
-- **Grok**: Weekly allowance window with countdown and session activity history.
-- **OpenCode Go**: 26 sessions, 492 messages, token volume totals, and estimated cost.
-- **Claude**: Optional companion-file quota windows and tokens-per-day heatmap.
-- **26-Week Heatmaps**: 26-week activity matrices for Codex (sessions) and Claude (tokens) with interactive daily, weekly, and cumulative views.
-
-Percentages span calm green and amber warning bands so screenshots demonstrate color headroom scales clearly without alarmist red styling. Reset countdowns are calculated relative to launch time so screenshots remain natural.
-
-## Safety Guarantees
-
-- **Strict Activation**: The environment variable must be exactly `1`. Values like `true`, `yes`, or `0` remain off.
-- **Whole-App Integrity**: Evaluated once at composition root — the dashboard is never partially real and partially fake.
-- **Prominent Badge**: A **Demo** badge is displayed in the header to prevent any confusion with live telemetry.
-- **Synthetic sources**: Demo provider sources perform no network requests and invoke no provider CLI commands. The Electron candidate writes its own isolated preferences, history and cache files.
+Provider marks exported during macOS packaging are needed for every icon to
+render. Use those matching generated resources when capturing on Linux. Do not
+substitute unrelated marks. Browser fonts and framing can differ from macOS.
 
 ## Electron candidate
 
-After `pnpm build`, run the candidate JSON path without a tray or window:
+After `pnpm build`, synthetic headless inspection uses:
 
 ```sh
 meterusage_demo_root="$(node -p 'require("node:fs").realpathSync(require("node:os").tmpdir())')"
 node dist/main/cli.cjs json --demo --candidate-profile "$meterusage_demo_root/meterusage-cli-demo"
 ```
 
-On macOS, launch the separate packaged candidate directly:
+For a packaged app on macOS, execute its binary directly:
 
 ```sh
 ./release/mac-arm64/MeterUsage.app/Contents/MacOS/meterusage --demo --candidate-profile /private/tmp/meterusage-native-demo
 ```
 
-The explicit profile must be empty on first use and use a canonical path.
-Candidate mode rejects symlink aliases, including macOS `/tmp` and `/var`.
-Demo mode selects synthetic
-providers before composition and isolates all preferences, caches, history and
-Electron state. Relaunch with the same profile to test persistence. Live
-provider discovery, login-item changes and update installation are disabled.
-Demo reset confirmation consumes only synthetic fixture credits. The original
-logo PNGs are reused; SF Symbol stand-ins are exported on macOS during packaging.
+The profile must be empty on first use and use a canonical path. Symlink aliases,
+including macOS `/tmp` and `/var`, are rejected. Reuse the same marked profile
+for relaunch checks. Preferences, caches, history and Electron state stay there.
+Live provider discovery, login-item changes and update installation are disabled.
+Demo reset confirmation consumes only synthetic fixture credits.
 
-Native candidate UI and two different-height notch captures remain required
-acceptance evidence. Swift screenshots above do not prove Electron rendering.
+## Swift legacy demo
+
+From the retained Swift source on macOS:
+
+```sh
+METERUSAGE_DEMO=1 swift run meterusage
+```
+
+The environment value must be exactly `1`. Swift demo mode swaps provider
+sources at composition; it does not establish current Electron appearance.
+Quit and relaunch normally to return to real data. Do not run legacy and beta
+normal profiles together.
+
+## Data and proof
+
+Demo sources supply example allowances, reset windows, account balances and
+local token/session activity. Local history and account allowance are separate
+measurements in the real app. A Claude demo heatmap does not imply access to
+Claude Desktop chat history. Missing provider-reported values stay unknown.
+
+Public captures must use synthetic data and identify it as demo data. Browser
+captures prove renderer output only. Native anchoring acceptance still needs
+Mac captures for two providers with different card heights, as defined in
+[ADR 0004](adr/0004-side-notch-anchor-invariant.md).

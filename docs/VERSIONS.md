@@ -1,29 +1,29 @@
 # MeterUsage versions and repository strategy
 
-Electron is the sole active target for new features. The published Swift app is
-frozen as legacy support and rollback during migration. Both currently say
-`0.2.41`. That shared number does not establish
-build identity, publication, installation or native acceptance. The candidate
-is not a released v2.1. This comparison describes source at revision
-`605f1c4328eed6d4f793fcee0937a8d2e1659f6d` with the accompanying candidate changes.
+Electron is the sole active target for new features. Electron **0.3.0-beta.1,
+build 54** is an opt-in public prerelease. Swift **0.2.41** remains the stable
+download and rollback reference. The beta does not replace the stable updater.
 
 ## Current layout and status
 
-| Area | Retained Swift | Electron candidate |
+| Area | Retained Swift | Electron beta |
 | --- | --- | --- |
-| Development | Critical fixes and transition compatibility only | All new features |
-| Source and manifest | `Sources/`, `Tests/`, [Package.swift](../Package.swift) | `src/`, `tests/`, [package.json](../package.json) |
-| Version | 0.2.41 in [Info.plist](../Resources/Info.plist) | 0.2.41 in package metadata |
-| Build | `swift build`; explicit `./Scripts/make-app.sh --build-from-source` | `pnpm build`; macOS `pnpm package:mac` |
-| Default user download | Pinned published Swift ZIP via `./Scripts/make-app.sh` | No published candidate download route |
-| Build/install evidence | Separate from source and release metadata | Private build and installation receipts exist; complete native acceptance remains open |
-| Guide | [Swift](swift/README.md) | [Electron](electron/README.md) |
+| Development | Critical fixes and transition compatibility | All new features |
+| Source | `Sources/`, `Tests/`, `Package.swift` | `src/`, `tests/`, `package.json` |
+| Download version | 0.2.41 | 0.3.0-beta.1, build 54 |
+| Source metadata | 0.2.41 | Manifest retains 0.2.41; packaging overrides it |
+| User installation | Pinned Swift ZIP via `Scripts/make-app.sh` | Manual signed/notarized Apple silicon ZIP |
+| Updates | Stable release only | Manual beta downloads; no beta updater |
+| Guide | [Swift](swift/README.md) | [Beta installation and limits](BETA.md), [Electron](electron/README.md) |
 
-A source check does not prove a signed bundle. A built bundle does not prove
-installation or launch. A tag does not create a GitHub Release, and an uploaded
-asset does not prove native runtime acceptance. Current public availability and
-installed state need their own observation; this documentation does not refresh
-them. The pinned Swift download contract remains unchanged.
+Build 54 was built from `6ce695324e54bb09bf6e5ab36fd4733875c94427`.
+The beta tag also carries refreshed documentation and screenshots; its
+executable inputs are unchanged. Its Settings footer still incorrectly displays
+`0.2.41`. See [known limits and verification](BETA.md#known-limits).
+
+The beta source and signed bundle have separate recorded checks. Native
+acceptance remains incomplete and is disclosed for this opt-in prerelease.
+Stable cutover, stack merge and Swift source retirement remain separate work.
 
 ## Repository coexistence and app isolation
 
@@ -59,7 +59,7 @@ data compatibility, native acceptance and no-automatic-cutover rules still apply
    performance. Keep intentional UI removals intact.
 3. Verify deliberate update and rollback before public cutover. Preserve the
    current Swift download and installer contract until the replacement is ready.
-   Release publication remains subject to the existing release holds.
+   The opt-in beta is published separately; stable cutover still requires these checks.
 4. Preserve the retrievable legacy source revision and matching release artifact,
    then remove old-app-only source, tests, build steps and obsolete CI references
    from the active branch in a reviewed change. No second repository is needed.
@@ -69,8 +69,8 @@ Keep `Scripts/electron/desktop-keychain.swift`,
 fixtures/contracts used by Electron. Trace dependencies before removing legacy
 files. Retiring the Swift application does not mean deleting all Swift files.
 
-Only the development guidance is applied here. Source removal, workflow changes,
-version assignment and cutover remain pending.
+Source removal, workflow changes and stable cutover remain pending. Publishing
+the manual beta does not change the stable download contract.
 
 ### Update-channel prerequisites
 

@@ -136,9 +136,11 @@ See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
 
 ## TypeScript Electron candidate
 
-The source version is 0.2.41. This candidate is unpublished; private build and
-installation receipts exist, while complete native acceptance remains open.
-See the [candidate guide](docs/electron/README.md) for source choices and parity gaps.
+The source manifest retains 0.2.41. The public Electron beta is 0.3.0-beta.1,
+build 54, with the version explicitly set during packaging. See the
+[beta guide](docs/BETA.md) for the signed artifact, known cosmetic footer issue
+and incomplete native acceptance, and the [Electron guide](docs/electron/README.md)
+for source choices and parity gaps.
 
 
 Use the Node and pnpm versions declared in `package.json`. Provider accounts
@@ -178,7 +180,8 @@ pnpm package:mac
 
 `package:mac` exports the existing SF Symbol stand-ins, builds the app and
 packages an Apple silicon ZIP with publication disabled. It does not install
-or replace an app. Do not upload this candidate as the current public release.
+or replace an app. Locally packaged output is not the verified public beta
+artifact. Keep the stable release and beta download routes separate.
 Windows packaging, CI, native testing and release remain paused.
 
 electron-builder resolves `pnpm` from PATH when collecting production
