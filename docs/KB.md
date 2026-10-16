@@ -68,6 +68,9 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   Input accessible names and full label hit areas remain. Settings action
   errors retain their alert role, message and dismissal in a sticky banner.
   Advanced account rows wrap without changing their save/remove behavior.
+- Settings displays the running Electron bundle version supplied by the main
+  process. Source previews without bundle metadata omit the version instead
+  of showing the legacy Swift version.
 - Candidate Usage keeps Service status first and visible, before provider usage.
   Provider/account tabs show one usage card at a time in saved provider order.
   Arrow keys and Home/End switch tabs; removing a selected slot falls back to

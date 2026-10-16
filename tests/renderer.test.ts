@@ -21,6 +21,14 @@ function renderApp(view: ViewState, surface = "flyout", error = "") {
 }
 
 const now = Date.parse("2026-10-06T12:00:00Z");
+it("shows the running bundle version in Settings without a stale fallback", () => {
+  const view = state();
+  view.appVersion = "0.3.0-beta.1";
+  expect(renderApp(view, "settings")).toContain("MeterUsage 0.3.0-beta.1");
+  delete view.appVersion;
+  expect(renderApp(view, "settings")).toContain("MeterUsage · Cost figures");
+  expect(renderApp(view, "settings")).not.toContain("MeterUsage 0.2.41");
+});
 it("passes the saved size to notch details without scaling the strip or share surface", () => {
   const view = state();
   for (const [size, scale] of [["small", "0.8"], ["medium", "1"], ["large", "1.15"]]) {
