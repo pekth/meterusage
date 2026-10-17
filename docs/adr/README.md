@@ -38,3 +38,5 @@ compatibility and acceptance requirements remain in force. The
 | [0026](0026-antigravity-desktop-local-quota.md) | Opt-in Antigravity Desktop quota through its owned local service. | Source implementation; native/provider acceptance pending |
 | [0027](0027-grok-cursor-closed-reader.md) | Opt-in Grok Bot via closed/checkpointed Cursor with immutable SQLite and account binding. | Source implemented; native/live unverified |
 | [0028](0028-grok-bot-desktop-reader.md) | Use consented Grok Bot Desktop scoped credentials and a fixed read-only Connect allowance request for new Grok connections; retain saved Cursor sources. | Source and synthetic proof; native/live unverified |
+| [0029](0029-api-billing-snapshots.md) | Separate OpenAI API and Anthropic API billing snapshots from subscriptions; keep Admin keys in a one-run helper. | Source implementation; real billing acceptance pending |
+| [0030](0030-grok-bot-encrypted-compatibility.md) | Accept account-bound encrypted Bot legacy values and use the observed fixed Keychain account. | Bounded source correction; live allowance acceptance pending |

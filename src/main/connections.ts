@@ -9,7 +9,7 @@ import { parseCodexAccountUsage } from "./providers/codex-account-usage";
 import { desktopQuota, readDesktopCredential, desktopReadErrors } from "./providers/claude-desktop";
 import { readAntigravityDesktop, antigravityRPC, type AntigravityRPC } from "./providers/antigravity-desktop";
 import { cursorGrokQuota, cursorIdentity, readCursorCredential } from "./providers/cursor-grok";
-import { readGrokBotCredential, grokBotQuota, grokBotTransport, type GrokBotRPC } from "./providers/grok-bot-desktop";
+import { readGrokBotCredential, grokBotQuota, grokBotTransport, grokBotConnectionErrors, GrokBotFailure, type GrokBotRPC } from "./providers/grok-bot-desktop";
 import { selectJSON } from "./select-json";
 import { Unavailable, failed, resetCreditAvailable } from "../domain/models";
 import { providerKey, type ConnectionState, type ConnectionProvider } from "../shared/ipc";
@@ -128,16 +128,19 @@ export class DesktopConnections {
     const check = () => { guard(); signal.throwIfAborted(); };
     check();
     const credential = await readGrokBotCredential(this.launch.home, this.helper, this.command, this.now(), allowUI, signal, check);
-    const current = () => { check(); if (credential.expiresAt <= this.now() + 60000) throw new Unavailable("notSignedIn", "Grok Bot Desktop"); };
+    const current = () => { check(); if (credential.expiresAt <= this.now() + 60000) throw new GrokBotFailure("credentials"); };
     current();
-    if (expected && credential.identity !== expected) throw new Unavailable("notSignedIn", "Grok Bot Desktop");
+    if (expected && credential.identity !== expected) throw new GrokBotFailure("credentials");
     let raw: string;
     try { current(); raw = await this.grokBot(credential.token, credential.team, signal); }
+    catch (error) { throw error instanceof GrokBotFailure ? error : new GrokBotFailure("request", error instanceof Unavailable ? error.code : "failed"); }
     finally {
-      current();
-      const after = await readGrokBotCredential(this.launch.home, this.helper, this.command, this.now(), false, signal, current);
-      current();
-      if (after.identity !== credential.identity || after.store !== credential.store) throw new Unavailable("notSignedIn", "Grok Bot Desktop");
+      try {
+        current();
+        const after = await readGrokBotCredential(this.launch.home, this.helper, this.command, this.now(), false, signal, current);
+        current();
+        if (after.identity !== credential.identity || after.store !== credential.store) throw new GrokBotFailure("verification");
+      } catch { throw new GrokBotFailure("verification"); }
     }
     return { identity: credential.identity, quota: grokBotQuota(raw, this.now()) };
   }
@@ -215,6 +218,7 @@ export class DesktopConnections {
     let savedIdentity: string | undefined;
     const previousGrokSource = this.prefs.values.desktopGrokSource;
     let grokSourceSaved = false;
+    let grokError = "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect.";
     let claudeError = "Open Claude Desktop and sign in, then try connecting again";
     try {
       if (!await consent()) return false;
@@ -236,6 +240,7 @@ export class DesktopConnections {
       } else if (provider === "grok") {
         const result = await this.bot(true, controller.signal, () => { if (this.stopped || this.pending.get("grok")?.controller !== controller) throw new Unavailable("notSignedIn", "Grok Bot Desktop"); });
         controller.signal.throwIfAborted(); savedIdentity = result.identity;
+        grokError = grokBotConnectionErrors.preferences;
         grokSourceSaved = true; await this.prefs.set("desktopGrokSource", "bot");
         controller.signal.throwIfAborted();
         await this.prefs.set("desktopGrokIdentity", result.identity);
@@ -262,7 +267,8 @@ export class DesktopConnections {
         controller.signal.throwIfAborted();
       }
       return true;
-    } catch {
+    } catch (error) {
+      if (provider === "grok" && !controller.signal.aborted && error instanceof GrokBotFailure) grokError = grokBotConnectionErrors[error.stage];
       if (candidateID) {
         await this.disable("codex", candidateID);
         try { await this.cleanup(candidateID); }
@@ -276,7 +282,7 @@ export class DesktopConnections {
         try { await this.prefs.set("desktopGrokSource", previousGrokSource); }
         catch { this.prefs.values.desktopGrokSource = previousGrokSource; }
       }
-      this.errors.add(provider); throw new Error(provider === "codex" ? "Open Codex on this Mac, then try connecting again" : provider === "antigravity" ? "Open one Antigravity Desktop account and sign in, then try connecting again" : provider === "grok" ? "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect." : controller.signal.aborted ? "Open Claude Desktop and sign in, then try connecting again" : claudeError);
+      this.errors.add(provider); throw new Error(provider === "codex" ? "Open Codex on this Mac, then try connecting again" : provider === "antigravity" ? "Open one Antigravity Desktop account and sign in, then try connecting again" : provider === "grok" ? grokError : controller.signal.aborted ? "Open Claude Desktop and sign in, then try connecting again" : claudeError);
     }
     finally { finish(); }
   }

@@ -3,6 +3,7 @@
 - Status: Source implemented; native and live-provider acceptance pending
 - Date: 2026-10-16
 - Amends: ADR 0027 for new connections; saved Cursor sources remain compatible
+- Amended by: [ADR 0030](0030-grok-bot-encrypted-compatibility.md) for observed encrypted legacy values and the corrected fixed Keychain account
 
 New Grok connections use **Connect Grok Bot Desktop (Beta)**. The user signs in
 through Bot first, then permits MeterUsage's read-only access. MeterUsage does

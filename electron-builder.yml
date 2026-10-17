@@ -11,6 +11,8 @@ files:
   - dist/renderer/**
   - package.json
 extraResources:
+  - from: dist/api-helper/api-usage-helper.cjs
+    to: api-usage-helper.cjs
   - from: build/desktop-keychain
     to: desktop-keychain
 mac:

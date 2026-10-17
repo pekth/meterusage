@@ -1,3 +1,5 @@
+import { apiBillingProviders, type ApiBillingProvider, type ApiBillingReading } from "../domain/api-billing";
+import { readApiBilling } from "./providers/api-billing";
 import { join } from "node:path";
 import { readdir, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -15,6 +17,7 @@ import { limitsReport, canonicalJSON } from "../domain/report";
 type Kind = "accountActivity" | "quota" | "activity" | "usage" | "plan" | "status";
 export const backoffDelay = (failures: number) => Math.min(2 ** (Math.min(Math.max(failures, 1), 6) - 1), 30) * 60000;
 export class Coordinator {
+  apiBilling?: Partial<Record<ApiBillingProvider, ApiBillingReading>>;
   accountActivities: Record<string, Loaded<AccountActivity>> = Object.create(null);
   quotas: Record<string, Loaded<Quota>> = Object.create(null);
   activities: Record<string, Loaded<Activity>> = Object.create(null);
@@ -72,7 +75,7 @@ export class Coordinator {
     const quotas = Object.fromEntries(Object.entries(this.quotas).map(([key, state]) => [key, state.status === "value" ? value({ ...state.value, canConsumeReset: resettable.has(key) }) : state]));
     const statuses = { ...this.statuses };
     for (const source of this.sources) if (source.status && !statuses[source.slot.provider]) statuses[source.slot.provider] = { status: "idle" };
-    return structuredClone({ demo: this.launch.demo, refreshing: !!this.inflight, clock: this.now(), lastRefreshedAt: this.lastRefreshedAt, slots, traySlots: tray.filter(s => s.provider !== "openRouter"), notchSlots: tray, quotas, archived: this.archived, accountActivities: Object.fromEntries(this.sources.filter(s => s.accountActivity).map(s => [slotKey(s.slot), this.accountActivities[slotKey(s.slot)] ?? { status: "idle" }])), activities: this.activities, usages: this.usages, plans: this.plans, statuses, appearance: { theme: p.appearanceTheme as string, accent: p.accentTheme as string, heatmap: p.showHeatmap === true, claudeHeatmap: p.showClaudeHeatmap === true, codexHeatmap: p.showCodexHeatmap === true, pacing: p.showPacingBurnRate === true, telemetry: p.showActivityTelemetry === true, chart: p.showDailyActivityChart === true, resetButton: p.showSideNotchResetButton === true, compactTray: p.menuBarCompactEnabled === true, notch: p.sideNotchPanelEnabled === true, pinned: false, onboarding: p.onboardingCompleted === true }, historyError: this.history.error, archiveWriteFailed: this.archiveWriteFailed, clearingCache: this.clearingCache });
+    return structuredClone({ ...(this.apiBilling ? { apiBilling: this.apiBilling } : {}), demo: this.launch.demo, refreshing: !!this.inflight, clock: this.now(), lastRefreshedAt: this.lastRefreshedAt, slots, traySlots: tray.filter(s => s.provider !== "openRouter"), notchSlots: tray, quotas, archived: this.archived, accountActivities: Object.fromEntries(this.sources.filter(s => s.accountActivity).map(s => [slotKey(s.slot), this.accountActivities[slotKey(s.slot)] ?? { status: "idle" }])), activities: this.activities, usages: this.usages, plans: this.plans, statuses, appearance: { theme: p.appearanceTheme as string, accent: p.accentTheme as string, heatmap: p.showHeatmap === true, claudeHeatmap: p.showClaudeHeatmap === true, codexHeatmap: p.showCodexHeatmap === true, pacing: p.showPacingBurnRate === true, telemetry: p.showActivityTelemetry === true, chart: p.showDailyActivityChart === true, resetButton: p.showSideNotchResetButton === true, compactTray: p.menuBarCompactEnabled === true, notch: p.sideNotchPanelEnabled === true, pinned: false, onboarding: p.onboardingCompleted === true }, historyError: this.history.error, archiveWriteFailed: this.archiveWriteFailed, clearingCache: this.clearingCache });
   }
   subscribe(observer: (state: Snapshot) => void) { this.observers.add(observer); return () => this.observers.delete(observer); }
   publish() { const state = this.snapshot(); for (const observe of this.observers) observe(state); }
@@ -94,6 +97,9 @@ export class Coordinator {
     this.publish(); return this.inflight;
   }
   private async sweep(force: boolean, onlyKey?: string) {
+    if (!this.launch.demo && !this.launch.codexTest && !this.launch.claudeTest) {
+      this.apiBilling = Object.fromEntries(apiBillingProviders.map(provider => [provider, readApiBilling(this.launch.home, provider, this.now())]));
+    }
     const tasks: Promise<void>[] = [];
     for (const source of this.sources) {
       const key = slotKey(source.slot); if (onlyKey && key !== onlyKey) continue;

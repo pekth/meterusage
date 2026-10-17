@@ -1,5 +1,7 @@
+import type { ApiBillingProvider, ApiBillingReading } from "../domain/api-billing";
 import type { Slot, Loaded, Quota, Activity, Usage, ServiceStatus, Provider, AccountActivity } from "../domain/models";
 export interface Snapshot {
+  apiBilling?: Partial<Record<ApiBillingProvider, ApiBillingReading>>;
   demo: boolean; refreshing: boolean; clock: number; lastRefreshedAt?: number;
   slots: Slot[]; traySlots: Slot[]; notchSlots: Slot[];
   quotas: Record<string, Loaded<Quota>>; archived: Record<string, Quota>;

@@ -155,7 +155,7 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   profiles retain their preference. [ADR 0014](adr/0014-settings-onboarding.md)
   records this placement; native acceptance is separate from source validation.
 
-- The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, read-only Desktop cache/cookie selection and the OAuth allowance endpoint after consent. New Grok Bot Desktop connections select the active scoped encrypted access token and optional team through a fixed Keychain item and bounded Connect allowance request. Saved Cursor connections retain their immutable SQLite reader and fixed identity-before-allowance requests. Both use opaque account binding. Nonempty WAL/journal files, ambiguous evidence and observed races fail closed. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md), ADR 0011, [ADR 0027](adr/0027-grok-cursor-closed-reader.md) and [ADR 0028](adr/0028-grok-bot-desktop-reader.md) define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
+- The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, read-only Desktop cache/cookie selection and the OAuth allowance endpoint after consent. New Grok Bot Desktop connections select the active account-bound encrypted access token and optional team through a fixed Keychain item and bounded Connect allowance request. Saved Cursor connections retain their immutable SQLite reader and fixed identity-before-allowance requests. Both use opaque account binding. Nonempty WAL/journal files, ambiguous evidence and observed races fail closed. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md), ADR 0011, [ADR 0027](adr/0027-grok-cursor-closed-reader.md) and [ADR 0028](adr/0028-grok-bot-desktop-reader.md) define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
 
 - Antigravity Desktop quota uses compact model headings and limit labels.
   It preserves provider-reported bucket values and resets; duration metadata
@@ -279,3 +279,17 @@ Reviewed Swift base: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. Source checks d
   `~/.bun/bin/opencode`. Coverage remains Go-only.
 - Activity heatmaps use one 26-column, seven-row layout. Thirty-day telemetry
   leaves older dates unavailable. Local-day and OpenRouter UTC scope are retained.
+
+## API billing and Grok compatibility follow-up
+
+- OpenAI API and Anthropic API are independent billing snapshots, not quota
+  provider slots. A bundled one-run helper uses environment-only Admin keys,
+  fixed cost endpoints and projected owner-only USD files. Cards retain the
+  reported UTC period, exact capture time and explicit stale state. Empty
+  reports do not become zero usage. Real organization billing remains unverified.
+  See [API billing](API_USAGE_BETA.md) and [ADR 0029](adr/0029-api-billing-snapshots.md).
+- The Grok Bot encrypted reader accepts canonical v10 legacy values with the
+  same full-subject active-account binding as scoped envelopes. Its fixed
+  Keychain pair is Grok Bot Safe Storage / Grok Bot Key. Native metadata confirms
+  these shapes; access and live allowance remain separate gates. See
+  [ADR 0030](adr/0030-grok-bot-encrypted-compatibility.md).

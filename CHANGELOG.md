@@ -8,6 +8,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Add separate OpenAI API and Anthropic API billing cards backed by projected
+  owner-only snapshots. A bundled one-run helper uses existing environment-only
+  organization Admin keys. Keep API billing distinct from subscription quota
+  and estimates; show report periods, capture age and stale state. Live billing
+  acceptance remains pending.
 - Add an explicit Antigravity Desktop connection in Electron setup and Settings.
   Read account allowance from one running, signed-in desktop language server
   without requiring `agy`. Keep CLI selection explicit and local activity
@@ -18,7 +23,7 @@ follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Connect new Grok Bot accounts through **Grok Bot Desktop (Beta)** after
-  explicit consent. Read only the active scoped encrypted access token and team
+  explicit consent. Read only the active account-bound encrypted access token and team
   through a fixed Keychain item; use a bounded read-only allowance request with
   MeterUsage's own headers. Reject identity/team/store changes and cancelled
   results. Keep saved Cursor connections compatible and CLI selection explicit.
@@ -31,6 +36,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Read Grok Bot's account-bound encrypted legacy v10 access values and correct
+  its fixed Keychain account to Grok Bot Key. Preserve scope, expiry, identity,
+  cancellation and store checks; reject plaintext and unsupported encryption.
 - Give 30-day provider activity the same 26-column, seven-row heatmap layout.
   Keep older unavailable dates distinct from measured zero-token days.
 - Add **Use local OpenCode** setup for key-free Go session history and restore

@@ -26,7 +26,7 @@ Usage. See [ADR 0023](../adr/0023-onboarding-source-choice.md).
 | Claude Desktop | Explicit consent permits a fixed Keychain helper and read-only Desktop cache/cookie access for current account allowance. | Allowance only. No Desktop chat/token history, local cost, tier or extra-usage credit projection. Compatibility can fail when the active account has no allowance token; paid-account live acceptance remains open. |
 | Claude Code CLI | Local transcript counters, tier metadata and optional companion quota files. | Local activity; allowance requires the [companion](../COMPANION.md). |
 | Antigravity Desktop | Explicit consent reads allowance from one running, signed-in desktop server. | Account allowance only. Local CLI activity stays separate. Live comparison was confirmed by the owner; broad compatibility is unverified. |
-| Grok Bot Desktop (Beta), unreleased source | Explicit consent reads the active scoped encrypted Bot credential and requests allowance. | Native Keychain/store and endpoint compatibility remain unverified. Existing saved Cursor connections retain their source. |
+| Grok Bot Desktop (Beta), unreleased source | Explicit consent reads the active account-bound encrypted Bot credential and requests allowance. | Native Keychain/store and endpoint compatibility remain unverified. Existing saved Cursor connections retain their source. |
 | OpenCode Go local | **Use local OpenCode** enables local Go sessions without a sign-in or key. Existing Go authentication also supplies allowance. | Go sessions only. Other providers used through OpenCode are excluded. |
 | Grok CLI (Beta) | Existing CLI authentication and local session summaries. | Consumer website/mobile sign-in is unsupported. Session/message counts do not establish token totals. |
 
@@ -54,6 +54,9 @@ Desktop connection. These changes are separate from the published build 54.
   A quota key alone cannot supply local history. The OpenCode-only CLI fallback
   checks executable `~/.bun/bin/opencode` installs as well as the existing paths.
 - OpenRouter uses existing keys for account quota/credit and aggregate activity.
+- Separate OpenAI API and Anthropic API cards read owner-only billing snapshots
+  from the bundled one-run helper. Admin keys stay in its environment; the app
+  has no key field or billing credential store. See [API billing](../API_USAGE_BETA.md).
   That activity is provider account scope, not a local chat count.
 - Cursor, Copilot CLI and Gemini CLI use optional existing local quota snapshots.
   Presence alone does not provide cloud quota or a token ledger.

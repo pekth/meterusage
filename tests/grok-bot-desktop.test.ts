@@ -3,7 +3,7 @@ import { createCipheriv, createHash, pbkdf2Sync } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { grokBotCredential, grokBotQuota, grokBotTransport, readGrokBotCredential, type GrokBotRPC } from "../src/main/providers/grok-bot-desktop";
+import { grokBotCredential, grokBotQuota, grokBotTransport, readGrokBotCredential, grokBotConnectionErrors, GrokBotFailure, type GrokBotRPC } from "../src/main/providers/grok-bot-desktop";
 import { Unavailable } from "../src/domain/models";
 import { DesktopConnections } from "../src/main/connections";
 import { Preferences } from "../src/main/preferences";
@@ -61,9 +61,9 @@ it("decrypts only active scoped token/team and hashes full subject and team", ()
   expect(parsed).not.toContain('"SKIP-REFRESH"'); expect(parsed).not.toContain('"SKIP-OTHER"'); expect(parsed).not.toContain('"SKIP-ROOT"'); expect(parsed).not.toContain('"SKIP-JWT"');
   expect(JSON.stringify({ identity: values.identity })).not.toContain(subject);
 });
-it.each(["legacy", "plaintext", "scope", "version", "cipher", "wrong-key", "subject", "expired", "missing", "null-active", "team-invalid", "team-scope"])('rejects %s credential ambiguity', kind => {
+it.each(["noncanonical-base64", "plaintext", "scope", "version", "cipher", "wrong-key", "subject", "expired", "missing", "null-active", "team-invalid", "team-scope"])('rejects %s credential ambiguity', kind => {
   let raw = store(), key = password;
-  if (kind === "legacy") raw = store({ "cursor-access-token": encrypted(token()).split(":").at(-1) });
+  if (kind === "noncanonical-base64") raw = store({ "cursor-access-token": encrypted(token()).split(":").at(-1)! + "=" });
   if (kind === "plaintext") raw = store({ "cursor-access-token": "plaintext:v1:" + token() });
   if (kind === "scope") raw = store({ "cursor-access-token": encrypted(token(), hash("other")) });
   if (kind === "version") raw = raw.replace('"version":1', '"version":2');
@@ -185,7 +185,7 @@ it("checks guard before every private read, and cancellation during helper preve
 });
 it("preserves Claude's default fixed helper pair and denies restricted profiles before Bot reads", async () => {
   const source = readFileSync(new URL("../Scripts/electron/desktop-keychain.swift", import.meta.url), "utf8");
-  expect(source).toContain('grok ? "Grok Bot Safe Storage" : "Claude Safe Storage"'); expect(source).toContain('grok ? "Grok Bot" : "Claude Key"'); expect(source).not.toContain("SecItemAdd");
+  expect(source).toContain('grok ? "Grok Bot Safe Storage" : "Claude Safe Storage"'); expect(source).toContain('grok ? "Grok Bot Key" : "Claude Key"'); expect(source).not.toContain("SecItemAdd");
   const f = await setup();
   for (const restricted of [{ demo: true }, { codexTest: true }, { claudeTest: true }]) {
     const c = new DesktopConnections({ ...f.launch, ...restricted }, f.prefs, "/fixture/helper", () => {}, f.command, undefined, () => now, undefined, f.rpc);
@@ -229,4 +229,54 @@ it("does not save a Bot connection when quota is unavailable", async () => {
   const f = await setup(); f.handler(async () => "{}");
   await expect(f.connect()).rejects.toThrow("Could not connect Grok Bot Desktop");
   expect(f.connections.enabled("grok")).toBe(false); expect(f.prefs.values.desktopGrokIdentity).toBe(""); expect(f.prefs.values.desktopGrokSource).toBe("cursor");
+});
+
+it("accepts active-account legacy encrypted v10 credentials while preserving full subject binding", () => {
+  const legacy = (value: string) => encrypted(value).split(":").at(-1)!;
+  const credential = grokBotCredential(store({ "cursor-access-token": legacy(token()) }), password, now);
+  expect(credential.token).toBe(token());
+  expect(credential.identity).toBe(grokBotCredential(store(), password, now).identity);
+  expect(() => grokBotCredential(store({ "cursor-access-token": legacy(token("other-account")) }), password, now)).toThrow("Not signed in");
+});
+
+it.each(["subject", "expired", "version", "malformed", "plaintext", "team-unscoped"])("rejects legacy encrypted %s without relaxing account or team guards", kind => {
+  const legacy = (value: string) => encrypted(value).split(":").at(-1)!;
+  let value = legacy(token());
+  if (kind === "subject") value = legacy(token("other-subject"));
+  if (kind === "expired") value = legacy(token(subject, now / 1000 + 60));
+  if (kind === "version") value = Buffer.from("v11unsupported").toString("base64");
+  if (kind === "malformed") value += "=";
+  if (kind === "plaintext") value = "plaintext:v1:" + token();
+  const values: Record<string, unknown> = { "cursor-access-token": value };
+  if (kind === "team-unscoped") values["cursor-selected-team-id"] = legacy("1");
+  expect(() => grokBotCredential(store(values), password, now)).toThrow("Not signed in");
+});
+it("keeps scoped team binding when an active access token uses encrypted legacy storage", async () => {
+  const f = await setup(), legacyToken = encrypted(token()).split(":").at(-1)!;
+  writeFileSync(f.path, store({ "cursor-access-token": legacyToken, "cursor-selected-team-id": encrypted("2") }));
+  await expect(f.connect()).resolves.toBe(true);
+  expect(f.rpc).toHaveBeenCalledWith(token(), "2", expect.any(AbortSignal));
+});
+it.each(["store", "keychain", "credentials", "decryption", "request", "verification", "quota", "preferences"] as const)("reports only the fixed %s failure stage", async stage => {
+  const f = await setup(), original = f.command.getMockImplementation()!;
+  if (stage === "store") rmSync(f.path);
+  if (stage === "keychain") f.command.mockImplementation(async (...args) => { if (args[0] === "/fixture/helper") throw new Error("SKIP-RAW-ERROR"); return original(...args); });
+  if (stage === "credentials") writeFileSync(f.path, store({ "cursor-access-token": encrypted(token("other-subject")) }));
+  if (stage === "decryption") writeFileSync(f.path, store({ "cursor-access-token": encrypted(token(), scope, "wrong-fixture-key") }));
+  if (stage === "request") f.handler(async () => { throw new Error("SKIP-RAW-ERROR"); });
+  if (stage === "verification") f.handler(async () => { writeFileSync(f.path, store({ "cursor-selected-team-id": encrypted("1") })); return paid; });
+  if (stage === "quota") f.handler(async () => "{}");
+  if (stage === "preferences") vi.spyOn(f.prefs, "set").mockRejectedValue(new Error("SKIP-RAW-ERROR"));
+  await expect(f.connect()).rejects.toThrow(grokBotConnectionErrors[stage]);
+  expect(f.connections.enabled("grok")).toBe(false);
+  if (["store", "keychain", "credentials", "decryption"].includes(stage)) expect(f.rpc).not.toHaveBeenCalled();
+  if (stage === "request") expect(f.command.mock.calls.filter(c => c[0] === "/fixture/helper")).toHaveLength(2);
+});
+it("discards raw errors and lets failed post-request verification override request failure", async () => {
+  const f = await setup();
+  f.handler(async () => { rmSync(f.path); throw new Error("SKIP-RAW-ERROR"); });
+  await expect(f.connect()).rejects.toThrow(grokBotConnectionErrors.verification);
+  const error = new GrokBotFailure("request", "offline");
+  expect(error.code).toBe("offline"); expect(error.message).toBe("Offline"); expect(error.stage).toBe("request");
+  expect(error).not.toHaveProperty("cause"); expect(JSON.stringify(error)).not.toContain("SKIP");
 });

@@ -11,7 +11,7 @@ guard CommandLine.arguments.dropFirst().allSatisfy({ ["--allow-ui", "--grok-bot"
 let query: [String: Any] = [
     kSecClass as String: kSecClassGenericPassword,
     kSecAttrService as String: grok ? "Grok Bot Safe Storage" : "Claude Safe Storage",
-    kSecAttrAccount as String: grok ? "Grok Bot" : "Claude Key",
+    kSecAttrAccount as String: grok ? "Grok Bot Key" : "Claude Key",
     kSecReturnData as String: true,
     kSecMatchLimit as String: kSecMatchLimitOne,
     kSecUseAuthenticationContext as String: context

@@ -279,12 +279,14 @@ remain unverified. See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
 New connections use the existing Grok Bot Desktop sign-in after explicit
 consent. No CLI, copied credential or separate MeterUsage OAuth flow is needed.
 The fixed candidate store is `Library/Application Support/Grok Bot/sand-secrets.json`
-under the user's home. MeterUsage selects only the active account's scoped
-access token and optional selected team. It rejects unsupported versions,
-legacy/plaintext envelopes, duplicate keys, expired tokens and ambiguous scope.
+under the user's home. MeterUsage selects only the active account's encrypted
+access token and optional selected team. Scoped and canonical encrypted legacy
+v10 values require the same full JWT-subject hash binding to the active account.
+It rejects plaintext, unsupported encryption/versions, duplicate keys, expired
+tokens and ambiguous scope.
 Refresh tokens and other accounts' credential values are skipped.
 
-The bundled helper reads only `Grok Bot Safe Storage` / `Grok Bot` in macOS
+The bundled helper reads only `Grok Bot Safe Storage` / `Grok Bot Key` in macOS
 Keychain. Explicit connection can show a Keychain prompt; polling forbids UI.
 The reader opens no symlinks, bounds the JSON read, and checks store metadata,
 account and team before and after the request. These checks detect observed
@@ -307,10 +309,11 @@ can retain dated allowance only after the account and store are reverified.
 Source changes clear account-bound quota. Disconnect changes only MeterUsage.
 
 This private compatibility contract was traced statically from Grok Bot 0.71.2
-and Electron 42.1.0. Store existence/format, the derived Keychain name, and
-server acceptance of JSON with MeterUsage's own headers remain **UNVERIFIED**
-until native checks. No app machine identity or client impersonation is used.
-See [ADR 0028](adr/0028-grok-bot-desktop-reader.md).
+and Electron 42.1.0. Native metadata confirms the encrypted legacy store format
+and fixed Keychain label. Successful Keychain access and server acceptance of
+JSON with MeterUsage's own headers remain **UNVERIFIED**. No app machine identity
+or client impersonation is used. See [ADR 0028](adr/0028-grok-bot-desktop-reader.md)
+and its [correction](adr/0030-grok-bot-encrypted-compatibility.md).
 
 ### Saved Cursor connections
 
@@ -330,3 +333,10 @@ fallback also discovers executable Bun installs at `~/.bun/bin/opencode`.
 
 All provider heatmaps share a 26-column, seven-row layout. A 30-day feed keeps
 older days unavailable rather than showing invented zero-token readings.
+
+## API billing
+
+OpenRouter uses its existing key for balance and aggregate activity. Separate
+OpenAI API and Anthropic API billing cards read sanitized snapshots from the
+bundled one-run helper. Subscription connections do not authorize API billing.
+See [API billing setup](API_USAGE_BETA.md) for Admin-key scope and limitations.

@@ -153,15 +153,15 @@ candidate boundary; it does not change the published Swift release.
 Grok Bot Desktop offers the primary opt-in **Connect Grok Bot Desktop (Beta)**
 flow under [ADR 0028](adr/0028-grok-bot-desktop-reader.md). After consent, the main
 process opens only the fixed `Grok Bot/sand-secrets.json` store under Application
-Support and the helper's fixed `Grok Bot Safe Storage` / `Grok Bot` Keychain item.
+Support and the helper's fixed `Grok Bot Safe Storage` / `Grok Bot Key` Keychain item.
 Only explicit Connect permits Keychain UI; polling forbids it. The bounded JSON
 reader rejects symlinks, duplicate keys, unsupported versions and changed stores.
-It selects only the active account's scoped access token and optional team;
-refresh tokens and other accounts' credential values remain skipped. Plaintext
-and legacy unscoped credentials are rejected. Decrypted byte buffers are cleared
+It selects only the active account's encrypted access token and optional team;
+refresh tokens and other accounts' credential values remain skipped. Plaintext and unsupported encryption are rejected. Canonical encrypted v10
+legacy values use the same full JWT-subject hash binding as scoped values. Decrypted byte buffers are cleared
 when projected; in-memory strings remain subject to garbage collection.
 
-The full JWT subject hash must match the active account and envelope scopes,
+The full JWT subject hash must match the active account and any present envelope scope,
 and expiry must exceed sixty seconds. The optional team must be a safe
 nonnegative integer. Both account and team bind the stored opaque fingerprint.
 Connect JSON POST `{}` goes only to
@@ -173,8 +173,8 @@ and thirty seconds. Account, team and store stability are checked after every
 attempt while consent remains valid. Cancellation prevents further private reads.
 Only projected quota and a reported reset reach the renderer/archive. Pooled
 enterprise allowance and contradictory limit flags stay unavailable; trial expiry
-is never treated as a reset. Native store/Keychain compatibility and server
-acceptance of the own-client request remain unverified. MeterUsage does not
+is never treated as a reset. Native metadata confirms the encrypted legacy store format and fixed Keychain
+label. Successful access and server acceptance remain unverified. MeterUsage does not
 initiate an xAI OAuth flow or modify Bot's account state.
 
 Previously saved Grok Bot connections via Cursor retain the legacy reader under
@@ -209,6 +209,26 @@ Disconnect and connect again to switch to Bot Desktop. No local CLI
 history is attached. Trial expiry is not a replenishment timestamp. Universal
 Grok Desktop, X and shared-pool coverage is unverified, as are native/live
 compatibility and packaged acceptance. See [setup](DESKTOP-CONNECTIONS.md).
+
+## Optional API billing snapshots
+
+OpenAI API and Anthropic API billing use separate normalized snapshots under
+`Library/Application Support/MeterUsage/api-usage`. The optional bundled helper
+reads the selected organization Admin key from its environment for one fetch,
+removes that key from its own environment and calls only the documented
+OpenAI `/v1/organization/costs` or Anthropic `/v1/organizations/cost_report`
+HTTPS endpoint. It rejects redirects, caps response size and pagination, and
+never starts inference. The app does not read, receive or store these keys.
+
+The helper writes only schema/provider, capture/period timestamps, currency and
+daily USD totals. Identifiers, headers and raw responses/errors are discarded.
+Files and their final directory are owner-only; replacement is atomic and a
+failed request preserves the previous file. The app validates the fixed files
+and publishes only projected fields. Demo and isolated provider tests never
+read live API billing files. Polling rereads snapshots and never fetches billing.
+Reports older than 24 hours or from a prior UTC month are marked stale.
+Anthropic Priority Tier costs are excluded. See [setup](API_USAGE_BETA.md) and
+[ADR 0029](adr/0029-api-billing-snapshots.md).
 
 ## Selective parsing and display boundary
 

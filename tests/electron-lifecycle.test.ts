@@ -1,3 +1,4 @@
+import { grokBotConnectionErrors } from "../src/main/providers/grok-bot-desktop";
 import { it, expect, vi } from "vite-plus/test";
 import { EventEmitter } from "node:events";
 import { mkdtempSync, rmSync, mkdirSync, symlinkSync, readlinkSync, realpathSync } from "node:fs";
@@ -264,6 +265,12 @@ it.each([
       }
       connect.mockImplementationOnce(async () => { throw new Error("Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect."); });
       expect(await invoke(settings, { action: "connect", provider: "grok" })).toEqual({ ok: false, error: "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect." });
+      for (const message of Object.values(grokBotConnectionErrors)) {
+        connect.mockImplementationOnce(async () => { throw new Error(message); });
+        expect(await invoke(settings, { action: "connect", provider: "grok" })).toEqual({ ok: false, error: message });
+      }
+      connect.mockImplementationOnce(async () => { throw new Error("PRIVATE_PROVIDER_ERROR private-secret-value"); });
+      expect(await invoke(settings, { action: "connect", provider: "grok" })).toEqual({ ok: false, error: "Could not complete action" });
       useLocal.mockImplementationOnce(async () => { values.desktopGrokIdentity = ""; connectionChanged(); });
       values.desktopGrokIdentity = "a".repeat(64); connectionChanged();
       expect(forgetQuota).toHaveBeenCalledWith("grok");

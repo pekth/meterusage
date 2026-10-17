@@ -1,141 +1,86 @@
-# API usage tracking beta
+# API billing snapshots
 
-> **Status: Research proposal; not implemented.** meterusage does not currently fetch OpenAI API or Anthropic API organization usage or cost data.
+Current Electron source adds separate OpenAI API and Anthropic API billing cards.
+The published beta1 does not contain them. OpenRouter keeps its existing account
+balance, key limits and aggregate activity integration.
 
-This proposal adds provider-reported API spend to meterusage without mixing it with Codex or Claude subscription usage. It is a documentation-only research record. `README.md` and `docs/PRIVACY.md` stay unchanged until an implementation is approved and verified.
+## What the cards report
 
-## Supported provider findings
+OpenAI API and Anthropic API show provider-reported USD cost buckets for the
+current UTC month through the helper request time. They are separate from Codex
+and Claude subscriptions and from locally estimated token costs. Empty reports
+remain unavailable; a provider-reported zero is displayed as zero. These cards
+do not invent token counts, budgets or quota percentages.
 
-### OpenAI API
+The card shows the report period and exact snapshot time. A snapshot becomes
+stale after 24 hours or a UTC-month change. A prior month's snapshot retains
+its own period. Refresh rereads the file; it does not fetch billing or make an
+old snapshot fresh. Anthropic's cost report excludes Priority Tier costs. Neither
+provider's report replaces its dashboard or invoice.
 
-OpenAI documents organization-level usage endpoints and an organization costs endpoint. The costs response supports time buckets and grouping fields. Access requires an organization Admin API key, which has broader authority than a project API key.
+## Set up the helper
 
-Official sources:
+The optional helper needs an existing organization Admin API key. A normal
+project API key and a ChatGPT or Claude subscription sign-in do not grant this
+access. Keep these high-authority keys out of MeterUsage and chat.
 
-- [Usage API reference](https://platform.openai.com/docs/api-reference/usage)
-- [Costs endpoint reference](https://platform.openai.com/docs/api-reference/usage/costs)
-- [Administration overview](https://platform.openai.com/docs/api-reference/administration)
+Use a trusted secret manager or an existing process environment to make only
+`OPENAI_ADMIN_KEY` or `ANTHROPIC_ADMIN_KEY` available to the short-lived helper.
+Do not put a key in command arguments, shell history, a profile or a repository.
+The helper removes its selected key from its own environment before fetching.
+It cannot remove a key from the parent shell.
 
-### Anthropic API
+In a build containing this feature, the helper is bundled with the installed app.
+Run one provider per invocation:
 
-Anthropic documents organization usage and cost reports through the Admin API. The reports support time buckets and grouping by fields such as workspace and model. Access requires an organization Admin API key. Anthropic states that Priority Tier costs are not included in the cost report.
-
-Official sources:
-
-- [Usage and cost API](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
-
-### Other providers
-
-Other providers remain research candidates. They should enter this beta only when they expose a documented aggregate usage or billing API with a clear authentication contract. Per-request token fields and local price calculations are not substitutes for a provider-reported billing total.
-
-## Proposed beta boundary
-
-The first beta would support only OpenAI API and Anthropic API organization spend. It would be disabled by default and would not change the menu-bar label.
-
-The beta would report:
-
-- current UTC-month spend from the provider's cost report
-- daily spend for the last seven days
-- request and token totals when the provider reports them
-- the last successful snapshot time
-- loading, stale, unavailable, and authentication-error states
-
-Provider cost reports would remain distinct from meterusage's locally estimated token costs. The interface must label provider-reported amounts as billing data and local calculations as estimates.
-
-## Proposed snapshot-helper flow
-
-```mermaid
-flowchart LR
-    A[User starts local helper] --> B[Helper reads admin key from its process environment]
-    B --> C[Official provider usage and cost API]
-    C --> D[Drop project, workspace, key, and account identifiers]
-    D --> E[Write owner-readable normalized snapshot]
-    E --> F[meterusage reads snapshot]
-    F --> G[OpenAI API or Anthropic API spend card]
+```sh
+ELECTRON_RUN_AS_NODE=1 /Applications/MeterUsage.app/Contents/MacOS/meterusage \
+  /Applications/MeterUsage.app/Contents/Resources/api-usage-helper.cjs openai
+ELECTRON_RUN_AS_NODE=1 /Applications/MeterUsage.app/Contents/MacOS/meterusage \
+  /Applications/MeterUsage.app/Contents/Resources/api-usage-helper.cjs anthropic
 ```
 
-The recommended beta uses a separate, short-lived local helper. The helper reads an existing Admin API key from its process environment, calls the official API, removes identifiers, and writes a normalized snapshot with owner-only file permissions. meterusage reads the snapshot and does not receive or persist the key.
+These commands contain no key. Run only the command for which you have supplied
+the corresponding helper environment. Source contributors can instead run
+`node dist/api-helper/api-usage-helper.cjs openai` or `anthropic` after building.
 
-The snapshot should contain only the fields needed for display and freshness checks:
+The helper makes bounded HTTPS GET requests to the provider's documented cost
+report, follows pagination, drops identifiers and writes one owner-readable
+snapshot under `~/Library/Application Support/MeterUsage/api-usage/`:
 
-- provider identity
-- bucket start and end timestamps
-- currency and amount
-- aggregate request, input-token, output-token, and cache-token counts when available
-- snapshot creation time
-- schema version
+- `openai.json` for OpenAI API
+- `anthropic.json` for Anthropic API
 
-The helper must not write a key, authorization header, raw provider response, organization identifier, project identifier, workspace identifier, user identifier, or API-key identifier to disk or logs.
+Snapshots and their final directory use owner-only permissions. The reader
+rejects unsafe paths, permissions, duplicate/malformed fields and unsupported
+currency. Successful writes replace the file atomically. A failed collection
+preserves the previous snapshot. The helper prints only a fixed success or
+error category, including authentication failure. It has no scheduler or
+background key storage. Rerun it when you need a new report, then refresh
+MeterUsage. Remove the provider's snapshot to stop displaying that billing card.
 
-This proposal does not define a command for supplying credentials. Any later setup documentation must preserve the current rule against asking users to paste keys into meterusage.
+## Data and credential boundary
 
-## Separate product identities
+Only the helper receives the environment key. MeterUsage reads only normalized
+numeric snapshots. A snapshot contains schema/provider, capture and period
+timestamps, USD currency, and daily start/end/amount values. It excludes raw
+responses and organization, project, workspace, user and key identifiers.
+Keys, authorization headers and provider error bodies are never written to
+snapshots, diagnostics or the renderer.
 
-API billing must use identities that are separate from the existing Codex and Claude providers. Suggested display names are `OpenAI API` and `Anthropic API`.
+Requests refuse redirects, share a 30-second deadline, bound each response to
+1 MiB and stop after bounded or repeated pagination. OpenAI dollar amounts are
+used as reported. Anthropic decimal cents are converted to USD. Non-USD amounts
+stay unavailable; there is no currency conversion.
 
-This separation prevents an API cost snapshot from replacing or being presented as:
+## Official contracts and proof limits
 
-- Codex subscription quota
-- Claude subscription activity or optional quota windows
-- OpenRouter usage and account balance
-- locally estimated model costs
+- [OpenAI organization costs](https://platform.openai.com/docs/api-reference/usage/costs)
+  uses an organization Admin API key. The implementation follows the official
+  OpenAI OpenAPI definition for `/organization/costs`.
+- [Anthropic usage and cost API](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
+  requires Admin API access and documents the Priority Tier exclusion.
 
-The storage key, settings toggle, refresh status, diagnostics entry, and card must use the API-specific identity throughout the data path.
-
-## Security and privacy constraints
-
-Organization Admin API keys can expose organization-wide usage and cost data. The beta must treat them as high-authority credentials.
-
-- meterusage must not provide a key-entry field.
-- meterusage must not read, display, log, cache, or persist an Admin API key.
-- The helper must keep the key in memory only for one fetch run.
-- The helper must use documented HTTPS endpoints and reject non-success responses without writing their raw bodies to logs.
-- Snapshots must exclude account, organization, project, workspace, user, and key identifiers.
-- Snapshots must use owner-only file permissions and an atomic replacement write.
-- Diagnostics must report provider, freshness, and error category without including request or response bodies.
-- Fixtures and tests must use synthetic values.
-- A future implementation requires security and privacy review before release.
-
-The existing OpenRouter path proves that meterusage can show authenticated aggregate usage while retaining only display-safe fields. It does not remove the need for a separate review because OpenAI and Anthropic require organization-level admin credentials for these reports.
-
-## UX concept
-
-Each API provider would have an optional card in the popover and a separate Settings toggle. The card would lead with current-month spend, followed by a seven-day daily trend and secondary usage totals. It would always show the snapshot timestamp.
-
-State labels should be explicit:
-
-- `Not configured` when no snapshot exists
-- `Updated <time>` for a fresh snapshot
-- `Stale` when the snapshot exceeds the approved freshness threshold
-- `Authentication failed` when the helper records that category
-- `Unavailable` for provider, network, or malformed-snapshot failures
-
-The beta should not show an API spend percentage unless the user can configure a budget in a later, separately approved feature.
-
-## Deferred scope
-
-This proposal does not include:
-
-- direct credential storage in macOS Keychain
-- a key-entry, login, or account-connection screen
-- background scheduling or a launch agent
-- budgets, alerts, forecasting, or invoice reconciliation
-- project, workspace, model, user, or API-key breakdowns
-- combined spend across providers or currency conversion
-- providers without a documented aggregate cost endpoint
-- changes to the menu-bar indicator
-
-## Acceptance questions
-
-Implementation should not start until these questions are answered:
-
-1. Is a separate short-lived snapshot helper acceptable for the beta, or must collection run inside meterusage?
-2. Where should snapshots live, and what freshness threshold should mark them stale?
-3. Should the beta display provider-reported cost only, or also aggregate request and token counts?
-4. Should OpenAI API and Anthropic API ship together, or should one provider validate the snapshot contract first?
-5. What evidence is required to confirm that identifiers and raw responses never reach disk, diagnostics, or the UI?
-6. What release label and opt-in wording make the beta status clear?
-
-## Documentation gate
-
-Before implementation ships, update `README.md` and `docs/PRIVACY.md` with the verified behavior, data flow, outbound requests, retained fields, credential boundary, failure states, and test evidence. Until then, those documents must continue to describe only the features that exist.
+Synthetic fixtures verify projection, units, pagination, privacy, freshness and
+failure behavior. Real organization billing access and invoice reconciliation
+remain unverified. No real Admin key is required for source tests.

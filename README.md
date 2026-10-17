@@ -39,7 +39,10 @@ reordering and readable token totals. Account coverage depends on the source.
 Build 54 keeps Grok Beta CLI-only; Antigravity desktop login is follow-up work.
 Current source additionally offers opt-in [Grok Bot Desktop Beta](docs/DESKTOP-CONNECTIONS.md#grok-bot-desktop-beta).
 Sign in through Grok Bot Desktop first, then approve read-only access.
-Native/live support, X and shared-pool coverage remain unverified.
+Native/live allowance, X and shared-pool coverage remain unverified.
+Current source also adds separate [OpenAI API and Anthropic API billing snapshots](docs/API_USAGE_BETA.md)
+through a bundled environment-only helper. OpenRouter keeps its existing
+account balance and aggregate activity integration.
 Build 54's Settings footer incorrectly says `0.2.41`; the packaged version is
 `0.3.0-beta.1`. See [known beta limits](docs/BETA.md#known-limits).
 
@@ -75,8 +78,9 @@ CLI/local collection. The [Electron source choices](docs/electron/README.md#sour
 also describe optional Codex browser sign-in and Claude Desktop allowance.
 
 Local activity covers this Mac. Provider-reported account data has its own
-coverage limits. Missing tokens remain unknown; costs are estimates and provider
-dashboards remain the billing source of record. Read the [privacy contract](docs/PRIVACY.md)
+coverage limits. Missing tokens remain unknown. Local token costs are estimates; optional API
+billing cards label provider-reported amounts separately. Provider dashboards
+remain the billing source of record. Read the [privacy contract](docs/PRIVACY.md)
 before changing a data source or sharing screenshots.
 
 ## Can both editions coexist?
