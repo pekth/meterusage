@@ -68,7 +68,7 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   test profiles cannot switch to local collection. See
   [ADR 0023](adr/0023-onboarding-source-choice.md).
 
-- Candidate Settings uses category navigation for Connections, Appearance,
+- Candidate Settings uses category navigation for Connections, API connections, Appearance,
   General, Providers, Side notch, Usage details and Diagnostics. Connection
   summaries show the current source, collection state and reading availability;
   Configure reveals the existing setup actions. Category changes preserve pending
@@ -280,11 +280,21 @@ Reviewed Swift base: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. Source checks d
 - Activity heatmaps use one 26-column, seven-row layout. Thirty-day telemetry
   leaves older dates unavailable. Local-day and OpenRouter UTC scope are retained.
 
+Completed-onboarding launches preload the usage window hidden before connection
+recovery and provider collection. The first tray click reuses that renderer;
+fresh provider data still depends on its source. Incomplete onboarding continues
+to open Settings. No window is shown or focused by preload.
+
 ## API billing and Grok compatibility follow-up
 
 - OpenAI API and Anthropic API are independent billing snapshots, not quota
-  provider slots. A bundled one-run helper uses environment-only Admin keys,
-  fixed cost endpoints and projected owner-only USD files. Cards retain the
+  provider slots. Settings → API connections accepts a one-time masked Admin
+  key and fetches billing without Terminal. The field clears on submit or
+  leaving the page; pasted keys are never saved. **Use saved key** reads only the
+  selected provider's legacy `com.meterusage.api-keys` Keychain entry without
+  changing it or returning the key to the renderer. It runs only on request. A bundled environment-only helper
+  remains available. Both paths use fixed cost endpoints and projected
+  owner-only USD files. Cards retain the
   reported UTC period, exact capture time and explicit stale state. Empty
   reports do not become zero usage. Real organization billing remains unverified.
   See [API billing](API_USAGE_BETA.md) and [ADR 0029](adr/0029-api-billing-snapshots.md).
@@ -300,6 +310,8 @@ Reviewed Swift base: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. Source checks d
   Missing/stale reads, reconnects, source changes and resets clear measurement.
   Archives retain quota but discard these observation baselines. No token or
   dollar rate is derived. See [ADR 0031](adr/0031-grok-quota-burn.md).
-- API setup includes key-free macOS zsh commands that read the organization
-  Admin key at a hidden prompt inside a short-lived subshell. The app still
-  receives only normalized billing snapshots. Real billing remains unverified.
+- API setup has its own Settings category, separate from account connections
+  and onboarding. Fetch billing updates the snapshot automatically; ordinary
+  Refresh only rereads it. The advanced helper retains key-free macOS zsh
+  commands and a hidden prompt. See [ADR 0032](adr/0032-one-time-api-setup.md).
+  Real organization billing remains unverified.

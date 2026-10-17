@@ -42,3 +42,5 @@ compatibility and acceptance requirements remain in force. The
 | [0030](0030-grok-bot-encrypted-compatibility.md) | Accept account-bound encrypted Bot legacy values and use the observed fixed Keychain account. | Bounded source correction; live allowance acceptance pending |
 
 | [0031](0031-grok-quota-burn.md) | Measure Grok Bot quota burn from recent same-account percentages without inventing token counts or cycle duration. | Source implementation; native and live rate acceptance separate |
+
+| [0032](0032-one-time-api-setup.md) | Separate API setup from account connections and accept a one-time Admin key for explicit billing fetches, without saving credentials. | Source implementation; real billing acceptance pending |

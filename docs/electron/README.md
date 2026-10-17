@@ -55,13 +55,15 @@ Desktop connection. These changes are separate from the published build 54.
   checks executable `~/.bun/bin/opencode` installs as well as the existing paths.
 - OpenRouter uses existing keys for account quota/credit and aggregate activity.
 - Separate OpenAI API and Anthropic API cards read owner-only billing snapshots
-  from the bundled one-run helper. Admin keys stay in its environment; the app
-  has no key field or billing credential store. See [API billing](../API_USAGE_BETA.md).
+  from **Settings → API connections → Fetch billing** or the bundled one-run
+  helper. Settings can reuse the previous app's saved Keychain Admin key or
+  accept a masked, one-time key. Neither path saves new credentials. See [API billing](../API_USAGE_BETA.md).
   That activity is provider account scope, not a local chat count.
 - Cursor, Copilot CLI and Gemini CLI use optional existing local quota snapshots.
   Presence alone does not provide cloud quota or a token ledger.
 
-Do not paste credentials into MeterUsage or documentation. The full input and
+Enter an API Admin key only in its dedicated Settings field or the advanced
+helper prompt. Never paste credentials into diagnostic reports or documentation. The full input and
 request list is in [privacy](../PRIVACY.md#provider-inputs-and-requests).
 
 ### Advanced local accounts

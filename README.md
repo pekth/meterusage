@@ -41,7 +41,9 @@ Current source additionally offers opt-in [Grok Bot Desktop Beta](docs/DESKTOP-C
 Sign in through Grok Bot Desktop first, then approve read-only access.
 Native/live allowance, X and shared-pool coverage remain unverified.
 Current source also adds separate [OpenAI API and Anthropic API billing snapshots](docs/API_USAGE_BETA.md)
-through a bundled environment-only helper. OpenRouter keeps its existing
+through Settings → API connections with a saved legacy Admin key, a one-time
+Admin key, or the bundled environment-only helper. Existing Keychain entries
+are preserved; pasted keys are not saved. OpenRouter keeps its existing
 account balance and aggregate activity integration.
 Build 54's Settings footer incorrectly says `0.2.41`; the packaged version is
 `0.3.0-beta.1`. See [known beta limits](docs/BETA.md#known-limits).

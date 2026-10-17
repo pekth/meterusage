@@ -728,14 +728,15 @@ it("keeps every Settings category mounted and selects categories without dispatc
   const nav = settings.props.children[1].props.children[0];
   expect(nav.props["aria-label"]).toBe("Settings categories");
   const buttons = nav.props.children;
-  expect(buttons.map((button: { props: { children: string } }) => button.props.children)).toEqual(["Connections", "Appearance", "General", "Providers", "Side notch", "Usage details", "Diagnostics"]);
+  expect(buttons.map((button: { props: { children: string } }) => button.props.children)).toEqual(["Connections", "API connections", "Appearance", "General", "Providers", "Side notch", "Usage details", "Diagnostics"]);
   buttons[1].props.onClick();
-  expect(select).toHaveBeenCalledWith("Appearance"); expect(action).not.toHaveBeenCalled();
-  for (const category of ["Connections", "Appearance", "Providers"]) {
+  expect(select).toHaveBeenCalledWith("API connections"); expect(action).not.toHaveBeenCalled();
+  for (const category of ["Connections", "API connections", "Appearance", "Providers"]) {
     vi.mocked(useState).mockReturnValueOnce([category, select]);
     const markup = renderToStaticMarkup(createElement(Settings, { state: view, action, saveOrder: async () => true }));
     expect(markup).toContain(`aria-current="page">${category}</button>`);
-    expect((markup.match(/<section(?: class="providers")? hidden="">/g) ?? []).length).toBe(6);
+    expect((markup.match(/<section(?: class="providers")? hidden="">/g) ?? []).length).toBe(7);
+    expect(markup.includes('type="password"')).toBe(category === "API connections");
     for (const control of ["Codex connection method", "Collect Codex usage", "Add Claude account…", "Usage-panel size", "Clear local scan cache"]) expect(markup).toContain(control);
     const masks = [...markup.matchAll(/<mask id="([^"]+)"/g)].map(match => match[1]);
     expect(masks.length).toBeGreaterThan(1); expect(new Set(masks).size).toBe(masks.length);

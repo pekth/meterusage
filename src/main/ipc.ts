@@ -23,6 +23,8 @@ export function parseRequest(raw: unknown): Request {
       break;
     case "providerOrder": fields = ["order"]; valid = validProviderOrder(r.order); break;
     case "accountAdd": fields = ["provider"]; valid = r.provider === "codex" || r.provider === "claude"; break;
+    case "apiBillingFetch": fields = ["provider", "adminKey"]; valid = Object.keys(r).length === 3 && (r.provider === "openai" || r.provider === "anthropic") && typeof r.adminKey === "string" && r.adminKey.length >= 1 && r.adminKey.length <= 8192 && !/[\s\x00-\x1f\x7f]/.test(r.adminKey); break;
+    case "apiBillingFetchSaved": fields = ["provider"]; valid = r.provider === "openai" || r.provider === "anthropic"; break;
     case "connect": case "disconnect": case "connectionCancel": case "connectionLocal": fields = ["provider"]; valid = typeof r.provider === "string" && ["codex", "claude", "antigravity", "grok"].includes(r.provider); break;
     case "statusPage": fields = ["provider"]; valid = typeof r.provider === "string" && Object.hasOwn(statusPages, r.provider); break;
     case "accountUpdate": fields = ["id", ...("label" in r ? ["label"] : []), ...("enabled" in r ? ["enabled"] : [])]; valid = id(r.id) && fields.length > 1 && (!("label" in r) || string(r.label, 100)) && (!("enabled" in r) || typeof r.enabled === "boolean"); break;

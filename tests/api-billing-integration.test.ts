@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { Coordinator } from "../src/main/coordinator";
 import { Preferences } from "../src/main/preferences";
 import { launchConfiguration } from "../src/main/launch";
-import { ApiBillingCards, Connections, App } from "../src/renderer/app";
+import { ApiBillingCards, ApiBillingConnections, Connections, App } from "../src/renderer/app";
 import type { ViewState } from "../src/shared/ipc";
 import type { ApiBillingProvider, ApiBillingSnapshot } from "../src/domain/api-billing";
 import * as billing from "../src/main/providers/api-billing";
@@ -51,8 +51,8 @@ it("refresh projects billing independently and removes a value after a file beco
   expect(c.snapshot().apiBilling?.openai).toEqual({ status: "missing", code: "unavailable" });
   cards = renderToStaticMarkup(createElement(ApiBillingCards, { state: view() }));
   expect(cards).not.toContain("OpenAI API"); expect(cards).toContain("Anthropic API");
-  const settings = renderToStaticMarkup(createElement(Connections, { state: view(), action: async () => {} }));
-  expect(settings).toContain("Snapshot unavailable. Run the helper to replace it.");
+  const settings = renderToStaticMarkup(createElement(ApiBillingConnections, { state: view(), action: async () => {} }));
+  expect(settings).toContain("Billing snapshot unavailable. Fetch again to replace it.");
 });
 it.each(["demo", "codex", "claude"] as const)("does not discover snapshots in the %s profile", async mode => {
   const { c, home } = await setup(mode);
@@ -68,11 +68,14 @@ it("renders exact UTC snapshot age, old-month period and separate billing withou
   for (const text of ["OpenAI API", "Anthropic API", "API billing", "Provider-reported billing", "USD", "2026-09-01 to 2026-09-30 UTC", "2026-09-30T23:45:12.000Z", "2026-10-16T12:34:56.000Z", "Stale snapshot", "Priority Tier excluded."]) expect(markup).toContain(text);
   for (const text of ["tokens", "quota", "%", "current month", "Codex", "Claude Desktop"]) expect(markup).not.toContain(text);
 });
-it("always explains both API setup paths and missing status with no credential fields", async () => {
+it("separates API setup from app connections and explains one-time Admin keys", async () => {
   const { view } = await setup();
-  const markup = renderToStaticMarkup(createElement(Connections, { state: view(), action: async () => {} }));
-  for (const text of ["OpenAI API", "Anthropic API", "organization Admin key in its environment", "no credentials are entered or stored in the app", "Not configured. Run the helper, then refresh."]) expect(markup).toContain(text);
-  expect(markup).not.toContain('type="password"');
+  const markup = renderToStaticMarkup(createElement(ApiBillingConnections, { state: view(), action: async () => {} }));
+  for (const text of ["OpenAI API", "Anthropic API", "Admin key", "never saved", "No billing snapshot yet.", "Fetch billing"]) expect(markup).toContain(text);
+  expect(markup.match(/type="password"/g)).toHaveLength(2);
+  const connections = renderToStaticMarkup(createElement(Connections, { state: view(), action: async () => {} }));
+  for (const text of ["OpenAI API", "Anthropic API", 'type="password"', "API connections", "Fetch billing"]) expect(connections).not.toContain(text);
+  expect(connections).toContain("Choose how to connect");
 });
 
 it("places billing on the flyout only and preserves tray, notch and share surfaces", async () => {
@@ -99,6 +102,6 @@ it("distinguishes no reported cost buckets from an explicit zero-cost bucket", a
   c.apiBilling.openai = { status: "value", stale: false, value: zero };
   const explicitZero = renderToStaticMarkup(createElement(ApiBillingCards, { state: view() }));
   expect(explicitZero).toContain("$0.00"); expect(explicitZero).not.toContain("No cost buckets reported");
-  const settings = renderToStaticMarkup(createElement(Connections, { state: view(), action: async () => {} }));
+  const settings = renderToStaticMarkup(createElement(ApiBillingConnections, { state: view(), action: async () => {} }));
   expect(settings).not.toContain("docs/API_USAGE_BETA.md");
 });

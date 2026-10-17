@@ -198,11 +198,11 @@ export function ApiBillingCards({ state }: { state: ViewState }) {
     return <section key={provider} className="provider-card" aria-label={`${apiBillingNames[provider]} billing`}><div className="row"><h2>{apiBillingNames[provider]} <small>API billing</small></h2><strong>{reading.value.daily.length ? money(reading.value.daily.reduce((sum, day) => sum + day.amountUSD, 0)) : "No cost buckets reported"}</strong></div><ApiBillingDetails reading={reading} />{provider === "anthropic" && <p className="secondary">Priority Tier excluded.</p>}</section>;
   })}</>;
 }
-function ApiBillingConnections({ state }: { state: ViewState }) {
-  return <section aria-label="API billing setup"><h2>API billing <small>Beta</small></h2><p className="secondary section-description">Run the bundled API snapshot helper with an organization Admin key in its environment. MeterUsage reads the snapshot; no credentials are entered or stored in the app.</p><ApiBillingSetup /><div className="settings-group">{apiBillingProviders.map(provider => {
+export function ApiBillingConnections({ state, action }: { state: ViewState; action: (r: Request) => Promise<void> }) {
+  return <section className="connections" aria-label="API connections"><h2>API connections <small>Beta</small></h2><p className="secondary section-description">View organization API spend. Use an Admin key, not a project key or ChatGPT or Claude subscription sign-in.</p><p className="secondary section-description">Use a saved key from the previous MeterUsage, or paste a one-time key. Pasted keys are cleared on submit and never saved.</p>{state.snapshot.demo && <p className="secondary connection-demo">API access is disabled in this profile.</p>}<div className="settings-group">{apiBillingProviders.map(provider => {
     const reading = state.snapshot.apiBilling?.[provider];
-    return <div className="provider-setting connection-row" key={provider}><strong>{apiBillingNames[provider]}</strong>{reading?.status === "value" ? <ApiBillingDetails reading={reading} /> : <p className="secondary">{state.snapshot.demo ? "Snapshot access disabled in this profile." : reading?.code === "unavailable" ? "Snapshot unavailable. Run the helper to replace it." : "Not configured. Run the helper, then refresh."}</p>}{provider === "anthropic" && <p className="secondary">Priority Tier excluded.</p>}</div>;
-  })}</div></section>;
+    return <div className="provider-setting connection-row" key={provider}><strong>{apiBillingNames[provider]}</strong>{reading?.status === "value" ? <ApiBillingDetails reading={reading} /> : <p className="secondary">{reading?.code === "unavailable" ? "Billing snapshot unavailable. Fetch again to replace it." : "No billing snapshot yet."}</p>}<ApiBillingSetup provider={provider} disabled={state.snapshot.demo} action={action} />{provider === "anthropic" && <p className="secondary">Priority Tier costs are excluded.</p>}</div>;
+  })}</div><p className="secondary">Fetch billing updates the snapshot automatically. Refresh rereads saved snapshots. OpenRouter keeps its existing connection.</p></section>;
 }
 export function Connections({ state, action }: { state: ViewState; action: (r: Request) => Promise<void> }) {
   const connections: ConnectionState[] = state.connections ?? ["codex", "claude", "antigravity", "grok"].map(provider => ({ provider: provider as ConnectionState["provider"], source: provider === "grok" ? "cli" : "account", localAvailable: !state.snapshot.demo, status: "disconnected" }));
@@ -217,13 +217,12 @@ export function Connections({ state, action }: { state: ViewState; action: (r: R
         <p className="secondary" role="status">{state.settings.values.showProviderOpenCodeGo === true ? "Local collection enabled" : "Local collection off"} · Activity: {state.snapshot.usages.openCodeGo?.status === "value" ? "Available" : reason(state.snapshot.usages.openCodeGo)} · Allowance: {state.snapshot.quotas.openCodeGo?.status === "value" ? "Available" : reason(state.snapshot.quotas.openCodeGo)}</p>
       </div>]}
     </div>
-    <ApiBillingConnections state={state} />
     {!state.snapshot.appearance.onboarding && <div className="onboarding-finish"><p className="secondary">You can skip setup and change these choices in Settings later.</p><button onClick={() => void action({ action: "setPreference", key: "onboardingCompleted", value: true })}>Done</button></div>}
   </section>;
 }
 export function Settings({ state, action, saveOrder }: { state: ViewState; action: (r: Request) => Promise<void>; saveOrder: (order: Provider[]) => Promise<boolean> }) {
   const [category, setCategory] = useState("Connections");
-  const categories = ["Connections", "Appearance", "General", "Providers", "Side notch", "Usage details", "Diagnostics"];
+  const categories = ["Connections", "API connections", "Appearance", "General", "Providers", "Side notch", "Usage details", "Diagnostics"];
   const values = state.settings.values;
   const reportCoolingDown = (state.issueReport?.retryAt ?? 0) > state.snapshot.clock;
   const set = (key: string, value: string | boolean | number) => void action({ action: "setPreference", key, value });
@@ -235,6 +234,7 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
     {!state.snapshot.appearance.onboarding && <section className="provider-card onboarding"><h2>Your usage, at a glance</h2><p>Choose your existing CLI setup, browser sign-in or Desktop connection below. Each provider shows the methods it supports. Sign-in is optional.</p></section>}
     <Connections state={state} action={action} />
     </section>
+    <section hidden={category !== "API connections"}>{category === "API connections" && <ApiBillingConnections state={state} action={action} />}</section>
     <section hidden={category !== "Appearance"}><h2>Appearance</h2><div className="settings-group">
       <fieldset className="size-picker" aria-describedby="panel-size-help"><legend>Usage-panel size</legend>
         <div className="size-options">{Object.values(PanelSize).map(size => <label key={size}><input type="radio" name="panelSize" value={size} checked={String(values.panelSize ?? PanelSize.Medium) === size} onChange={() => set("panelSize", size)} /><span>{size[0].toUpperCase() + size.slice(1)}</span></label>)}</div>

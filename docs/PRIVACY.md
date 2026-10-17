@@ -4,8 +4,8 @@ MeterUsage reads quota and usage from existing local provider stores, provider
 CLIs and aggregate endpoints. It has no telemetry service, analytics or
 automatic crash-upload endpoint. Electron Diagnostics has an explicit optional
 **Send report** action described below. The Electron candidate adds opt-in account connections;
-Codex sign-in occurs in the provider browser page, not a MeterUsage password form. It does not ask for credentials or send
-prompts, code or tool payloads to a provider.
+Codex sign-in occurs in the provider browser page, not a MeterUsage password form. The optional API billing page accepts a one-time organization Admin key as
+described below. MeterUsage does not send prompts, code or tool payloads to a provider.
 
 The published Swift app retains the existing local/CLI boundaries. The
 TypeScript/Electron candidate adds the opt-in boundaries described below. The candidate has source/fixture checks, but native behavior and
@@ -217,18 +217,32 @@ OpenAI API and Anthropic API billing use separate normalized snapshots under
 reads the selected organization Admin key from its environment for one fetch,
 removes that key from its own environment and calls only the documented
 OpenAI `/v1/organization/costs` or Anthropic `/v1/organizations/cost_report`
-HTTPS endpoint. It rejects redirects, caps response size and pagination, and
-never starts inference. The app does not read, receive or store these keys.
+HTTPS endpoint. The Settings → API connections page also accepts a one-time
+Admin key in a masked field. An explicit Fetch billing action passes it through
+the registered Settings bridge to the main process, using the same collector.
+The field clears on submit; leaving the page clears unsubmitted input. Keys are
+not saved in preferences, Keychain, snapshots, diagnostics or renderer state
+publications. An explicit **Use saved key** action instead reads the selected
+provider's existing `com.meterusage.api-keys` generic-password item, account
+`openAI` or `anthropic`, through the fixed native helper. Only that action may
+request Keychain UI. The original item is not changed or deleted; the key stays
+in main-process/helper memory and never reaches the renderer. Missing, denied
+and ambiguous requests do not fall back to another credential. Startup and
+polling never read these Keychain items. Fixed errors exclude key values and provider response bodies.
+Only one request per provider may run; quit cancels pending fetches. Requests
+reject redirects, cap response size and pagination, and never start inference.
 
 The helper writes only schema/provider, capture/period timestamps, currency and
 daily USD totals. Identifiers, headers and raw responses/errors are discarded.
 Files and their final directory are owner-only; replacement is atomic and a
 failed request preserves the previous file. The app validates the fixed files
 and publishes only projected fields. Demo and isolated provider tests never
-read live API billing files. Polling rereads snapshots and never fetches billing.
+read live API billing files. Demo, candidate and isolated profiles cannot use
+the Settings fetch action. Polling rereads snapshots and never fetches billing.
 Reports older than 24 hours or from a prior UTC month are marked stale.
 Anthropic Priority Tier costs are excluded. See [setup](API_USAGE_BETA.md) and
-[ADR 0029](adr/0029-api-billing-snapshots.md).
+[ADR 0029](adr/0029-api-billing-snapshots.md) and
+[ADR 0032](adr/0032-one-time-api-setup.md).
 
 ## Selective parsing and display boundary
 

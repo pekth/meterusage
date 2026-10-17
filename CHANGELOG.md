@@ -11,9 +11,6 @@ follows [Semantic Versioning](https://semver.org/).
 - Show Grok Bot Desktop quota burn in percentage points per hour from recent
   same-account readings. Collect for at least a minute, discard old/reset
   observations and show an estimated run-out only when measured.
-- Add expandable API billing setup with provider Admin-key locations, hidden
-  Terminal prompts, helper commands and fixed result guidance.
-
 - Add separate OpenAI API and Anthropic API billing cards backed by projected
   owner-only snapshots. A bundled one-run helper uses existing environment-only
   organization Admin keys. Keep API billing distinct from subscription quota
@@ -27,6 +24,12 @@ follows [Semantic Versioning](https://semver.org/).
   pending; the published beta is unchanged.
 
 ### Changed
+
+- Move API setup to its own Settings sidebar page. OpenAI and Anthropic API
+  setup now accepts a one-time Admin key and fetches billing directly, with no
+  Terminal steps. Existing legacy Admin keys can be reused through a read-only
+  Keychain action; newly pasted keys are not saved. Account connections and
+  onboarding stay separate.
 
 - Connect new Grok Bot accounts through **Grok Bot Desktop (Beta)** after
   explicit consent. Read only the active account-bound encrypted access token and team
@@ -42,6 +45,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Preload the tray usage window hidden after completed onboarding, before
+  connection recovery or provider collection. The first click reuses the loaded
+  renderer instead of starting its initial load.
 - Read Grok Bot's account-bound encrypted legacy v10 access values and correct
   its fixed Keychain account to Grok Bot Key. Preserve scope, expiry, identity,
   cancellation and store checks; reject plaintext and unsupported encryption.

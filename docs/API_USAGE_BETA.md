@@ -7,7 +7,7 @@ balance, key limits and aggregate activity integration.
 ## What the cards report
 
 OpenAI API and Anthropic API show provider-reported USD cost buckets for the
-current UTC month through the helper request time. They are separate from Codex
+current UTC month through the request time. They are separate from Codex
 and Claude subscriptions and from locally estimated token costs. Empty reports
 remain unavailable; a provider-reported zero is displayed as zero. These cards
 do not invent token counts, budgets or quota percentages.
@@ -18,21 +18,44 @@ its own period. Refresh rereads the file; it does not fetch billing or make an
 old snapshot fresh. Anthropic's cost report excludes Priority Tier costs. Neither
 provider's report replaces its dashboard or invoice.
 
-## Set up the helper
+## Set up in Settings
 
-The optional helper needs an existing organization Admin API key. A normal
-project API key and a ChatGPT or Claude subscription sign-in do not grant this
-access. In OpenAI Platform, create an Admin key under Organization settings →
-Admin keys. In Anthropic Console, create an Admin key under Settings → Admin
-keys. Keep these high-authority keys out of MeterUsage and chat.
+1. Open **Settings → API connections**.
+2. If you saved an Admin key in the previous MeterUsage, click **Use saved key** for that provider. Approve macOS Keychain access if asked. This fetches billing without entering the key again.
+3. Otherwise, create an organization Admin key in **OpenAI Platform → Organization settings → Admin keys**, or **Anthropic Console → Settings → Admin keys**.
+4. Paste the key into the matching provider's masked field and click **Fetch billing**.
 
-In MeterUsage Settings, expand **Set up API billing snapshots**. Open Terminal
-on your Mac, paste the matching command below, then paste the Admin key at the
-hidden prompt and press Return. The commands use macOS zsh. The entered key is
-not a command, so it does not enter shell history. The subshell supplies only the
-selected environment variable to the helper and exits afterward. MeterUsage and
-the parent shell do not store the entered key. Never put a key in command text,
-a profile, a repository or chat.
+MeterUsage clears the field on submit and updates the billing snapshot after a
+successful request. Pasted keys are not saved. Use **Use saved key** again to
+refresh with an existing Keychain key; otherwise, enter a one-time key. Leaving the API page clears unsubmitted input. A normal project key or
+ChatGPT or Claude subscription sign-in cannot read organization billing.
+
+The key passes through the trusted Settings bridge to a one-time main-process
+request to that provider. A pasted key never enters preferences, Keychain, diagnostic
+reports or billing snapshots. There is no background billing fetch. Demo and
+isolated profiles cannot fetch billing. Keep keys out of chat and documentation.
+
+Authentication failure means the key is invalid or lacks organization access.
+Data unavailable means no supported report could be fetched. Check the provider
+billing dashboard; a failed fetch preserves the previous snapshot. Refresh
+rereads snapshots without contacting the billing API.
+
+Saved-key access reads only the previous app's fixed `com.meterusage.api-keys`
+Keychain service and `openAI` or `anthropic` account. The key stays in the main
+process and native helper; it is never returned to the UI or copied elsewhere.
+The original entry is not changed or deleted. Missing and denied entries show
+a fixed error, with no environment or other-account fallback. Keychain is read
+only after the explicit action, never at startup or during polling.
+
+## Advanced: use the helper
+
+The bundled environment-only helper remains available. Open Terminal on your
+Mac, paste the matching command below, then paste the Admin key at the hidden
+prompt and press Return. The commands use macOS zsh. The entered key is not a
+command, so it does not enter shell history. The subshell supplies only the
+selected environment variable to the helper and exits afterward. The parent
+shell and MeterUsage do not save the entered key. Never put a key in command
+text, a profile, a repository or chat.
 
 OpenAI API:
 
@@ -91,8 +114,9 @@ integration.
 
 ## Data and credential boundary
 
-Only the helper receives the environment key. MeterUsage reads only normalized
-numeric snapshots. A snapshot contains schema/provider, capture and period
+The Settings action receives a one-time key in memory; the advanced helper
+receives its key through the environment. Both use the same fixed-endpoint
+collector and write only normalized numeric snapshots. A snapshot contains schema/provider, capture and period
 timestamps, USD currency, and daily start/end/amount values. It excludes raw
 responses and organization, project, workspace, user and key identifiers.
 Keys, authorization headers and provider error bodies are never written to

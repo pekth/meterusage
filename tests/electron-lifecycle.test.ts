@@ -41,6 +41,8 @@ it.each([
   const windows: TestWindow[] = [];
   const ipc = vi.fn();
   const reportFetch = vi.fn<typeof fetch>(async (_url, init) => Response.json({ id: JSON.parse(String(init?.body)).id, identifier: "MU-123" }, { status: 201 }));
+  const savedCommand = vi.fn(async () => "synthetic-saved-admin");
+  vi.doMock("../src/main/providers/transport", async original => ({ ...await original<typeof import("../src/main/providers/transport")>(), runCommand: savedCommand }));
   vi.stubGlobal("fetch", reportFetch);
   const notify = vi.fn();
   const showErrorBox = vi.fn();
@@ -72,7 +74,9 @@ it.each([
       this.contents.emit("did-finish-load"); return Promise.resolve();
     };
   }
-  const start = vi.fn(async () => {});
+  let finishRecovery!: () => void;
+  const recovery = new Promise<void>(resolve => { finishRecovery = resolve; });
+  const recover = vi.fn(() => recovery), start = vi.fn(async () => {});
   const connect = vi.fn(async (_provider: string, _open: unknown, consent: () => Promise<boolean>) => { await consent(); return false; });
   const useLocal = vi.fn(async (_provider: string) => {}), disconnect = vi.fn(async (_provider: string) => {});
   const composition = vi.fn(() => []), refresh = vi.fn(async () => {}), forgetQuota = vi.fn();
@@ -93,7 +97,7 @@ it.each([
   vi.doMock("../src/main/composition", () => ({ compose: composition }));
   vi.doMock("../src/main/connections", () => ({ DesktopConnections: class {
     constructor(_launch: unknown, _prefs: unknown, _helper: unknown, changed: () => void) { connectionChanged = changed; }
-    state = []; configured = () => false; recover = async () => {}; stop = async () => {};
+    state = []; configured = () => false; recover = recover; stop = async () => {};
     connect = connect; useLocal = useLocal; disconnect = disconnect;
   } }));
   vi.doMock("../src/main/coordinator", () => ({ Coordinator: class {
@@ -114,6 +118,18 @@ it.each([
     application.emit("second-instance");
     expect(windows).toHaveLength(0);
     finishLoad();
+    await vi.waitFor(() => expect(recover).toHaveBeenCalledOnce());
+    expect(start).not.toHaveBeenCalled();
+    const preloaded = windows.find(w => w.surface === "flyout");
+    if (onboarding) {
+      expect(preloaded).toBeDefined();
+      expect(preloaded!.show).not.toHaveBeenCalled();
+      expect(preloaded!.focus).not.toHaveBeenCalled();
+      const reply = await ipc.mock.calls[0][1]({ sender: preloaded!.contents, senderFrame: preloaded!.contents.mainFrame }, { action: "state" });
+      expect(reply).toMatchObject({ ok: true, state: { snapshot: { quotas: { codex: { status: "value" } } } } });
+    } else expect(preloaded).toBeUndefined();
+    const coldNavigation = preloaded && vi.spyOn(preloaded, "loadURL");
+    finishRecovery();
     await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
     await vi.waitFor(() => expect(windows).toHaveLength(2));
     expect(windows[1].focus).toHaveBeenCalled();
@@ -128,6 +144,7 @@ it.each([
     }
     tray.emit("click");
     await vi.waitFor(() => expect(windows).toHaveLength(2));
+    if (coldNavigation) expect(coldNavigation).not.toHaveBeenCalled();
     if (!onboarding) {
       const setup = windows[1];
       expect(setup.surface).toBe("settings");
@@ -185,6 +202,47 @@ it.each([
     expect((await invoke(flyout, { action: "state" })).state).not.toHaveProperty("issueReport");
     await invoke(settings, { action: "sendReport" });
     expect(reportFetch).toHaveBeenCalledOnce();
+    const billingRequest = { action: "apiBillingFetch", provider: "openai", adminKey: "synthetic-settings-admin" };
+    const savedRequest = { action: "apiBillingFetchSaved", provider: "openai" };
+    for (const window of windows.filter(w => w.surface !== "settings")) {
+      expect((await invoke(window, savedRequest)).ok).toBe(false);
+    }
+    expect(savedCommand).not.toHaveBeenCalled();
+    const callsBeforeBilling = reportFetch.mock.calls.length;
+    expect(await invoke(flyout, billingRequest)).toEqual({ ok: false, error: "Open Settings to fetch API billing." });
+    expect(await invoke(windows[0], billingRequest)).toEqual({ ok: false, error: "Invalid request" });
+    expect(await ipc.mock.calls[0][1]({ sender: settings.contents, senderFrame: { ...settings.contents.mainFrame } }, billingRequest)).toEqual({ ok: false, error: "Untrusted renderer" });
+    const settingsURL = settings.contents.mainFrame.url;
+    settings.contents.mainFrame.url = settingsURL + "&unregistered=1";
+    expect(await invoke(settings, billingRequest)).toEqual({ ok: false, error: "Untrusted renderer" });
+    settings.contents.mainFrame.url = settingsURL;
+    expect(await ipc.mock.calls[0][1]({ sender: { id: -1, mainFrame: settings.contents.mainFrame }, senderFrame: settings.contents.mainFrame }, billingRequest)).toEqual({ ok: false, error: "Untrusted renderer" });
+    expect(await invoke(settings, { ...billingRequest, adminKey: "synthetic\x01admin" })).toEqual({ ok: false, error: "Invalid request" });
+    expect(reportFetch).toHaveBeenCalledTimes(callsBeforeBilling);
+    if (candidate) {
+      expect(await invoke(settings, savedRequest)).toEqual({ ok: false, error: "API billing fetch is unavailable in demo or isolated profiles." });
+      expect(savedCommand).not.toHaveBeenCalled();
+      expect(await invoke(settings, billingRequest)).toEqual({ ok: false, error: "API billing fetch is unavailable in demo or isolated profiles." });
+      expect(reportFetch).toHaveBeenCalledTimes(callsBeforeBilling);
+    } else {
+      reportFetch.mockResolvedValueOnce(Response.json({ has_more: false, data: [] }));
+      expect(await invoke(settings, savedRequest)).toEqual({ ok: true });
+      expect(savedCommand).toHaveBeenCalledExactlyOnceWith(join(root, "desktop-keychain"), ["--api-openai", "--allow-ui"], { signal: expect.any(AbortSignal), timeoutMs: 60000, maxBytes: 8192 });
+      expect(new Headers(reportFetch.mock.calls.at(-1)![1]?.headers).get("authorization")).toBe("Bearer synthetic-saved-admin");
+      for (const provider of ["openai", "anthropic"]) {
+        reportFetch.mockResolvedValueOnce(Response.json({ has_more: false, data: [] }));
+        const refreshes = refresh.mock.calls.length;
+        expect(await invoke(settings, { ...billingRequest, provider })).toEqual({ ok: true });
+        expect(refresh).toHaveBeenCalledTimes(refreshes + 1);
+      }
+      reportFetch.mockResolvedValueOnce(new Response(billingRequest.adminKey, { status: 401 }));
+      expect(await invoke(settings, billingRequest)).toEqual({ ok: false, error: "API billing authentication failed" });
+      reportFetch.mockRejectedValueOnce(new Error(billingRequest.adminKey));
+      expect(await invoke(settings, billingRequest)).toEqual({ ok: false, error: "API billing data unavailable" });
+    }
+    const billingState = await invoke(settings, { action: "state" });
+    expect(JSON.stringify([billingState, ...windows.flatMap(w => w.contents.send.mock.calls)])).not.toContain(billingRequest.adminKey);
+    expect(JSON.stringify([billingState, ...windows.flatMap(w => w.contents.send.mock.calls)])).not.toContain("synthetic-saved-admin");
     if (keyboard) {
       settings.bounds = { x: 160, y: 100, width: 740, height: 680 };
       const resizeSettings = (height: number) => invoke(settings, { action: "resize", height, width: 10000 });
@@ -458,8 +516,23 @@ it.each([
     expect(() => display.emit("display-metrics-changed")).not.toThrow();
     expect(() => display.emit("display-removed")).not.toThrow();
     expect(() => theme.emit("updated")).not.toThrow();
+    if (!candidate) {
+      let finishBilling!: (response: Response) => void;
+      reportFetch.mockImplementationOnce(() => new Promise(resolve => { finishBilling = resolve; }));
+      const refreshes = refresh.mock.calls.length;
+      const pendingBilling = invoke(settings, billingRequest);
+      expect(await invoke(settings, billingRequest)).toEqual({ ok: false, error: "API billing fetch is already in progress for this provider." });
+      const signal = reportFetch.mock.calls.at(-1)?.[1]?.signal;
+      application.emit("before-quit", { preventDefault: vi.fn() });
+      expect(signal?.aborted).toBe(true);
+      finishBilling(Response.json({ has_more: false, data: [] }));
+      expect(await pendingBilling).toEqual({ ok: false, error: "API billing data unavailable" });
+      expect(refresh).toHaveBeenCalledTimes(refreshes);
+      expect(await invoke(settings, billingRequest)).toEqual({ ok: false, error: "API billing data unavailable" });
+    }
   } finally {
     finishLoad();
+    finishRecovery();
     application.emit("before-quit", { preventDefault: vi.fn() });
     await Promise.resolve();
     vi.useRealTimers();

@@ -9,8 +9,10 @@ import { compose } from "./composition";
 import { DesktopConnections } from "./connections";
 import { desktopReadErrors } from "./providers/claude-desktop";
 import { grokBotConnectionErrors } from "./providers/grok-bot-desktop";
+import { runCommand } from "./providers/transport";
 import { Coordinator } from "./coordinator";
 import { IssueReports } from "./issue-reports";
+import { ApiBillingFetch, apiBillingFetchErrors } from "./api-billing-fetch";
 import { NotchFold } from "./notch-fold";
 import { Updater } from "./updater";
 import { runJSON } from "./cli";
@@ -65,6 +67,7 @@ async function start(launch: Launch) {
     if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
   }, sources);
   const issueReports = new IssueReports(() => coordinator.diagnostics(app.getVersion()), publish, prefs);
+  const apiBillingFetch = new ApiBillingFetch(launch, () => coordinator.refresh(), fetch, (provider, signal) => runCommand(desktopHelper, [`--api-${provider}`, "--allow-ui"], { signal, timeoutMs: 60000, maxBytes: 8192 }));
   // Do not restore a legacy archive under a newly connected account.
   for (const p of ["codex", "claude", "antigravity", "grok"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
   const notch = { expanded: false, cardOnRight: false, selected: "codex", dragging: false };
@@ -222,6 +225,10 @@ async function start(launch: Launch) {
     switch (r.action) {
       case "state": return { ok: true, state: state(surface) };
       case "refresh": await coordinator.refresh(); break;
+      case "apiBillingFetch":
+      case "apiBillingFetchSaved":
+        if (surface !== "settings") throw new Error(apiBillingFetchErrors.settings);
+        await apiBillingFetch.run(r.provider, r.action === "apiBillingFetch" ? r.adminKey : undefined); break;
       case "settings": showSettings(); break;
       case "statusPage":
         if (surface !== "flyout") throw new Error("Invalid request");
@@ -369,7 +376,7 @@ async function start(launch: Launch) {
     const source = BrowserWindow.fromWebContents(event.sender), surface = [...windows].find(([, w]) => w === source)?.[0];
     if (!source || !surface) return { ok: false, error: "Unknown window" };
     try { return await handle(parseRequest(raw), source, surface); }
-    catch (e) { return { ok: false, error: e instanceof Error && ["Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.", ...Object.values(desktopReadErrors), ...Object.values(grokBotConnectionErrors), "Could not read Claude account allowance. Try connecting again later.", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.", "Could not save the Claude Desktop connection preferences. Try connecting again.", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Could not disconnect Claude Desktop", "Open one Antigravity Desktop account and sign in, then try connecting again", "Could not disconnect Antigravity Desktop", "Could not select Grok CLI", "Could not disconnect Grok Bot Desktop", "Connections are disabled in demo mode", "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect."].includes(e.message) ? e.message : "Could not complete action" }; }
+    catch (e) { return { ok: false, error: e instanceof Error && [...Object.values(apiBillingFetchErrors), "Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.", ...Object.values(desktopReadErrors), ...Object.values(grokBotConnectionErrors), "Could not read Claude account allowance. Try connecting again later.", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.", "Could not save the Claude Desktop connection preferences. Try connecting again.", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Could not disconnect Claude Desktop", "Open one Antigravity Desktop account and sign in, then try connecting again", "Could not disconnect Antigravity Desktop", "Could not select Grok CLI", "Could not disconnect Grok Bot Desktop", "Connections are disabled in demo mode", "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect."].includes(e.message) ? e.message : "Could not complete action" }; }
   });
   const unsubscribe = coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
   screen.on("display-metrics-changed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); }); screen.on("display-removed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); });
@@ -383,6 +390,7 @@ async function start(launch: Launch) {
     event.preventDefault();
     if (quitting) return;
     quitting = true;
+    apiBillingFetch.stop();
     unsubscribe();
     coordinator.stop(); updater.reset(); stopHoverCheck(); clearInterval(clockTimer); if (drag) { clearInterval(drag.timer); clearTimeout(drag.timeout); } folding.cancel();
     void connections.stop().finally(() => {
@@ -392,6 +400,7 @@ async function start(launch: Launch) {
   });
   nativeTheme.themeSource = prefs.values.appearanceTheme as "system" | "dark" | "light";
   create("tray"); restoreAnchor();
+  if (prefs.values.onboardingCompleted === true) create("flyout");
   // Recovery failures remain visible in connection state, with collection disabled.
   await connections.recover().catch(() => {});
   if (quitting) return;
