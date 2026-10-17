@@ -8,6 +8,7 @@ import { openRouterUsage } from "../src/main/providers/usage";
 import { telemetry } from "../src/domain/telemetry";
 import { trayTooltip } from "../src/domain/overview";
 import { readFileSync } from "node:fs";
+import { observeQuota } from "../src/domain/pacing";
 
 vi.mock("react", async importOriginal => {
   const actual = await importOriginal<typeof import("react")>();
@@ -116,7 +117,7 @@ it("offers simple account setup and truthful Grok availability without directori
   const markup = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
   expect(markup).toContain('aria-label="Disconnect Claude"');
   expect(markup).toContain("Sign in to Codex"); expect(markup).toContain("Disconnect"); expect(markup).toContain("Account allowance");
-  expect(markup).toContain("Grok website and mobile usage are not supported"); expect(markup).not.toMatch(/directory|terminal|API key/);
+  expect(markup).toContain("Grok website and mobile usage are not supported"); expect(markup.split('<section aria-label="API billing setup">')[0]).not.toMatch(/directory|terminal|API key/);
   view.connections[0].status = "failed";
   const failed = renderToStaticMarkup(createElement(Connections, { state: view, action: async () => {} }));
   expect(failed).toContain("Connection failed. Check the message above and try again."); expect(failed).toContain("Sign in to Codex");
@@ -228,6 +229,34 @@ const state = (): ViewState => ({ snapshot: {
   activities: { codex: value({ provider: "codex", scannedAt: now, daily: [], sessions: [session("old-project", now - 2 * 3600000, 100000), session("active-project", now - 60000, 100, 100)] }) },
   usages: {}, plans: {}, statuses: {}, appearance: { theme: "dark", accent: "blue", heatmap: false, claudeHeatmap: false, codexHeatmap: false, pacing: true, telemetry: false, chart: false, resetButton: false, compactTray: true, notch: true, pinned: false, onboarding: true }, archiveWriteFailed: false, clearingCache: false,
 }, settings: { values: {}, accounts: [] }, systemDark: true, notch: { expanded: true, cardOnRight: false, selected: "codex", dragging: false } });
+
+it("shows measured Grok quota burn on menu and detail cards without inventing tokens or billing", () => {
+  const view = state(), first = quota("grok", [window("Grok Bot Desktop", 10, now + 7200000)], now - 120000);
+  const observed = observeQuota(quota("grok", [window("Grok Bot Desktop", 12, now + 7200000)], now), observeQuota(first, undefined, first.capturedAt), now);
+  view.connections = [{ provider: "grok", source: "account", accountMethod: "bot", status: "connected", localAvailable: true }];
+  view.snapshot.quotas.grok = value(observed);
+  const render = (detail = false) => renderToStaticMarkup(createElement(ProviderCard, { slot: primary("grok"), state: view, action: async () => {}, detail }));
+  for (const detail of [false, true]) {
+    const markup = render(detail);
+    expect(markup).toContain("Quota burn · 60 pp/h"); expect(markup).toContain("Est. 1h 28m left");
+    expect(markup).toContain("Percentage points of quota used per hour"); expect(markup).not.toContain("tokens/min"); expect(markup).not.toContain("$");
+  }
+  view.snapshot.appearance.pacing = false;
+  expect(render()).not.toContain("Quota burn"); expect(render()).not.toContain("Est. "); expect(render()).toContain("Resets ");
+  view.snapshot.appearance.pacing = true;
+  view.snapshot.archived.grok = observed; view.snapshot.quotas.grok = { status: "missing", code: "offline", reason: "Offline" };
+  expect(render()).toContain("Last known"); expect(render()).not.toContain("Quota burn"); expect(render()).not.toContain("Collecting usage after reset");
+});
+
+it("collects Grok observations before displaying a rate and preserves measured zero", () => {
+  const first = observeQuota(quota("grok", [window("Grok Bot Desktop", 87)], now - 60000), undefined, now - 60000);
+  const render = (w: typeof first.windows[number]) => renderToStaticMarkup(createElement(Meter, { w, now, pacing: true, quotaBurn: true }));
+  expect(render(first.windows[0])).toContain("Collecting quota burn rate"); expect(render(first.windows[0])).not.toContain("pp/h");
+  const unchanged = observeQuota(quota("grok", [window("Grok Bot Desktop", 87)], now), first, now);
+  expect(render(unchanged.windows[0])).toContain("Quota burn · 0 pp/h"); expect(render(unchanged.windows[0])).not.toContain("Est. ");
+  const tiny = observeQuota(quota("grok", [window("Grok Bot Desktop", 87.0001)], now), first, now);
+  expect(render(tiny.windows[0])).toContain("&lt;0.1 pp/h");
+});
 
 it("hides forecasts when pacing is disabled and retains the reported reset time", () => {
   const render = (pacing: boolean) => renderToStaticMarkup(createElement(Meter, { w, now, pacing }));

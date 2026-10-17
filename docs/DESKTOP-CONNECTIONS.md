@@ -47,7 +47,11 @@ below it to apply the choice. Existing profiles keep their current source.
   access token and selected team, then requests allowance. It does not initiate
   a separate xAI sign-in or renew access. After expiry, sign in through Bot and
   reconnect. Existing **Grok CLI** collection remains an explicit alternative.
-  Native compatibility, X and shared-pool coverage remain unverified.
+  The usage card can show measured quota burn after at least one minute of
+  fresh readings. Units are percentage points per hour, not tokens or dollars.
+  A reset, reconnect or stale reading starts collection again. Estimated
+  run-out appears only from a positive measured rate before the reported reset.
+  X and universal shared-pool coverage remain unverified.
 
 
 **Use CLI** first disconnects only the MeterUsage-owned account connection and

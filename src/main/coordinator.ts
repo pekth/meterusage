@@ -7,7 +7,7 @@ import { type Loaded, type Quota, type AccountActivity, type Activity, type Usag
 import { orderedSlots } from "../domain/provider-order";
 import { AlertEvaluator, type Alert } from "../domain/alerts";
 import { telemetry } from "../domain/telemetry";
-import { resetPacing } from "../domain/pacing";
+import { observeQuota, resetPacing } from "../domain/pacing";
 import { type Snapshot } from "../shared/state";
 import { Preferences, trayPreference } from "./preferences";
 import { type Launch } from "./launch";
@@ -15,6 +15,11 @@ import { type Source, compose, accountHome } from "./composition";
 import { HistoryStore, readArchive, saveArchive } from "./history";
 import { limitsReport, canonicalJSON } from "../domain/report";
 type Kind = "accountActivity" | "quota" | "activity" | "usage" | "plan" | "status";
+// Grok observations belong to the live source session; dated quota may survive it.
+function archiveQuota(q: Quota): Quota {
+  const windows = (ws: Quota["windows"]) => ws.map(w => ({ ...w, pacingBaseline: undefined }));
+  return q.provider === "grok" ? { ...q, windows: windows(q.windows), groups: q.groups.map(g => ({ ...g, windows: windows(g.windows) })) } : q;
+}
 export const backoffDelay = (failures: number) => Math.min(2 ** (Math.min(Math.max(failures, 1), 6) - 1), 30) * 60000;
 export class Coordinator {
   apiBilling?: Partial<Record<ApiBillingProvider, ApiBillingReading>>;
@@ -43,6 +48,7 @@ export class Coordinator {
   constructor(readonly launch: Launch, readonly preferences: Preferences, sources: Source[], readonly now: () => number = Date.now, readonly notify: (alert: Alert) => void = () => {}, readonly sourceFactory: () => Source[] = () => compose(launch, preferences)) {
     this.currentSources = sources;
     this.history = new HistoryStore(join(launch.data, "durable-daily-history.json")); this.archived = readArchive(join(launch.data, "quota-archive.json"));
+    for (const key of Object.keys(this.archived)) this.archived[key] = archiveQuota(this.archived[key]);
   }
   get sources(): readonly Source[] { return this.currentSources; }
   set sources(next: readonly Source[]) {
@@ -116,7 +122,7 @@ export class Coordinator {
     if (this.stopped) return;
     for (const source of this.sources.filter(s => this.visible(s))) {
       const key = slotKey(source.slot), q = this.quotas[key], a = this.activities[key];
-      if (q?.status === "value") this.archived[key] = q.value;
+      if (q?.status === "value") this.archived[key] = archiveQuota(q.value);
       if (a?.status === "value") {
         this.history.record(key, a.value.daily, q?.status === "value" ? Math.max(0, ...q.value.windows.map(w => w.usedPercent)) : undefined);
         const durable = this.history.records(key);
@@ -136,7 +142,7 @@ export class Coordinator {
   private persistArchive() {
     try {
       const slotMap = new Map(this.sources.map(s => [slotKey(s.slot), s.slot]));
-      saveArchive(join(this.launch.data, "quota-archive.json"), Object.entries(this.archived).map(([key, quota]) => ({ quota, slot: slotMap.get(key) ?? { provider: quota.provider, slotID: key.includes("#") ? key.slice(key.indexOf("#") + 1) : "", label: "" } })));
+      saveArchive(join(this.launch.data, "quota-archive.json"), Object.entries(this.archived).map(([key, quota]) => ({ quota: archiveQuota(quota), slot: slotMap.get(key) ?? { provider: quota.provider, slotID: key.includes("#") ? key.slice(key.indexOf("#") + 1) : "", label: "" } })));
       this.archiveWriteFailed = false;
     } catch { this.archiveWriteFailed = true; }
   }
@@ -160,7 +166,10 @@ export class Coordinator {
     if (kind === "quota") {
       const previous = this.archived[key];
       if (previous?.resetPacingSince !== resetAtStart) return;
-      if (result.status === "value" && previous?.resetPacingSince !== undefined) {
+      if (result.status === "value" && source.slot.provider === "grok" && source.accountBound && this.preferences.values.desktopGrokSource === "bot") {
+        const live = this.quotas[key];
+        result = value(observeQuota(result.value as Quota, live?.status === "value" ? live.value : undefined, this.now()) as T);
+      } else if (result.status === "value" && previous?.resetPacingSince !== undefined) {
         const q = result.value as Quota;
         if (q.capturedAt <= previous.resetPacingSince || q.capturedAt <= previous.capturedAt) return;
         result = value(resetPacing(q, previous, previous.resetPacingSince, q.capturedAt) as T);

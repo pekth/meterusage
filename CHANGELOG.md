@@ -8,6 +8,12 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Show Grok Bot Desktop quota burn in percentage points per hour from recent
+  same-account readings. Collect for at least a minute, discard old/reset
+  observations and show an estimated run-out only when measured.
+- Add expandable API billing setup with provider Admin-key locations, hidden
+  Terminal prompts, helper commands and fixed result guidance.
+
 - Add separate OpenAI API and Anthropic API billing cards backed by projected
   owner-only snapshots. A bundled one-run helper uses existing environment-only
   organization Admin keys. Keep API billing distinct from subscription quota

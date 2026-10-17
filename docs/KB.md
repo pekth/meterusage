@@ -293,3 +293,13 @@ Reviewed Swift base: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. Source checks d
   Keychain pair is Grok Bot Safe Storage / Grok Bot Key. Native metadata confirms
   these shapes; access and live allowance remain separate gates. See
   [ADR 0030](adr/0030-grok-bot-encrypted-compatibility.md).
+
+- Grok Bot Desktop quota burn uses live same-account observations spanning at
+  least one minute and no more than five minutes. It reports percentage points
+  per hour and can estimate run-out without assuming a quota-cycle duration.
+  Missing/stale reads, reconnects, source changes and resets clear measurement.
+  Archives retain quota but discard these observation baselines. No token or
+  dollar rate is derived. See [ADR 0031](adr/0031-grok-quota-burn.md).
+- API setup includes key-free macOS zsh commands that read the organization
+  Admin key at a hidden prompt inside a short-lived subshell. The app still
+  receives only normalized billing snapshots. Real billing remains unverified.

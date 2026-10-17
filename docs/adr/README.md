@@ -40,3 +40,5 @@ compatibility and acceptance requirements remain in force. The
 | [0028](0028-grok-bot-desktop-reader.md) | Use consented Grok Bot Desktop scoped credentials and a fixed read-only Connect allowance request for new Grok connections; retain saved Cursor sources. | Source and synthetic proof; native/live unverified |
 | [0029](0029-api-billing-snapshots.md) | Separate OpenAI API and Anthropic API billing snapshots from subscriptions; keep Admin keys in a one-run helper. | Source implementation; real billing acceptance pending |
 | [0030](0030-grok-bot-encrypted-compatibility.md) | Accept account-bound encrypted Bot legacy values and use the observed fixed Keychain account. | Bounded source correction; live allowance acceptance pending |
+
+| [0031](0031-grok-quota-burn.md) | Measure Grok Bot quota burn from recent same-account percentages without inventing token counts or cycle duration. | Source implementation; native and live rate acceptance separate |

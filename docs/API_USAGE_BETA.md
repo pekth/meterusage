@@ -22,27 +22,54 @@ provider's report replaces its dashboard or invoice.
 
 The optional helper needs an existing organization Admin API key. A normal
 project API key and a ChatGPT or Claude subscription sign-in do not grant this
-access. Keep these high-authority keys out of MeterUsage and chat.
+access. In OpenAI Platform, create an Admin key under Organization settings →
+Admin keys. In Anthropic Console, create an Admin key under Settings → Admin
+keys. Keep these high-authority keys out of MeterUsage and chat.
 
-Use a trusted secret manager or an existing process environment to make only
-`OPENAI_ADMIN_KEY` or `ANTHROPIC_ADMIN_KEY` available to the short-lived helper.
-Do not put a key in command arguments, shell history, a profile or a repository.
-The helper removes its selected key from its own environment before fetching.
-It cannot remove a key from the parent shell.
+In MeterUsage Settings, expand **Set up API billing snapshots**. Open Terminal
+on your Mac, paste the matching command below, then paste the Admin key at the
+hidden prompt and press Return. The commands use macOS zsh. The entered key is
+not a command, so it does not enter shell history. The subshell supplies only the
+selected environment variable to the helper and exits afterward. MeterUsage and
+the parent shell do not store the entered key. Never put a key in command text,
+a profile, a repository or chat.
 
-In a build containing this feature, the helper is bundled with the installed app.
-Run one provider per invocation:
+OpenAI API:
 
-```sh
-ELECTRON_RUN_AS_NODE=1 /Applications/MeterUsage.app/Contents/MacOS/meterusage \
-  /Applications/MeterUsage.app/Contents/Resources/api-usage-helper.cjs openai
-ELECTRON_RUN_AS_NODE=1 /Applications/MeterUsage.app/Contents/MacOS/meterusage \
-  /Applications/MeterUsage.app/Contents/Resources/api-usage-helper.cjs anthropic
+```zsh
+(
+  IFS= read -rs 'OPENAI_ADMIN_KEY?Paste OpenAI Admin key (hidden): ' || exit 1
+  print
+  export OPENAI_ADMIN_KEY
+  ELECTRON_RUN_AS_NODE=1 /Applications/MeterUsage.app/Contents/MacOS/meterusage \
+    /Applications/MeterUsage.app/Contents/Resources/api-usage-helper.cjs openai
+)
 ```
 
-These commands contain no key. Run only the command for which you have supplied
-the corresponding helper environment. Source contributors can instead run
-`node dist/api-helper/api-usage-helper.cjs openai` or `anthropic` after building.
+Anthropic API:
+
+```zsh
+(
+  IFS= read -rs 'ANTHROPIC_ADMIN_KEY?Paste Anthropic Admin key (hidden): ' || exit 1
+  print
+  export ANTHROPIC_ADMIN_KEY
+  ELECTRON_RUN_AS_NODE=1 /Applications/MeterUsage.app/Contents/MacOS/meterusage \
+    /Applications/MeterUsage.app/Contents/Resources/api-usage-helper.cjs anthropic
+)
+```
+
+After `API billing snapshot updated`, click **Refresh** in MeterUsage. An
+`API billing authentication failed` result means the supplied key lacks access
+or is invalid. `API billing data unavailable` means the helper could not obtain
+a supported report; check the organization billing dashboard. A failed fetch
+preserves the last snapshot. A missing helper environment produces the fixed
+`API billing admin key missing from helper environment` result.
+
+These commands contain no key. An existing trusted secret manager can instead
+supply the selected environment variable directly to the one-run helper. The
+helper removes that variable from its own environment before fetching. Source
+contributors can use `node dist/api-helper/api-usage-helper.cjs openai` or
+`anthropic` after building, with the same environment requirement.
 
 The helper makes bounded HTTPS GET requests to the provider's documented cost
 report, follows pagination, drops identifiers and writes one owner-readable
@@ -56,8 +83,11 @@ rejects unsafe paths, permissions, duplicate/malformed fields and unsupported
 currency. Successful writes replace the file atomically. A failed collection
 preserves the previous snapshot. The helper prints only a fixed success or
 error category, including authentication failure. It has no scheduler or
-background key storage. Rerun it when you need a new report, then refresh
-MeterUsage. Remove the provider's snapshot to stop displaying that billing card.
+background key storage. Rerun the matching helper command when you need a new
+report, then refresh MeterUsage to reread the snapshot. Refresh does not contact
+the billing API. Remove the provider's snapshot to stop displaying that billing
+card. OpenRouter account activity and key limits continue to use its existing
+integration.
 
 ## Data and credential boundary
 
