@@ -12,7 +12,7 @@ Swift app remains the stable download and rollback option during migration.
 
 | Edition | Current status | Setup and behavior |
 | --- | --- | --- |
-| Electron 0.3.0-beta.1, build 54 | Public beta for Apple silicon, macOS 13+; signed and notarized | [Download beta](https://github.com/pekth/meterusage/releases/tag/v0.3.0-beta.1) · [Beta guide](docs/BETA.md) |
+| Electron 0.3.0-beta.3, build 61 | Public beta for Apple silicon, macOS 13+; signed and notarized | [Download beta](https://github.com/pekth/meterusage/releases/tag/v0.3.0-beta.3) · [Beta guide](docs/BETA.md) |
 | Legacy Swift 0.2.41 | Frozen for new features; published stable download and migration rollback | [Swift guide](docs/swift/README.md) |
 
 Electron is the active app for new features. Swift remains the stable download
@@ -29,24 +29,19 @@ and the [version strategy](docs/VERSIONS.md).
   <img src="docs/images/beta-notch-claude.png" alt="Electron beta hover card and compact side-notch usage rail" width="256">
 </p>
 
-Synthetic demo captures of build 54's renderer. Claude Desktop provides allowance,
+Synthetic demo captures of build 61's renderer. Claude Desktop provides allowance,
 not a chat-history heatmap. See the [full screenshot gallery and capture details](docs/SCREENSHOTS.md)
 for Codex, Claude, side notch and Settings.
 
 The beta includes Codex browser sign-in/account history, optional Claude Desktop
 allowance, existing CLI sources, compact provider tabs and hover cards, provider
 reordering and readable token totals. Account coverage depends on the source.
-Build 54 keeps Grok Beta CLI-only; Antigravity desktop login is follow-up work.
-Current source additionally offers opt-in [Grok Bot Desktop Beta](docs/DESKTOP-CONNECTIONS.md#grok-bot-desktop-beta).
-Sign in through Grok Bot Desktop first, then approve read-only access.
-Native/live allowance, X and shared-pool coverage remain unverified.
-Current source also adds separate [OpenAI API and Anthropic API billing snapshots](docs/API_USAGE_BETA.md)
-through Settings → API connections with a saved legacy Admin key, a one-time
-Admin key, or the bundled environment-only helper. Existing Keychain entries
-are preserved; pasted keys are not saved. OpenRouter keeps its existing
-account balance and aggregate activity integration.
-Build 54's Settings footer incorrectly says `0.2.41`; the packaged version is
-`0.3.0-beta.1`. See [known beta limits](docs/BETA.md#known-limits).
+The beta also includes Antigravity Desktop allowance, Grok Bot Desktop (Beta),
+key-free OpenCode Go local setup and separate [API billing](docs/API_USAGE_BETA.md)
+under Settings → API connections. Reuse a legacy saved Admin key or enter a
+one-time key. Pasted keys are not saved. OpenRouter retains its existing balance
+and activity integration. Desktop compatibility and billing coverage vary;
+see [known beta limits](docs/BETA.md#known-limits).
 
 ## Stable Swift installation
 

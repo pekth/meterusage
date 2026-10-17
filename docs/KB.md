@@ -1,6 +1,6 @@
 # Project knowledge
 
-Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
+Release documentation refresh: 2026-10-17; build 61 executable inputs are unchanged.
 
 ## Edition documentation
 
@@ -10,10 +10,10 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   native acceptance, deliberate cutover and retrievable archive checks pass.
   Source retirement is pending. Electron-required Swift helpers and assets stay.
 - [Swift 0.2.41](swift/README.md) is the published default install route.
-  [Electron 0.3.0-beta.1, build 54](BETA.md) is an opt-in public prerelease,
+  [Electron 0.3.0-beta.3, build 61](BETA.md) is an opt-in public prerelease,
   signed and notarized for Apple silicon. Native acceptance remains incomplete.
-  Source manifests and its cosmetic Settings footer still say 0.2.41; packaging
-  explicitly sets the beta version. Stable updaters do not offer the beta.
+  Source manifests retain 0.2.41; packaging explicitly sets the beta version.
+  Settings displays that bundle version. Stable updaters do not offer the beta.
 - Both implementations remain in their current source trees. Shared app name,
   bundle ID and default data/preferences prevent safe normal-profile coexistence.
   Use only documented isolated QA profiles.
@@ -29,8 +29,8 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   remain distinct. Current source adds AG Desktop/OpenCode setup, restores Bun
   discovery and matches activity grid geometry. See the candidate guide.
 - Edition documentation was reconciled against revision
-  build source `6ce695324e54bb09bf6e5ab36fd4733875c94427`.
-- Current product screenshots use build 54's renderer and synthetic demo data.
+  `c2d092cb92180b37a686582a904dbd0129bc371c`.
+- Current product screenshots use build 61's renderer and synthetic demo data.
   Old product captures are removed; see [capture provenance](SCREENSHOTS.md).
 
 ## Repository state
@@ -41,7 +41,7 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 ## Product and source facts
 
-- Unreleased Antigravity Desktop setup reuses the existing connection controls,
+- Antigravity Desktop setup in beta.3 reuses the existing connection controls,
   preferences, IPC and account-bound source. It requires one running same-user
   desktop language server with a CSRF token and PID-owned IPv4 loopback port.
   Fixed quota/status RPCs use request-scoped TLS handling, redirect rejection,
@@ -49,13 +49,14 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   credentials stay in main-process memory. Empty modern quota and missing
   fractions remain unavailable. Local CLI usage stays detached. Synthetic
   fixtures cover account switches, closure, transport failures and connection
-  races. Native/live-provider proof and release inclusion remain pending.
+  races. The owner confirmed a live connection. Broad native compatibility and an
+  automated desktop-versus-CLI comparison remain pending.
   See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
 
 - Heatmap hover/focus readouts use compact token and session totals, including
   local, account, session-only, daily, weekly and cumulative grids. Exact grouped
   counts remain in tooltips and accessible labels. Summary counts compact from
-  1,000. This follow-up is separate from the published build 54 artifact.
+  1,000. These readouts are included in build 61.
 
 - Onboarding and Settings offer provider-specific source choices: Codex browser
   sign-in or CLI, Claude Desktop or Claude Code CLI, Antigravity Desktop or

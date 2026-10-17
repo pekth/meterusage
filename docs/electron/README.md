@@ -4,11 +4,11 @@ Electron is the sole active target for new MeterUsage features. The legacy
 Swift app is frozen as the current stable download and rollback option until
 [staged retirement](../adr/0024-electron-primary-swift-retirement.md) passes.
 
-The public beta is **0.3.0-beta.1, build 54**, for Apple silicon and macOS 13+.
+The public beta is **0.3.0-beta.3, build 61**, for Apple silicon and macOS 13+.
 Use the [beta download and installation guide](../BETA.md). The ZIP is Developer
 ID signed and notarized. This is an opt-in manual download; Swift stays stable.
-Source manifests and build 54's cosmetic Settings footer still say `0.2.41`.
-Packaging explicitly sets the beta version. Full native acceptance remains open.
+Source manifests retain `0.2.41`; packaging explicitly sets the beta version.
+Settings shows that bundle version. Full native acceptance remains open.
 
 See the [current beta screenshots](../SCREENSHOTS.md) for Usage, notch and Settings.
 
@@ -25,8 +25,8 @@ Usage. See [ADR 0023](../adr/0023-onboarding-source-choice.md).
 | Codex CLI | Existing authenticated CLI supplies quota/reset metadata; local rollouts supply tokens, sessions and estimated cost. | Activity on this Mac only. |
 | Claude Desktop | Explicit consent permits a fixed Keychain helper and read-only Desktop cache/cookie access for current account allowance. | Allowance only. No Desktop chat/token history, local cost, tier or extra-usage credit projection. Compatibility can fail when the active account has no allowance token; paid-account live acceptance remains open. |
 | Claude Code CLI | Local transcript counters, tier metadata and optional companion quota files. | Local activity; allowance requires the [companion](../COMPANION.md). |
-| Antigravity Desktop | Explicit consent reads allowance from one running, signed-in desktop server. | Account allowance only. Local CLI activity stays separate. Live comparison was confirmed by the owner; broad compatibility is unverified. |
-| Grok Bot Desktop (Beta), unreleased source | Explicit consent reads the active account-bound encrypted Bot credential and requests allowance. | Native Keychain/store and endpoint compatibility remain unverified. Existing saved Cursor connections retain their source. |
+| Antigravity Desktop | Explicit consent reads allowance from one running, signed-in desktop server. | Account allowance only. Local CLI activity stays separate. The owner confirmed a live connection; automated quota comparison and broad compatibility remain unverified. |
+| Grok Bot Desktop (Beta) | Explicit consent reads the active account-bound encrypted Bot credential and requests allowance. | Native Keychain/store and endpoint compatibility remain unverified. Existing saved Cursor connections retain their source. |
 | OpenCode Go local | **Use local OpenCode** enables local Go sessions without a sign-in or key. Existing Go authentication also supplies allowance. | Go sessions only. Other providers used through OpenCode are excluded. |
 | Grok CLI (Beta) | Existing CLI authentication and local session summaries. | Consumer website/mobile sign-in is unsupported. Session/message counts do not establish token totals. |
 
@@ -41,7 +41,7 @@ to local collection. See [desktop connections](../DESKTOP-CONNECTIONS.md) and
 
 All nine adapters remain wired in [composition](../../src/main/composition.ts).
 The current source adds an OpenCode Go local setup action and Antigravity
-Desktop connection. These changes are separate from the published build 54.
+Desktop connection. Both are included in build 61.
 
 - Antigravity CLI quota uses existing authenticated `agy` container state, Docker or
   Podman, image `antigravity-cli:local` and volumes `antigravity-config` and
@@ -84,7 +84,7 @@ scales and height fits within the display. Ctrl/Cmd plus or minus changes size;
 Ctrl/Cmd 0 restores Medium. Refresh interval, theme/accent, collection/display,
 heatmap, pacing, telemetry, chart, alerts, login and update preferences remain.
 
-Settings has a compact category sidebar: Connections, Appearance, General,
+Settings has a compact category sidebar: Connections, API connections, Appearance, General,
 Providers, Side notch, Usage details and Diagnostics. Provider summaries show the
 current source, collection state and reading availability. Choose Configure for
 setup actions; selecting a method still requires its explicit connection action.
@@ -129,13 +129,12 @@ in memory and is excluded from local rollups, durable history and schema-1 JSON.
 Live Codex account history has been observed; complete device/product coverage remains unverified. See
 [ADR 0022](../adr/0022-codex-account-token-history.md).
 
-Compact hover/focus readouts are an unreleased source change; published build 54
-retains exact readouts. Hover and keyboard focus show dated compact totals such as `42.4B tokens` and
+Hover and keyboard focus show dated compact totals such as `42.4B tokens` and
 `1.6K sessions`. Tooltips and accessible labels retain exact grouped counts. Each live heatmap
 has one Tab entry. Use arrow keys to move between days, Home/End for the first
 or last cell, and Tab to leave the grid. Shared images omit focusable cells.
-Feedback about 30-day versus 26-week grid geometry
-remains pending. These source contracts do not establish native keyboard access,
+All activity grids share 26 columns and seven rows. A short feed leaves older
+dates unavailable. These source contracts do not establish native keyboard access,
 layout or anchor acceptance.
 
 ## Known parity gaps
@@ -228,15 +227,15 @@ Desktop account research for Grok/Cursor, Antigravity and OpenCode Go is recorde
 in [DESKTOP-LOGIN-RESEARCH.md](../DESKTOP-LOGIN-RESEARCH.md). It separates
 documented sign-in from implemented quota collection.
 
-### Unreleased Antigravity Desktop setup
+### Antigravity Desktop setup
 
 Current source adds **Connect Antigravity Desktop** to the existing source
 selector. One running, signed-in desktop language server supplies account
 allowance without `agy`; local CLI history is excluded. Multiple matching
 servers and missing or expired data remain unavailable. **Use CLI** selects
-the existing local integration explicitly. This adapter has synthetic-fixture
-coverage only and is absent from published build 54. Native process discovery,
-local transport and live quota comparison remain acceptance gaps. See
+the existing local integration explicitly. Build 61 includes this adapter and
+the owner confirmed a live connection. Broad native compatibility and an
+automated quota comparison remain acceptance gaps. See
 [desktop connections](../DESKTOP-CONNECTIONS.md#antigravity-desktop-source-boundary).
 
 All activity heatmaps use the same 26-column, seven-row grid. Feeds with only

@@ -6,6 +6,17 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0-beta.3] - 2026-10-17
+
+### Release
+
+- Publish signed and notarized Electron build 61 for Apple silicon. Keep the
+  stable Swift download and updater unchanged. Refresh beta documentation and
+  screenshots, including the separate API connections page.
+- Reuse the verified build from source c2d092c. Source/package checks passed;
+  native timing, broad provider compatibility and complete billing acceptance
+  remain disclosed beta limits.
+
 ### Added
 
 - Show Grok Bot Desktop quota burn in percentage points per hour from recent
@@ -21,7 +32,7 @@ follows [Semantic Versioning](https://semver.org/).
   without requiring `agy`. Keep CLI selection explicit and local activity
   separate. Synthetic fixtures cover identity changes, unavailable quota,
   transport limits and cancellation. Native and live-provider acceptance remain
-  pending; the published beta is unchanged.
+  pending beyond the owner-confirmed live connection.
 
 ### Changed
 
@@ -37,8 +48,7 @@ follows [Semantic Versioning](https://semver.org/).
   MeterUsage's own headers. Reject identity/team/store changes and cancelled
   results. Keep saved Cursor connections compatible and CLI selection explicit.
   No token refresh, app writes or separate xAI sign-in is added. Native store,
-  Keychain and endpoint compatibility remain unverified; the published build
-  is unchanged.
+  Keychain and endpoint compatibility remain incomplete beta acceptance.
 - Shorten heatmap hover/focus totals to values such as `42.4B tokens` and
   `1.6K sessions` across local and account history. Keep exact grouped counts
   in tooltips and accessibility labels. Summary counts compact from 1,000.

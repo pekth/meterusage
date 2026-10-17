@@ -1,7 +1,7 @@
 # MeterUsage versions and repository strategy
 
-Electron is the sole active target for new features. Electron **0.3.0-beta.1,
-build 54** is an opt-in public prerelease. Swift **0.2.41** remains the stable
+Electron is the sole active target for new features. Electron **0.3.0-beta.3,
+build 61** is an opt-in public prerelease. Swift **0.2.41** remains the stable
 download and rollback reference. The beta does not replace the stable updater.
 
 ## Current layout and status
@@ -10,16 +10,15 @@ download and rollback reference. The beta does not replace the stable updater.
 | --- | --- | --- |
 | Development | Critical fixes and transition compatibility | All new features |
 | Source | `Sources/`, `Tests/`, `Package.swift` | `src/`, `tests/`, `package.json` |
-| Download version | 0.2.41 | 0.3.0-beta.1, build 54 |
+| Download version | 0.2.41 | 0.3.0-beta.3, build 61 |
 | Source metadata | 0.2.41 | Manifest retains 0.2.41; packaging overrides it |
 | User installation | Pinned Swift ZIP via `Scripts/make-app.sh` | Manual signed/notarized Apple silicon ZIP |
 | Updates | Stable release only | Manual beta downloads; no beta updater |
 | Guide | [Swift](swift/README.md) | [Beta installation and limits](BETA.md), [Electron](electron/README.md) |
 
-Build 54 was built from `6ce695324e54bb09bf6e5ab36fd4733875c94427`.
+Build 61 was built from `c2d092cb92180b37a686582a904dbd0129bc371c`.
 The beta tag also carries refreshed documentation and screenshots; its
-executable inputs are unchanged. Its Settings footer still incorrectly displays
-`0.2.41`. See [known limits and verification](BETA.md#known-limits).
+executable inputs are unchanged. Settings displays the running bundle version. See [known limits and verification](BETA.md#known-limits).
 
 The beta source and signed bundle have separate recorded checks. Native
 acceptance remains incomplete and is disclosed for this opt-in prerelease.

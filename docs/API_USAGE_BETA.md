@@ -1,7 +1,7 @@
 # API billing snapshots
 
-Current Electron source adds separate OpenAI API and Anthropic API billing cards.
-The published beta1 does not contain them. OpenRouter keeps its existing account
+Electron 0.3.0-beta.3, build 61 includes separate OpenAI API and Anthropic API
+billing cards. OpenRouter keeps its existing account
 balance, key limits and aggregate activity integration.
 
 ## What the cards report
@@ -136,5 +136,7 @@ stay unavailable; there is no currency conversion.
   requires Admin API access and documents the Priority Tier exclusion.
 
 Synthetic fixtures verify projection, units, pagination, privacy, freshness and
-failure behavior. Real organization billing access and invoice reconciliation
-remain unverified. No real Admin key is required for source tests.
+failure behavior. OpenAI saved-key recovery through the installed signed helper
+succeeded. The live Settings button journey, Anthropic billing and complete
+invoice reconciliation remain unverified. No real Admin key is required for
+source tests.

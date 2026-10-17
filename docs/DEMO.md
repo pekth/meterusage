@@ -2,7 +2,7 @@
 
 Demo mode uses the real app views with invented data. Use it for screenshots
 and UI inspection without exposing real accounts. The [current beta gallery](SCREENSHOTS.md)
-shows Electron build 54. Old product captures have been removed.
+shows Electron build 61. Old product captures have been removed.
 
 ## Electron browser preview
 

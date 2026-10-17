@@ -274,8 +274,8 @@ An empty modern summary never falls back to legacy data. Legacy model quota
 is read only when the modern RPC explicitly reports unsupported; it cannot
 establish weekly allowance. Disconnect and cancellation reject late results.
 
-This is source and synthetic-fixture coverage. It is absent from the published
-build 54 beta. Native discovery, local transport and live allowance comparison
+Build 61 includes this adapter. The owner confirmed a live connection; broad
+native compatibility and an automated desktop-versus-CLI allowance comparison
 remain unverified. See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
 
 ## Grok Bot Desktop Beta

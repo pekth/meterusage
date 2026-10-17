@@ -1,13 +1,13 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.1, build 54** is an opt-in macOS beta. The ZIP supports
+MeterUsage **0.3.0-beta.3, build 61** is an opt-in macOS beta. The ZIP supports
 Apple silicon and macOS 13 or later. It is Developer ID signed, notarized and
 stapled. Swift `0.2.41` remains the stable release and updater download.
 
 ## Install
 
-1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.1/MeterUsage-0.3.0-beta.1-mac-arm64.zip)
-   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.1/SHA256SUMS).
+1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.3/MeterUsage-0.3.0-beta.3-mac-arm64.zip)
+   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.3/SHA256SUMS).
 2. Quit MeterUsage and keep a copy of your existing app and its saved data for
    rollback. The beta shares the app identity and data locations with Swift.
 3. Unzip the download, move `MeterUsage.app` to Applications, and open it.
@@ -27,7 +27,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-ec4e8878e6a35120b397d8c118d023f010e8a6952a257b75764f05ecbc6f52ba
+6bc074f8753330c7b8bcf975ba3696fa249890230737d8c7580e7b93c3321439
 ```
 
 ## Provider coverage
@@ -43,17 +43,37 @@ ec4e8878e6a35120b397d8c118d023f010e8a6952a257b75764f05ecbc6f52ba
   user out of Claude Desktop. Desktop chat/token history is not collected.
 - Claude Code CLI reads local transcript activity. Quota requires an optional
   companion file. Local activity does not cover other devices.
-- Existing Grok CLI, Antigravity container, OpenCode Go and other adapters retain
-  their source-specific limits. New Antigravity Desktop and Grok/Cursor login
-  integrations are not included. Grok consumer web sign-in is unavailable.
+- Antigravity Desktop reads account allowance from one running, signed-in
+  language server. The owner confirmed a live connection; broad compatibility
+  and an automated desktop-versus-CLI comparison remain incomplete. Local CLI
+  activity stays separate.
+- Grok Bot Desktop (Beta) reads the active account's encrypted local credential
+  after consent and requests allowance. Quota burn needs recent same-account
+  observations and is measured in percentage points per hour, not tokens.
+  Live burn-rate and broad endpoint compatibility remain unverified. Existing
+  saved Cursor connections retain their original source. Consumer web sign-in
+  is unavailable.
+- OpenCode Go offers local session history without a key. Allowance separately
+  requires an existing Go key saved by OpenCode. Only Go sessions count.
+- OpenAI API and Anthropic API billing use separate owner-only snapshots.
+  Settings → API connections can reuse a provider's fixed legacy Keychain
+  Admin key or accept a masked one-time Admin key. Original saved keys are
+  preserved and newly pasted keys are not saved. OpenRouter keeps its existing
+  balance and aggregate activity source. Read [API setup and limits](API_USAGE_BETA.md).
 
 See [source choices](electron/README.md#source-choices),
 [desktop connections](DESKTOP-CONNECTIONS.md) and [privacy](PRIVACY.md).
 
 ## Known limits
 
-- Settings displays a hardcoded `0.2.41` footer. The installed bundle and beta
-  download are version `0.3.0-beta.1`, build 54. A footer fix is separate work.
+- Settings now shows the running bundle version. Source previews omit it when
+  packaging metadata is absent.
+- The tray renderer preloads after completed onboarding. Native first-click
+  latency has not been measured, so no timing guarantee is made.
+- OpenAI saved-key recovery through the installed signed helper succeeded.
+  The live Settings button journey, Anthropic billing, invoice completeness
+  and live Grok burn-rate acceptance remain unverified. Anthropic Priority
+  Tier costs are excluded.
 - Native keyboard/VoiceOver, complete setup/account/offline journeys,
   notifications/login items, sharing, update/relaunch/rollback and multi-display
   notch transitions have incomplete acceptance coverage. These are gaps in
@@ -71,12 +91,13 @@ Never include tokens, passwords or raw account files in an issue.
 ## Build and screenshot identity
 
 The signed artifact was built from source
-`6ce695324e54bb09bf6e5ab36fd4733875c94427`. Release documentation and new
+`c2d092cb92180b37a686582a904dbd0129bc371c`. Release documentation and new
 screenshots are a documentation-only descendant; executable inputs are unchanged.
-Source manifests retain `0.2.41`; beta packaging explicitly set `0.3.0-beta.1`.
+Source manifests retain `0.2.41`; beta packaging explicitly set `0.3.0-beta.3`.
 
-Matching validation recorded 417 synthetic tests across 19 files, TypeScript
-checking and production bundling. Signing, notarization, stapling, Gatekeeper,
+Matching validation recorded 739 tests across 28 files on macOS, TypeScript
+checking, native helper compilation and production bundling. Exact-source CI
+also passed Swift build and tests. Signing, notarization, stapling, Gatekeeper,
 installed bundle identity and ZIP bytes were verified separately. These checks
 do not close the native acceptance gaps above.
 
