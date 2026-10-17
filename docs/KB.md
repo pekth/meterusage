@@ -25,9 +25,9 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   require code and asset-routing changes; see the
   [update-channel prerequisites](VERSIONS.md#update-channel-prerequisites).
 - Candidate gaps include Settings account overview, seven-day sparkline, reset
-  timing display, update feedback and tray refresh. Smaller display omissions,
-  OpenCode Bun fallback discovery, pending AGY/OpenCode onboarding and unresolved
-  notch-dimension/grid-geometry feedback remain distinct. See the candidate guide.
+  timing display, update feedback and tray refresh. Smaller display omissions
+  remain distinct. Current source adds AG Desktop/OpenCode setup, restores Bun
+  discovery and matches activity grid geometry. See the candidate guide.
 - Edition documentation was reconciled against revision
   build source `6ce695324e54bb09bf6e5ab36fd4733875c94427`.
 - Current product screenshots use build 54's renderer and synthetic demo data.
@@ -41,13 +41,25 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 ## Product and source facts
 
+- Unreleased Antigravity Desktop setup reuses the existing connection controls,
+  preferences, IPC and account-bound source. It requires one running same-user
+  desktop language server with a CSRF token and PID-owned IPv4 loopback port.
+  Fixed quota/status RPCs use request-scoped TLS handling, redirect rejection,
+  1 MiB response limits and bounded time. Account fingerprints are opaque;
+  credentials stay in main-process memory. Empty modern quota and missing
+  fractions remain unavailable. Local CLI usage stays detached. Synthetic
+  fixtures cover account switches, closure, transport failures and connection
+  races. Native/live-provider proof and release inclusion remain pending.
+  See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
+
 - Heatmap hover/focus readouts use compact token and session totals, including
   local, account, session-only, daily, weekly and cumulative grids. Exact grouped
   counts remain in tooltips and accessible labels. Summary counts compact from
   1,000. This follow-up is separate from the published build 54 artifact.
 
 - Onboarding and Settings offer provider-specific source choices: Codex browser
-  sign-in or CLI, Claude Desktop or Claude Code CLI, and Grok CLI only. Choosing
+  sign-in or CLI, Claude Desktop or Claude Code CLI, Antigravity Desktop or
+  Antigravity CLI, and Grok CLI or opt-in Grok Bot Desktop Beta. Choosing
   an option does not change collection until its action is used. Use CLI waits
   for MeterUsage-owned connection cleanup before selecting existing local
   collection. Ordinary Disconnect still prevents automatic local fallback.
@@ -56,7 +68,7 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   test profiles cannot switch to local collection. See
   [ADR 0023](adr/0023-onboarding-source-choice.md).
 
-- Candidate Settings uses category navigation for Connections, Appearance,
+- Candidate Settings uses category navigation for Connections, API connections, Appearance,
   General, Providers, Side notch, Usage details and Diagnostics. Connection
   summaries show the current source, collection state and reading availability;
   Configure reveals the existing setup actions. Category changes preserve pending
@@ -143,13 +155,21 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   profiles retain their preference. [ADR 0014](adr/0014-settings-onboarding.md)
   records this placement; native acceptance is separate from source validation.
 
-- The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, read-only Desktop cache/cookie selection and the OAuth allowance endpoint after consent. Grok consumer connection remains unavailable. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md) and ADR 0011 define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
+- The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, read-only Desktop cache/cookie selection and the OAuth allowance endpoint after consent. New Grok Bot Desktop connections select the active account-bound encrypted access token and optional team through a fixed Keychain item and bounded Connect allowance request. Saved Cursor connections retain their immutable SQLite reader and fixed identity-before-allowance requests. Both use opaque account binding. Nonempty WAL/journal files, ambiguous evidence and observed races fail closed. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md), ADR 0011, [ADR 0027](adr/0027-grok-cursor-closed-reader.md) and [ADR 0028](adr/0028-grok-bot-desktop-reader.md) define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
+
+- Antigravity Desktop quota uses compact model headings and limit labels.
+  It preserves provider-reported bucket values and resets; duration metadata
+  is added only for explicit Weekly or 5-hour labels. Missing allowance under
+  a saved account remains unavailable. This presentation does not establish
+  that Desktop and the CLI use the same account. The Cursor process guard
+  excludes only Apple's `CursorUIViewService` under `/System/Library/`, while
+  retaining active-editor and database guards.
 
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
 - The published app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure. Its AppKit and SwiftUI imports require macOS for package build and test checks; Swift itself supports other platforms. `AGENTS.md` describes a generic macOS SSH route for Linux development without private host aliases.
 - `README.md` links directly to the prebuilt v0.2.41 app ZIP as the default installation path. Installing and running it does not require Swift, Xcode, Command Line Tools, or Git; its Swift runtime ships with macOS. `Scripts/make-app.sh` also downloads that pinned release by default, checks its SHA-256 and code signature, and prepares `dist/MeterUsage.app` without compiling or installing developer tools. It copies and verifies the replacement in staging on the destination filesystem before replacing existing output, so copy or verification failures preserve the previous generated app. It rejects unsupported platforms and never falls back to a source build. Source builds require `--build-from-source` and are documented in `CONTRIBUTING.md`. The v0.2.41 asset targets Apple silicon and macOS 13 or later, is ad-hoc signed, and is not notarized. GitHub's source archives contain source and scripts, not an app bundle. ADR 0009 records the script's default.
 - Swift provider data sources are implemented under `Sources/MeterUsage/Services/`; the candidate adapters live under `src/main/providers/` and `src/main/composition.ts`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
-- Antigravity quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
+- Antigravity CLI quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
 - `Resources/Info.plist` and `CHANGELOG.md` record version 0.2.41, build 46, dated 2026-10-05. This release collects fresh quota observations after an accepted manual Codex reset, derives pacing and ETA from later usage growth, and removes the redeemed reset credit from archived quota data. The previous release was 0.2.40, which added accent colour themes, Codex cost estimates, and refreshed model prices. Repository version and release-note entries do not prove that a GitHub Release or its downloadable asset has been published.
 - `CONTRIBUTING.md` requires focused changes, synthetic fixtures, and `swift build`, `swift test`, and `Scripts/make-app.sh --build-from-source` before a code pull request. `Tests/Scripts/make-app-tests.sh` covers default preparation, explicit source selection, and download, verification, argument, and platform failures without network or compiler access.
@@ -250,6 +270,48 @@ Reviewed Swift base: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. Source checks d
 
 - Electron Diagnostics restores explicit **Send report** through the existing private support relay. Main generates the same allowlisted status summary used by Copy diagnostics with the running app version; renderer IPC accepts intent only. In-flight clicks are deduplicated, uncertain retries reuse the report UUID/snapshot, and a matching HTTP201 receipt supplies the support reference. No raw logs, account labels/IDs, paths, credentials or transcripts are uploaded. See [REPORTING.md](REPORTING.md). Transport fixtures do not prove live Linear delivery.
 
-- Grok is labeled **Beta** in Electron usage cards, setup and provider settings. Official-source desktop research found X Subscription per-seat shared Grok/Cursor usage, unified local Antigravity authentication and API-key-based OpenCode Go setup. These do not establish new MeterUsage connections. See [desktop login research](DESKTOP-LOGIN-RESEARCH.md).
+- Grok is labeled **Beta** in Electron usage cards, setup and provider settings. Official-source desktop research found X Subscription per-seat shared Grok/Cursor usage, unified local Antigravity authentication and API-key-based OpenCode Go setup. Those research findings alone do not establish connections. The source-only Bot Desktop Beta implementation is documented in [ADR 0028](adr/0028-grok-bot-desktop-reader.md), with saved Cursor compatibility in ADR 0027; universal shared-pool coverage remains unverified. See [desktop login research](DESKTOP-LOGIN-RESEARCH.md).
 
 - Diagnostic report attempts have a 10-minute main-process cooldown persisted as a private native preference before HTTP. Relaunch and failed sends retain the limit. Storage failure prevents transmission; Copy diagnostics remains available. Only the timestamp persists, with no report content, account identifier or receipt. See [REPORTING.md](REPORTING.md).
+
+- OpenCode Go has an explicit local setup action. Local Go session history needs
+  no key; allowance uses the existing Go key. CLI fallback includes executable
+  `~/.bun/bin/opencode`. Coverage remains Go-only.
+- Activity heatmaps use one 26-column, seven-row layout. Thirty-day telemetry
+  leaves older dates unavailable. Local-day and OpenRouter UTC scope are retained.
+
+Completed-onboarding launches preload the usage window hidden before connection
+recovery and provider collection. The first tray click reuses that renderer;
+fresh provider data still depends on its source. Incomplete onboarding continues
+to open Settings. No window is shown or focused by preload.
+
+## API billing and Grok compatibility follow-up
+
+- OpenAI API and Anthropic API are independent billing snapshots, not quota
+  provider slots. Settings → API connections accepts a one-time masked Admin
+  key and fetches billing without Terminal. The field clears on submit or
+  leaving the page; pasted keys are never saved. **Use saved key** reads only the
+  selected provider's legacy `com.meterusage.api-keys` Keychain entry without
+  changing it or returning the key to the renderer. It runs only on request. A bundled environment-only helper
+  remains available. Both paths use fixed cost endpoints and projected
+  owner-only USD files. Cards retain the
+  reported UTC period, exact capture time and explicit stale state. Empty
+  reports do not become zero usage. Real organization billing remains unverified.
+  See [API billing](API_USAGE_BETA.md) and [ADR 0029](adr/0029-api-billing-snapshots.md).
+- The Grok Bot encrypted reader accepts canonical v10 legacy values with the
+  same full-subject active-account binding as scoped envelopes. Its fixed
+  Keychain pair is Grok Bot Safe Storage / Grok Bot Key. Native metadata confirms
+  these shapes; access and live allowance remain separate gates. See
+  [ADR 0030](adr/0030-grok-bot-encrypted-compatibility.md).
+
+- Grok Bot Desktop quota burn uses live same-account observations spanning at
+  least one minute and no more than five minutes. It reports percentage points
+  per hour and can estimate run-out without assuming a quota-cycle duration.
+  Missing/stale reads, reconnects, source changes and resets clear measurement.
+  Archives retain quota but discard these observation baselines. No token or
+  dollar rate is derived. See [ADR 0031](adr/0031-grok-quota-burn.md).
+- API setup has its own Settings category, separate from account connections
+  and onboarding. Fetch billing updates the snapshot automatically; ordinary
+  Refresh only rereads it. The advanced helper retains key-free macOS zsh
+  commands and a hidden prompt. See [ADR 0032](adr/0032-one-time-api-setup.md).
+  Real organization billing remains unverified.

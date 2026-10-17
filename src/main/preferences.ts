@@ -15,7 +15,7 @@ type Kind = "boolean" | "number" | "string" | "data" | "date";
 const kinds: Record<string, Kind> = {
   refreshIntervalSeconds: "number", appearanceTheme: "string", accentTheme: "string", panelSize: "string", managedAccounts: "data", providerOrder: "data",
   sideNotchPanelCorner: "string", updateLastCheckDate: "date", reportNextAllowedAt: "date", updateDismissedVersion: "string", updateAnnouncedVersion: "string",
-  desktopCodexConnection: "string", desktopCodexCleanup: "string", desktopClaudeIdentity: "string",
+  desktopCodexConnection: "string", desktopCodexCleanup: "string", desktopClaudeIdentity: "string", desktopAntigravityIdentity: "string", desktopGrokIdentity: "string", desktopGrokSource: "string",
   ...Object.fromEntries(["launchAtLogin", "showHeatmap", "showClaudeHeatmap", "showCodexHeatmap", "quotaAlertsEnabled", "sideNotchPanelEnabled", "sideNotchPanelPinned", "menuBarCompactEnabled", "onboardingCompleted", "updateCheckEnabled", "showPacingBurnRate", "showActivityTelemetry", "showDailyActivityChart", "showSideNotchResetButton", ...providers.flatMap(p => [providerPreference(p), trayPreference(p)])].map(k => [k, "boolean" as const])),
 };
 export const initialPreferences: Record<string, PreferenceValue> = {
@@ -24,15 +24,15 @@ export const initialPreferences: Record<string, PreferenceValue> = {
   sideNotchPanelEnabled: false, sideNotchPanelPinned: false, menuBarCompactEnabled: true, onboardingCompleted: false,
   updateCheckEnabled: true, showPacingBurnRate: true, showActivityTelemetry: true, showDailyActivityChart: true, showSideNotchResetButton: true,
   updateDismissedVersion: "", updateAnnouncedVersion: "",
-  desktopCodexConnection: "", desktopCodexCleanup: "", desktopClaudeIdentity: "",
+  desktopCodexConnection: "", desktopCodexCleanup: "", desktopClaudeIdentity: "", desktopAntigravityIdentity: "", desktopGrokIdentity: "", desktopGrokSource: "cursor",
   ...Object.fromEntries(providers.flatMap(p => [[providerPreference(p), ["codex", "openCodeGo", "openRouter"].includes(p)], [trayPreference(p), true]])),
 };
 const codexTestPreferences: Record<string, PreferenceValue> = {
-  launchAtLogin: false, updateCheckEnabled: false, desktopClaudeIdentity: "off",
+  launchAtLogin: false, updateCheckEnabled: false, desktopClaudeIdentity: "off", desktopGrokIdentity: "off",
   ...Object.fromEntries(providers.filter(p => p !== "codex").map(p => [providerPreference(p), false])),
 };
 const claudeTestPreferences: Record<string, PreferenceValue> = {
-  launchAtLogin: false, updateCheckEnabled: false, desktopCodexConnection: "off", desktopCodexCleanup: "",
+  launchAtLogin: false, updateCheckEnabled: false, desktopCodexConnection: "off", desktopCodexCleanup: "", desktopGrokIdentity: "off",
   ...Object.fromEntries(providers.filter(p => p !== "claude").map(p => [providerPreference(p), false])),
 };
 export function validAccounts(raw: unknown): raw is ManagedAccount[] {
@@ -45,12 +45,13 @@ function validate(key: string, v: unknown): v is PreferenceValue {
   if (kind === "date" || kind === "number") return typeof v === "number" && Number.isFinite(v);
   if (kind === "boolean") return typeof v === "boolean";
   if (typeof v !== "string" || v.length > 100 || /[\r\n\0]/.test(v)) return false;
+  if (key === "desktopGrokSource") return v === "cursor" || v === "bot";
   if (key === "appearanceTheme") return ["system", "light", "dark"].includes(v);
   if (key === "accentTheme") return ["blue", "violet", "teal", "amber", "rose", "graphite"].includes(v);
   if (key === "panelSize") return Object.hasOwn(panelScales, v);
   if (key === "sideNotchPanelCorner") return v === "" || /^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(v);
   if (key === "desktopCodexConnection" || key === "desktopCodexCleanup") return v === "" || key === "desktopCodexConnection" && v === "off" || /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(v);
-  if (key === "desktopClaudeIdentity") return v === "" || v === "off" || /^[a-f\d]{64}$/.test(v);
+  if (key === "desktopClaudeIdentity" || key === "desktopAntigravityIdentity" || key === "desktopGrokIdentity") return v === "" || v === "off" || /^[a-f\d]{64}$/.test(v);
   return true;
 }
 export class Preferences {

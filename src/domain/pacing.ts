@@ -5,6 +5,30 @@ export interface Pace {
   usedPercent: number; remainingPercent: number; elapsedPercent: number; deficitPercent: number;
   burnRate: number; projectedExhaustion?: number; status: "deficit" | "surplus" | "onPace";
 }
+const observationInterval = 60000, observationFreshness = 5 * 60000;
+const freshObservation = (at: number | undefined, now: number): at is number => at !== undefined && Number.isFinite(at) && Number.isFinite(now) && at <= now && now - at <= observationFreshness;
+const validPercent = (used: number) => Number.isFinite(used) && used >= 0 && used <= 100;
+const activeWindow = (w: QuotaWindow, now: number) => validPercent(w.usedPercent) && (w.resetsAt === undefined || Number.isFinite(w.resetsAt) && w.resetsAt > now);
+
+export function measuredBurn(w: QuotaWindow, now: number): { percentPerHour: number; projectedExhaustion?: number } | undefined {
+  const b = w.pacingBaseline;
+  if (!b || !activeWindow(w, now) || !validPercent(b.usedPercent) || w.usedPercent < b.usedPercent || !freshObservation(b.capturedAt, now) || !freshObservation(b.observedAt, now) || b.observedAt - b.capturedAt < observationInterval) return;
+  const percentPerHour = (w.usedPercent - b.usedPercent) * 3600000 / (b.observedAt - b.capturedAt);
+  const exhaustion = percentPerHour > 0 && w.usedPercent < 100 ? b.observedAt + (100 - w.usedPercent) * 3600000 / percentPerHour : undefined;
+  return { percentPerHour, ...(exhaustion !== undefined && Number.isFinite(exhaustion) && exhaustion > now && (w.resetsAt === undefined || exhaustion < w.resetsAt) ? { projectedExhaustion: exhaustion } : {}) };
+}
+
+// Callers supply only live observations from the same account/source, never archives.
+export function observeQuota(current: Quota, previous: Quota | undefined, now: number): Quota {
+  const sample = (w: QuotaWindow, prior?: QuotaWindow): QuotaWindow => {
+    const clean = { ...w, pacingBaseline: undefined };
+    if (!freshObservation(current.capturedAt, now) || !activeWindow(w, now) || previous && current.capturedAt <= previous.capturedAt) return clean;
+    const b = prior?.pacingBaseline;
+    const keep = prior && previous && previous.provider === current.provider && freshObservation(previous.capturedAt, now) && activeWindow(prior, now) && prior.resetsAt === w.resetsAt && prior.windowDurationMins === w.windowDurationMins && w.usedPercent >= prior.usedPercent && b && b.observedAt === previous.capturedAt && freshObservation(b.capturedAt, now) && b.capturedAt <= previous.capturedAt && validPercent(b.usedPercent) && b.usedPercent <= prior.usedPercent;
+    return { ...clean, pacingBaseline: { usedPercent: keep ? b.usedPercent : w.usedPercent, capturedAt: keep ? b.capturedAt : current.capturedAt, observedAt: current.capturedAt } };
+  };
+  return { ...current, windows: current.windows.map(w => sample(w, previous?.windows.find(p => p.label === w.label))), groups: current.groups.map(g => ({ ...g, windows: g.windows.map(w => sample(w, previous?.groups.find(p => p.id === g.id)?.windows.find(p => p.label === w.label))) })) };
+}
 export function durationMins(w: QuotaWindow): number | undefined {
   if (w.windowDurationMins && w.windowDurationMins > 0) return w.windowDurationMins;
   const l = w.label.toLowerCase();

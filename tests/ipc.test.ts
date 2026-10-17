@@ -1,6 +1,24 @@
 import { describe, it, expect } from "vite-plus/test";
 import { parseRequest, trustedSender, projectSettings } from "../src/main/ipc";
 describe("renderer boundary", () => {
+  it("allows only fixed providers and no credential or selector in saved-key requests", () => {
+    for (const provider of ["openai", "anthropic"]) expect(parseRequest({ action: "apiBillingFetchSaved", provider })).toEqual({ action: "apiBillingFetchSaved", provider });
+    for (const provider of ["openAI", "claude", null, 1]) expect(() => parseRequest({ action: "apiBillingFetchSaved", provider })).toThrow("Invalid request");
+    for (const field of ["adminKey", "service", "account", "path", "allowUI"]) expect(() => parseRequest({ action: "apiBillingFetchSaved", provider: "openai", [field]: "synthetic" })).toThrow("Invalid request");
+  });
+  it("accepts only an exact one-run API billing request with a bounded header-safe key", () => {
+    for (const provider of ["openai", "anthropic"]) for (const adminKey of ["x", "synthetic-admin-key", "x".repeat(8192)]) {
+      const request = { action: "apiBillingFetch", provider, adminKey };
+      expect(parseRequest(request)).toEqual(request);
+    }
+    const request = { action: "apiBillingFetch", provider: "openai", adminKey: "synthetic" };
+    for (const adminKey of ["", "x".repeat(8193), "a b", "a\u00a0b", "a\u2028b", ...Array.from({ length: 32 }, (_, n) => `a${String.fromCharCode(n)}b`), "a\x7fb", null, 1, ["synthetic"], {}]) expect(() => parseRequest({ ...request, adminKey })).toThrow("Invalid request");
+    for (const provider of ["codex", "claude", "OPENAI", ["openai"], null, 1]) expect(() => parseRequest({ ...request, provider })).toThrow("Invalid request");
+    for (const raw of [{ action: request.action }, { action: request.action, provider: "openai" }, { ...request, url: "https://example.invalid" }, { ...request, path: "/synthetic" }, { ...request, save: true }]) expect(() => parseRequest(raw)).toThrow("Invalid request");
+    expect(() => parseRequest(Object.assign(Object.create({ adminKey: "synthetic" }), { action: request.action, provider: "openai" }))).toThrow("Invalid request");
+    expect(() => parseRequest({ action: "setPreference", key: "adminKey", value: "synthetic" })).toThrow("Invalid request");
+    expect(projectSettings({ adminKey: "synthetic" }, [], "/synthetic").values).not.toHaveProperty("adminKey");
+  });
   it("accepts report intent without renderer-selected content or destination", () => {
     expect(parseRequest({ action: "sendReport" })).toEqual({ action: "sendReport" });
     expect(() => parseRequest({ action: "setPreference", key: "reportNextAllowedAt", value: 0 })).toThrow();
@@ -75,4 +93,10 @@ it("rejects removed strip and legacy pin edits and excludes strip mode from sett
     expect(projectSettings({ sideNotchStripMode: value }, [], "/synthetic").values).not.toHaveProperty("sideNotchStripMode");
   }
   expect(() => parseRequest({ action: "setPreference", key: "sideNotchPanelPinned", value: true })).toThrow();
+});
+
+it("keeps Grok Cursor credentials and identity outside renderer-controlled connection requests", () => {
+  for (const extra of [{ token: "synthetic" }, { cookie: "synthetic" }, { identity: "a".repeat(64) }, { path: "/synthetic" }, { url: "https://example.invalid" }, { consent: true }]) expect(() => parseRequest({ action: "connect", provider: "grok", ...extra })).toThrow("Invalid request");
+  expect(() => parseRequest({ action: "setPreference", key: "desktopGrokIdentity", value: "a".repeat(64) })).toThrow("Invalid request");
+  expect(projectSettings({ desktopGrokIdentity: "a".repeat(64) }, [], "/synthetic").values).not.toHaveProperty("desktopGrokIdentity");
 });
