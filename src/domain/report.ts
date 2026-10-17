@@ -3,7 +3,7 @@ import { pace, effectivePace, etaSeconds, formatETA, paceText } from "./pacing";
 
 export const iso = (at: number) => new Date(at).toISOString().replace(/\.\d{3}Z$/, "Z");
 export interface WindowReport { label: string; used_percent: number; remaining_percent: number; resets_at?: string; eta_seconds?: number; eta_text?: string; pacing?: string; burn_rate?: number }
-export interface ProviderReport { provider: Provider; account?: string; status: "ok" | "unavailable"; reason?: string; plan?: string; windows: WindowReport[]; credits?: { balance: number; unit: "credits" | "dollars"; dollar_balance?: number } }
+export interface ProviderReport { provider: Provider; account?: string; status: "ok" | "unavailable"; reason?: string; plan?: string; observed_at?: string; windows: WindowReport[]; credits?: { balance: number; unit: "credits" | "dollars"; dollar_balance?: number } }
 export interface LimitsReport { schema: 1; generated_at: string; providers: ProviderReport[] }
 export function limitsReport(order: Slot[], quotas: Record<string, Loaded<Quota>>, burns: Record<string, number> = {}, now = Date.now()): LimitsReport {
   return {
@@ -16,6 +16,7 @@ export function limitsReport(order: Slot[], quotas: Record<string, Loaded<Quota>
       const q = state.value;
       return {
         provider: s.provider, ...account, status: "ok", ...(q.planType === undefined ? {} : { plan: q.planType }),
+        ...(s.provider === "muse" ? { observed_at: iso(q.capturedAt) } : {}),
         windows: q.windows.map(w => {
           const raw = pace(w, now), p = raw && effectivePace(raw, burns[slotKey(s)], now);
           const eta = p && etaSeconds(p, w.resetsAt, now);

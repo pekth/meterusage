@@ -45,6 +45,8 @@ through Settings → API connections with a saved legacy Admin key, a one-time
 Admin key, or the bundled environment-only helper. Existing Keychain entries
 are preserved; pasted keys are not saved. OpenRouter keeps its existing
 account balance and aggregate activity integration.
+Unreleased source adds opt-in [Muse Code CLI allowance](docs/DESKTOP-CONNECTIONS.md#muse-code-cli).
+Muse.ai cloud/Desktop connection is separate and remains pending.
 Build 54's Settings footer incorrectly says `0.2.41`; the packaged version is
 `0.3.0-beta.1`. See [known beta limits](docs/BETA.md#known-limits).
 
@@ -72,7 +74,7 @@ fall back to compilation. See the [Swift installation guide](docs/swift/README.m
 
 ## Setup and data coverage
 
-All nine provider adapters remain in the retained Swift and candidate source:
+The original nine provider adapters remain in the retained Swift and candidate source:
 Codex, Claude Code, Antigravity, OpenRouter, Grok, OpenCode Go, Cursor, Copilot
 CLI and Gemini CLI. Their inputs and available measurements differ. The
 [Swift provider matrix](docs/swift/README.md#provider-matrix) describes existing

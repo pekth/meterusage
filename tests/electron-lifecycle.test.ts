@@ -6,6 +6,7 @@ import { tmpdir, hostname } from "node:os";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { providers, type Provider } from "../src/domain/models";
+import type { Source } from "../src/main/composition";
 
 it.each([
   { candidate: false, keyboard: false, retainedZoom: false, onboarding: true },
@@ -79,7 +80,8 @@ it.each([
   const recover = vi.fn(() => recovery), start = vi.fn(async () => {});
   const connect = vi.fn(async (_provider: string, _open: unknown, consent: () => Promise<boolean>) => { await consent(); return false; });
   const useLocal = vi.fn(async (_provider: string) => {}), disconnect = vi.fn(async (_provider: string) => {});
-  const composition = vi.fn(() => []), refresh = vi.fn(async () => {}), forgetQuota = vi.fn();
+  const composition = vi.fn<() => Source[]>(() => []), refresh = vi.fn(async () => {}), forgetQuota = vi.fn();
+  let activeSources: readonly Source[] = [];
   let connectionChanged!: () => void;
   vi.doMock("electron", () => ({ app: application, Tray: TestTray, BrowserWindow: TestWindow,
     screen: display, nativeTheme: theme, powerMonitor: new EventEmitter(), ipcMain: { handle: ipc }, dialog: { showErrorBox, showMessageBox },
@@ -101,7 +103,9 @@ it.each([
     connect = connect; useLocal = useLocal; disconnect = disconnect;
   } }));
   vi.doMock("../src/main/coordinator", () => ({ Coordinator: class {
-    constructor(_launch: unknown, _prefs: unknown, _sources: unknown, _clock: unknown, alert: (a: unknown) => void) { alert({ title: "Fixture", body: "Fixture" }); }
+    constructor(_launch: unknown, _prefs: unknown, sources: Source[], _clock: unknown, alert: (a: unknown) => void) { activeSources = sources; alert({ title: "Fixture", body: "Fixture" }); }
+    get sources() { return activeSources; }
+    set sources(next: readonly Source[]) { activeSources = next; }
     prepareReset = prepareReset; confirmReset = confirmReset; cancelReset = cancelReset;
     diagnostics = (version: string) => `MeterUsage ${version}\nquota: unavailable (offline)`;
     refresh = refresh; forgetQuota = forgetQuota;
@@ -190,6 +194,18 @@ it.each([
     expect(flyout.bounds).toMatchObject({ width: 420, height: 593 });
     await invoke(windows[2], { action: "settings" });
     const settings = windows[3];
+    const stableSource: Source = { slot: { provider: "codex", slotID: "", label: "" } }, museSource: Source = { slot: { provider: "muse", slotID: "", label: "" } };
+    activeSources = [stableSource];
+    composition.mockReturnValueOnce([stableSource, museSource]);
+    expect(await invoke(settings, { action: "setPreference", key: "showProviderMuse", value: true })).toEqual({ ok: true });
+    expect(activeSources).toEqual([stableSource, museSource]); expect(forgetQuota).toHaveBeenCalledWith("muse");
+    const oldSources = activeSources, invalidations = forgetQuota.mock.calls.length;
+    setPreference.mockRejectedValueOnce(new Error("Synthetic Muse save failure"));
+    expect(await invoke(settings, { action: "setPreference", key: "showProviderMuse", value: false })).toEqual({ ok: false, error: "Could not complete action" });
+    expect(activeSources).toBe(oldSources); expect(forgetQuota).toHaveBeenCalledTimes(invalidations);
+    composition.mockReturnValueOnce([stableSource]);
+    expect(await invoke(settings, { action: "setPreference", key: "showProviderMuse", value: false })).toEqual({ ok: true });
+    expect(activeSources).toEqual([stableSource]);
     expect(reportFetch).not.toHaveBeenCalled();
     expect(await invoke(flyout, { action: "sendReport" })).toEqual({ ok: false, error: "Could not complete action" });
     expect(reportFetch).not.toHaveBeenCalled();

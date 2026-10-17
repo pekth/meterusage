@@ -21,7 +21,7 @@ it("normalizes damaged and older orders without dropping providers", () => {
   for (const raw of [[], ["claude"], [...order, "claude"], [...order.slice(1), "unknown"]]) expect(validProviderOrder(raw)).toBe(false);
   expect(orderedSlots([primary("codex"), primary("claude"), { ...primary("codex"), slotID: "work" }, { ...primary("claude"), slotID: "second" }], order).map(slotKey)).toEqual(["claude", "claude#second", "codex", "codex#work"]);
   expect(moveProvider(order, "claude", -1)).toEqual(order);
-  expect(moveProvider(order, "gemini", 1)).toEqual(order);
+  expect(moveProvider(order, providers.at(-1)!, 1)).toEqual(order);
   expect(moveProvider(order, "claude", 1).slice(0, 2)).toEqual(["codex", "claude"]);
 });
 it("persists and reloads order, normalizes legacy input and rejects invalid writes at IPC", async () => {

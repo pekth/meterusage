@@ -115,5 +115,7 @@ export function readArchive(path: string): Record<string, Quota> {
   } catch { return {}; }
 }
 export function saveArchive(path: string, readings: { slot: Slot; quota: Quota }[]) {
-  atomicJSON(path, readings.map(({ slot: s, quota: q }) => ({ provider: s.provider, slotID: s.slotID || undefined, label: s.label || undefined, capturedAt: toDate(q.capturedAt), windows: q.windows.map(encodeWindow), groups: q.groups.length ? q.groups.map(g => ({ ...g, windows: g.windows.map(encodeWindow) })) : undefined, credits: q.credits && { ...q.credits, unit: { [q.credits.unit]: {} } }, resetCreditCount: q.resetCreditCount, resetCredits: q.resetCredits.length ? q.resetCredits.map(c => ({ ...c, expiresAt: toDate(c.expiresAt) })) : undefined, planType: q.planType, resetPacingSince: toDate(q.resetPacingSince) })));
+  // Legacy Swift/Electron readers reject the entire file for an unknown provider.
+  // Muse allowance stays in memory so rollback retains every other quota.
+  atomicJSON(path, readings.filter(({ slot }) => slot.provider !== "muse").map(({ slot: s, quota: q }) => ({ provider: s.provider, slotID: s.slotID || undefined, label: s.label || undefined, capturedAt: toDate(q.capturedAt), windows: q.windows.map(encodeWindow), groups: q.groups.length ? q.groups.map(g => ({ ...g, windows: g.windows.map(encodeWindow) })) : undefined, credits: q.credits && { ...q.credits, unit: { [q.credits.unit]: {} } }, resetCreditCount: q.resetCreditCount, resetCredits: q.resetCredits.length ? q.resetCredits.map(c => ({ ...c, expiresAt: toDate(c.expiresAt) })) : undefined, planType: q.planType, resetPacingSince: toDate(q.resetPacingSince) })));
 }

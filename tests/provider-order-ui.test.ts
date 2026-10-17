@@ -1,7 +1,7 @@
 import { it, expect, vi, beforeEach } from "vite-plus/test";
 import { createElement, isValidElement, type ReactNode } from "react";
 import { ProviderOrder } from "../src/renderer/provider-order";
-import { providers, type Provider } from "../src/domain/models";
+import { providers, providerNames, type Provider } from "../src/domain/models";
 const hooks = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0 }));
 vi.mock("react", async original => ({
   ...await original<typeof import("react")>(),
@@ -32,7 +32,7 @@ function setup(result: boolean | Promise<boolean> = true) {
 const settle = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 beforeEach(() => { hooks.cells = []; hooks.cursor = 0; });
 it("moves by keyboard and buttons, respects bounds and restores handle focus", async () => {
-  const s = setup(); expect(s.button("Move Codex up").props.disabled).toBe(true); expect(s.button("Move Gemini CLI down").props.disabled).toBe(true);
+  const s = setup(); expect(s.button("Move Codex up").props.disabled).toBe(true); expect(s.button(`Move ${providerNames[providers.at(-1)!]} down`).props.disabled).toBe(true);
   s.button("Reorder Codex").props.onKeyDown({ key: "ArrowUp", preventDefault: vi.fn() }); await settle(); expect(s.save).not.toHaveBeenCalled();
   s.button("Reorder Claude").props.onKeyDown({ key: "ArrowUp", preventDefault: vi.fn() }); await settle(); expect(s.saved.slice(4, 6)).toEqual(["claude", "openRouter"]);
   s.button("Move Claude up").props.onClick(); await settle(); expect(s.saved.slice(3, 5)).toEqual(["claude", "openCodeGo"]); expect(s.focus).toHaveBeenCalled();

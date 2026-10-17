@@ -29,6 +29,7 @@ Usage. See [ADR 0023](../adr/0023-onboarding-source-choice.md).
 | Grok Bot Desktop (Beta), unreleased source | Explicit consent reads the active account-bound encrypted Bot credential and requests allowance. | Native Keychain/store and endpoint compatibility remain unverified. Existing saved Cursor connections retain their source. |
 | OpenCode Go local | **Use local OpenCode** enables local Go sessions without a sign-in or key. Existing Go authentication also supplies allowance. | Go sessions only. Other providers used through OpenCode are excluded. |
 | Grok CLI (Beta) | Existing CLI authentication and local session summaries. | Consumer website/mobile sign-in is unsupported. Session/message counts do not establish token totals. |
+| Muse Code CLI, unreleased source | Explicit **Use Muse Code CLI** enables read-only subscription observations through an existing official CLI. | Last-observed session/weekly allowance only. No local activity, token totals or Muse.ai cloud allowance. Native/live validation remains pending. |
 
 **Use CLI** ends only MeterUsage-owned account state and waits for successful
 cleanup before enabling local collection. Failed cleanup blocks the switch.
@@ -39,7 +40,7 @@ to local collection. See [desktop connections](../DESKTOP-CONNECTIONS.md) and
 
 ### Existing provider inputs
 
-All nine adapters remain wired in [composition](../../src/main/composition.ts).
+The original nine adapters and the unreleased Muse Code reader are wired in [composition](../../src/main/composition.ts).
 The current source adds an OpenCode Go local setup action and Antigravity
 Desktop connection. These changes are separate from the published build 54.
 
