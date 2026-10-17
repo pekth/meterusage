@@ -16,12 +16,17 @@ cutover acceptance remain pending. See [ADR 0010](adr/0010-macos-typescript-elec
 | Provider | Read or request | Retained data |
 | --- | --- | --- |
 | Codex | `codex app-server --listen stdio://` initializes the CLI and calls `account/rateLimits/read`. The CLI uses its own existing authentication. Local rollout headers, model context and cumulative token-ledger events are selected from `sessions/**/*.jsonl`. | Quota windows/groups, plan, balances, reset credits, timestamps, numeric tokens and model. Session paths become opaque IDs; workspace directories become basenames. |
+| Muse Code, unreleased Electron source | Opt-in `muse serve` subprocess using existing official CLI authentication. MSP initialization enables experimental methods, then `usage/read` reads the host's last observation. No model session, prompt, login or logout is started. MeterUsage does not open Muse credential files. | Session and weekly allowance percentages, reset timestamps, session duration, a restricted tier identifier and the provider observation timestamp. Missing or expired observations remain unavailable. No token ledger, cost or Muse.ai allowance is inferred. |
 | Claude | Local transcript usage fields under `projects/`, three tier keys from `.claude.json`, and optional companion quota JSON. | Numeric tokens/cost estimates, model, dates, project basename, plan tier and quota windows. Transcript message content and identifying tier metadata are skipped. |
 | OpenRouter | Existing `OPENROUTER_API_KEY` or supported local key file for `/api/v1/key` and `/api/v1/credits`. An existing management key, with configured API-key fallback, is used for `/api/v1/activity`. | Aggregate usage, balances, limits, dates, request counts and token totals. |
 | OpenCode Go | Existing `opencode-go` key in the local auth store for `https://opencode.ai/zen/go/v1/usage`. Read-only session SQL, with `opencode db --format json` fallback, selects tokens, cost, message counts, dates and directory. | Quota windows, numeric usage and project basename. No message bodies, prompts or tool arguments are selected. |
 | Grok | Existing OIDC key from `.grok/auth.json`, re-read for each billing refresh, sent to `cli-chat-proxy.grok.com/v1/billing?format=credits`. Session `summary.json` files supply dates and message counts. | Allowance, period/reset, plan and session/count metadata. No chat-history content is decoded. |
 | Antigravity | Existing agy container CLI `/usage`; numeric fields from conversation SQLite/protobuf stores, native first and container-volume fallback. Older stores use only history conversation ID/timestamp fields. | Model-group quota, numeric token totals, turn times and aggregate counts. Older history has unknown tokens. No prompt/tool payload or workspace text is decoded. |
 | Cursor, Copilot, Gemini | Existing local quota/usage JSON candidates and local presence checks. | Snapshot quota windows when present. These readers do not fetch cloud quota or provide a token ledger. Presence alone never becomes a zero-usage reading. |
+
+Muse Code allowance stays in memory and is not written to the shared quota
+archive. This preserves archive compatibility with older app versions. Its
+collection preference remains saved; allowance is read again after relaunch.
 
 Codex and Claude additional accounts use separate user-selected configuration
 directories. Enabled existing directories get distinct sources; an absent or

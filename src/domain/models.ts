@@ -1,8 +1,8 @@
-export const providers = ["codex", "antigravity", "grok", "openCodeGo", "openRouter", "claude", "cursor", "copilot", "gemini"] as const;
+export const providers = ["codex", "antigravity", "grok", "openCodeGo", "openRouter", "claude", "cursor", "copilot", "gemini", "muse"] as const;
 export type Provider = typeof providers[number];
 export const providerNames: Record<Provider, string> = {
   codex: "Codex", antigravity: "Antigravity", grok: "Grok", openCodeGo: "OpenCode Go",
-  openRouter: "OpenRouter", claude: "Claude", cursor: "Cursor", copilot: "Copilot CLI", gemini: "Gemini CLI",
+  openRouter: "OpenRouter", claude: "Claude", cursor: "Cursor", copilot: "Copilot CLI", gemini: "Gemini CLI", muse: "Muse Code",
 };
 export interface Slot { provider: Provider; slotID: string; label: string }
 export interface ManagedAccount { id: string; provider: "codex" | "claude"; label: string; path: string; enabled: boolean }
@@ -33,6 +33,7 @@ export const isSessionWindow = (w: QuotaWindow) => w.label.toLowerCase() === "5-
 export function headlineWindow(provider: Provider, windows: QuotaWindow[]): QuotaWindow | undefined {
   if (provider === "codex") return windows.find(isSessionWindow) ?? (windows.length === 1 ? windows[0] : undefined);
   if (provider === "claude") return windows.find(isSessionWindow) ?? windows.find(w => w.label === "7-day" || w.label === "Weekly · All models");
+  if (provider === "muse") return windows.find(isSessionWindow);
   if (provider === "openCodeGo") return windows.find(w => w.label.toLowerCase() === "rolling");
   if (["cursor", "copilot", "gemini"].includes(provider)) { const session = windows.find(isSessionWindow); if (session) return session; }
   return windows.reduce<QuotaWindow | undefined>((max, w) => !max || w.usedPercent > max.usedPercent ? w : max, undefined);

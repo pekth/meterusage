@@ -41,7 +41,7 @@ export class Coordinator {
   private evaluator = new AlertEvaluator();
   private timer?: ReturnType<typeof setInterval>;
   private stopped = false;
-  private controllers = new Set<AbortController>();
+  private controllers = new Map<AbortController, Source>();
   private confirmations = new Map<string, { key: string; creditID: string; expires: number; source: Source }>();
   private resets = new Map<string, AbortController>();
   private currentSources: readonly Source[];
@@ -54,6 +54,7 @@ export class Coordinator {
   set sources(next: readonly Source[]) {
     for (const source of this.currentSources) if (!next.includes(source)) {
       const key = slotKey(source.slot);
+      for (const [controller, owner] of this.controllers) if (owner === source) controller.abort();
       this.resets.get(key)?.abort();
       for (const readings of [this.accountActivities, this.quotas, this.activities, this.usages, this.plans]) delete readings[key];
       for (const kind of ["accountActivity", "quota", "activity", "usage", "plan"]) this.backoffs.delete(`${kind}-${key}`);
@@ -87,7 +88,7 @@ export class Coordinator {
   publish() { const state = this.snapshot(); for (const observe of this.observers) observe(state); }
   start() { this.stopped = false; this.restartTimer(); return this.refresh(); }
   restartTimer() { if (this.timer) clearInterval(this.timer); this.timer = setInterval(() => { void this.refresh(true); }, this.preferences.refreshInterval * 1000); }
-  stop() { this.stopped = true; if (this.timer) clearInterval(this.timer); this.timer = undefined; this.pendingForced = false; for (const c of this.controllers) c.abort(); for (const c of this.resets.values()) c.abort(); this.confirmations.clear(); }
+  stop() { this.stopped = true; if (this.timer) clearInterval(this.timer); this.timer = undefined; this.pendingForced = false; for (const c of this.controllers.keys()) c.abort(); for (const c of this.resets.values()) c.abort(); this.confirmations.clear(); }
   refreshIfStale() { return this.lastRefreshedAt === undefined || this.now() - this.lastRefreshedAt > 20000 ? this.refresh() : Promise.resolve(); }
   refresh(scheduled = false, onlyKey?: string): Promise<void> {
     if (this.stopped) return Promise.resolve();
@@ -155,7 +156,7 @@ export class Coordinator {
     const key = kind === "status" ? source.slot.provider : slotKey(source.slot), backoffKey = `${kind}-${key}`, prior = this.backoffs.get(backoffKey);
     if (!force && prior && this.now() < prior.next) return;
     const resetAtStart = this.archived[key]?.resetPacingSince;
-    const controller = new AbortController(); this.controllers.add(controller);
+    const controller = new AbortController(); this.controllers.set(controller, source);
     const timeout = setTimeout(() => controller.abort(), 30000);
     const aborted = new Promise<never>((_resolve, reject) => controller.signal.addEventListener("abort", () => reject(new Error("Source cancelled")), { once: true }));
     let result: Loaded<T>;

@@ -10,6 +10,7 @@ import { cliPath, cliEnvironment, codexRPC, runCommand, httpTransport, endpoints
 import { AntigravityRuntime, runtimeCandidates } from "./providers/antigravity";
 import { scanGrok, openRouterUsage, openCodeUsage, parseOpenCodeRows, openCodeQuery } from "./providers/usage";
 import { demoSources } from "./demo";
+import { museCodeQuota, museCodeRPC } from "./providers/muse-code";
 import type { DesktopConnections } from "./connections";
 export interface Source {
   accountBound?: boolean;
@@ -92,7 +93,10 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
     quota: signal => options.connections ? options.connections.quota("antigravity", signal, antigravityIdentity) : Promise.reject(new Unavailable("notSignedIn", "Antigravity Desktop")),
   } : { slot: primary("antigravity"), quota: signal => runtime.quota(now(), signal), usage: signal => runtime.usage(join(launch.home, ".gemini/antigravity-cli"), now(), signal) };
   const grokIdentity = String(prefs.values.desktopGrokIdentity);
-  const sources: Source[] = [codex, {
+  const muse: Source[] = prefs.enabled("muse") ? [{
+    slot: primary("muse"), accountBound: true, quota: async signal => museCodeQuota(await museCodeRPC(cliPath("muse", launch.home, env), { env, signal }), now()),
+  }] : [];
+  const sources: Source[] = [codex, ...muse, {
     slot: primary("openRouter"), quota: async signal => {
       const key = openRouterKey(launch); if (!key) throw new Unavailable("dataNotFound", "OpenRouter API key");
       // Start the optional deadline with the required request, inside its 30s budget.

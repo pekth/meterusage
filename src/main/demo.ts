@@ -15,6 +15,7 @@ function demoQuota(p: Provider, now: number): Quota {
   if (p === "openRouter") return { ...quota(p, [w("Monthly", 25.5)], now), credits: { balance: 74.5, hasCredits: true, unlimited: false, unit: "dollars", usedDollars: 25.5, limitDollars: 100 } };
   if (p === "openCodeGo") return { ...quota(p, [w("Rolling", 87, 1.9 * 3600), w("Weekly", 77, 26 * 3600), w("Monthly", 44, 22.4 * 86400)], now), planType: "go" };
   if (p === "grok") return { ...quota(p, [w("Weekly", 31, 2.2 * 86400)], now), planType: "X Premium" };
+  if (p === "muse") return { ...quota(p, [w("Session", 24, 3 * 3600, 300), w("Weekly", 46, 3 * 86400, 10080)], now - 60000), planType: "power" };
   if (p === "antigravity") {
     const q = quota(p, [w("Gemini Weekly", 89, 22 * 3600 + 24 * 60, 10080), w("Gemini 5-hour", 9, 4 * 3600 + 26 * 60, 300), w("Claude/GPT Weekly", 1, 22 * 3600 + 19 * 60, 10080), w("Claude/GPT 5-hour", 0, 4 * 3600 + 59 * 60, 300)], now);
     q.groups = ["Gemini Models", "Claude and GPT models"].map((title, i) => ({ title, id: title.toLowerCase(), windows: q.windows.slice(i * 2, i * 2 + 2).map((w, index) => ({ ...w, label: index ? "5-hour limit" : "Weekly limit" })) })); return q;
@@ -27,7 +28,7 @@ function demoActivity(p: "codex" | "claude", now: number): Activity {
   return { provider: p, sessions, daily, scannedAt: now, telemetry: telemetry(sessions.map(s => ({ startedAt: s.startedAt, tokens: totalTokens(s.tokens), messageCount: s.messageCount })), daily, now) };
 }
 export function demoSources(now: () => number, accounts: ManagedAccount[] = []): Source[] {
-  const slots = [primary("claude"), second("claude"), primary("codex"), second("codex"), ...(["openRouter", "openCodeGo", "grok", "antigravity"] as const).map(primary), ...accounts.filter(a => a.enabled).map(accountSlot)];
+  const slots = [primary("claude"), second("claude"), primary("codex"), second("codex"), ...(["openRouter", "openCodeGo", "grok", "antigravity", "muse"] as const).map(primary), ...accounts.filter(a => a.enabled).map(accountSlot)];
   return slots.map(slot => {
     const consumed = new Set<string>();
     const source: Source = { slot, quota: async () => { const q = demoQuota(slot.provider, now()); if (slot.provider === "codex") { q.resetCredits = q.resetCredits.filter(c => !consumed.has(c.id)); q.resetCreditCount = q.resetCredits.length; if (consumed.size) { q.windows = q.windows.map(w => ({ ...w, usedPercent: 0 })); q.groups[0].windows = q.windows; } } return q; } };

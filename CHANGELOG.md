@@ -8,6 +8,13 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Add opt-in Muse Code subscription allowance through the official CLI's
+  read-only `usage/read` protocol. Show session and weekly windows with the
+  original observation time. Do not send prompts or read CLI credentials.
+  Honor saved opt-in in headless reports, cancel reads when stopped, retain
+  observation time in JSON and keep allowance out of the shared archive for
+  compatibility with older app versions on rollback.
+  Muse.ai Desktop import and native/live validation remain pending.
 - Show Grok Bot Desktop quota burn in percentage points per hour from recent
   same-account readings. Collect for at least a minute, discard old/reset
   observations and show an estimated run-out only when measured.

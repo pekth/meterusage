@@ -86,6 +86,32 @@ identify the cause of a live connection failure or prove that Claude Desktop
 connection works. Packaged banner display, Keychain access, Desktop compatibility
 and live allowance still require native acceptance.
 
+## Muse Code CLI
+
+Unreleased Electron source adds a separate **Muse Code** row in Settings.
+Sign in with the [official CLI](https://dev.meta.ai/products/muse-code), then
+choose **Use Muse Code CLI**. Collection starts disabled and the choice survives
+relaunch. Headless JSON collection also honors this choice. **Stop Muse Code**
+cancels active reads and clears the in-memory allowance without signing out the CLI.
+Demo mode provides invented allowance and blocks the setup action. Isolated
+Codex and Claude test profiles exclude this provider.
+
+MeterUsage starts `muse serve`, initializes the official experimental MSP
+surface and calls [`usage/read`](https://meta-models.github.io/muse-code-sdk/next/generated/msp/methods/usage-read/).
+It never starts a model turn or opens CLI credentials. The method returns the
+host's last observation, which can be absent. Missing data is unavailable,
+never zero. An unsupported CLI must be upgraded separately. Cards show the
+original observation time, session and weekly percentages, and reported resets.
+They provide no local token history or cost estimate.
+The JSON quota report includes `observed_at` for Muse Code, separate from the
+report's `generated_at`. Muse allowance stays in memory and is excluded from the
+shared quota archive, so older versions can still load other providers on rollback.
+
+Muse.ai's cloud agent and Desktop app use a separate subscription and session.
+The Muse Code connection does not provide Muse.ai allowance. Native Muse.ai
+session import remains pending verification of its store and encryption schema.
+Source tests do not prove native or live-provider behavior.
+
 ## Data coverage
 
 Account allowance comes from the provider account service. It can reflect use

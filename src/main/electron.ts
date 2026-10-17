@@ -274,6 +274,10 @@ async function start(launch: Launch) {
           if (app.getLoginItemSettings().openAtLogin !== r.value) throw new Error("Could not change login item");
         }
         await prefs.set(r.key, r.value);
+        if (r.key === "showProviderMuse") {
+          coordinator.forgetQuota("muse");
+          coordinator.sources = [...coordinator.sources.filter(s => s.slot.provider !== "muse"), ...sources().filter(s => s.slot.provider === "muse")];
+        }
         if (r.key === "onboardingCompleted" && r.value === true && surface === "settings" && !quitting && !source.isDestroyed()) { source.hide(); showFlyout(); }
         if (r.key === "panelSize") sizeFlyout();
         if (r.key === "refreshIntervalSeconds") coordinator.restartTimer();

@@ -191,13 +191,13 @@ describe("candidate isolation before composition", () => {
     const root = temp(), launch = launchConfiguration(["--demo", "--candidate-profile", root], { OPENROUTER_API_KEY: "never-read", HOME: "/invented/home", CODEX_HOME: "/invented/account" });
     const forbidden: Command = async () => { throw new Error("Live command invoked"); };
     const preferences = await Preferences.load(launch, forbidden), sources = compose(launch, preferences, { now: () => now, command: forbidden, http: async () => { throw new Error("Live HTTP invoked"); } });
-    const report = await jsonReport(sources, now); expect(report.providers).toHaveLength(8); expect(report.providers.every(p => p.status === "ok")).toBe(true);
+    const report = await jsonReport(sources, now); expect(report.providers).toHaveLength(9); expect(report.providers.every(p => p.status === "ok")).toBe(true);
     expect(launch.env).toEqual({}); expect(launch.home).toBe(root); await preferences.set("appearanceTheme", "dark"); expect((await Preferences.load(launch, forbidden)).values.appearanceTheme).toBe("dark");
     expect(JSON.stringify(report)).not.toMatch(/never-read|invented\/home/); expect(existsSync(join(root, "quota-archive.json"))).toBe(false);
   });
   it("returns headless schema1 including explicit --force and --json compatibility", async () => {
     const root = temp(); const r = JSON.parse(await runJSON(["--json", "--force", "--demo", "--candidate-profile", root], {}));
-    expect(r.schema).toBe(1); expect(r.providers.map((p: { provider: string }) => p.provider)).toEqual(["claude", "claude", "codex", "codex", "openRouter", "openCodeGo", "grok", "antigravity"]);
+    expect(r.schema).toBe(1); expect(r.providers.map((p: { provider: string }) => p.provider)).toEqual(["claude", "claude", "codex", "codex", "openRouter", "openCodeGo", "grok", "antigravity", "muse"]);
     expect(r.providers[1].account).toBe("Second account"); expect(r.providers[2].credits.balance).toBe(41.6);
   });
 });
@@ -279,10 +279,10 @@ describe("provider path and transport composition", () => {
       const provider = (await report).providers[0]; expect(provider.status).toBe("ok"); expect(provider.windows[0].used_percent).toBe(0); expect(cancelled).toBe(true);
     } finally { vi.useRealTimers(); }
   });
-  it("has all nine primary providers and never falls back from alternate Claude plan/quota", async () => {
+  it("has every primary provider and never falls back from alternate Claude plan/quota", async () => {
     const root = temp(), alt = join(root, "alternate"); mkdirSync(alt); mkdirSync(join(root, ".claude")); writeFileSync(join(root, ".claude.json"), '{"oauthAccount":{"seatTier":"pro"}}'); writeFileSync(join(root, ".claude", "meterusage-usage.json"), '{"five_hour":{"used_percentage":75}}');
     const prefs = await Preferences.load(liveFixture(root), async () => { throw new Error("absent"); }); prefs.values.managedAccounts = [{ id: "alternate", provider: "claude", label: "Alternate", path: alt, enabled: true }];
-    const sources = compose(liveFixture(root), prefs, { now: () => now }); expect(sources.filter(s => !s.slot.slotID)).toHaveLength(9);
+    const sources = compose(liveFixture(root), prefs, { now: () => now }); expect(sources.filter(s => !s.slot.slotID)).toHaveLength(providers.filter(p => p !== "muse" || prefs.enabled(p)).length);
     expect(sources.filter(s => s.status).map(s => s.slot.provider)).toEqual(["codex", "claude"]);
     const alternate = sources.find(s => s.slot.slotID === "alternate")!; await expect(alternate.plan!()).rejects.toThrow("No usage"); await expect(alternate.quota!()).rejects.toThrow("No usage");
     const primary = sources.find(s => s.slot.provider === "claude" && !s.slot.slotID)!; expect(await primary.plan!()).toBe("Pro"); expect((await primary.quota!()).windows[0].usedPercent).toBe(75);

@@ -41,6 +41,19 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 ## Product and source facts
 
+- Unreleased Electron source adds opt-in Muse Code allowance with `muse serve`
+  and the official experimental MSP `usage/read` method. The source starts
+  disabled, reads no credential files and sends no model turn. It preserves
+  observation age and percentages, including provider values above 100, while
+  rejecting absent, expired or malformed observations. Settings, demo cards,
+  menu-bar/notch provider ordering and JSON quota reporting use the separate
+  `muse` provider. Saved opt-in also gates headless collection; stopping cancels
+  active reads and invalidates allowance. JSON includes `observed_at`, and
+  allowance stays in memory, outside the shared archive, to preserve rollback
+  compatibility. Muse.ai native session import remains unimplemented; no
+  verified native store path or schema is available. Native/live validation
+  remains separate. See [ADR 0033](adr/0033-muse-code-subscription-allowance.md).
+
 - Unreleased Antigravity Desktop setup reuses the existing connection controls,
   preferences, IPC and account-bound source. It requires one running same-user
   desktop language server with a CSRF token and PID-owned IPv4 loopback port.
