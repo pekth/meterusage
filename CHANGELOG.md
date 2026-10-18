@@ -19,7 +19,8 @@ follows [Semantic Versioning](https://semver.org/).
   local CLI activity, Codex browser sign-in through the installed CLI,
   OpenRouter usage and one-time OpenAI or Anthropic API billing keys. Windows
   desktop Claude, Antigravity and Grok Bot connections remain unavailable.
-  Packaging and a Windows CI workflow are configured; workflow success, native
+  Windows CI passed focused tests, unsigned NSIS/portable packaging and an
+  isolated packaged-demo/single-instance smoke check. Interactive Windows
   acceptance, installer acceptance and signing remain unverified. This is not
   a Windows release.
 

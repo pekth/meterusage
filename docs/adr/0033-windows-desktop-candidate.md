@@ -1,6 +1,6 @@
 # ADR 0033: Windows desktop source candidate
 
-- Status: Accepted candidate scope; Windows validation and release remain open
+- Status: Accepted candidate scope; interactive Windows validation and release remain open
 - Date: 2026-10-18
 - Amends: [ADR 0010](0010-macos-typescript-electron.md) only for the Windows implementation hold
 
@@ -31,6 +31,26 @@ or Keychain data. One-time API keys stay in memory for the requested fetch.
 Windows workflow defines typecheck, focused tests, package creation and an
 isolated demo/single-instance smoke check. Its definition is not evidence that
 CI passed. No public Windows build or release is authorized by this ADR.
+
+## CI validation
+
+On 2026-10-18, [Windows run 39107127936](https://github.com/pekth/meterusage/actions/runs/39107127936)
+passed for candidate head `82b7ca2952bc725576879647747ff4fa4018d60b`, using
+PR merge checkout `58f48c2b20ca572b9480e8bfa2c0941b73a08d20`:
+
+- Typecheck and 78 tests passed, including three native Windows npm-wrapper
+  and process-tree tests.
+- Unsigned x64 NSIS and portable executables were built.
+- The unpacked packaged demo stayed running in an isolated profile, and a
+  second invocation exited successfully while the first remained running.
+- Both executables were uploaded as the
+  [MeterUsage-Windows-x64-unsigned CI artifact](https://github.com/pekth/meterusage/actions/runs/39107127936/artifacts/12128544404).
+
+The [macOS CI run](https://github.com/pekth/meterusage/actions/runs/39107127916)
+also built the Swift package and passed 394 tests using the same PR merge checkout.
+These receipts establish CI behavior for the recorded inputs. They do not
+establish interactive Windows behavior, installer install/uninstall acceptance,
+signing or a public release.
 
 ## Consequences and remaining proof
 

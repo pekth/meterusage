@@ -16,8 +16,10 @@ browser sign-in through the installed CLI, OpenRouter and one-time OpenAI or
 Anthropic API billing. Claude Desktop, Antigravity Desktop and Grok Bot Desktop
 account connections are unavailable. Preferences, history and sanitized
 billing snapshots use `%APPDATA%\MeterUsage`, defaulting to the user's
-`AppData\Roaming\MeterUsage`. Windows CI success, native behavior, installer
-acceptance and signing are unverified. See [ADR 0033](../adr/0033-windows-desktop-candidate.md).
+`AppData\Roaming\MeterUsage`. Windows CI passed focused tests, packaging and
+isolated packaged startup/single-instance checks. Interactive Windows behavior,
+installer acceptance and signing remain unverified. See the
+[CI receipt and open gates](../adr/0033-windows-desktop-candidate.md#ci-validation).
 
 See the [current beta screenshots](../SCREENSHOTS.md) for Usage, notch and Settings.
 
@@ -233,9 +235,9 @@ includes native setup/account/offline journeys, tray/focus/accessibility,
 notifications, login items, sharing, updater replacement/relaunch, drag/display
 persistence and two different-height notch captures. Reuse matching source,
 packaging and installation receipts only for their recorded layer. Windows has
-a source candidate and configured CI workflow, but workflow success, native
-acceptance, installer acceptance, signing and release remain unverified. See
-[ADR 0033](../adr/0033-windows-desktop-candidate.md).
+a source candidate with passing focused tests, packaging and isolated startup
+checks. Interactive acceptance, installer acceptance, signing and release
+remain open. See [ADR 0033](../adr/0033-windows-desktop-candidate.md).
 
 [ADR 0010](../adr/0010-macos-typescript-electron.md) keeps Swift as the behavior
 reference and rollback path. No automatic cutover, data migration, release or

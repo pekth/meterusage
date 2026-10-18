@@ -196,9 +196,11 @@ Documentation refresh: 2026-10-18; the public Mac build 61 executable inputs are
   `%APPDATA%\MeterUsage` (normally the user's `AppData\Roaming\MeterUsage`);
   Windows does not read the macOS defaults or Keychain stores, and one-time API
   keys are memory-only. `package:win` configures unsigned x64 NSIS and portable
-  executables, and a Windows workflow defines build and isolated demo smoke
-  steps. CI success, native GUI/provider behavior, installer acceptance and
-  signing are unverified. No Windows release is available. The former RN/Tauri
+  executables. Windows CI passed 78 focused tests, packaging and the isolated
+  packaged-demo/single-instance smoke check for `82b7ca2`; see the
+  [CI receipt](adr/0033-windows-desktop-candidate.md#ci-validation).
+  Interactive GUI/provider behavior, installer acceptance and signing remain
+  unverified. No Windows release is available. The former RN/Tauri
   Windows-first plan is superseded. See [ADR 0033](adr/0033-windows-desktop-candidate.md).
 - Candidate checks use synthetic fixtures. Demo/candidate selection isolates preferences, history, caches and Electron state before composition. Live provider/key discovery, updater installation and login-item changes are disabled in demo. `pnpm package:mac` creates a separate candidate with publication disabled, using existing macOS tools.
 - Candidate account visibility rechecks directory presence. Sharing freezes the displayed account key. Pacing-off hides forecasts; notch details reuse window-scoped burn metrics and have a bounded scroller. These contracts have synthetic/static-markup proof; native UI acceptance remains open.

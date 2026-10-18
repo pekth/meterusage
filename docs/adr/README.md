@@ -44,4 +44,4 @@ compatibility and acceptance requirements remain in force. The
 | [0031](0031-grok-quota-burn.md) | Measure Grok Bot quota burn from recent same-account percentages without inventing token counts or cycle duration. | Source implementation; native and live rate acceptance separate |
 
 | [0032](0032-one-time-api-setup.md) | Separate API setup from account connections and accept a one-time Admin key for explicit billing fetches, without saving credentials. | Source implementation; real billing acceptance pending |
-| [0033](0033-windows-desktop-candidate.md) | Record the Windows x64 Electron candidate scope, storage boundary and evidence still required before release. | Source candidate; CI, native acceptance, installer acceptance and signing unverified |
+| [0033](0033-windows-desktop-candidate.md) | Record the Windows x64 Electron candidate scope, storage boundary and evidence still required before release. | CI verified; interactive acceptance, installer acceptance and signing unverified |

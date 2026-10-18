@@ -16,7 +16,8 @@ oracle and rollback path.
 Windows has an unsigned x64 source candidate. Its `package:win` command
 configures NSIS and portable executables, and `.github/workflows/windows.yml`
 defines typecheck, focused tests, packaging and isolated demo/single-instance
-smoke steps. This workflow has not yet been confirmed green. The candidate
+smoke steps. These checks passed for `82b7ca2`, as recorded in the
+[CI receipt](../adr/0033-windows-desktop-candidate.md#ci-validation). The candidate
 supports local CLI data, Codex browser sign-in through the installed CLI,
 OpenRouter, one-time OpenAI/Anthropic API billing keys, the tray and side notch.
 Claude Desktop, Antigravity Desktop and Grok Bot Desktop account connections are
@@ -39,8 +40,8 @@ release evidence required.
 3. Repository delivery: exact-base/head independent review, required forge
    gates and guarded merge. Source-only draft delivery may record open native
    gates; it does not authorize cutover or release.
-4. Windows candidate: confirm the workflow on the exact candidate revision,
-   then record native Windows startup, settings, provider/offline, persistence,
+4. Windows candidate: reuse the recorded workflow receipt only for matching
+   inputs. Record interactive Windows startup, settings, provider/offline, persistence,
    tray/notch and PNG-sharing checks, plus installer install/uninstall evidence.
    Signing and publication are separate gates. An unsigned package or passing
    workflow alone does not close this stage.

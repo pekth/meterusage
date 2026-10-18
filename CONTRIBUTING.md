@@ -148,10 +148,11 @@ are optional; synthetic tests and demo mode require no login. Shared checks
 can run on Linux. macOS packaging, system symbol export and native acceptance
 require macOS with the existing Swift and signing tools. The Windows source
 candidate uses `pnpm package:win` to produce unsigned x64 NSIS and portable
-executables. Its workflow is configured for typecheck, focused tests, packaging
-and an isolated packaged-demo/single-instance smoke check; no completed
-workflow receipt is claimed here. Native Windows UI/provider checks, installer
-acceptance and signing remain open. See [ADR 0033](docs/adr/0033-windows-desktop-candidate.md).
+executables. Its workflow passed typecheck, focused tests, packaging and an
+isolated packaged-demo/single-instance smoke check at the revision recorded in
+[ADR 0033](docs/adr/0033-windows-desktop-candidate.md#ci-validation).
+Interactive Windows UI/provider checks, installer acceptance and signing
+remain open.
 
 `pnpm package:mac` also compiles the fixed Claude Desktop Keychain helper and
 bundles it as an app resource. `pnpm build:desktop-helper` targets arm64 and
