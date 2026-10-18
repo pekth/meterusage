@@ -136,8 +136,8 @@ See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
 
 ## TypeScript Electron candidate
 
-The source manifest retains 0.2.41. The public Electron beta is 0.3.0-beta.1,
-build 54, with the version explicitly set during packaging. See the
+The source manifest retains 0.2.41. The public Electron beta is 0.3.0-beta.3,
+build 61, with the version explicitly set during packaging. See the
 [beta guide](docs/BETA.md) for the signed artifact, known cosmetic footer issue
 and incomplete native acceptance, and the [Electron guide](docs/electron/README.md)
 for source choices and parity gaps.
@@ -145,8 +145,13 @@ for source choices and parity gaps.
 
 Use the Node and pnpm versions declared in `package.json`. Provider accounts
 are optional; synthetic tests and demo mode require no login. Shared checks
-can run on Linux. Packaging, system symbol export and native acceptance require
-macOS with the existing Swift and signing tools.
+can run on Linux. macOS packaging, system symbol export and native acceptance
+require macOS with the existing Swift and signing tools. The Windows source
+candidate uses `pnpm package:win` to produce unsigned x64 NSIS and portable
+executables. Its workflow is configured for typecheck, focused tests, packaging
+and an isolated packaged-demo/single-instance smoke check; no completed
+workflow receipt is claimed here. Native Windows UI/provider checks, installer
+acceptance and signing remain open. See [ADR 0033](docs/adr/0033-windows-desktop-candidate.md).
 
 `pnpm package:mac` also compiles the fixed Claude Desktop Keychain helper and
 bundles it as an app resource. `pnpm build:desktop-helper` targets arm64 and
@@ -182,7 +187,9 @@ pnpm package:mac
 packages an Apple silicon ZIP with publication disabled. It does not install
 or replace an app. Locally packaged output is not the verified public beta
 artifact. Keep the stable release and beta download routes separate.
-Windows packaging, CI, native testing and release remain paused.
+Windows packaging and a CI workflow are implemented in the candidate source.
+They do not establish successful CI, native acceptance, signing or a release.
+See the [platform pipeline](docs/plans/feature-and-windows-pipeline.md).
 
 electron-builder resolves `pnpm` from PATH when collecting production
 dependencies. If an existing launcher incorrectly loads a standalone pnpm

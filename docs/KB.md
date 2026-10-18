@@ -1,6 +1,6 @@
 # Project knowledge
 
-Release documentation refresh: 2026-10-17; build 61 executable inputs are unchanged.
+Documentation refresh: 2026-10-18; the public Mac build 61 executable inputs are unchanged.
 
 ## Edition documentation
 
@@ -188,7 +188,18 @@ Release documentation refresh: 2026-10-17; build 61 executable inputs are unchan
 - Side notch chrome is derived per theme in `SideNotchPanelView` by an HSV mix pinned to the popover surface's Rec. 709 relative luminance (`blendTinted`), so every accent renders at the same perceived brightness as the window beside it. The notch bands and hues delegate to the shared `headroomColor`/`MU` scale (80/95 thresholds), and the panel window forces `darkAqua` so those tokens resolve their dark variants on the strip.
 - ADR 0006 replaces fixed alternate cases with a managed account list for Codex and Claude. Generated app IDs, provider, user label, directory and enabled state persist as JSON in UserDefaults Data. Primary keys retain their old form; additional history/archive keys use provider plus generated ID, and schema-1 reports add `account` labels. Rename preserves identity; remove stops metering without deleting provider files. No provider account identity is read for labels.
 - ADR 0010 selects macOS TypeScript/Electron/React with pnpm, Vite+, Tailwind, Vitest and electron-builder. Main owns provider files/keys, native actions and persistence; a separate sandbox-compatible preload exposes sender-validated IPC to React. The candidate keeps JSON/history/archive and known preference formats. Swift remains the oracle and rollback path. No server or remote control layer is added.
-- Windows implementation, installers, CI, testing and releases are paused until a test machine is available. The former RN/Tauri Windows-first plan is superseded; shared portable source does not establish Windows support.
+- A Windows x64 Electron source candidate now covers tray and side-notch usage,
+  local CLI activity, Codex browser sign-in through the installed CLI,
+  OpenRouter and one-time OpenAI or Anthropic API billing keys. Windows desktop
+  Claude, Antigravity and Grok Bot account connections are unavailable. The
+  candidate stores preferences, history and sanitized billing snapshots under
+  `%APPDATA%\MeterUsage` (normally the user's `AppData\Roaming\MeterUsage`);
+  Windows does not read the macOS defaults or Keychain stores, and one-time API
+  keys are memory-only. `package:win` configures unsigned x64 NSIS and portable
+  executables, and a Windows workflow defines build and isolated demo smoke
+  steps. CI success, native GUI/provider behavior, installer acceptance and
+  signing are unverified. No Windows release is available. The former RN/Tauri
+  Windows-first plan is superseded. See [ADR 0033](adr/0033-windows-desktop-candidate.md).
 - Candidate checks use synthetic fixtures. Demo/candidate selection isolates preferences, history, caches and Electron state before composition. Live provider/key discovery, updater installation and login-item changes are disabled in demo. `pnpm package:mac` creates a separate candidate with publication disabled, using existing macOS tools.
 - Candidate account visibility rechecks directory presence. Sharing freezes the displayed account key. Pacing-off hides forecasts; notch details reuse window-scoped burn metrics and have a bounded scroller. These contracts have synthetic/static-markup proof; native UI acceptance remains open.
 - The browser-demo notch uses viewport height when no native work-area height is supplied. The card and strip scroll independently; the 36-pixel charcoal strip has 22-pixel rings containing provider marks, percentages below. Settings is available in each expanded card footer, with no strip button or reserved slot. The 220-pixel detail card plus strip use 256 pixels total. Synthetic browser checks cover scrolling, two card heights and both CSS card sides, but do not verify native window placement or display changes.
@@ -257,9 +268,10 @@ Release documentation refresh: 2026-10-17; build 61 executable inputs are unchan
 - [`docs/DEMO.md`](DEMO.md): synthetic demo mode.
 - [`docs/SIDE-NOTCH.md`](SIDE-NOTCH.md): side notch states, anchor and geometry invariants, interaction, and verification.
 - [`docs/adr/0006-managed-account-list.md`](adr/0006-managed-account-list.md): current managed-account decision.
-- [`docs/adr/0010-macos-typescript-electron.md`](adr/0010-macos-typescript-electron.md): macOS migration and Windows hold.
+- [`docs/adr/0010-macos-typescript-electron.md`](adr/0010-macos-typescript-electron.md): macOS migration and the historical Windows hold, amended by ADR 0033 for source implementation.
 - [`docs/mockups/README.md`](mockups/README.md): Wave 1–3 concept mockups; provider marks stay.
-- [`docs/plans/feature-and-windows-pipeline.md`](plans/feature-and-windows-pipeline.md): superseded platform plan, current macOS direction and Windows hold.
+- [`docs/adr/0033-windows-desktop-candidate.md`](adr/0033-windows-desktop-candidate.md): Windows candidate scope and remaining proof.
+- [`docs/plans/feature-and-windows-pipeline.md`](plans/feature-and-windows-pipeline.md): current macOS direction, Windows candidate and open gates.
 - [`Package.swift`](../Package.swift): package targets and platform requirement.
 - [`CONTRIBUTING.md`](../CONTRIBUTING.md): contribution and validation commands.
 - [`CHANGELOG.md`](../CHANGELOG.md): repository release-note history.

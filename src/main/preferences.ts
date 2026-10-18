@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { providers, type Provider, type ManagedAccount } from "../domain/models";
 import { normalizeProviderOrder, validProviderOrder } from "../domain/provider-order";
@@ -62,9 +62,9 @@ export class Preferences {
     const prefs = new Preferences(launch, command, domain);
     if (launch.codexTest) prefs.values.desktopCodexConnection = "off";
     if (launch.claudeTest) { prefs.values.desktopClaudeIdentity = "off"; prefs.values.showProviderClaude = true; }
-    if (launch.demo || launch.codexTest || launch.claudeTest) {
+    if (launch.demo || launch.codexTest || launch.claudeTest || (launch.platform ?? process.platform) === "win32") {
       const path = join(launch.data, "preferences.json");
-      if (existsSync(path)) { try { const raw = JSON.parse(readFileSync(path, "utf8")); for (const [key, v] of Object.entries(raw)) if (key === "providerOrder") prefs.values[key] = normalizeProviderOrder(v); else if (validate(key, v)) prefs.values[key] = v; } catch { /* Keep known defaults for a damaged candidate file. */ } }
+      if (existsSync(path)) { try { const stat = lstatSync(path); if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1048576) throw new Error("Invalid preferences file"); const raw = JSON.parse(readFileSync(path, "utf8")); for (const [key, v] of Object.entries(raw)) if (key === "providerOrder") prefs.values[key] = normalizeProviderOrder(v); else if (validate(key, v)) prefs.values[key] = v; } catch { if ((launch.platform ?? process.platform) === "win32" && !launch.demo) throw new Error("Could not read preferences"); /* Keep known defaults for a damaged candidate file. */ } }
       else if (launch.demo) for (const p of providers) prefs.values[providerPreference(p)] = true;
     } else {
       await Promise.all(Object.keys(kinds).map(async key => {
@@ -101,8 +101,10 @@ export class Preferences {
     if (this.launch.codexTest && key in codexTestPreferences && value !== codexTestPreferences[key]) throw new Error("Preference unavailable in Codex test mode");
     if (this.launch.claudeTest && key in claudeTestPreferences && value !== claudeTestPreferences[key]) throw new Error("Preference unavailable in Claude test mode");
     if (key === "refreshIntervalSeconds") value = Math.max(30, (value as number) > 0 ? value as number : 60);
-    if (this.launch.demo || this.launch.codexTest || this.launch.claudeTest) {
-      const next = { ...this.values, [key]: value as PreferenceValue }; atomicJSON(join(this.launch.data, "preferences.json"), next);
+    if (this.launch.demo || this.launch.codexTest || this.launch.claudeTest || (this.launch.platform ?? process.platform) === "win32") {
+      const path = join(this.launch.data, "preferences.json");
+      if (existsSync(path) && (!lstatSync(path).isFile() || lstatSync(path).isSymbolicLink())) throw new Error("Invalid preferences file");
+      const next = { ...this.values, [key]: value as PreferenceValue }; atomicJSON(path, next);
     } else {
       const kind = kinds[key]; const typed = kind === "data" ? ["-data", Buffer.from(JSON.stringify(value)).toString("hex")] : kind === "date" ? ["-date", new Date(value as number).toISOString()] : kind === "boolean" ? ["-bool", value ? "true" : "false"] : kind === "number" ? ["-float", String(value)] : ["-string", value as string];
       await this.command("/usr/bin/defaults", ["write", this.domain, key, ...typed], { timeoutMs: 5000 });

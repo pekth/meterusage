@@ -22,6 +22,13 @@ for rollback. Both apps share their identity and saved data, so do not run them
 together against a normal profile. See [beta installation and limits](docs/BETA.md)
 and the [version strategy](docs/VERSIONS.md).
 
+Windows has an unsigned x64 source candidate, not a public download. The
+candidate includes the tray, side notch, heatmaps, local CLI activity, Codex
+browser sign-in through the installed CLI, OpenRouter and one-time OpenAI or
+Anthropic API billing keys. Windows desktop Claude, Antigravity and Grok Bot
+connections are unavailable. Native Windows acceptance, installer review and
+signing remain open. See the [Windows candidate notes](docs/adr/0033-windows-desktop-candidate.md).
+
 ## Current beta UI
 
 <p>

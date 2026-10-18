@@ -13,9 +13,10 @@ files:
 extraResources:
   - from: dist/api-helper/api-usage-helper.cjs
     to: api-usage-helper.cjs
-  - from: build/desktop-keychain
-    to: desktop-keychain
 mac:
+  extraResources:
+    - from: build/desktop-keychain
+      to: desktop-keychain
   target:
     - target: zip
       arch: [arm64]
@@ -30,3 +31,17 @@ mac:
     LSUIElement: true
     NSAppTransportSecurity:
       NSAllowsArbitraryLoads: false
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/AppIcon.ico
+nsis:
+  artifactName: MeterUsage-${version}-${arch}-setup.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+portable:
+  artifactName: MeterUsage-${version}-${arch}-portable.${ext}

@@ -32,7 +32,7 @@ export class ApiBillingFetch {
       if (this.stopped) throw new Error(apiBillingFetchErrors.unavailable);
       const snapshot = await collectApiBilling(provider, adminKey, Date.now(), (url, init) => this.fetcher(url, { ...init, signal: AbortSignal.any([controller.signal, ...(init?.signal ? [init.signal] : [])]) }));
       if (this.stopped) throw new Error(apiBillingFetchErrors.unavailable);
-      writeApiBilling(this.launch.home, snapshot);
+      writeApiBilling(this.launch.home, snapshot, this.launch.data, this.launch.platform);
       await this.refresh();
     } catch (error) {
       throw new Error(!this.stopped && error instanceof Error && [apiBillingFetchErrors.auth, apiBillingFetchErrors.savedMissing, apiBillingFetchErrors.savedAccess].some(message => message === error.message) ? error.message : apiBillingFetchErrors.unavailable);

@@ -1,7 +1,7 @@
 import { it, expect, afterEach, vi } from "vite-plus/test";
 import { createElement, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Coordinator } from "../src/main/coordinator";
@@ -24,7 +24,7 @@ const snapshot = (provider: ApiBillingProvider, capturedAt = now): ApiBillingSna
 };
 afterEach(() => { vi.restoreAllMocks(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 async function setup(mode: "live" | "demo" | "codex" | "claude" = "live") {
-  const home = mkdtempSync(join(tmpdir(), "meterusage-api-ui-")); roots.push(home);
+  const home = realpathSync(mkdtempSync(join(tmpdir(), "meterusage-api-ui-"))); roots.push(home);
   const isolated = launchConfiguration(["--demo", "--candidate-profile", home], {});
   const preferences = await Preferences.load(isolated);
   const launch = { ...isolated, demo: mode === "demo", ...(mode === "codex" ? { codexTest: true } : {}), ...(mode === "claude" ? { claudeTest: true } : {}) };
@@ -34,10 +34,10 @@ async function setup(mode: "live" | "demo" | "codex" | "claude" = "live") {
 }
 it("refresh projects billing independently and removes a value after a file becomes unavailable", async () => {
   const { c, home, view } = await setup();
-  billing.writeApiBilling(home, snapshot("openai"));
-  billing.writeApiBilling(home, snapshot("anthropic"));
+  billing.writeApiBilling(home, snapshot("openai"), home);
+  billing.writeApiBilling(home, snapshot("anthropic"), home);
   // Extra private fields never cross the snapshot projection.
-  const path = billing.apiBillingPath(home, "openai");
+  const path = billing.apiBillingPath(home, "openai", home);
   writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), privateField: "OMIT_PRIVATE" }));
   const before = c.json();
   await c.refresh();
@@ -56,7 +56,7 @@ it("refresh projects billing independently and removes a value after a file beco
 });
 it.each(["demo", "codex", "claude"] as const)("does not discover snapshots in the %s profile", async mode => {
   const { c, home } = await setup(mode);
-  billing.writeApiBilling(home, snapshot("openai"));
+  billing.writeApiBilling(home, snapshot("openai"), home);
   const read = vi.spyOn(billing, "readApiBilling");
   await c.refresh();
   expect(read).not.toHaveBeenCalled(); expect(c.snapshot().apiBilling).toBeUndefined();

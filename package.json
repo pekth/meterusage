@@ -17,7 +17,10 @@
     "json": "node dist/main/cli.cjs json",
     "package:mac": "pnpm export:marks && pnpm build:desktop-helper && pnpm build && electron-builder --mac --publish never",
     "build:desktop-helper": "mkdir -p build && swiftc -target arm64-apple-macosx13.0 Scripts/electron/desktop-keychain.swift -o build/desktop-keychain",
-    "export:marks": "swift Scripts/electron/export-symbols.swift Resources"
+    "export:marks": "swift Scripts/electron/export-symbols.swift Resources",
+    "package:win": "pnpm export:marks:portable && pnpm build && electron-builder --win --x64 --publish never",
+    "export:marks:portable": "node Scripts/electron/export-portable-assets.cjs",
+    "smoke:win": "node Scripts/electron/smoke-windows.cjs"
   },
   "dependencies": {
     "react": "19.2.6",

@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { launchConfiguration, type Launch } from "./launch";
 import { Preferences } from "./preferences";
+import { windowsFlyoutY } from "./platform";
 import { compose } from "./composition";
 import { DesktopConnections } from "./connections";
 import { desktopReadErrors } from "./providers/claude-desktop";
@@ -33,10 +34,11 @@ async function main() {
   // Validate isolation before Electron creates a session or contacts a singleton socket.
   if (launch.profile) { app.setPath("userData", join(launch.data, "electron")); app.setPath("sessionData", join(launch.data, "electron")); }
   app.setName("MeterUsage");
+  if (process.platform === "win32") { app.setPath("userData", join(launch.data, "electron")); app.setPath("sessionData", join(launch.data, "electron")); app.setAppUserModelId("dev.meterusage.app"); }
   if (json) {
     await runJSON(args, process.env, desktopHelper).then(json => { process.stdout.write(json + "\n"); app.exit(0); }, () => { process.stderr.write("meterusage: could not read report\n"); app.exit(1); });
-  } else if (process.platform !== "darwin") {
-    process.stderr.write("MeterUsage desktop candidates currently support macOS only.\n"); app.exit(1);
+  } else if (process.platform !== "darwin" && process.platform !== "win32") {
+    process.stderr.write("MeterUsage desktop supports macOS and Windows.\n"); app.exit(1);
   } else {
     let reveal: (() => void) | undefined, requested = false;
     const activate = () => { if (reveal) reveal(); else requested = true; };
@@ -67,7 +69,7 @@ async function start(launch: Launch) {
     if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
   }, sources);
   const issueReports = new IssueReports(() => coordinator.diagnostics(app.getVersion()), publish, prefs);
-  const apiBillingFetch = new ApiBillingFetch(launch, () => coordinator.refresh(), fetch, (provider, signal) => runCommand(desktopHelper, [`--api-${provider}`, "--allow-ui"], { signal, timeoutMs: 60000, maxBytes: 8192 }));
+  const apiBillingFetch = new ApiBillingFetch(launch, () => coordinator.refresh(), fetch, process.platform === "darwin" ? (provider, signal) => runCommand(desktopHelper, [`--api-${provider}`, "--allow-ui"], { signal, timeoutMs: 60000, maxBytes: 8192 }) : undefined);
   // Do not restore a legacy archive under a newly connected account.
   for (const p of ["codex", "claude", "antigravity", "grok"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
   const notch = { expanded: false, cardOnRight: false, selected: "codex", dragging: false };
@@ -78,13 +80,13 @@ async function start(launch: Launch) {
   let drag: { cursor: Electron.Point; anchor: Electron.Point; timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> } | undefined;
   let shareMenu: ShareMenu | undefined, shareDirectory: string | undefined, sharing = false, confirmingReset = false, trayWidth = 0;
   const sharedDirectories = new Set<string>();
-  const icon = nativeImage.createFromPath(join(__dirname, "../renderer/AppIcon.png")).resize({ width: 18, height: 18 }); icon.setTemplateImage(true);
+  const icon = nativeImage.createFromPath(join(__dirname, "../renderer/AppIcon.png")).resize({ width: 18, height: 18 }); icon.setTemplateImage(process.platform === "darwin");
   const tray = new Tray(icon);
   tray.setToolTip("MeterUsage");
   tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showUsage() }, { label: "Settings…", click: () => showSettings() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
   tray.on("click", () => { const w = windows.get("flyout"); w?.isVisible() ? w.hide() : showUsage(); });
   let shareState: ViewState | undefined, shareHeight = 0, shareReady: ((image: Electron.NativeImage) => void) | undefined, shareFailed: ((error: Error) => void) | undefined;
-  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ appVersion: app.getVersion(), ...(surface === "settings" ? { issueReport: issueReports.state } : {}), connections: connections.state, snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
+  const state = (surface?: Surface): ViewState => surface === "share" && shareState ? shareState : ({ platform: process.platform === "win32" ? "win32" : "darwin", appVersion: app.getVersion(), ...(surface === "settings" ? { issueReport: issueReports.state } : {}), connections: connections.state, snapshot: coordinator.snapshot(), settings: projectSettings(prefs.values, prefs.accounts, launch.home, surface), systemDark: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI, notch: { ...notch, maxHeight: Math.floor((anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()).workArea.height) }, update: updater.visible ? { version: updater.visible.version, state: updater.installState } : undefined });
   const updater = new Updater(prefs, app.getVersion(), publish, undefined, release => {
     if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: "MeterUsage update available", body: `MeterUsage ${release.version} is ready to install.`, silent: true }).show();
   });
@@ -117,7 +119,7 @@ async function start(launch: Launch) {
     const existing = windows.get(surface); if (existing && !existing.isDestroyed()) return existing;
     const panel = surface === "notch", trayImage = surface === "tray", shareImage = surface === "share";
     if (surface === "settings") settingsHeight = undefined;
-    const w = new BrowserWindow({ width: shareImage ? shareCardWidth * 2 : trayImage ? 1000 : panel ? stripWidth : surface === "settings" ? 620 : Math.round(420 * panelScale()), height: trayImage ? 22 : panel ? notchHeight : surface === "settings" ? 680 : Math.ceil(flyoutHeight * panelScale()), show: false, frame: surface === "settings", transparent: panel || trayImage || shareImage, resizable: surface === "settings", minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, ...(panel ? { type: "panel", focusable: false, hasShadow: false } : {}), title: surface === "settings" ? "MeterUsage Settings" : "MeterUsage", backgroundColor: panel || trayImage || shareImage ? "#00000000" : "#242428", webPreferences: { preload: join(__dirname, "../preload/preload.cjs"), offscreen: trayImage || shareImage, zoomFactor: shareImage ? 2 : 1, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false } });
+    const w = new BrowserWindow({ width: shareImage ? shareCardWidth * 2 : trayImage ? 1000 : panel ? stripWidth : surface === "settings" ? 620 : Math.round(420 * panelScale()), height: trayImage ? 22 : panel ? notchHeight : surface === "settings" ? 680 : Math.ceil(flyoutHeight * panelScale()), show: false, frame: surface === "settings", transparent: panel || trayImage || shareImage, resizable: surface === "settings", minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, ...(panel ? { ...(process.platform === "darwin" ? { type: "panel" as const } : {}), focusable: false, hasShadow: false } : {}), title: surface === "settings" ? "MeterUsage Settings" : "MeterUsage", backgroundColor: panel || trayImage || shareImage ? "#00000000" : "#242428", webPreferences: { preload: join(__dirname, "../preload/preload.cjs"), offscreen: trayImage || shareImage, zoomFactor: shareImage ? 2 : 1, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false } });
     if (trayImage) { w.webContents.setFrameRate(10); w.webContents.on("paint", (_event, _rect, image) => { if (!tray.isDestroyed() && trayWidth > 0) tray.setImage(image); }); }
     if (shareImage) {
       w.webContents.setFrameRate(10);
@@ -147,7 +149,7 @@ async function start(launch: Launch) {
     }
     w.on("closed", () => { documents.delete(webContentsId); if (windows.get(surface) === w) windows.delete(surface); if (panel) { stopHoverCheck(); finishDrag(); } });
     if (surface === "flyout") w.on("blur", () => { if (!sharing) w.hide(); });
-    if (panel) { w.setAlwaysOnTop(true, "status"); w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); }
+    if (panel) { w.setAlwaysOnTop(true, process.platform === "darwin" ? "status" : "normal"); if (process.platform === "darwin") w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); }
     void w.loadURL(document.href).then(() => { publish(); if (panel) { placeNotch(); w.showInactive(); } });
     return w;
   }
@@ -161,7 +163,7 @@ async function start(launch: Launch) {
     const w = windows.get("flyout"); if (!w || w.isDestroyed()) return;
     const bounds = w.getBounds(), work = screen.getDisplayMatching(bounds).workArea;
     const width = Math.min(Math.round(420 * panelScale()), work.width), height = Math.min(Math.ceil(flyoutHeight * panelScale()), work.height);
-    w.setBounds({ x: Math.round(Math.min(Math.max(bounds.x, work.x), work.x + work.width - width)), y: Math.round(Math.min(Math.max(bounds.y, work.y), work.y + work.height - height)), width, height }, false);
+    w.setBounds({ x: Math.round(Math.min(Math.max(bounds.x, work.x), work.x + work.width - width)), y: Math.round(process.platform === "win32" ? windowsFlyoutY(tray.getBounds(), work, height) : Math.min(Math.max(bounds.y, work.y), work.y + work.height - height)), width, height }, false);
   }
   function sizeSettings() {
     const source = windows.get("settings"); if (!source || source.isDestroyed() || settingsHeight === undefined) return;
@@ -278,7 +280,7 @@ async function start(launch: Launch) {
         if (r.key === "panelSize") sizeFlyout();
         if (r.key === "refreshIntervalSeconds") coordinator.restartTimer();
         nativeTheme.themeSource = prefs.values.appearanceTheme as "system" | "dark" | "light";
-        if (r.key === "updateCheckEnabled") { if (r.value) void updater.checkIfDue(); else updater.reset(); }
+        if (r.key === "updateCheckEnabled") { if (r.value && process.platform === "darwin") void updater.checkIfDue(); else updater.reset(); }
         syncNotch(); coordinator.publish(); if (r.key.startsWith("showProvider")) await coordinator.refresh(); break;
       case "accountAdd": {
         if (surface !== "settings") throw new Error("Open Settings to add an account");
@@ -352,6 +354,11 @@ async function start(launch: Launch) {
             create("share");
           });
           windows.get("share")?.close(); shareState = undefined;
+          if (process.platform === "win32") {
+            const saved = await dialog.showSaveDialog(source, { title: "Save usage card", defaultPath: "MeterUsage.png", filters: [{ name: "PNG image", extensions: ["png"] }] });
+            if (!saved.canceled && saved.filePath) writeFileSync(saved.filePath, image.toPNG());
+            sharing = false; folding.changed(); break;
+          }
           shareDirectory = mkdtempSync(join(launch.data, "share-")); const path = join(shareDirectory, "MeterUsage.png"); writeFileSync(path, image.toPNG(), { mode: 0o600 });
           sharedDirectories.add(shareDirectory);
           // ShareMenu reports menu dismissal, not completion of the service.
@@ -362,7 +369,7 @@ async function start(launch: Launch) {
       }
       case "updateDismiss": await updater.dismiss(); break;
       case "updateInstall": {
-        if (launch.demo || launch.candidate || !app.isPackaged || !updater.visible) throw new Error("Update installation unavailable");
+        if (process.platform !== "darwin" || launch.demo || launch.candidate || !app.isPackaged || !updater.visible) throw new Error("Update installation unavailable");
         const confirmedRelease = structuredClone(updater.visible);
         const accepted = await dialog.showMessageBox(source, { type: "question", title: "Install MeterUsage update?", message: `Install MeterUsage ${confirmedRelease.version}?`, detail: "The app will quit, verify the downloaded bundle, replace this app and relaunch.", buttons: ["Cancel", "Install update"], defaultId: 0, cancelId: 0 });
         if (accepted.response === 1) { await updater.install(resolve(app.getPath("exe"), "../../.."), confirmedRelease); app.quit(); }
@@ -376,9 +383,9 @@ async function start(launch: Launch) {
     const source = BrowserWindow.fromWebContents(event.sender), surface = [...windows].find(([, w]) => w === source)?.[0];
     if (!source || !surface) return { ok: false, error: "Unknown window" };
     try { return await handle(parseRequest(raw), source, surface); }
-    catch (e) { return { ok: false, error: e instanceof Error && [...Object.values(apiBillingFetchErrors), "Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Open Claude Desktop and sign in, then try connecting again", "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.", ...Object.values(desktopReadErrors), ...Object.values(grokBotConnectionErrors), "Could not read Claude account allowance. Try connecting again later.", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.", "Could not save the Claude Desktop connection preferences. Try connecting again.", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Could not disconnect Claude Desktop", "Open one Antigravity Desktop account and sign in, then try connecting again", "Could not disconnect Antigravity Desktop", "Could not select Grok CLI", "Could not disconnect Grok Bot Desktop", "Connections are disabled in demo mode", "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect."].includes(e.message) ? e.message : "Could not complete action" }; }
+    catch (e) { return { ok: false, error: e instanceof Error && [...Object.values(apiBillingFetchErrors), "Invalid request", "Unknown account", "Reset credit unavailable", "Reset confirmation expired", "Couldn't redeem Codex reset", "Login items require an installed app", "Could not change login item", "Could not share snapshot", "Card too tall to share", "Open Codex on this Mac, then try connecting again", "Install Codex CLI on this PC, then try signing in again", "Desktop connection is unavailable on Windows. Choose CLI instead.", "Open Claude Desktop and sign in, then try connecting again", "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.", ...Object.values(desktopReadErrors), ...Object.values(grokBotConnectionErrors), "Could not read Claude account allowance. Try connecting again later.", "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.", "Could not save the Claude Desktop connection preferences. Try connecting again.", "Could not clear the cancelled Codex connection", "Could not disconnect Codex", "Could not disconnect Claude Desktop", "Open one Antigravity Desktop account and sign in, then try connecting again", "Could not disconnect Antigravity Desktop", "Could not select Grok CLI", "Could not disconnect Grok Bot Desktop", "Connections are disabled in demo mode", "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect."].includes(e.message) ? e.message : "Could not complete action" }; }
   });
-  const unsubscribe = coordinator.subscribe(() => { syncNotch(); publish(); if (!coordinator.snapshot().refreshing) void updater.checkIfDue(); });
+  const unsubscribe = coordinator.subscribe(() => { syncNotch(); publish(); if (process.platform === "darwin" && !coordinator.snapshot().refreshing) void updater.checkIfDue(); });
   screen.on("display-metrics-changed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); }); screen.on("display-removed", () => { placeNotch(); sizeFlyout(); sizeSettings(); publish(); });
   powerMonitor.on("resume", () => { void coordinator.refresh(); });
   app.on("window-all-closed", () => {});

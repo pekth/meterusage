@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vite-plus/test";
-import { chmodSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ApiBillingFetch, apiBillingFetchErrors } from "../src/main/api-billing-fetch";
@@ -21,7 +21,7 @@ const files = (root: string): string[] => readdirSync(root, { withFileTypes: tru
 afterEach(() => { vi.restoreAllMocks(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 async function setup(overrides: Partial<Launch> = {}) {
   vi.spyOn(Date, "now").mockReturnValue(now);
-  const home = mkdtempSync(join(tmpdir(), "meterusage-api-fetch-")); roots.push(home);
+  const home = realpathSync(mkdtempSync(join(tmpdir(), "meterusage-api-fetch-"))); roots.push(home);
   const isolated: Launch = { home, data: home, env: {}, demo: true, candidate: true };
   const prefs = await Preferences.load(isolated);
   await prefs.set("appearanceTheme", "dark");
@@ -71,27 +71,27 @@ it("refuses an in-flight duplicate, permits the other provider, and releases the
   expect(fetcher).toHaveBeenCalledTimes(3);
 });
 
-it.each([401, 403, 500, "transport", "write"])("preserves the old snapshot, masks failure and releases the lock (%s)", async failure => {
+it.each([401, 403, 500, "transport", ...(process.platform === "win32" ? [] : ["write"])])("preserves the old snapshot, masks failure and releases the lock (%s)", async failure => {
   const { launch, home, coordinator, refresh } = await setup();
-  writeApiBilling(home, snapshot("openai")); await coordinator.refresh();
-  const oldFile = readFileSync(apiBillingPath(home, "openai"), "utf8"), oldState = coordinator.snapshot().apiBilling;
+  writeApiBilling(home, snapshot("openai"), home); await coordinator.refresh();
+  const oldFile = readFileSync(apiBillingPath(home, "openai", home), "utf8"), oldState = coordinator.snapshot().apiBilling;
   const fetcher = vi.fn<typeof fetch>(async () => {
     if (failure === "transport") throw new Error(keys.openai);
     return typeof failure === "number" ? new Response(keys.openai, { status: failure }) : response("openai");
   });
   // A non-private existing snapshot must be refused by the atomic writer.
-  if (failure === "write") chmodSync(apiBillingPath(home, "openai"), 0o644);
+  if (failure === "write") chmodSync(apiBillingPath(home, "openai", home), 0o644);
   const billing = new ApiBillingFetch(launch, refresh, fetcher);
   await expect(billing.run("openai", keys.openai)).rejects.toThrow(failure === 401 || failure === 403 ? apiBillingFetchErrors.auth : apiBillingFetchErrors.unavailable);
-  expect(readFileSync(apiBillingPath(home, "openai"), "utf8")).toBe(oldFile); expect(coordinator.snapshot().apiBilling).toEqual(oldState); expect(refresh).not.toHaveBeenCalled();
-  if (failure === "write") chmodSync(apiBillingPath(home, "openai"), 0o600);
+  expect(readFileSync(apiBillingPath(home, "openai", home), "utf8")).toBe(oldFile); expect(coordinator.snapshot().apiBilling).toEqual(oldState); expect(refresh).not.toHaveBeenCalled();
+  if (failure === "write") chmodSync(apiBillingPath(home, "openai", home), 0o600);
   fetcher.mockResolvedValueOnce(response("openai")); await billing.run("openai", keys.openai);
   expect(refresh).toHaveBeenCalledOnce();
 });
 
 it("aborts on quit and rejects a late success without writing or refreshing", async () => {
   const { launch, home, refresh } = await setup();
-  writeApiBilling(home, snapshot("openai"));
+  writeApiBilling(home, snapshot("openai"), home);
   const before = files(home);
   let finish!: (value: Response) => void;
   const fetcher = vi.fn<typeof fetch>(() => new Promise(resolve => { finish = resolve; }));
@@ -129,7 +129,7 @@ it("blocks saved-key access in isolated profiles and after quit", async () => {
 
 it.each(["missing", "denied", "cancelled"])("preserves snapshots and hides saved-key errors (%s)", async failure => {
   const { launch, refresh, home } = await setup();
-  writeApiBilling(home, snapshot("openai")); const before = files(home);
+  writeApiBilling(home, snapshot("openai"), home); const before = files(home);
   let finish!: (key: string) => void;
   const saved = vi.fn(async (_provider: ApiBillingProvider, _signal: AbortSignal) => {
     if (failure === "missing") return "";
@@ -144,4 +144,20 @@ it.each(["missing", "denied", "cancelled"])("preserves snapshots and hides saved
   }
   await expect(pending).rejects.toThrow(failure === "cancelled" ? apiBillingFetchErrors.unavailable : failure === "missing" ? apiBillingFetchErrors.savedMissing : apiBillingFetchErrors.savedAccess);
   expect(fetcher).not.toHaveBeenCalled(); expect(refresh).not.toHaveBeenCalled(); expect(files(home)).toEqual(before);
+});
+
+it("reports a missing saved-key reader without a Keychain error or a request", async () => {
+  const { launch, refresh, home } = await setup(), fetcher = vi.fn<typeof fetch>();
+  const before = files(home);
+  await expect(new ApiBillingFetch(launch, refresh, fetcher).run("openai")).rejects.toThrow(apiBillingFetchErrors.savedMissing);
+  expect(fetcher).not.toHaveBeenCalled(); expect(refresh).not.toHaveBeenCalled(); expect(files(home)).toEqual(before);
+});
+
+it("writes billing into the configured app-data directory", async () => {
+  const { launch, refresh, home } = await setup();
+  launch.data = join(home, "configured-app-data");
+  await new ApiBillingFetch(launch, refresh, vi.fn<typeof fetch>(async () => response("openai"))).run("openai", keys.openai);
+  const raw = readFileSync(apiBillingPath(home, "openai", launch.data), "utf8");
+  expect(JSON.parse(raw)).toMatchObject({ provider: "openai", daily: [{ amountUSD: 2 }] });
+  expect(raw).not.toContain(keys.openai); expect(raw).not.toContain("PRIVATE_RESPONSE");
 });
