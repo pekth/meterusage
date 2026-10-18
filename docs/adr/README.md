@@ -21,7 +21,7 @@ compatibility and acceptance requirements remain in force. The
 | [0006](0006-managed-account-list.md) | Additional accounts are a managed, unbounded Settings list; `ProviderSlot` (provider + generated id, label display-only) keys every metered surface, with primary-slot persistence formats unchanged. | Accepted |
 | [0008](0008-reset-aware-quota-pacing.md) | ADR 0008: Collect fresh quota observations after a manual reset | Accepted |
 | [0009](0009-prebuilt-bundle-default.md) | Download and verify the prebuilt app by default; compile only with `--build-from-source`. | Accepted |
-| [0010](0010-macos-typescript-electron.md) | Port macOS and the schema-1 JSON CLI to TypeScript/Electron/React; preserve data contracts and pause Windows until a test machine is available. | Accepted architecture; native acceptance pending |
+| [0010](0010-macos-typescript-electron.md) | Port macOS and the schema-1 JSON CLI to TypeScript/Electron/React; preserve data contracts and pause Windows until a test machine is available. | Accepted architecture; Windows implementation hold amended by [0033](0033-windows-desktop-candidate.md); native acceptance pending |
 | [0011](0011-desktop-account-connections.md) | Add opt-in Codex browser sign-in and Claude Desktop account allowance; separate account allowance from local activity. | Accepted implementation direction; native and provider acceptance pending |
 | [0012](0012-codex-live-test-profile.md) | Run isolated live Codex validation in the existing UI while blocking other providers and candidate system effects. | Accepted implementation direction; reset prohibition superseded by [0017](0017-connected-codex-menu-reset.md); native UI acceptance pending |
 | [0013](0013-candidate-single-instance-startup.md) | Validate candidate Electron singleton metadata before locking; preserve other symlink rejection and safe activation during startup and Quit. | Accepted implementation direction; native acceptance pending |
@@ -44,3 +44,4 @@ compatibility and acceptance requirements remain in force. The
 | [0031](0031-grok-quota-burn.md) | Measure Grok Bot quota burn from recent same-account percentages without inventing token counts or cycle duration. | Source implementation; native and live rate acceptance separate |
 
 | [0032](0032-one-time-api-setup.md) | Separate API setup from account connections and accept a one-time Admin key for explicit billing fetches, without saving credentials. | Source implementation; real billing acceptance pending |
+| [0033](0033-windows-desktop-candidate.md) | Record the Windows x64 Electron candidate scope, storage boundary and evidence still required before release. | CI verified; interactive acceptance, installer acceptance and signing unverified |

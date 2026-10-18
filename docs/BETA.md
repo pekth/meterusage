@@ -81,7 +81,10 @@ See [source choices](electron/README.md#source-choices),
 - Live Codex refresh was observed. Claude paid-account allowance was not
   live-tested. Optional support-report delivery and deployed relay limits
   were not verified end to end.
-- Windows support is paused. Intel Mac binaries are not provided by this beta.
+- This beta remains macOS-only. A separate Windows x64 source candidate exists,
+  with native and installer acceptance, signing and public
+  release still open. See [ADR 0033](adr/0033-windows-desktop-candidate.md).
+  Intel Mac binaries are not provided by this beta.
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.

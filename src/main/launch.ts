@@ -1,7 +1,8 @@
 import { userInfo, tmpdir, hostname } from "node:os";
 import { mkdtempSync, mkdirSync, realpathSync, existsSync, readdirSync, writeFileSync, lstatSync, readlinkSync } from "node:fs";
-import { isAbsolute, join, resolve, relative, dirname } from "node:path";
-export interface Launch { demo: boolean; candidate: boolean; home: string; data: string; env: NodeJS.ProcessEnv; profile?: string; codexTest?: boolean; claudeTest?: boolean }
+import { isAbsolute, join, resolve, relative, dirname, parse, sep } from "node:path";
+import { applicationData } from "./platform";
+export interface Launch { demo: boolean; candidate: boolean; home: string; data: string; env: NodeJS.ProcessEnv; profile?: string; codexTest?: boolean; claudeTest?: boolean; platform?: NodeJS.Platform }
 export function launchConfiguration(args: string[], env: NodeJS.ProcessEnv = process.env, realHome = userInfo().homedir, electronSingletons = false): Launch {
   const demo = args.includes("--demo") || env.METERUSAGE_DEMO === "1", candidateIndex = args.indexOf("--candidate-profile"), codexIndex = args.indexOf("--codex-test-profile"), claudeIndex = args.indexOf("--claude-test-profile"), codexTest = codexIndex >= 0, claudeTest = claudeIndex >= 0;
   const liveTest = codexTest || claudeTest;
@@ -9,9 +10,9 @@ export function launchConfiguration(args: string[], env: NodeJS.ProcessEnv = pro
   const index = codexTest ? codexIndex : claudeTest ? claudeIndex : candidateIndex, profile = index < 0 ? undefined : args[index + 1];
   if (index >= 0 && ((!liveTest && !demo) || !profile || !isAbsolute(profile))) throw new Error("Candidate profile requires an absolute test directory and --demo unless using --codex-test-profile or --claude-test-profile");
   if (profile) {
-    const normalized = resolve(profile), liveData = join(realHome, "Library/Application Support/MeterUsage");
+    const normalized = resolve(profile), liveData = applicationData(realHome, process.platform, env);
     const inside = relative(liveData, normalized);
-    if (normalized === "/" || normalized === realHome || inside === "" || (inside !== ".." && !inside.startsWith("../"))) throw new Error("Candidate profile cannot use installed-app storage");
+    if (normalized === parse(normalized).root || normalized === realHome || inside === "" || (!isAbsolute(inside) && inside !== ".." && !inside.startsWith(`..${sep}`))) throw new Error("Candidate profile cannot use installed-app storage");
     let ancestor = normalized;
     while (!existsSync(ancestor)) ancestor = dirname(ancestor);
     if (realpathSync(ancestor) !== ancestor) throw new Error("Candidate profile cannot follow a symlink");
@@ -40,7 +41,7 @@ export function launchConfiguration(args: string[], env: NodeJS.ProcessEnv = pro
   // Demo always isolates preferences, provider sources, caches and Electron's
   // userData before any provider or coordinator is constructed.
   const isolated = liveTest ? resolve(profile!) : demo ? profile ?? mkdtempSync(join(tmpdir(), "meterusage-demo-")) : undefined;
-  return { demo, candidate: index >= 0, ...(codexTest ? { codexTest: true } : {}), ...(claudeTest ? { claudeTest: true } : {}), home: demo ? isolated! : realHome, data: isolated ?? join(realHome, "Library/Application Support/MeterUsage"), profile: isolated, env: liveTest ? { PATH: env.PATH, TMPDIR: env.TMPDIR } : demo ? {} : { ...env } };
+  return { demo, candidate: index >= 0, ...(process.platform === "win32" ? { platform: "win32" as const } : {}), ...(codexTest ? { codexTest: true } : {}), ...(claudeTest ? { claudeTest: true } : {}), home: demo ? isolated! : realHome, data: isolated ?? applicationData(realHome, process.platform, env), profile: isolated, env: liveTest ? { PATH: env.PATH, TMPDIR: env.TMPDIR, ...(process.platform === "win32" ? Object.fromEntries(Object.entries(env).filter(([key]) => ["systemroot", "comspec", "userprofile", "localappdata", "appdata", "pathext", "temp", "tmp"].includes(key.toLowerCase()))) : {}) } : demo ? {} : { ...env } };
 }
 
 function validateElectronSingletons([socketLink, cookieLink, lockLink]: string[]) {

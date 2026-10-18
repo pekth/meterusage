@@ -10,6 +10,19 @@ follows [Semantic Versioning](https://semver.org/).
 
 - Optically center the Grok mark in provider rings, menu items, cards and
   Settings. Preserve the original provider artwork and existing icon sizes.
+- Preserve a finished provider command's result when Windows process cleanup
+  races its natural exit.
+
+### Added
+
+- Add a Windows x64 Electron source candidate with tray and side-notch usage,
+  local CLI activity, Codex browser sign-in through the installed CLI,
+  OpenRouter usage and one-time OpenAI or Anthropic API billing keys. Windows
+  desktop Claude, Antigravity and Grok Bot connections remain unavailable.
+  Windows CI passed focused tests, unsigned NSIS/portable packaging and an
+  isolated packaged-demo/single-instance smoke check. Interactive Windows
+  acceptance, installer acceptance and signing remain unverified. This is not
+  a Windows release.
 
 ## [0.3.0-beta.3] - 2026-10-17
 

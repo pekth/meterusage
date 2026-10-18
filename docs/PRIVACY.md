@@ -11,6 +11,15 @@ The published Swift app retains the existing local/CLI boundaries. The
 TypeScript/Electron candidate adds the opt-in boundaries described below. The candidate has source/fixture checks, but native behavior and
 cutover acceptance remain pending. See [ADR 0010](adr/0010-macos-typescript-electron.md).
 
+The Windows candidate stores preferences, provider history and sanitized API
+billing snapshots under `%APPDATA%\MeterUsage`, normally the user's
+`AppData\Roaming\MeterUsage`. It follows the redirected `%APPDATA%` location
+when set. Windows uses the user's AppData access controls; it does not read
+macOS UserDefaults or Keychain items. OpenAI and Anthropic billing accept a
+one-time key in Settings, held in memory for that request. Windows has no saved
+Keychain-key import. The compact tray is fixed on Windows, PNG sharing uses the
+Save dialog, and automatic update installation is unavailable.
+
 ## Provider inputs and requests
 
 | Provider | Read or request | Retained data |
@@ -213,7 +222,8 @@ compatibility and packaged acceptance. See [setup](DESKTOP-CONNECTIONS.md).
 ## Optional API billing snapshots
 
 OpenAI API and Anthropic API billing use separate normalized snapshots under
-`Library/Application Support/MeterUsage/api-usage`. The optional bundled helper
+`Library/Application Support/MeterUsage/api-usage` on macOS and
+`%APPDATA%\MeterUsage\api-usage` on Windows. The optional bundled helper
 reads the selected organization Admin key from its environment for one fetch,
 removes that key from its own environment and calls only the documented
 OpenAI `/v1/organization/costs` or Anthropic `/v1/organizations/cost_report`
@@ -234,8 +244,9 @@ reject redirects, cap response size and pagination, and never start inference.
 
 The helper writes only schema/provider, capture/period timestamps, currency and
 daily USD totals. Identifiers, headers and raw responses/errors are discarded.
-Files and their final directory are owner-only; replacement is atomic and a
-failed request preserves the previous file. The app validates the fixed files
+On macOS, files and their final directory are owner-only. On Windows, files
+inherit the user's AppData access controls. Replacement is atomic and a failed
+request preserves the previous file. The app validates the fixed files
 and publishes only projected fields. Demo and isolated provider tests never
 read live API billing files. Demo, candidate and isolated profiles cannot use
 the Settings fetch action. Polling rereads snapshots and never fetches billing.

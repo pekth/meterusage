@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Launch } from "./launch";
 import { Preferences } from "./preferences";
+import { accountConnectionAvailable } from "./platform";
 import { boundedChild, cliEnvironment, cliPath, codexRPC, endpoints, httpTransport, runCommand, type Command, type HTTP } from "./providers/transport";
 import { object, parseCodex } from "./providers/parsers";
 import { parseCodexAccountUsage } from "./providers/codex-account-usage";
@@ -72,22 +73,24 @@ export class DesktopConnections {
   private grokController = new AbortController();
   constructor(readonly launch: Launch, readonly prefs: Preferences, readonly helper: string, readonly changed: () => void, readonly command: Command = runCommand, readonly http: HTTP = httpTransport(), readonly now = Date.now, readonly antigravity: AntigravityRPC = antigravityRPC, readonly grokBot: GrokBotRPC = grokBotTransport()) {}
   get state(): ConnectionState[] {
-    return (["codex", "claude", "antigravity", "grok"] as const).map(provider => ({ provider, status: this.launch.codexTest && provider !== "codex" || this.launch.claudeTest && provider !== "claude" ? "unsupported" : this.pending.has(provider) ? "connecting" : this.enabled(provider) ? "connected" : this.errors.has(provider) ? "failed" : "disconnected", source: this.configured(provider) ? "account" : "cli", ...(provider === "grok" && /^[a-f\d]{64}$/.test(String(this.prefs.values.desktopGrokIdentity)) ? { accountMethod: this.prefs.values.desktopGrokSource === "bot" ? "bot" as const : "cursor" as const } : {}), localAvailable: !this.launch.demo && !this.launch.codexTest && !this.launch.claudeTest }));
+    return (["codex", "claude", "antigravity", "grok"] as const).map(provider => ({ provider, status: !accountConnectionAvailable(provider, this.launch.platform ?? process.platform) || this.launch.codexTest && provider !== "codex" || this.launch.claudeTest && provider !== "claude" ? "unsupported" : this.pending.has(provider) ? "connecting" : this.enabled(provider) ? "connected" : this.errors.has(provider) ? "failed" : "disconnected", source: this.configured(provider) ? "account" : "cli", ...(provider === "grok" && /^[a-f\d]{64}$/.test(String(this.prefs.values.desktopGrokIdentity)) ? { accountMethod: this.prefs.values.desktopGrokSource === "bot" ? "bot" as const : "cursor" as const } : {}), localAvailable: !this.launch.demo && !this.launch.codexTest && !this.launch.claudeTest }));
   }
-  enabled(provider: ConnectionProvider) { const value = this.prefs.values[this.key(provider)]; return (!this.launch.codexTest || provider === "codex") && (!this.launch.claudeTest || provider === "claude") && !this.stopped && !this.pending.has(provider) && !(provider === "codex" && this.prefs.values.desktopCodexCleanup !== "") && typeof value === "string" && value !== "" && value !== "off"; }
+  enabled(provider: ConnectionProvider) { const value = this.prefs.values[this.key(provider)]; return accountConnectionAvailable(provider, this.launch.platform ?? process.platform) && (!this.launch.codexTest || provider === "codex") && (!this.launch.claudeTest || provider === "claude") && !this.stopped && !this.pending.has(provider) && !(provider === "codex" && this.prefs.values.desktopCodexCleanup !== "") && typeof value === "string" && value !== "" && value !== "off"; }
   configured(provider: ConnectionProvider) { return this.prefs.values[this.key(provider)] !== ""; }
   private key(provider: ConnectionProvider) { return provider === "codex" ? "desktopCodexConnection" : provider === "claude" ? "desktopClaudeIdentity" : provider === "antigravity" ? "desktopAntigravityIdentity" : "desktopGrokIdentity"; }
   private binary() {
-    for (const root of ["/Applications", join(this.launch.home, "Applications")]) {
+    for (const root of (this.launch.platform ?? process.platform) === "win32" ? [] : ["/Applications", join(this.launch.home, "Applications")]) {
       const path = join(root, "Codex.app/Contents/Resources/codex");
       try { accessSync(path, constants.X_OK); return path; } catch { /* Existing command installations remain supported. */ }
     }
-    return cliPath("codex", this.launch.home, this.launch.env);
+    return cliPath("codex", this.launch.home, this.launch.env, this.launch.platform ?? process.platform);
   }
   private env(id: string) {
     const home = join(this.launch.data, "connections", "codex", id);
     mkdirSync(home, { recursive: true, mode: 0o700 });
-    return { HOME: this.launch.home, PATH: cliEnvironment(this.launch.home, { PATH: this.launch.env.PATH }).PATH, CODEX_HOME: home, TMPDIR: this.launch.env.TMPDIR };
+    const windows = (this.launch.platform ?? process.platform) === "win32";
+    const env = windows ? Object.fromEntries(Object.entries(this.launch.env).filter(([key]) => ["path", "systemroot", "comspec", "userprofile", "localappdata", "appdata", "pathext", "temp", "tmp"].includes(key.toLowerCase()))) : { PATH: this.launch.env.PATH };
+    return { ...cliEnvironment(this.launch.home, env, this.launch.platform ?? process.platform), HOME: this.launch.home, CODEX_HOME: home, TMPDIR: this.launch.env.TMPDIR };
   }
   private async claude(allowUI: boolean, signal?: AbortSignal, readingCache?: (stage: keyof typeof desktopReadErrors) => void) {
     try {
@@ -203,6 +206,7 @@ export class DesktopConnections {
     } finally { this.resetController = undefined; }
   }
   async connect(provider: ConnectionProvider, open: (url: string) => Promise<void>, consent: () => Promise<boolean> = async () => provider === "codex" || provider === "antigravity") {
+    if (!accountConnectionAvailable(provider, this.launch.platform ?? process.platform)) throw new Error("Desktop connection is unavailable on Windows. Choose CLI instead.");
     if (this.stopped) throw new Error("Connection unavailable");
     if (this.launch.demo) throw new Error("Connections are disabled in demo mode");
     if (this.launch.codexTest && provider !== "codex") throw new Error("Connection unavailable in Codex test mode");
@@ -282,7 +286,7 @@ export class DesktopConnections {
         try { await this.prefs.set("desktopGrokSource", previousGrokSource); }
         catch { this.prefs.values.desktopGrokSource = previousGrokSource; }
       }
-      this.errors.add(provider); throw new Error(provider === "codex" ? "Open Codex on this Mac, then try connecting again" : provider === "antigravity" ? "Open one Antigravity Desktop account and sign in, then try connecting again" : provider === "grok" ? grokError : controller.signal.aborted ? "Open Claude Desktop and sign in, then try connecting again" : claudeError);
+      this.errors.add(provider); throw new Error(provider === "codex" ? (this.launch.platform ?? process.platform) === "win32" ? "Install Codex CLI on this PC, then try signing in again" : "Open Codex on this Mac, then try connecting again" : provider === "antigravity" ? "Open one Antigravity Desktop account and sign in, then try connecting again" : provider === "grok" ? grokError : controller.signal.aborted ? "Open Claude Desktop and sign in, then try connecting again" : claudeError);
     }
     finally { finish(); }
   }
@@ -318,6 +322,7 @@ export class DesktopConnections {
     await this.clearConnection(provider, true);
   }
   private async clearConnection(provider: ConnectionProvider, local: boolean) {
+    if (!local && !accountConnectionAvailable(provider, this.launch.platform ?? process.platform)) throw new Error("Desktop connection is unavailable on Windows. Choose CLI instead.");
     if (this.stopped) throw new Error("Connection unavailable");
     if (this.launch.demo) throw new Error("Connections are disabled in demo mode");
     if (this.launch.codexTest && provider !== "codex") throw new Error("Connection unavailable in Codex test mode");

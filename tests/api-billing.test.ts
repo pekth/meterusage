@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { appendFileSync, chmodSync, lstatSync, mkdtempSync, readFileSync, readdirSync, readSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, fstatSync, linkSync, lstatSync, mkdtempSync, readFileSync, readdirSync, readSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { type ApiBillingProvider, type ApiBillingSnapshot } from "../src/domain/api-billing";
@@ -8,7 +8,7 @@ import { runApiUsageHelper } from "../src/main/api-usage-helper";
 
 const now = Date.parse("2026-10-16T12:00:00Z"), start = Date.parse("2026-10-01T00:00:00Z"), day = 86400000;
 const roots: string[] = [];
-vi.mock("node:fs", async original => { const fs = await original<typeof import("node:fs")>(); return { ...fs, readSync: vi.fn(fs.readSync) }; });
+vi.mock("node:fs", async original => { const fs = await original<typeof import("node:fs")>(); return { ...fs, readSync: vi.fn(fs.readSync), fstatSync: vi.fn(fs.fstatSync) }; });
 const temp = () => { const root = realpathSync(mkdtempSync(join(tmpdir(), "meterusage-api-fixture-"))); roots.push(root); return root; };
 afterEach(() => { vi.useRealTimers(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 const snapshot = (provider: ApiBillingProvider = "openai"): ApiBillingSnapshot => ({ schema: 1, provider, capturedAt: now, monthStart: start, periodEnd: now, currency: "USD", daily: [{ start, end: start + day, amountUSD: 1.25 }] });
@@ -23,7 +23,8 @@ describe("API billing snapshot privacy and filesystem boundary", () => {
     const home = temp(), value = snapshot(provider);
     writeApiBilling(home, { ...value, organization_id: "PRIVATE_ORG", daily: [{ ...value.daily[0], workspace_id: "PRIVATE_WORKSPACE" }] } as unknown as ApiBillingSnapshot);
     const file = apiBillingPath(home, provider), raw = readFileSync(file, "utf8");
-    expect(raw).not.toContain("PRIVATE"); expect(lstatSync(file).mode & 0o777).toBe(0o600); expect(lstatSync(dirname(file)).mode & 0o777).toBe(0o700);
+    expect(raw).not.toContain("PRIVATE");
+    if (process.platform !== "win32") { expect(lstatSync(file).mode & 0o777).toBe(0o600); expect(lstatSync(dirname(file)).mode & 0o777).toBe(0o700); }
     expect(readApiBilling(home, provider, now + 60000)).toEqual({ status: "value", value, stale: false });
     expect(readApiBilling(home, provider, now + day)).toEqual({ status: "value", value, stale: true });
     expect(readdirSync(dirname(file))).toEqual([`${provider}.json`]);
@@ -38,12 +39,12 @@ describe("API billing snapshot privacy and filesystem boundary", () => {
     writeApiBilling(home, snapshot()); writeFileSync(apiBillingPath(home, "openai"), "invalid");
     expect(readApiBilling(home, "openai", now)).toEqual({ status: "missing", code: "unavailable" });
   });
-  it.each([0o644, 0o666])("rejects public snapshot permissions %s", mode => {
+  it.skipIf(process.platform === "win32").each([0o644, 0o666])("rejects public snapshot permissions %s", mode => {
     const home = temp(); writeApiBilling(home, snapshot()); chmodSync(apiBillingPath(home, "openai"), mode);
     expect(readApiBilling(home, "openai", now).status).toBe("missing");
     expect(() => writeApiBilling(home, snapshot())).toThrow();
   });
-  it("rejects symlink files and directories without changing their targets", () => {
+  it.skipIf(process.platform === "win32")("rejects symlink files and directories without changing their targets", () => {
     const home = temp(), outside = temp(), secret = join(outside, "private.json"); writeFileSync(secret, "PRIVATE_DATA", { mode: 0o600 });
     writeApiBilling(home, snapshot()); rmSync(apiBillingPath(home, "openai")); symlinkSync(secret, apiBillingPath(home, "openai"));
     expect(readApiBilling(home, "openai", now).status).toBe("missing"); expect(() => writeApiBilling(home, snapshot())).toThrow();
@@ -51,7 +52,7 @@ describe("API billing snapshot privacy and filesystem boundary", () => {
     expect(() => writeApiBilling(home, snapshot())).toThrow(); expect(readApiBilling(home, "openai", now).status).toBe("missing");
     expect(readFileSync(secret, "utf8")).toBe("PRIVATE_DATA"); expect(readdirSync(outside)).toEqual(["private.json"]);
   });
-  it("rejects public directories and oversized files", () => {
+  it.skipIf(process.platform === "win32")("rejects public directories and oversized files", () => {
     const home = temp(); writeApiBilling(home, snapshot()); const path = apiBillingPath(home, "openai");
     chmodSync(dirname(path), 0o755); expect(readApiBilling(home, "openai", now).status).toBe("missing");
     chmodSync(dirname(path), 0o700); writeFileSync(path, " ".repeat(1048577)); expect(readApiBilling(home, "openai", now).status).toBe("missing");
@@ -80,6 +81,53 @@ describe("API billing snapshot privacy and filesystem boundary", () => {
     expect(() => parseApiBillingSnapshot(old.replace('"schema":1', '"schema":1,"schema":1'), "openai", now)).toThrow();
     expect(() => writeApiBilling(home, { ...snapshot(), currency: "EUR" } as unknown as ApiBillingSnapshot)).toThrow();
     expect(readFileSync(apiBillingPath(home, "openai"), "utf8")).toBe(old);
+  });
+  it.each(process.platform === "win32" ? ["win32"] as const : ["darwin", "win32"] as const)("rejects hard links and oversized reads under %s storage policy", platform => {
+    const home = temp(), data = join(home, "configured-data");
+    writeApiBilling(home, snapshot(), data, platform);
+    const path = apiBillingPath(home, "openai", data), linked = join(home, "linked.json");
+    linkSync(path, linked);
+    expect(readApiBilling(home, "openai", now, data, platform)).toEqual({ status: "missing", code: "unavailable" });
+    expect(() => writeApiBilling(home, snapshot(), data, platform)).toThrow();
+    rmSync(linked); writeFileSync(path, " ".repeat(1048577));
+    expect(readApiBilling(home, "openai", now, data, platform)).toEqual({ status: "missing", code: "unavailable" });
+  });
+  it("uses Windows inherited permissions while retaining projection and atomic replacement", () => {
+    const home = temp(), data = join(home, "AppData", "Roaming", "MeterUsage");
+    const value = { ...snapshot(), apiKey: "PRIVATE_KEY", response: "PRIVATE_RESPONSE" } as unknown as ApiBillingSnapshot;
+    writeApiBilling(home, value, data, "win32");
+    const file = apiBillingPath(home, "openai", data);
+    chmodSync(file, 0o644); chmodSync(dirname(file), 0o755);
+    expect(readApiBilling(home, "openai", now, data, "win32")).toEqual({ status: "value", value: snapshot(), stale: false });
+    const next = { ...snapshot(), daily: [{ ...snapshot().daily[0], amountUSD: 2 }] };
+    writeApiBilling(home, next, data, "win32");
+    expect(readApiBilling(home, "openai", now, data, "win32")).toEqual({ status: "value", value: next, stale: false });
+    expect(readFileSync(file, "utf8")).not.toContain("PRIVATE"); expect(readdirSync(dirname(file))).toEqual(["openai.json"]);
+    if (process.platform !== "win32") expect(readApiBilling(home, "openai", now, data, "darwin").status).toBe("missing");
+  });
+  it("rejects Windows junction/symlink ancestors before creating or reading snapshot files", () => {
+    const home = temp(), outside = temp(), parent = join(home, "AppData");
+    symlinkSync(outside, parent, process.platform === "win32" ? "junction" : "dir");
+    const data = join(parent, "Roaming", "MeterUsage");
+    expect(() => writeApiBilling(home, snapshot(), data, "win32")).toThrow();
+    expect(readApiBilling(home, "openai", now, data, "win32")).toEqual({ status: "missing", code: "unavailable" });
+    expect(readdirSync(outside)).toEqual([]);
+  });
+  it.skipIf(process.platform === "win32")("rejects a Windows snapshot symlink without opening or replacing its target", () => {
+    const home = temp(), data = join(home, "app-data"), outside = join(home, "private.json");
+    writeApiBilling(home, snapshot(), data, "win32");
+    const file = apiBillingPath(home, "openai", data);
+    writeFileSync(outside, "PRIVATE_DATA"); rmSync(file); symlinkSync(outside, file);
+    expect(readApiBilling(home, "openai", now, data, "win32")).toEqual({ status: "missing", code: "unavailable" });
+    expect(() => writeApiBilling(home, snapshot(), data, "win32")).toThrow();
+    expect(readFileSync(outside, "utf8")).toBe("PRIVATE_DATA");
+  });
+  it("rejects a changed Windows file descriptor identity", async () => {
+    const home = temp(), data = join(home, "app-data");
+    writeApiBilling(home, snapshot(), data, "win32");
+    const fs = await vi.importActual<typeof import("node:fs")>("node:fs");
+    vi.mocked(fstatSync).mockImplementationOnce(fd => { const stat = fs.fstatSync(fd); stat.ino++; return stat; });
+    expect(readApiBilling(home, "openai", now, data, "win32")).toEqual({ status: "missing", code: "unavailable" });
   });
 });
 

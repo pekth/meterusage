@@ -14,6 +14,7 @@ export interface SettingsState {
 }
 export interface IssueReportState { sending: boolean; receipt?: string; error?: string; retryAt?: number }
 export interface ViewState {
+  platform?: "darwin" | "win32";
   appVersion?: string;
   issueReport?: IssueReportState;
   connections?: ConnectionState[];

@@ -4,7 +4,7 @@ import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import { type Usage, type Tokens, tokens, addTokens, totalTokens, localDay, weekStart, Unavailable } from "../../domain/models";
 import { telemetry } from "../../domain/telemetry";
-import { runCommand, type Command, type CommandOptions } from "./transport";
+import { cliPath, runCommand, type Command, type CommandOptions } from "./transport";
 import { parseAntigravity } from "./parsers";
 import { antigravityHistory } from "./usage";
 import { readFile } from "node:fs/promises";
@@ -107,5 +107,6 @@ export class AntigravityRuntime {
   }
 }
 export function runtimeCandidates(env: NodeJS.ProcessEnv): string[] {
+  if (process.platform === "win32") return ["docker", "podman"].flatMap(name => { try { return [cliPath(name, env.USERPROFILE ?? env.HOME ?? "", env)]; } catch { return []; } });
   return [...new Set(["/opt/homebrew/bin/docker", "/opt/homebrew/bin/podman", "/usr/local/bin/docker", "/usr/local/bin/podman", "/usr/bin/docker", ...(env.PATH ?? "").split(":").flatMap(p => [join(p, "docker"), join(p, "podman")])])];
 }

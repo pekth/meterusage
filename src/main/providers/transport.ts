@@ -1,6 +1,6 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { constants, accessSync } from "node:fs";
-import { join } from "node:path";
+import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { constants, accessSync, statSync } from "node:fs";
+import { posix, win32 } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Unavailable, failed, type Provider } from "../../domain/models";
 import { selectJSON } from "../select-json";
@@ -8,22 +8,98 @@ import { object } from "./parsers";
 
 export interface CommandOptions { env?: NodeJS.ProcessEnv; signal?: AbortSignal; timeoutMs?: number; maxBytes?: number }
 export type Command = (binary: string, args: string[], options?: CommandOptions) => Promise<string>;
-export function cliPath(name: string, home: string, env: NodeJS.ProcessEnv): string {
-  const paths = ["/opt/homebrew/bin", "/usr/local/bin", join(home, ".cargo/bin"), ...(name === "opencode" ? [join(home, ".bun/bin")] : []), join(home, ".local/bin"), ...(env.PATH ?? "/usr/bin:/bin").split(":")];
-  for (const dir of paths) { const path = join(dir, name); try { accessSync(path, constants.X_OK); return path; } catch { /* Probe common GUI install paths. */ } }
+function windowsEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const key = Object.keys(env).find(key => key.toLowerCase() === name.toLowerCase());
+  return key === undefined ? undefined : env[key];
+}
+function windowsCLIPaths(home: string, env: NodeJS.ProcessEnv, name?: string): string[] {
+  const local = windowsEnv(env, "LOCALAPPDATA") ?? win32.join(home, "AppData", "Local");
+  return [...new Set([
+    win32.join(home, ".local", "bin"), win32.join(home, ".bun", "bin"), win32.join(home, ".cargo", "bin"),
+    win32.join(windowsEnv(env, "APPDATA") ?? win32.join(home, "AppData", "Roaming"), "npm"),
+    win32.join(local, "Microsoft", "WinGet", "Links"),
+    ...(name && ["codex", "claude", "opencode"].includes(name) ? [win32.join(local, "Programs", name)] : []),
+    ...(windowsEnv(env, "PATH") ?? "").split(";").map(path => path.replace(/^"(.*)"$/, "$1")),
+  ].filter(path => win32.isAbsolute(path) && win32.parse(path).root.length > 1))];
+}
+export function cliPath(name: string, home: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): string {
+  if (platform === "win32") {
+    const extensions = win32.extname(name) ? [""] : (windowsEnv(env, "PATHEXT") ?? ".COM;.EXE;.BAT;.CMD").split(";").map(ext => ext.toLowerCase()).filter(ext => [".exe", ".com", ".cmd", ".bat"].includes(ext));
+    for (const dir of windowsCLIPaths(home, env, name)) for (const ext of extensions) {
+      const path = win32.join(dir, name + ext);
+      try { accessSync(path, constants.R_OK); if (statSync(path).isFile()) return path; } catch { /* Probe existing Windows CLI installations. */ }
+    }
+    throw new Unavailable("cliNotFound", name);
+  }
+  const paths = ["/opt/homebrew/bin", "/usr/local/bin", posix.join(home, ".cargo/bin"), ...(name === "opencode" ? [posix.join(home, ".bun/bin")] : []), posix.join(home, ".local/bin"), ...(env.PATH ?? "/usr/bin:/bin").split(":")];
+  for (const dir of paths) { const path = posix.join(dir, name); try { accessSync(path, constants.X_OK); return path; } catch { /* Probe common GUI install paths. */ } }
   throw new Unavailable("cliNotFound", name);
 }
-export function cliEnvironment(home: string, env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return { ...env, PATH: ["/opt/homebrew/bin", "/usr/local/bin", join(home, ".cargo/bin"), join(home, ".local/bin"), env.PATH ?? "/usr/bin:/bin"].join(":") };
+export function cliEnvironment(home: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): NodeJS.ProcessEnv {
+  if (platform === "win32") return { ...Object.fromEntries(Object.entries(env).filter(([key]) => key.toLowerCase() !== "path")), PATH: windowsCLIPaths(home, env).join(";") };
+  return { ...env, PATH: ["/opt/homebrew/bin", "/usr/local/bin", posix.join(home, ".cargo/bin"), posix.join(home, ".local/bin"), env.PATH ?? "/usr/bin:/bin"].join(":") };
+}
+function commandInvocation(binary: string, args: string[], env: NodeJS.ProcessEnv): [string, string[]] {
+  if (process.platform !== "win32" || !/\.(cmd|bat)$/i.test(binary)) return [binary, args];
+  // Bypass known npm shims entirely so provider arguments never reach cmd.exe.
+  const scripts: Record<string, string> = { codex: "@openai/codex/bin/codex.js", claude: "@anthropic-ai/claude-code/cli.js", opencode: "opencode-ai/bin/opencode" };
+  const script = scripts[win32.basename(binary, win32.extname(binary)).toLowerCase()];
+  if (!script) throw new Error("Provider command wrapper unsupported");
+  try {
+    const dir = win32.dirname(binary), target = win32.join(dir, "node_modules", script);
+    accessSync(target, constants.R_OK); if (!statSync(target).isFile()) throw new Error();
+    let node = win32.join(dir, "node.exe");
+    try { accessSync(node, constants.R_OK); if (!statSync(node).isFile()) throw new Error(); }
+    catch { node = cliPath("node.exe", windowsEnv(env, "USERPROFILE") ?? windowsEnv(env, "HOME") ?? "", env); }
+    return [node, [target, ...args]];
+  } catch { throw new Error("Provider command wrapper unavailable"); }
 }
 // Provider stderr may contain credentials or paths. Drain it, but never retain
 // or propagate it. All failures crossing this boundary use fixed messages.
 export function boundedChild(binary: string, args: string[], options: CommandOptions, exchange: (child: ChildProcessWithoutNullStreams, finish: (result: string | Error) => void) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted) { reject(new Error("Provider request cancelled")); return; }
-    const child = spawn(binary, args, { env: options.env, stdio: "pipe", shell: false });
+    let invocation: [string, string[]];
+    try { invocation = commandInvocation(binary, args, options.env ?? process.env); }
+    catch (error) { reject(error); return; }
+    const windows = process.platform === "win32";
+    const child = spawn(invocation[0], invocation[1], { env: options.env, stdio: "pipe", shell: false, ...(windows ? { windowsHide: true } : {}) });
     let outcome: string | Error | undefined, killTimer: ReturnType<typeof setTimeout> | undefined, bytes = 0;
-    const stop = () => { if (child.exitCode === null) { child.kill("SIGTERM"); killTimer ??= setTimeout(() => child.kill("SIGKILL"), 250); } };
+    let treeKill: ChildProcess | undefined, closed = false, cleanupDone = true, settled = false;
+    let cleanupExitCode: number | null | undefined;
+    const settle = () => {
+      // taskkill reports 128 when the provider exits before termination reaches it.
+      if (cleanupExitCode === 128 && child.exitCode !== null && closed) cleanupDone = true;
+      if (settled || !closed || !cleanupDone) return;
+      settled = true; clearTimeout(timer); if (killTimer) clearTimeout(killTimer); options.signal?.removeEventListener("abort", abort);
+      const result = outcome ?? new Error("Provider process exited");
+      if (result instanceof Error) reject(result); else resolve(result);
+    };
+    const cleanupFailed = () => {
+      if (settled) return;
+      outcome = new Error("Provider process cleanup failed");
+      try { treeKill?.kill("SIGKILL"); child.kill("SIGKILL"); } catch { /* Cleanup failures use the fixed error above. */ }
+      child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy();
+      closed = cleanupDone = true; settle();
+    };
+    const stop = () => {
+      if (windows) {
+        killTimer = setTimeout(cleanupFailed, 1500);
+        if (child.exitCode !== null || child.pid === undefined) return;
+        // Node launchers cannot forward signals after Windows force-terminates them.
+        cleanupDone = false;
+        try {
+          treeKill = spawn(win32.join(windowsEnv(process.env, "SystemRoot") ?? "C:\\Windows", "System32", "taskkill.exe"), ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", shell: false, windowsHide: true });
+          treeKill.on("error", cleanupFailed);
+          treeKill.on("close", code => {
+            cleanupExitCode = code;
+            if (code !== 0 && code !== 128) cleanupFailed(); else { cleanupDone = code === 0; settle(); }
+          });
+        } catch { cleanupFailed(); }
+      } else if (child.exitCode === null) {
+        child.kill("SIGTERM"); killTimer = setTimeout(() => child.kill("SIGKILL"), 250);
+      }
+    };
     const finish = (result: string | Error) => { if (outcome !== undefined) return; outcome = result; stop(); };
     const timer = setTimeout(() => finish(new Error("Provider request timed out")), options.timeoutMs ?? 20000);
     const abort = () => finish(new Error("Provider request cancelled"));
@@ -32,11 +108,7 @@ export function boundedChild(binary: string, args: string[], options: CommandOpt
     child.stdout.on("data", (data: Buffer) => { bytes += data.length; if (bytes > (options.maxBytes ?? 16 * 1048576)) finish(new Error("Provider output exceeded limit")); });
     child.stdin.on("error", () => finish(new Error("Provider input closed")));
     child.on("error", () => finish(new Error("Provider process unavailable")));
-    child.on("close", () => {
-      clearTimeout(timer); if (killTimer) clearTimeout(killTimer); options.signal?.removeEventListener("abort", abort);
-      const result = outcome ?? new Error("Provider process exited");
-      if (result instanceof Error) reject(result); else resolve(result);
-    });
+    child.on("close", () => { closed = true; settle(); });
     exchange(child, finish);
   });
 }

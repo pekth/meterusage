@@ -10,6 +10,17 @@ ID signed and notarized. This is an opt-in manual download; Swift stays stable.
 Source manifests retain `0.2.41`; packaging explicitly sets the beta version.
 Settings shows that bundle version. Full native acceptance remains open.
 
+Windows has a separate unsigned x64 source candidate, not a public build. It
+includes shared tray/notch usage views and heatmaps, local CLI sources, Codex
+browser sign-in through the installed CLI, OpenRouter and one-time OpenAI or
+Anthropic API billing. Claude Desktop, Antigravity Desktop and Grok Bot Desktop
+account connections are unavailable. Preferences, history and sanitized
+billing snapshots use `%APPDATA%\MeterUsage`, defaulting to the user's
+`AppData\Roaming\MeterUsage`. Windows CI passed focused tests, packaging and
+isolated packaged startup/single-instance checks. Interactive Windows behavior,
+installer acceptance and signing remain unverified. See the
+[CI receipt and open gates](../adr/0033-windows-desktop-candidate.md#ci-validation).
+
 See the [current beta screenshots](../SCREENSHOTS.md) for Usage, notch and Settings.
 
 ## Source choices
@@ -21,8 +32,8 @@ Usage. See [ADR 0023](../adr/0023-onboarding-source-choice.md).
 
 | Provider and method | Available source behavior | Coverage limit |
 | --- | --- | --- |
-| Codex browser sign-in | Existing official app helper, with command-install compatibility, signs in through the provider page using a separate keyring-only profile. Reads allowance and provider-reported daily account tokens. | Account history is separate from CLI tokens. No local sessions, category split, cost or burn attribution comes from this method. Universal device/product coverage is unverified. |
-| Codex CLI | Existing authenticated CLI supplies quota/reset metadata; local rollouts supply tokens, sessions and estimated cost. | Activity on this Mac only. |
+| Codex browser sign-in | Existing official app helper, with command-install compatibility, signs in through the provider page using a separate keyring-only profile on macOS. On Windows it uses the installed Codex CLI. Reads allowance and provider-reported daily account tokens. | Account history is separate from CLI tokens. No local sessions, category split, cost or burn attribution comes from this method. Universal device/product coverage is unverified. |
+| Codex CLI | Existing authenticated CLI supplies quota/reset metadata; local rollouts supply tokens, sessions and estimated cost. | Activity on this Mac or PC only. |
 | Claude Desktop | Explicit consent permits a fixed Keychain helper and read-only Desktop cache/cookie access for current account allowance. | Allowance only. No Desktop chat/token history, local cost, tier or extra-usage credit projection. Compatibility can fail when the active account has no allowance token; paid-account live acceptance remains open. |
 | Claude Code CLI | Local transcript counters, tier metadata and optional companion quota files. | Local activity; allowance requires the [companion](../COMPANION.md). |
 | Antigravity Desktop | Explicit consent reads allowance from one running, signed-in desktop server. | Account allowance only. Local CLI activity stays separate. The owner confirmed a live connection; automated quota comparison and broad compatibility remain unverified. |
@@ -39,6 +50,14 @@ to local collection. See [desktop connections](../DESKTOP-CONNECTIONS.md) and
 
 ### Existing provider inputs
 
+Windows keeps the shared CLI/local sources and OpenRouter. Desktop account
+connections are available only for Codex there; Claude Desktop, Antigravity
+Desktop and Grok Bot Desktop require macOS integration. Windows does not import
+saved macOS Admin keys. Its billing setup accepts one-time OpenAI and Anthropic
+Admin keys in Settings. The tray is compact, PNG sharing uses a Save dialog,
+and automatic updates are unavailable. The [Windows candidate ADR](../adr/0033-windows-desktop-candidate.md)
+records the remaining acceptance gates.
+
 All nine adapters remain wired in [composition](../../src/main/composition.ts).
 The current source adds an OpenCode Go local setup action and Antigravity
 Desktop connection. Both are included in build 61.
@@ -54,10 +73,11 @@ Desktop connection. Both are included in build 61.
   A quota key alone cannot supply local history. The OpenCode-only CLI fallback
   checks executable `~/.bun/bin/opencode` installs as well as the existing paths.
 - OpenRouter uses existing keys for account quota/credit and aggregate activity.
-- Separate OpenAI API and Anthropic API cards read owner-only billing snapshots
+- Separate OpenAI API and Anthropic API cards read normalized billing snapshots
   from **Settings → API connections → Fetch billing** or the bundled one-run
-  helper. Settings can reuse the previous app's saved Keychain Admin key or
-  accept a masked, one-time key. Neither path saves new credentials. See [API billing](../API_USAGE_BETA.md).
+  helper. macOS can reuse the previous app's saved Keychain Admin key; both
+  platforms accept a masked, one-time key. Neither path saves new credentials.
+  Windows supports the one-time key path only. See [API billing](../API_USAGE_BETA.md).
   That activity is provider account scope, not a local chat count.
 - Cursor, Copilot CLI and Gemini CLI use optional existing local quota snapshots.
   Presence alone does not provide cloud quota or a token ledger.
@@ -214,8 +234,10 @@ Private installation receipts do not close native acceptance. Remaining proof
 includes native setup/account/offline journeys, tray/focus/accessibility,
 notifications, login items, sharing, updater replacement/relaunch, drag/display
 persistence and two different-height notch captures. Reuse matching source,
-packaging and installation receipts only for their recorded layer. Windows
-implementation, packaging, CI, testing and release remain paused.
+packaging and installation receipts only for their recorded layer. Windows has
+a source candidate with passing focused tests, packaging and isolated startup
+checks. Interactive acceptance, installer acceptance, signing and release
+remain open. See [ADR 0033](../adr/0033-windows-desktop-candidate.md).
 
 [ADR 0010](../adr/0010-macos-typescript-electron.md) keeps Swift as the behavior
 reference and rollback path. No automatic cutover, data migration, release or
