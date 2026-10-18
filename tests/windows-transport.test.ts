@@ -6,6 +6,10 @@ import { win32 } from "node:path";
 import { boundedChild, cliEnvironment, cliPath, codexRPC, runCommand } from "../src/main/providers/transport";
 
 const files = vi.hoisted(() => new Map<string, boolean>());
+vi.mock("node:path", async original => {
+  const actual = await original<typeof import("node:path")>();
+  return { ...actual, join: actual.win32.join };
+});
 vi.mock("node:fs", async original => ({
   ...await original<typeof import("node:fs")>(),
   accessSync: vi.fn((path: string) => { if (!files.has(path.toLowerCase())) throw new Error("Synthetic path missing"); }),
@@ -83,8 +87,10 @@ describe("Windows CLI discovery", () => {
     file(".local\\bin\\codex.exe");
     expect(() => cliPath("codex", "", {}, "win32")).toThrow("not found");
   });
-  it("preserves the POSIX environment augmentation", () => {
-    expect(cliEnvironment("/synthetic/home", { PATH: "/synthetic/bin", KEEP: "value" }, "linux")).toEqual({ KEEP: "value", PATH: "/opt/homebrew/bin:/usr/local/bin:/synthetic/home/.cargo/bin:/synthetic/home/.local/bin:/synthetic/bin" });
+  it.each(["linux", "darwin"] as const)("preserves %s paths when the host uses Windows joins", platform => {
+    expect(cliEnvironment("/synthetic/home", { PATH: "/synthetic/bin", KEEP: "value" }, platform)).toEqual({ KEEP: "value", PATH: "/opt/homebrew/bin:/usr/local/bin:/synthetic/home/.cargo/bin:/synthetic/home/.local/bin:/synthetic/bin" });
+    file("/synthetic/home/.bun/bin/opencode");
+    expect(cliPath("opencode", "/synthetic/home", {}, platform)).toBe("/synthetic/home/.bun/bin/opencode");
   });
 });
 
@@ -149,12 +155,29 @@ describe("Windows provider process boundary", () => {
     close(0); await Promise.resolve(); expect(settled).toBe(false);
     treeKill.emit("close", 0); await expect(pending).resolves.toBe("synthetic result");
   });
-  it.each(["error", "timeout", "pipes", "exited-launcher"] as const)("bounds tree cleanup %s and rejects without exposing stderr", async cleanup => {
+  it.each(["helper-first", "child-first"])("preserves the output limit after process-not-found cleanup (%s)", async order => {
+    const { child, close, treeKill } = fakeChild("timeout");
+    const pending = onWindows(() => runCommand("D:\\CLI\\codex.exe", [], { maxBytes: 10 }));
+    const rejected = expect(pending).rejects.toThrow("Provider output exceeded limit");
+    child.stdout.write("x".repeat(1000));
+    if (order === "helper-first") treeKill.emit("close", 128);
+    close(0); await Promise.resolve();
+    if (order === "child-first") treeKill.emit("close", 128);
+    await rejected; expect(child.kill).not.toHaveBeenCalled();
+  });
+  it("does not accept access failure after the provider closes", async () => {
+    const { close, treeKill } = fakeChild("timeout");
+    const pending = onWindows(() => boundedChild("D:\\CLI\\codex.exe", [], {}, (_child, finish) => finish("synthetic result")));
+    const rejected = expect(pending).rejects.toThrow("Provider process cleanup failed");
+    close(0); await Promise.resolve(); treeKill.emit("close", 1); await rejected;
+  });
+  it.each(["error", "timeout", "pipes", "exited-launcher", "missing-with-open-pipes"] as const)("bounds tree cleanup %s and rejects without exposing stderr", async cleanup => {
     vi.useFakeTimers();
     const { child, treeKill } = fakeChild(cleanup === "error" ? "error" : "timeout");
     if (cleanup === "exited-launcher") child.exitCode = 0;
     const pending = onWindows(() => boundedChild("D:\\CLI\\codex.exe", [], {}, (_child, finish) => finish("synthetic result")));
     if (cleanup === "pipes") treeKill.emit("close", 0);
+    if (cleanup === "missing-with-open-pipes") { child.exitCode = 0; treeKill.emit("close", 128); }
     const rejected = expect(pending).rejects.toThrow("Provider process cleanup failed");
     await vi.advanceTimersByTimeAsync(1500); await rejected;
     if (cleanup !== "exited-launcher") expect(treeKill.kill).toHaveBeenCalledWith("SIGKILL");

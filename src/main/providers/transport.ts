@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { constants, accessSync, statSync } from "node:fs";
-import { join, win32 } from "node:path";
+import { posix, win32 } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Unavailable, failed, type Provider } from "../../domain/models";
 import { selectJSON } from "../select-json";
@@ -31,13 +31,13 @@ export function cliPath(name: string, home: string, env: NodeJS.ProcessEnv, plat
     }
     throw new Unavailable("cliNotFound", name);
   }
-  const paths = ["/opt/homebrew/bin", "/usr/local/bin", join(home, ".cargo/bin"), ...(name === "opencode" ? [join(home, ".bun/bin")] : []), join(home, ".local/bin"), ...(env.PATH ?? "/usr/bin:/bin").split(":")];
-  for (const dir of paths) { const path = join(dir, name); try { accessSync(path, constants.X_OK); return path; } catch { /* Probe common GUI install paths. */ } }
+  const paths = ["/opt/homebrew/bin", "/usr/local/bin", posix.join(home, ".cargo/bin"), ...(name === "opencode" ? [posix.join(home, ".bun/bin")] : []), posix.join(home, ".local/bin"), ...(env.PATH ?? "/usr/bin:/bin").split(":")];
+  for (const dir of paths) { const path = posix.join(dir, name); try { accessSync(path, constants.X_OK); return path; } catch { /* Probe common GUI install paths. */ } }
   throw new Unavailable("cliNotFound", name);
 }
 export function cliEnvironment(home: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): NodeJS.ProcessEnv {
   if (platform === "win32") return { ...Object.fromEntries(Object.entries(env).filter(([key]) => key.toLowerCase() !== "path")), PATH: windowsCLIPaths(home, env).join(";") };
-  return { ...env, PATH: ["/opt/homebrew/bin", "/usr/local/bin", join(home, ".cargo/bin"), join(home, ".local/bin"), env.PATH ?? "/usr/bin:/bin"].join(":") };
+  return { ...env, PATH: ["/opt/homebrew/bin", "/usr/local/bin", posix.join(home, ".cargo/bin"), posix.join(home, ".local/bin"), env.PATH ?? "/usr/bin:/bin"].join(":") };
 }
 function commandInvocation(binary: string, args: string[], env: NodeJS.ProcessEnv): [string, string[]] {
   if (process.platform !== "win32" || !/\.(cmd|bat)$/i.test(binary)) return [binary, args];
@@ -66,7 +66,10 @@ export function boundedChild(binary: string, args: string[], options: CommandOpt
     const child = spawn(invocation[0], invocation[1], { env: options.env, stdio: "pipe", shell: false, ...(windows ? { windowsHide: true } : {}) });
     let outcome: string | Error | undefined, killTimer: ReturnType<typeof setTimeout> | undefined, bytes = 0;
     let treeKill: ChildProcess | undefined, closed = false, cleanupDone = true, settled = false;
+    let cleanupExitCode: number | null | undefined;
     const settle = () => {
+      // taskkill reports 128 when the provider exits before termination reaches it.
+      if (cleanupExitCode === 128 && child.exitCode !== null && closed) cleanupDone = true;
       if (settled || !closed || !cleanupDone) return;
       settled = true; clearTimeout(timer); if (killTimer) clearTimeout(killTimer); options.signal?.removeEventListener("abort", abort);
       const result = outcome ?? new Error("Provider process exited");
@@ -88,7 +91,10 @@ export function boundedChild(binary: string, args: string[], options: CommandOpt
         try {
           treeKill = spawn(win32.join(windowsEnv(process.env, "SystemRoot") ?? "C:\\Windows", "System32", "taskkill.exe"), ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", shell: false, windowsHide: true });
           treeKill.on("error", cleanupFailed);
-          treeKill.on("close", code => { if (code !== 0) cleanupFailed(); else { cleanupDone = true; settle(); } });
+          treeKill.on("close", code => {
+            cleanupExitCode = code;
+            if (code !== 0 && code !== 128) cleanupFailed(); else { cleanupDone = code === 0; settle(); }
+          });
         } catch { cleanupFailed(); }
       } else if (child.exitCode === null) {
         child.kill("SIGTERM"); killTimer = setTimeout(() => child.kill("SIGKILL"), 250);

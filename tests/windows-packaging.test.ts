@@ -44,7 +44,7 @@ it("copies the original provider marks and wraps the original 256px PNG as ICO",
 it("keeps Swift and the Keychain helper confined to macOS packaging", () => {
   const manifest = JSON.parse(readFileSync(resolve("package.json"), "utf8"));
   expect(manifest.scripts["package:win"]).toBe("pnpm export:marks:portable && pnpm build && electron-builder --win --x64 --publish never");
-  const config = readFileSync(resolve("electron-builder.yml"), "utf8");
+  const config = readFileSync(resolve("electron-builder.yml"), "utf8").replace(/\r\n/g, "\n");
   expect(config.split("mac:\n")[0]).not.toContain("desktop-keychain");
   expect(config.split("win:\n")[1]).not.toContain("desktop-keychain");
   expect(config).toContain("mac:\n  extraResources:\n    - from: build/desktop-keychain\n      to: desktop-keychain");

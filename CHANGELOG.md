@@ -10,6 +10,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 - Optically center the Grok mark in provider rings, menu items, cards and
   Settings. Preserve the original provider artwork and existing icon sizes.
+- Preserve a finished provider command's result when Windows process cleanup
+  races its natural exit.
 
 ### Added
 
