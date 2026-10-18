@@ -236,6 +236,10 @@ Release documentation refresh: 2026-10-17; build 61 executable inputs are unchan
   synthetic proof do not establish live availability or universal cloud,
   device or product coverage. See [ADR 0022](adr/0022-codex-account-token-history.md).
 
+- Electron provider marks share one renderer. The Grok mask has a one-pixel
+  optical offset to balance its right-heavy artwork at both icon sizes. The
+  original logo files, ring centers and notch geometry stay unchanged.
+
 ## Verification gaps
 
 - The Electron candidate still needs native GUI launch/relaunch, preferences/account/offline journeys, tray/focus/accessibility, notification/login/share/updater paths, drag/display persistence and two different-height notch captures. Verified packaging and headless JSON cannot close migration or cutover.

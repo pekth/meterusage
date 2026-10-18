@@ -6,6 +6,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Optically center the Grok mark in provider rings, menu items, cards and
+  Settings. Preserve the original provider artwork and existing icon sizes.
+
 ## [0.3.0-beta.3] - 2026-10-17
 
 ### Release
