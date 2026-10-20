@@ -79,10 +79,12 @@ export function parseClaudeQuota(s: string, now = Date.now()): Quota {
 export const claudeTierSelection = { oauthAccount: { organizationRateLimitTier: true, seatTier: true, userRateLimitTier: true } } as const;
 export function parseClaudePlan(s: string): string {
   const r = object(selectJSON(s, claudeTierSelection)), a = object(r.oauthAccount);
-  const tier = text(a.organizationRateLimitTier) ?? text(a.seatTier) ?? text(a.userRateLimitTier);
-  if (!tier) throw new Unavailable("noData");
-  const v = tier.toLowerCase();
-  return /max_?20x/.test(v) ? "Max 20×" : /max_?5x/.test(v) ? "Max 5×" : v.includes("enterprise") ? "Enterprise" : v.includes("team") ? "Team" : v.includes("pro") ? "Pro" : v.includes("free") ? "Free" : displayText(tier) ?? "Unknown";
+  const labels: Record<string, string> = { max_20x: "Max 20×", max20x: "Max 20×", max_5x: "Max 5×", max5x: "Max 5×", pro: "Pro", free: "Free", team: "Team", enterprise: "Enterprise" };
+  for (const tier of [a.organizationRateLimitTier, a.seatTier, a.userRateLimitTier].map(text)) {
+    const key = tier?.toLowerCase().replace(/^default_claude_/, ""), label = key && Object.hasOwn(labels, key) ? labels[key] : undefined;
+    if (label) return label;
+  }
+  throw new Unavailable("noData");
 }
 export function parseOpenRouter(s: string, creditsData?: string, now = Date.now()): Quota {
   const r = object(json(s).data), usedRaw = number(r.usage), used = usedRaw === undefined ? undefined : Math.max(0, usedRaw), limit = number(r.limit);

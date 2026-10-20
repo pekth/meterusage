@@ -52,6 +52,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Read known Claude plan labels from the available tier fields without showing
+  internal identifiers or guessing a plan from an unrelated substring.
+- Accept duplicate Claude Desktop cache entries when their eligible access
+  tokens are identical. Distinct matching tokens still require a clear login;
+  an ambiguous-token failure preserves the selected CLI source.
 - Preload the tray usage window hidden after completed onboarding, before
   connection recovery or provider collection. The first click reuses the loaded
   renderer instead of starting its initial load.

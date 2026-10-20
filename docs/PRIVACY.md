@@ -108,7 +108,9 @@ transport; do not run the helper interactively or record its output. The main
 process decrypts `oauth:tokenCacheV2` from Claude Desktop's `config.json` and
 reads only the active organization cookie from a read-only cookie database.
 It selects account-scoped current access-token/expiry fields, skips refresh
-tokens, and rejects ambiguous, legacy or expired entries. It never writes to
+tokens, and rejects ambiguous, legacy or expired entries. Identical tokens in
+eligible entries count as one credential; distinct tokens remain ambiguous.
+It never writes to
 Claude stores or rotates their tokens.
 
 The access token authenticates a GET to
