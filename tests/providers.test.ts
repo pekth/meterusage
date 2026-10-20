@@ -25,6 +25,21 @@ describe("selective privacy boundary", () => {
     expect(scalars).toEqual(['"max_20x"']); expect(JSON.stringify(result)).not.toContain("private");
     expect(parseClaudePlan(input)).toBe("Max 20×");
   });
+  it("recognizes the default Claude Max 5x tier alias", () => {
+    expect(parseClaudePlan(String.raw`{"oauthAccount":{"organizationRateLimitTier":"default_claude_max_5x"}}`)).toBe("Max 5×");
+  });
+  it("falls back from an unknown organization tier without exposing internal metadata", () => {
+    const scalars: string[] = [];
+    const input = String.raw`{"oauthAccount":{"organizationRateLimit\u0054ier":"internal_org_42","seatTier":"default_claude_ai","userRateLimitTier":"max_5x","email":"private@example.invalid","unknown":"private_metadata"}}`;
+    selectJSON(input, claudeTierSelection, scalar => scalars.push(scalar));
+    expect(parseClaudePlan(input)).toBe("Max 5×");
+    expect(parseClaudePlan(String.raw`{"oauthAccount":{"organizationRateLimitTier":"internal_profile","seatTier":"max_5x"}}`)).toBe("Max 5×");
+    expect(parseClaudePlan(String.raw`{"oauthAccount":{"organizationRateLimitTier":"project_internal","seatTier":"max_5x"}}`)).toBe("Max 5×");
+    expect(scalars).toEqual(['"internal_org_42"', '"default_claude_ai"', '"max_5x"']);
+    expect(() => parseClaudePlan(String.raw`{"oauthAccount":{"organizationRateLimitTier":"internal_org_42","seatTier":"default_claude_ai"}}`)).toThrow();
+    expect(() => parseClaudePlan(String.raw`{"oauthAccount":{}}`)).toThrow();
+    expect(parseClaudePlan(String.raw`{"oauthAccount":{"organizationRateLimitTier":"pro","seatTier":"max_5x"}}`)).toBe("Pro");
+  });
   it("skips transcript bodies and tools before scalar decoding", () => {
     const input = JSON.stringify({ type: "assistant", timestamp: "2026-10-06T11:00:00Z", message: { model: "claude-sonnet-4-6", content: [{ text: "PRIVATE_CONTENT" }], tool: { arguments: "PRIVATE_ARGUMENTS" }, usage: { input_tokens: 0, output_tokens: 7 } } });
     const scalars: string[] = []; selectJSON(input, claudeLineSelection, scalar => scalars.push(scalar));

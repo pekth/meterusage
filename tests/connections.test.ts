@@ -499,6 +499,61 @@ it("selects only current account/org access tokens and rejects stale, ambiguous 
   expect(() => desktopCredential(config({ [cacheKey()]: entry() }), "other-org", password, now)).toThrow();
   expect(() => desktopCredential(config({ [cacheKey()]: entry() }), org, "wrong-password", now)).toThrow();
 });
+it.each([
+  cacheKey().replace(client, "55555555-5555-5555-5555-555555555555"),
+  cacheKey().replace("user:profile user:inference", "user:inference user:profile"),
+])("accepts identical eligible Claude tokens under cache key %s regardless of record order", duplicateKey => {
+  const entries = {
+    [cacheKey()]: entry(),
+    [duplicateKey]: entry("synthetic-access-one", now + 240000),
+    [cacheKey().replace(client, "66666666-6666-6666-6666-666666666666")]: entry("synthetic-expiring", now + 120000),
+    [cacheKey("44444444-4444-4444-4444-444444444444")]: entry("synthetic-other-account"),
+    [cacheKey().replace(org, "77777777-7777-7777-7777-777777777777")]: entry("synthetic-other-org"),
+    [cacheKey().replace("api.anthropic.com", "example.invalid")]: entry("synthetic-other-host"),
+    [cacheKey().replace(" user:inference", "")]: entry("synthetic-missing-scope"),
+  };
+  const expected = desktopCredential(config({ [cacheKey()]: entry() }), org, password, now);
+  for (const records of [Object.entries(entries), Object.entries(entries).reverse()]) {
+    expect(desktopCredential(config(Object.fromEntries(records)), org, password, now)).toEqual(expected);
+  }
+});
+it.each(["identical", "distinct"])("handles %s Claude cache tokens when switching from CLI to Desktop", async kind => {
+  const { launch, preferences } = await prefs(); desktop(launch.home);
+  const root = join(launch.home, "Library/Application Support/Claude");
+  writeFileSync(join(root, "config.json"), config({
+    [cacheKey()]: entry(),
+    [cacheKey().replace(client, "55555555-5555-5555-5555-555555555555")]: entry(kind === "identical" ? "synthetic-access-one" : "synthetic-access-two"),
+  }));
+  const before = ["config.json", "Cookies"].map(name => readFileSync(join(root, name)));
+  mkdirSync(launch.data, { recursive: true });
+  writeFileSync(join(launch.data, "claude-usage.json"), '{"five_hour":{"used_percentage":17}}');
+  const helper = vi.fn<Command>(async () => password), http = vi.fn<HTTP>(async () => '{"five_hour":{"utilization":25}}');
+  const connections = new DesktopConnections(launch, preferences, "/synthetic/helper", () => {}, helper, http, () => now);
+  const source = () => compose(launch, preferences, { connections }).find(s => s.slot.provider === "claude")!;
+  expect(connections.state.find(s => s.provider === "claude")?.source).toBe("cli");
+  expect((await source().quota!()).windows[0].usedPercent).toBe(17);
+  if (kind === "identical") {
+    expect(await connections.connect("claude", async () => {}, async () => true)).toBe(true);
+    expect(connections.state.find(s => s.provider === "claude")).toMatchObject({ source: "account", status: "connected" });
+    const connected = source();
+    expect(connected.accountBound).toBe(true); expect(connected.activity).toBeUndefined(); expect(connected.plan).toBeUndefined();
+    expect((await connected.quota!()).windows[0].usedPercent).toBe(25);
+    expect(http.mock.calls.map(([url, , token]) => [url, token])).toEqual(Array(2).fill([endpoints.claudeAllowance, "synthetic-access-one"]));
+    expect(helper.mock.calls.map(([, args]) => args)).toEqual([["--allow-ui"], [], [], []]);
+    await connections.useLocal("claude");
+    await expect(connected.quota!()).rejects.toMatchObject({ code: "notSignedIn" });
+    expect(http).toHaveBeenCalledTimes(2); expect(helper).toHaveBeenCalledTimes(4);
+  } else {
+    await expect(connections.connect("claude", async () => {}, async () => true)).rejects.toThrow("multiple matching allowance tokens");
+    expect(connections.state.find(s => s.provider === "claude")?.status).toBe("failed");
+    expect(http).not.toHaveBeenCalled(); expect(helper).toHaveBeenCalledOnce();
+  }
+  expect(preferences.values.desktopClaudeIdentity).toBe("");
+  expect(connections.state.find(s => s.provider === "claude")).toMatchObject({ source: "cli", localAvailable: true });
+  expect(source().accountBound).toBeUndefined(); expect(source().activity).toBeTypeOf("function"); expect(source().plan).toBeTypeOf("function");
+  expect((await source().quota!()).windows[0].usedPercent).toBe(17);
+  for (const [i, name] of ["config.json", "Cookies"].entries()) expect(readFileSync(join(root, name))).toEqual(before[i]);
+});
 it("normalizes local Claude file, SQLite, decryption, JSON and helper failures to notSignedIn", async () => {
   const home = temp();
   await expect(readDesktopCredential(home, password, now)).rejects.toMatchObject({ code: "notSignedIn" });

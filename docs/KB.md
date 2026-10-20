@@ -41,6 +41,14 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 ## Product and source facts
 
+- Electron Claude plan labels recognize known organization, seat and user tiers
+  in that order. An unknown higher-priority value permits a known fallback;
+  unknown-only metadata stays unavailable instead of exposing internal labels.
+  Claude Desktop treats identical eligible access tokens as one credential,
+  while distinct tokens remain ambiguous. Ambiguous-token Desktop connection
+  failures preserve selected CLI collection. These changes have synthetic fixture proof; live
+  Desktop compatibility remains separate.
+
 - Unreleased Electron source adds opt-in Muse Code allowance with `muse serve`
   and the official experimental MSP `usage/read` method. The source starts
   disabled, reads no credential files and sends no model turn. It preserves

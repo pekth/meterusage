@@ -38,6 +38,11 @@ below it to apply the choice. Existing profiles keep their current source.
   Keychain prompt. The candidate requests account allowance using Desktop's
   current access token. This interface can change and is not a documented
   third-party consumer API contract.
+  Duplicate eligible cache entries with the same access token count as one
+  credential. Different matching tokens remain ambiguous; MeterUsage does not
+  choose the first token or the one with the latest expiry. An ambiguous-token
+  failure leaves the previously selected CLI source available. This handling has
+  synthetic fixture coverage; live cache compatibility remains unverified.
   Alternatively, choose **Claude Code CLI** and **Use CLI** to read local Claude
   Code activity. CLI allowance requires a companion usage file; this option
   does not provide Claude website token history.

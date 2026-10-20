@@ -43,12 +43,13 @@ export function desktopCredential(config: string, organization: string, password
         const entry = object(value), scopes = match?.[4].split(/\s+/);
         return match && match[1].toLowerCase() === account && uuid.test(match[2]) && match[3].toLowerCase() === organization.toLowerCase() && scopes?.includes("user:profile") && scopes.includes("user:inference") && typeof entry.expiresAt === "number" && Number.isFinite(entry.expiresAt) && entry.expiresAt > now + 120000 && !!text(entry.token);
       });
-      // Fail closed for ambiguous caches instead of guessing which login to use.
-      if (candidates.length !== 1) {
-        if (candidates.length > 1) reading?.("ambiguous");
+      // Identical eligible tokens are one credential; distinct tokens stay ambiguous.
+      const tokens = [...new Set(candidates.map(([, value]) => object(value).token))];
+      if (tokens.length !== 1) {
+        if (tokens.length > 1) reading?.("ambiguous");
         throw unavailable();
       }
-      return { token: text(object(candidates[0][1]).token)!, identity: createHash("sha256").update(account + ":" + organization.toLowerCase()).digest("hex") };
+      return { token: text(tokens[0])!, identity: createHash("sha256").update(account + ":" + organization.toLowerCase()).digest("hex") };
     } finally { plaintext.fill(0); }
   } catch { throw unavailable(); }
 }
