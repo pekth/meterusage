@@ -74,8 +74,12 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
     return { slot, quota: async () => {
       const paths = alternate ? [join(home, "meterusage-usage.json"), join(home, "claudewatch-usage.json")] : [join(launch.data, "claude-usage.json"), join(home, "claudewatch-usage.json"), join(home, "meterusage-usage.json")];
       const path = paths.find(existsSync), raw = path && read(path); if (!raw) throw new Unavailable("noData");
-      let capturedAt = now(); try { capturedAt = statSync(path!).mtimeMs; } catch { /* Swift falls back to polling time only when file metadata is unavailable. */ }
-      try { return parseClaudeQuota(raw, capturedAt); } catch { throw new Unavailable("noData"); }
+      try {
+        const q = parseClaudeQuota(raw, statSync(path!).mtimeMs), clock = now();
+        // A CLI companion must be observed within Claude's shortest quota cycle.
+        if (q.capturedAt > clock || clock - q.capturedAt >= 5 * 3600000 || q.windows.some(w => w.resetsAt !== undefined && w.resetsAt <= clock)) throw new Unavailable("noData");
+        return q;
+      } catch { throw new Unavailable("noData"); }
     }, activity: async signal => activity.scan(now(), signal), plan: async () => { const raw = read(alternate ? join(home, ".claude.json") : join(launch.home, ".claude.json")); if (!raw) throw new Unavailable("noData"); try { return parseClaudePlan(raw); } catch { throw new Unavailable("noData"); } } };
   };
   const codex = prefs.values.desktopCodexConnection !== "" ? connectedCodex() : makeCodex(primary("codex")), claude = makeClaude(primary("claude"), join(launch.home, ".claude"));

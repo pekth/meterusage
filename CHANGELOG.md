@@ -52,6 +52,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Mark Claude Code CLI companion quota unavailable after five hours, at any
+  reported window reset, or when its capture time is in the future. Preserve
+  fresh zero readings and dated archives without refreshing timestamps on polls.
 - Preload the tray usage window hidden after completed onboarding, before
   connection recovery or provider collection. The first click reuses the loaded
   renderer instead of starting its initial load.
