@@ -6,6 +6,12 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Include the existing OpenRouter, Cursor, Copilot and Gemini masks in renderer
+  builds without a macOS symbol export. Replace Muse Code's placeholder M with
+  the official Meta infinity mark used on its site, retaining status tint.
+
 ### Electron source integration
 
 - Merge the active Electron source stack onto main through PR #76. Retain

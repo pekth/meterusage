@@ -8,6 +8,7 @@ import { openRouterUsage } from "../src/main/providers/usage";
 import { telemetry } from "../src/domain/telemetry";
 import { trayTooltip } from "../src/domain/overview";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { observeQuota } from "../src/domain/pacing";
 
 vi.mock("react", async importOriginal => {
@@ -419,6 +420,30 @@ it("marks retained service status as last known in notch cards and tray tooltips
   expect(trayTooltip(view.snapshot)).toContain("Codex: 80% used · resets in 4h · Last known Operational · checked 1m ago · Service status unavailable");
   view.snapshot.statuses.codex = value({ provider: "codex", severity: "majorOutage", description: "Major outage", checkedAt: now });
   expect(trayTooltip(view.snapshot)).toContain("Major outage");
+});
+
+it.each(["openRouter", "cursor", "copilot", "gemini"] as const)("ships the existing %s provider mask without a symbol export", provider => {
+  const card = renderToStaticMarkup(createElement(ProviderCard, { slot: primary(provider), state: state(), action: async () => {} }));
+  expect(card).toContain(`mask-image:url(./${provider}-symbol.png)`);
+  const png = readFileSync(`Resources/${provider}-symbol.png`);
+  expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([32, 32]);
+});
+
+it("uses the official Meta mark for Muse and preserves provider status tint", () => {
+  const view = state();
+  for (const provider of providers) {
+    for (const [severity, tint] of [["degraded", "var(--warn)"], ["unknown", "var(--muted)"], ["majorOutage", "var(--alert)"]] as const) {
+      view.snapshot.statuses[provider] = value({ provider, severity, description: "Synthetic status", checkedAt: now });
+      const card = renderToStaticMarkup(createElement(ProviderCard, { slot: primary(provider), state: view, action: async () => {} }));
+      expect(card).toContain(provider === "claude" ? `color:${tint}` : `background:${tint}`);
+      if (provider === "muse") expect(card).toContain("mask-image:url(./muse-code-logo.svg)");
+    }
+  }
+  const card = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("muse"), state: state(), action: async () => {} }));
+  expect(card).toContain("background:#588cf5");
+  expect(card).not.toContain("M3 20V4l9 11 9-11v16");
+  expect(createHash("sha256").update(readFileSync("Resources/muse-code-logo.svg")).digest("hex")).toBe("a02f30fec5ddd270bdf3e6e8713743b34adfc66dbaa7847058e1b47bafb6c513");
 });
 
 it("keeps the rail compact with provider marks inside rings and percentages below", () => {

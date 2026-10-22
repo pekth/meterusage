@@ -2,6 +2,18 @@
 
 Release documentation refresh: 2026-10-22 for build 75.
 
+## Renderer provider marks
+
+- The OpenRouter, Cursor, Copilot and Gemini masks are checked-in PNG exports
+  of the existing SF Symbol stand-ins. Renderer builds copy `Resources/`
+  without requiring a fresh macOS symbol export.
+- `Resources/muse-code-logo.svg` contains Meta's official infinity mark used
+  on the [Muse Code site](https://dev.meta.ai/products/muse-code), from
+  [Meta's logo asset](https://dev.meta.ai/logo/meta-logo-with-text.svg).
+  The Meta text paths were removed and the viewBox narrowed to the unchanged
+  infinity paths. It is a Meta mark, not a separate Muse product logo.
+  The renderer applies the existing provider and service-status tint.
+
 ## Edition documentation
 
 - [ADR 0024](adr/0024-electron-primary-swift-retirement.md) makes Electron the
