@@ -30,7 +30,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-a86cc1eba95b0b7ce3badb294f1357c1800ce05c2d3160123cd12b82590c1ae1
+cc5cb4fdb573f37999685e263a574aa7df2d9a07b6ab7cb1d62deabde8afbf4f
 ```
 
 ## Provider coverage
@@ -102,7 +102,7 @@ Never include tokens, passwords or raw account files in an issue.
 ## Build and screenshot identity
 
 The signed artifact was built from source
-`3c56bd0d4ebf6d51996b9ebdc0a9b09f5570f182`. Release documentation is a documentation-only descendant; executable
+`321dd8a71474326ec29ce98c9d48d2e69d893933`. Release documentation is a documentation-only descendant; executable
 inputs are unchanged. Screenshots are from build 61 and do not show the Quota
 activity heatmap. Source manifests retain `0.2.41`; beta packaging explicitly
 set `0.3.0-beta.5`.

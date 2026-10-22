@@ -12,7 +12,7 @@ Swift is retained for critical maintenance and rollback.
 The beta source is published through its tag while the Electron PR stack stays
 unmerged. The tag includes current documentation and build 61 synthetic screenshots;
 its executable inputs match build source
-`3c56bd0d4ebf6d51996b9ebdc0a9b09f5570f182`. The beta's package version was set
+`321dd8a71474326ec29ce98c9d48d2e69d893933`. The beta's package version was set
 at packaging time; its source manifest retains 0.2.41. Settings shows the
 running bundle version. See [known beta limits](BETA.md#known-limits).
 
