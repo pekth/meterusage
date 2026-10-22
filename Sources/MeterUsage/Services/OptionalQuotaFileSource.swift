@@ -130,6 +130,10 @@ public struct OptionalQuotaFileSource: QuotaSource {
         self.fileManager = fileManager
     }
 
+    var diagnosticFiles: [DiagnosticsReport.FileObservation] {
+        candidatePaths.map { .inspect($0, role: .quotaCandidate, fileManager: fileManager) }
+    }
+
     public func fetchQuota() async throws -> ProviderQuota {
         guard let path = candidatePaths.first(where: { fileManager.fileExists(atPath: $0.path) }) else {
             throw SourceUnavailable.noData

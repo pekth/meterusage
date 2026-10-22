@@ -31,7 +31,7 @@ and the [version strategy](docs/VERSIONS.md).
 </p>
 
 Synthetic demo captures of build 61's renderer. Claude Desktop provides allowance,
-not chat history; its heatmap shows daily quota used across devices. See the [full screenshot gallery and capture details](docs/SCREENSHOTS.md)
+not a chat-history heatmap. See the [full screenshot gallery and capture details](docs/SCREENSHOTS.md)
 for Codex, Claude, side notch and Settings.
 
 The beta includes Codex browser sign-in/account history, optional Claude Desktop
@@ -79,7 +79,7 @@ Local activity covers this Mac. Provider-reported account data has its own
 coverage limits. Missing tokens remain unknown. Local token costs are estimates; optional API
 billing cards label provider-reported amounts separately. Provider dashboards
 remain the billing source of record. Read the [beta privacy contract](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/PRIVACY.md)
-for Electron or the [Swift privacy contract](docs/PRIVACY.md) before changing a
+for Electron or the [retained Swift reporting privacy contract](docs/PRIVACY.md#legacy-swift-source-diagnostic-reports) before changing a
 data source or sharing screenshots.
 
 ## Can both editions coexist?

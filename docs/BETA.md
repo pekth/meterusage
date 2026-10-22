@@ -113,7 +113,9 @@ Codex, Antigravity and Grok. Native rendering of filled heatmaps
 remains unverified. Signing, notarization, stapling, Gatekeeper,
 bundle identity and ZIP bytes were verified separately. Beta 6 changes only
 packaging metadata to version 0.3.0-beta.6, build 75; its executable source
-matches beta 5. Live beta.5-to-beta.6 update acceptance is pending. These checks
+matches beta 5. Installed beta 5 recorded discovery of beta 6. Installation
+and relaunch through its updater remain pending because native UI automation
+was unavailable. These checks
 do not close the native acceptance gaps above.
 
 The [screenshot gallery](SCREENSHOTS.md) uses invented demo data and the actual

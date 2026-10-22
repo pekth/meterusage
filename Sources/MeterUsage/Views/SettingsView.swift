@@ -417,7 +417,7 @@ struct SettingsView: View {
             HStack {
                 Text("v\(AppInfo.version)")
                 Spacer()
-                Text("No telemetry · all data stays local · est. \(Pricing.snapshotLabel) rates")
+                Text("Diagnostics sent only on request · est. \(Pricing.snapshotLabel) rates")
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -514,31 +514,63 @@ private struct DiagnosticsRow: View {
     @State private var copied = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Copy diagnostics")
-                    .font(.muBody)
-                    .foregroundColor(MU.text)
-                Text("Copies a privacy-safe summary of each provider's status for bug reports.")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Report issue")
+                        .font(.muBody)
+                        .foregroundColor(MU.text)
+                    Text("Sends app and provider diagnostics privately to our support team in Linear. No login needed. No credentials or chat content.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 6)
+                Button(action: { Task { await coordinator.sendIssueReport() } }) {
+                    Text(coordinator.isSendingIssueReport ? "Sending…" : (coordinator.issueReportReceipt == nil ? "Report issue" : "Sent"))
+                }
+                .controlSize(.small)
+                .disabled(coordinator.isSendingIssueReport || coordinator.issueReportReceipt != nil)
+                .help("Send diagnostics to support without signing in.")
+            }
+            if let receipt = coordinator.issueReportReceipt {
+                Text("Report sent. Reference: \(receipt)")
                     .font(.muCaption)
-                    .foregroundColor(MU.textTertiary)
+                    .foregroundColor(MU.textSecondary)
+                    .textSelection(.enabled)
+            }
+            if let reportError = coordinator.issueReportError {
+                Text(reportError)
+                    .font(.muCaption)
+                    .foregroundColor(MU.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 6)
-            Button(action: copy) {
-                Text(copied ? "Copied" : "Copy")
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Copy diagnostics")
+                        .font(.muBody)
+                        .foregroundColor(MU.text)
+                    Text("Copies a privacy-safe summary of each provider's status for bug reports.")
+                        .font(.muCaption)
+                        .foregroundColor(MU.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 6)
+                Button(action: copy) {
+                    Text(copied ? "Copied" : "Copy")
+                }
+                .controlSize(.small)
+                .help("Copy a sanitized diagnostics report to the clipboard.")
             }
-            .controlSize(.small)
-            .help("Copy a sanitized diagnostics report to the clipboard.")
         }
     }
 
     private func copy() {
-        let text = coordinator.diagnosticsText()
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        copied = true
         Task { @MainActor in
+            let text = await coordinator.diagnosticsText()
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            copied = true
             try? await Task.sleep(nanoseconds: 2 * NSEC_PER_SEC)
             copied = false
         }
@@ -722,4 +754,3 @@ private struct AccountRow: View {
         .accessibilityLabel("\(account.name), \(account.plan ?? "plan unknown"), via \(account.via)")
     }
 }
-

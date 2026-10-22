@@ -24,6 +24,8 @@
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>MeterUsageReportURL</key>
+	<string>https://meterusage-reports.fancy-queen-3301.workers.dev/report</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

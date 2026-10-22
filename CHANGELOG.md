@@ -6,6 +6,34 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Electron source integration
+
+- Preserve the TypeScript 7 upgrade, stale Claude CLI quota rejection and Grok
+  provider mark centering from the parallel Electron branches.
+- Run Electron typecheck, synthetic tests and production build in CI alongside
+  the retained Swift build and tests. Keep Swift's newer diagnostic reporting
+  source and document its separate reporting contract.
+
+### Legacy Swift source
+
+- Agents can prepare bounded bug drafts with `report draft`. `report submit`
+  shows the exact text and private Linear destination in a native consent
+  dialog. Each send or uncertain retry requires a user click; receipt checks
+  reuse the existing client and relay. No provider data is collected.
+  Draft serialization reserves space for its ID and newline. CLI metadata
+  excludes unobserved app state; native test failures abort their modal.
+
+- Settings offers Report issue for direct, user-requested diagnostic delivery
+  through a private Linear relay without user login. The report includes app
+  and environment details, provider state and recent refresh outcomes. Copy
+  diagnostics remains available. Report replies are limited to 1,024 bytes;
+  larger replies cancel the transfer. Source builds now use the verified
+  Workers Free relay. Diagnostic Markdown uses safe fences so Linear formatting
+  preserves exact receipt validation and duplicate retries.
+  Settings states that diagnostics are sent only on request.
+  Pending reports and receipts survive leaving and returning to Settings,
+  preventing a second submission while the first is in flight.
+
 ## [0.3.0-beta.6] - 2026-10-22
 
 ### Beta update verification
@@ -146,11 +174,83 @@ follows [Semantic Versioning](https://semver.org/).
 - Show the running app bundle's version in Settings instead of the legacy
   hardcoded version. Source previews omit the version when none is supplied.
 
+## [0.3.0-beta.3] - 2026-10-17
+
+### Release
+
+- Publish signed and notarized Electron build 61 for Apple silicon. Keep the
+  stable Swift download and updater unchanged. Refresh beta documentation and
+  screenshots, including the separate API connections page.
+- Reuse the verified build from source c2d092c. Source/package checks passed;
+  native timing, broad provider compatibility and complete billing acceptance
+  remain disclosed beta limits.
+
+### Added
+
+- Show Grok Bot Desktop quota burn in percentage points per hour from recent
+  same-account readings. Collect for at least a minute, discard old/reset
+  observations and show an estimated run-out only when measured.
+- Add separate OpenAI API and Anthropic API billing cards backed by projected
+  owner-only snapshots. A bundled one-run helper uses existing environment-only
+  organization Admin keys. Keep API billing distinct from subscription quota
+  and estimates; show report periods, capture age and stale state. Live billing
+  acceptance remains pending.
+- Add an explicit Antigravity Desktop connection in Electron setup and Settings.
+  Read account allowance from one running, signed-in desktop language server
+  without requiring `agy`. Keep CLI selection explicit and local activity
+  separate. Synthetic fixtures cover identity changes, unavailable quota,
+  transport limits and cancellation. Native and live-provider acceptance remain
+  pending beyond the owner-confirmed live connection.
+
+### Changed
+
+- Move API setup to its own Settings sidebar page. OpenAI and Anthropic API
+  setup now accepts a one-time Admin key and fetches billing directly, with no
+  Terminal steps. Existing legacy Admin keys can be reused through a read-only
+  Keychain action; newly pasted keys are not saved. Account connections and
+  onboarding stay separate.
+
+- Connect new Grok Bot accounts through **Grok Bot Desktop (Beta)** after
+  explicit consent. Read only the active account-bound encrypted access token and team
+  through a fixed Keychain item; use a bounded read-only allowance request with
+  MeterUsage's own headers. Reject identity/team/store changes and cancelled
+  results. Keep saved Cursor connections compatible and CLI selection explicit.
+  No token refresh, app writes or separate xAI sign-in is added. Native store,
+  Keychain and endpoint compatibility remain incomplete beta acceptance.
+- Shorten heatmap hover/focus totals to values such as `42.4B tokens` and
+  `1.6K sessions` across local and account history. Keep exact grouped counts
+  in tooltips and accessibility labels. Summary counts compact from 1,000.
+
+### Fixed
+
+- Preload the tray usage window hidden after completed onboarding, before
+  connection recovery or provider collection. The first click reuses the loaded
+  renderer instead of starting its initial load.
+- Read Grok Bot's account-bound encrypted legacy v10 access values and correct
+  its fixed Keychain account to Grok Bot Key. Preserve scope, expiry, identity,
+  cancellation and store checks; reject plaintext and unsupported encryption.
+- Give 30-day provider activity the same 26-column, seven-row heatmap layout.
+  Keep older unavailable dates distinct from measured zero-token days.
+- Add **Use local OpenCode** setup for key-free Go session history and restore
+  executable Bun-install discovery for the read-only SQL fallback.
+- Name saved legacy Grok connections as Cursor sources while new connections
+  use Grok Bot Desktop.
+
+- Group Antigravity Desktop limits under compact model headings and shorten
+  remaining-allowance labels to match the CLI presentation. Preserve every
+  reported bucket, its used percentage and reset. Keep account allowance
+  separate from CLI activity, and describe unavailable saved connections
+  without claiming a live connection.
+- Exclude Apple's system `CursorUIViewService` from the Cursor editor process
+  guard. Continue rejecting active Cursor processes and unsafe database state.
+- Show the running app bundle's version in Settings instead of the legacy
+  hardcoded version. Source previews omit the version when none is supplied.
+
 ## [0.3.0-beta.1] - 2026-10-16
 
 ### Release
 
-- Publish Electron build 54 as an opt-in Apple silicon beta. Keep Swift 0.2.41
+- Publish signed and notarized Electron build 54 as an opt-in Apple silicon beta. Keep Swift 0.2.41
   as the stable download and preserve its updater and installer contracts.
 - Replace old product screenshots with current synthetic Codex, Claude, notch
   and Settings captures. Refresh download, source-choice and beta-limit docs.

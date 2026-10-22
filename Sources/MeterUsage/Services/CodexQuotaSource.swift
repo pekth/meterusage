@@ -12,6 +12,11 @@ public struct CodexQuotaSource: QuotaSource, QuotaResetConsumer {
 
     private let client: JSONRPCClient
 
+    var diagnosticCLIAvailable: Bool? {
+        guard client is SubprocessJSONRPCClient else { return nil }
+        return (try? SubprocessJSONRPCClient.resolveCodexBinary()) != nil
+    }
+
     /// One Codex account slot. The default is the primary account reading
     /// the user's normal codex configuration; an additional-account source
     /// is built with a client whose `codexHome` points at that account's

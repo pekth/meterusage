@@ -1,5 +1,9 @@
 # Contributing to meterusage
 
+New MeterUsage features target Electron in `src/` and `tests/`. Retain Swift
+source for critical maintenance, compatibility and rollback. Both implementations
+remain in this checkout; use the matching validation commands below.
+
 > ### Quick start
 > 1. Fork & clone the repo.
 > 2. Enable pre-commit hook: `git config core.hooksPath .githooks`
@@ -95,7 +99,8 @@ Do not mix unrelated fixes in the same commit.
 <a id="build-and-test"></a>
 ## Legacy Swift build and test
 
-GitHub Actions runs `swift build` and `swift test` on macOS 15 for pushes to
+GitHub Actions runs `swift build` and `swift test` on macOS 15, plus Electron
+typecheck, synthetic tests and production bundling on Linux, for pushes to
 `main` and pull requests. Repository owners must enable Actions under
 Settings > Actions > General for these checks to run.
 
@@ -136,11 +141,11 @@ See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
 
 ## TypeScript Electron candidate
 
-The source manifest retains 0.2.41. The public Electron beta is 0.3.0-beta.1,
-build 54, with the version explicitly set during packaging. See the
-[beta guide](docs/BETA.md) for the signed artifact, known cosmetic footer issue
-and incomplete native acceptance, and the [Electron guide](docs/electron/README.md)
-for source choices and parity gaps.
+The source manifest retains 0.2.41. The public Electron beta is 0.3.0-beta.6,
+build 75, with the version explicitly set during packaging. See the
+[beta guide](docs/BETA.md) for the signed artifact and incomplete native
+acceptance, and the [Electron guide](docs/electron/README.md) for source choices
+and parity gaps.
 
 
 Use the Node and pnpm versions declared in `package.json`. Provider accounts

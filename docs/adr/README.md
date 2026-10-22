@@ -45,3 +45,9 @@ compatibility and acceptance requirements remain in force. The
 
 | [0032](0032-one-time-api-setup.md) | Separate API setup from account connections and accept a one-time Admin key for explicit billing fetches, without saving credentials. | Source implementation; real billing acceptance pending |
 | [0033](0033-muse-code-subscription-allowance.md) | Read opt-in Muse Code allowance through official MSP without a model turn; preserve observation age and keep Muse.ai separate. | Source implementation; native/live acceptance pending |
+
+| [0010](0010-user-triggered-github-diagnostics.md) | Initial GitHub form proposal, withdrawn before implementation because it required login. | Superseded by 0011 |
+| [0011](0011-login-free-linear-reports.md) | Send user-requested diagnostics through a free relay to a private Linear project without user login. | Accepted; report lifetime amended by 0012; relay activated 2026-10-08 |
+| [0012](0012-report-state-outlives-settings.md) | Retain report identity and delivery state in the app coordinator across Settings navigation. | Accepted; native-client delivery verified; native interaction pending |
+
+| [0013](0013-agent-feedback-native-consent.md) | Require native user consent for bounded agent bug drafts through the existing reporting relay. | Accepted |

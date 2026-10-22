@@ -24,6 +24,8 @@ Release documentation refresh: 2026-10-22 for build 75.
   Electron beta builds (version `-beta.N`) read the release list and accept
   `-mac-arm64` assets, so betas update in-app from beta 5; see
   [update channels](VERSIONS.md#update-channels).
+- Installed beta 5 recorded discovery of beta 6 on 2026-10-22. Automated
+  installation and relaunch were not completed; native UI control was unavailable.
 - Swift-to-Electron native upgrade and rollback remain blocked pending a
   separate macOS test user or VM. Swift 0.2.41 requires the unsuffixed
   `MeterUsage-<version>.zip` release asset and a GitHub SHA-256 digest. Its
@@ -221,7 +223,7 @@ Release documentation refresh: 2026-10-22 for build 75.
 - Burn attribution renders only measured burn (`BurnAttributionCalculator.calculate` in `Sources/MeterUsage/Services/BurnAttributionCalculator.swift`): sessions without a token ledger (for example Codex realtime sessions whose rollout records no `token_count` event) are excluded, and a scope with no token-bearing sessions yields no breakdown, so the burn card hides instead of showing all-zero rows.
 - Successful manual Codex resets start observation-based pacing for the redeemed account slot. `AppCoordinator.consumeCodexReset` invalidates the old estimate only after the provider accepts the reset. The first fresh reading establishes each window's baseline; `QuotaWindow.pace` then uses observed usage growth divided by the time between readings. One reading or unchanged usage yields no pace or ETA. Reads started before the reset cannot seed the new baseline. `QuotaArchive` persists this state and quota metadata across relaunches, while old archives still decode. Cycle or duration changes and usage drops replace the window's baseline. Accepted resets also remove the redeemed credit from the archived snapshot and decrement its known count, so an offline refresh or relaunch cannot offer that credit again. Other accounts and providers keep their existing pacing. ADR 0008 records this decision; `ResetPacingTests` covers the reset path.
 - Cost figures are local estimates from token counts against the single rate table in `Sources/MeterUsage/Services/Pricing.swift` (`Pricing.snapshotYearMonth` = `2026-09`). That table carries Claude list rates for the current generation (Opus 5.5, Sonnet 5.5, Haiku 4.5, Fable) and OpenAI/Codex Standard list rates for the GPT-6 family (GPT-6.1 Sol, GPT-6 Sol, GPT-6 Luna, GPT-6 Astra) and GPT-5.6 Sol/Terra/Luna plus `gpt-5.3-codex`. `CodexLocalSource` reads the session's model from the rollout's `turn_context` event and prices its tokens; reasoning is billed at the output rate, cached input uses the model's published cached rate (GPT-6.1 Sol's 5% tier), and Codex charges no cache writes, so those rows price cache writes at zero. A session whose model cannot be read prices at the Codex default tier and is flagged as an unrecognised-model guess rather than zero. Claude rows use one rate per family, so an older generation is estimated at the current generation's price.
-- GitHub Actions runs `swift build` and `swift test` on macOS 15 for pushes to `main` and pull requests. This repository fact does not prove that a workflow run has passed.
+- GitHub Actions runs `swift build` and `swift test` on macOS 15, plus Electron typecheck, synthetic tests and production bundling on Linux, for pushes to `main` and pull requests. This repository fact does not prove that a workflow run has passed.
 - The app preserves unreadable durable history and suspends history writes until relaunch after the file is repaired. Sanitized history load and save failures are visible in Copy diagnostics.
 - Providers tray icon in Settings (the small button beside the "Notch" caption) uses the `menubar.rectangle` symbol for both switch states; state is carried by tint. `menubar.rectangle.fill` is absent from the system symbol catalog (returns nil, renders as nothing), so a filled variant must be probed with `NSImage(systemSymbolName:)` before use.
 - `status.openai.com` runs on incident.io, which serves a Statuspage-compatible `components.json` but uses `full_outage` where Atlassian pages use `major_outage`. `StatusPageSource.severity(for:)` maps both to `.majorOutage`; an unmapped status degrades to `.unknown`, never to a false all-clear. Verified against the live feed on 2026-09-25 during an active Codex outage.
@@ -297,6 +299,10 @@ Release documentation refresh: 2026-10-22 for build 75.
   from local rollups, durable history and schema-1 quota JSON. Source and
   synthetic proof do not establish live availability or universal cloud,
   device or product coverage. See [ADR 0022](adr/0022-codex-account-token-history.md).
+
+- The retained Swift reporting candidate adds Settings Report issue, using an HTTPS relay to create a private Linear issue without a user login or bundled Linear credential. Diagnostics use allowlisted state and numbers; success requires a matching server receipt. AppCoordinator retains pending reports and receipts across Settings navigation until the app quits. On 2026-10-08, Workers Free and native-client delivery/retry were verified, and the source bundle endpoint was configured. Native Settings interaction and released-app availability remain unverified. See [Swift reporting](swift/REPORTING.md) and the retained Swift reporting ADRs 0011 and 0012.
+
+- The retained Swift agent feedback CLI accepts short structured bug drafts, then requires a native preview and user consent for each send. It reuses the private reporting client and relay, without polling providers or collecting transcripts. See [Swift reporting](swift/REPORTING.md) and [ADR 0013](adr/0013-agent-feedback-native-consent.md).
 
 ## Verification gaps
 
@@ -384,3 +390,10 @@ to open Settings. No window is shown or focused by preload.
   Refresh only rereads it. The advanced helper retains key-free macOS zsh
   commands and a hidden prompt. See [ADR 0032](adr/0032-one-time-api-setup.md).
   Real organization billing remains unverified.
+
+## Retained Swift reporting source
+
+Main's Swift reporting client, native-consent bug draft CLI and their tests
+remain in the retained Swift tree. Their diagnostic payload and user flow
+differ from Electron. See [the Swift reporting contract](swift/REPORTING.md)
+and its activation evidence; this does not add them to Swift 0.2.41.

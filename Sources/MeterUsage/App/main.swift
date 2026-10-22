@@ -13,6 +13,10 @@ import AppKit
 // This file must stay `main.swift`: top-level code is only permitted there, and
 // it is what gives SwiftPM an executable entry point.
 
+if CommandLine.arguments.dropFirst().first == "report" {
+    exit(await AgentFeedback.run(CommandLine.arguments))
+}
+
 // Headless scriptable mode: `meterusage json [--force]` prints the limits
 // report as JSON and exits before AppKit is ever touched, so it can run from
 // agents, cron, or scripts without launching the menu-bar app.

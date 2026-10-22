@@ -10,6 +10,8 @@ import { jsonReport, runJSON } from "../src/main/cli";
 import { endpoints, type Command, type HTTP } from "../src/main/providers/transport";
 import { providers, quota, Unavailable } from "../src/domain/models";
 import { DesktopConnections } from "../src/main/connections";
+import { Coordinator } from "../src/main/coordinator";
+import { readArchive } from "../src/main/history";
 const roots: string[] = []; const temp = () => { const root = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(root); return root; };
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 const now = Date.parse("2026-10-06T12:00:00Z");
@@ -242,6 +244,37 @@ describe("typed preferences and managed accounts", () => {
   });
 });
 describe("provider path and transport composition", () => {
+  it.each(["old file", "old updated_at", "expired reset", "future capture"])("rejects Claude CLI quota with %s without changing its companion", async kind => {
+    const clock = Date.parse("2032-06-13T09:00:00Z"), old = clock - 6 * 3600000;
+    const root = temp(), path = join(root, ".claude/claudewatch-usage.json"); mkdirSync(join(root, ".claude"));
+    const raw = JSON.stringify({ five_hour: { used_percentage: 0, resets_at: new Date(kind === "expired reset" ? clock : clock + 3600000).toISOString() },
+      ...(kind === "old updated_at" ? { updated_at: old / 1000 } : kind === "future capture" ? { updated_at: (clock + 60000) / 1000 } : {}) });
+    writeFileSync(path, raw); const mtime = kind === "old file" ? old : clock; utimesSync(path, mtime / 1000, mtime / 1000);
+    const launch = liveFixture(root), prefs = await Preferences.load(launch, async () => { throw new Error("absent"); });
+    const source = compose(launch, prefs, { now: () => clock }).find(s => s.slot.provider === "claude")!;
+    await expect(source.quota!()).rejects.toMatchObject({ code: "noData" });
+    const report = await jsonReport([source], clock); expect(report.providers[0]).toMatchObject({ status: "unavailable", windows: [] });
+    expect(readFileSync(path, "utf8")).toBe(raw);
+  });
+  it("expires unchanged Claude CLI quota while preserving dated history and excluding it from connected accounts", async () => {
+    const capturedAt = Date.parse("2032-06-13T09:00:00Z"); let clock = capturedAt;
+    const root = temp(), path = join(root, ".claude/meterusage-usage.json"); mkdirSync(join(root, ".claude"));
+    writeFileSync(path, JSON.stringify({ five_hour: { used_percentage: 0 }, updated_at: capturedAt / 1000 }));
+    const launch = liveFixture(root), prefs = await Preferences.load(launch, async () => { throw new Error("absent"); }); prefs.values.showProviderClaude = true;
+    const source = () => compose(launch, prefs, { now: () => clock, http: async () => { throw new Error("Unexpected HTTP"); } }).find(s => s.slot.provider === "claude")!;
+    const c = new Coordinator(launch, prefs, [source()], () => clock);
+    try {
+      await c.refresh(); expect(c.snapshot().quotas.claude).toMatchObject({ status: "value", value: { capturedAt, windows: [{ usedPercent: 0 }] } });
+      clock += 5 * 3600000;
+      await c.refresh(); expect(c.snapshot().quotas.claude).toMatchObject({ status: "missing", code: "noData" });
+      expect(c.snapshot().archived.claude).toMatchObject({ capturedAt, windows: [{ usedPercent: 0 }] });
+      expect(readArchive(join(launch.data, "quota-archive.json")).claude.capturedAt).toBe(capturedAt);
+      prefs.values.desktopClaudeIdentity = "b".repeat(64); const connected = source();
+      expect(connected.activity).toBeUndefined(); expect(connected.plan).toBeUndefined();
+      c.forgetQuota("claude"); c.sources = [connected]; await c.refresh();
+      expect(c.snapshot().quotas.claude.status).toBe("missing"); expect(c.snapshot().archived.claude).toBeUndefined();
+    } finally { c.stop(); }
+  });
   it("prioritizes the primary Claude app-support companion without alternate-account fallback", async () => {
     const root = temp(), alt = join(root, "alternate"), dir = join(root, "Library/Application Support/MeterUsage");
     mkdirSync(alt); mkdirSync(dir, { recursive: true }); mkdirSync(join(root, ".claude"));
@@ -249,6 +282,7 @@ describe("provider path and transport composition", () => {
     writeFileSync(companion, '{"five_hour":{"used_percentage":25}}');
     writeFileSync(join(root, ".claude/claudewatch-usage.json"), '{"five_hour":{"used_percentage":75}}');
     writeFileSync(join(alt, "meterusage-usage.json"), '{"five_hour":{"used_percentage":10}}');
+    for (const path of [companion, join(alt, "meterusage-usage.json")]) utimesSync(path, now / 1000, now / 1000);
     const launch = launchConfiguration([], {}, root), prefs = await Preferences.load(launch, async () => { throw new Error("absent"); });
     prefs.values.managedAccounts = [{ id: "alternate", provider: "claude", label: "Alternate", path: alt, enabled: true }];
     const sources = compose(launch, prefs, { now: () => now });
@@ -258,7 +292,7 @@ describe("provider path and transport composition", () => {
     writeFileSync(companion, 'invalid'); await expect(primary.quota!()).rejects.toThrow("No usage");
   });
   it("keeps Claude file capture age across polls and prefers explicit updated_at", async () => {
-    const root = temp(), path = join(root, ".claude/meterusage-usage.json"), old = now - 86400000;
+    const root = temp(), path = join(root, ".claude/meterusage-usage.json"), old = now - 3600000;
     mkdirSync(join(root, ".claude")); writeFileSync(path, '{"five_hour":{"used_percentage":0}}'); utimesSync(path, old / 1000, old / 1000);
     let clock = now; const prefs = await Preferences.load(liveFixture(root), async () => { throw new Error("absent"); });
     const source = compose(liveFixture(root), prefs, { now: () => clock }).find(s => s.slot.provider === "claude")!;
@@ -281,6 +315,7 @@ describe("provider path and transport composition", () => {
   });
   it("has every primary provider and never falls back from alternate Claude plan/quota", async () => {
     const root = temp(), alt = join(root, "alternate"); mkdirSync(alt); mkdirSync(join(root, ".claude")); writeFileSync(join(root, ".claude.json"), '{"oauthAccount":{"seatTier":"pro"}}'); writeFileSync(join(root, ".claude", "meterusage-usage.json"), '{"five_hour":{"used_percentage":75}}');
+    utimesSync(join(root, ".claude/meterusage-usage.json"), now / 1000, now / 1000);
     const prefs = await Preferences.load(liveFixture(root), async () => { throw new Error("absent"); }); prefs.values.managedAccounts = [{ id: "alternate", provider: "claude", label: "Alternate", path: alt, enabled: true }];
     const sources = compose(liveFixture(root), prefs, { now: () => now }); expect(sources.filter(s => !s.slot.slotID)).toHaveLength(providers.filter(p => p !== "muse" || prefs.enabled(p)).length);
     expect(sources.filter(s => s.status).map(s => s.slot.provider)).toEqual(["codex", "claude"]);

@@ -430,3 +430,32 @@ cookies and stored credentials, reject redirects, and enforce byte limits and a
 timeout. The relay sees the network source IP for rate limiting; Cloudflare and
 Linear process the submission. MeterUsage does not attach provider credentials.
 See [REPORTING.md](REPORTING.md) for the delivery contract and proof limits.
+
+## Legacy Swift source diagnostic reports
+
+The retained Swift source includes a separate reporting feature absent from
+the published Swift 0.2.41 app. Its [reporting contract](swift/REPORTING.md)
+also describes the native-consent agent feedback CLI.
+
+
+Settings **Report issue** sends a generated diagnostic summary to the configured
+HTTPS support relay. The relay creates an issue in the maintainers' Linear
+workspace. The user needs no account. The app contains no Linear credential.
+Sending is explicit; no background upload or automatic retry is added.
+
+Reports include app version/build, numeric macOS version and architecture,
+provider state, aggregate quota and token readings, freshness, cache/history
+status and recent refresh outcomes. Only allowlisted fields leave the app.
+Reports exclude credentials, account labels, persisted account identifiers,
+personal paths, hostnames, arbitrary provider labels, raw errors, prompts and
+transcripts. Unknown observations and omitted counts are marked explicitly.
+Recent outcomes stay in bounded app memory until the user sends or copies them.
+
+The relay uses the network address for rate limiting but does not include it in
+the Linear issue. Cloudflare receives network metadata when handling the HTTPS
+request; this feature is not an anonymous-network guarantee. Reports remain in
+Linear under the maintainers' workspace access and retention settings.
+**Copy diagnostics** writes the generated summary only to the local clipboard.
+A failed request is not reported as sent; uncertain retries reuse the report ID
+and snapshot across Settings navigation. Pending reports and receipts stay in
+app memory until the app quits. They are not saved to disk.
