@@ -1,3 +1,4 @@
+import { validClaudeIdentity } from "./providers/claude-desktop";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { providers, type Provider, type ManagedAccount } from "../domain/models";
@@ -7,6 +8,11 @@ import { runCommand, type Command } from "./providers/transport";
 import { type Launch } from "./launch";
 import { PanelSize, panelScales } from "../shared/ipc";
 export const defaultsDomain = "dev.meterusage.app";
+const readDefaultsData = `ObjC.import("Foundation");
+function run(args) {
+  const value = $.NSUserDefaults.alloc.initWithSuiteName(args[0]).persistentDomainForName(args[0]).objectForKey(args[1]);
+  return ObjC.unwrap(value.base64EncodedStringWithOptions(0));
+}`;
 const suffix = (p: Provider) => p[0].toUpperCase() + p.slice(1);
 export const providerPreference = (p: Provider) => `showProvider${suffix(p)}`;
 export const trayPreference = (p: Provider) => `menuBarProvider${suffix(p)}`;
@@ -51,7 +57,8 @@ function validate(key: string, v: unknown): v is PreferenceValue {
   if (key === "panelSize") return Object.hasOwn(panelScales, v);
   if (key === "sideNotchPanelCorner") return v === "" || /^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(v);
   if (key === "desktopCodexConnection" || key === "desktopCodexCleanup") return v === "" || key === "desktopCodexConnection" && v === "off" || /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(v);
-  if (key === "desktopClaudeIdentity" || key === "desktopAntigravityIdentity" || key === "desktopGrokIdentity") return v === "" || v === "off" || /^[a-f\d]{64}$/.test(v);
+  if (key === "desktopClaudeIdentity") return v === "" || v === "off" || validClaudeIdentity(v) || /^[a-f\d]{64}$/.test(v);
+  if (key === "desktopAntigravityIdentity" || key === "desktopGrokIdentity") return v === "" || v === "off" || /^[a-f\d]{64}$/.test(v);
   return true;
 }
 export class Preferences {
@@ -72,7 +79,11 @@ export class Preferences {
           const type = await command("/usr/bin/defaults", ["read-type", domain, key], { timeoutMs: 5000 });
           const raw = (await command("/usr/bin/defaults", ["read", domain, key], { timeoutMs: 5000 })).trim();
           const kind = kinds[key]; let value: unknown;
-          if (kind === "data" && /data/i.test(type) && /^<[a-f\d\s]*>$/i.test(raw)) value = JSON.parse(Buffer.from(raw.slice(1, -1).replace(/\s/g, ""), "hex").toString("utf8"));
+          if (kind === "data" && /data/i.test(type)) {
+            // NSData descriptions can omit bytes; read the exact domain's data instead.
+            const data = /^<[a-f\d\s]*>$/i.test(raw) ? Buffer.from(raw.slice(1, -1).replace(/\s/g, ""), "hex") : Buffer.from(await command("/usr/bin/osascript", ["-l", "JavaScript", "-e", readDefaultsData, domain, key], { timeoutMs: 5000 }), "base64");
+            value = JSON.parse(data.toString("utf8"));
+          }
           else if (kind === "boolean" && /boolean|integer/i.test(type)) value = raw === "1" || raw === "true" || raw === "YES";
           else if (kind === "number" && /integer|float|double/i.test(type)) value = Number(raw);
           else if (kind === "date" && /date/i.test(type)) value = Date.parse(raw);

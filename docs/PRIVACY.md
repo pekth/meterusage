@@ -13,6 +13,18 @@ cutover acceptance remain pending. See [ADR 0010](adr/0010-macos-typescript-elec
 
 ## Provider inputs and requests
 
+Claude Desktop GUI requests use a unique nonpersistent Electron session after
+app readiness, with caching disabled and ambient credentials omitted. Only the
+existing bootstrap and UUID-bound usage routes receive the explicitly selected
+session cookie. Other endpoints keep their existing transport. The same HTTP
+function serves Connect and subsequent allowance reads. Demo, JSON and Codex test
+paths do not use this native session. Native cookie behavior remains unverified.
+
+The shared provider HTTP transport aborts failed requests before awaiting body
+or reader cancellation. Cleanup rejection does not replace the original provider
+error. Successful requests are not aborted. Synthetic tests cover this ordering;
+they do not establish native connection closure.
+
 | Provider | Read or request | Retained data |
 | --- | --- | --- |
 | Codex | `codex app-server --listen stdio://` initializes the CLI and calls `account/rateLimits/read`. The CLI uses its own existing authentication. Local rollout headers, model context and cumulative token-ledger events are selected from `sessions/**/*.jsonl`. | Quota windows/groups, plan, balances, reset credits, timestamps, numeric tokens and model. Session paths become opaque IDs; workspace directories become basenames. |
@@ -42,7 +54,7 @@ an old reading fresh.
 The published Swift app does not open Claude `.credentials.json` or macOS
 Keychain items. The Electron candidate still skips `.credentials.json`, but
 explicit Claude Desktop connection permits one fixed Keychain read and
-read-only cache/cookie access. See the opt-in connection section below.
+read-only account-selector and session-cookie access. See the opt-in connection section below.
 Grok, OpenCode Go and OpenRouter are explicit existing-key readers. Keys stay
 in main-process memory and request headers; they are not displayed, logged,
 written to cache or sent to the renderer. Antigravity and Codex CLIs manage
@@ -100,33 +112,57 @@ checks reject late results. Missing history and unreported dates remain
 unavailable. The provider contract does not establish complete product, device
 or cloud coverage. See [ADR 0022](adr/0022-codex-account-token-history.md).
 
-Claude requires an explicit explanation and consent before access. A connection
-call without a consent callback denies access. The bundled
-native helper reads only the `Claude Safe Storage` / `Claude Key` item. Background
-reads disable interaction. Its stdout goes only to the main-process bounded
-transport; do not run the helper interactively or record its output. The main
-process decrypts `oauth:tokenCacheV2` from Claude Desktop's `config.json` and
-reads only the active organization cookie from a read-only cookie database.
-It selects account-scoped current access-token/expiry fields, skips refresh
-tokens, and rejects ambiguous, legacy or expired entries. Identical tokens in
-eligible entries count as one credential; distinct tokens remain ambiguous.
-It never writes to
-Claude stores or rotates their tokens.
+Claude requires explicit consent to use its Desktop web session. Previous
+access-token consent does not authorize this reader: an untagged identity
+requires Connect again and cannot start private reads or restore account quota.
+The bundled native helper reads only `Claude Safe Storage` / `Claude Key`.
+Background reads forbid interaction. Helper output stays in bounded main-process
+memory, outside logs, settings and diagnostics. Each allowance attempt obtains
+the password once and reuses it only within that attempt for the fresh local
+reads before and after requests. It is not cached between attempts.
 
-The access token authenticates a GET to
-`https://api.anthropic.com/api/oauth/usage` with the OAuth beta header and
-MeterUsage's own User-Agent. The candidate requests no reset grants, uses no
-CLI impersonation and starts no inference. This compatibility endpoint is not
-an established third-party consumer API contract and may become unavailable.
-Only numeric quota percentages, reset times and known window labels reach the
-renderer or quota archive. The account/organization fingerprint is stored only
-as an opaque hash in preferences, excluded from settings publication. It is
-checked before and after HTTP. Identity changes invalidate the observation.
-HTTP failures also require a fresh identity check before dated allowance can
-remain. Local credential and permission failures clear that allowance.
-Collection timeout also clears account-bound allowance when the identity check
-may not have completed. Disconnect removes consent metadata and prevents the
-post-request credential reread without changing Claude Desktop.
+The reader selects only `lastKnownAccountUuid` from Desktop configuration and
+the fixed `sessionKey` and `lastActiveOrg` cookies. It supports schema 24,
+encrypted v10 values with their host digest, root-path Secure cookies, an
+HttpOnly session cookie and exact integer expiry checks. Identical values are
+deduplicated; conflicting sessions or organizations fail closed. Fixed
+`/usr/bin/sqlite3` SELECTs run read-only under `/usr/bin/sandbox-exec`, which
+denies all file writes beneath the canonical Claude store root. Reads have
+row, file, memory and time limits. Missing shared-memory support or sandbox
+failure makes collection unavailable. No private database is copied.
+
+The captured session cookie authenticates GET `https://claude.ai/api/bootstrap`.
+Its nested account UUID must match the local account selector, and the intended
+organization must appear exactly once in that account's memberships. Only then
+can MeterUsage request GET
+`https://claude.ai/api/organizations/{organization-uuid}/usage`.
+Bootstrap is checked again and the local account, organization and session are
+reread before publishing allowance, including after a failed usage request.
+Membership alone does not establish allowance entitlement. No GET `/api/account`,
+OAuth cache selection, bearer fallback, refresh token, chat or inference request
+is used. Claude stores are never modified and credentials are never persisted.
+
+A Claude HTTP 403 response with `cf-mitigated: challenge` means provider
+browser verification blocks the automated request. MeterUsage does not bypass
+that challenge or change its TLS, User-Agent, headers or cookies to evade it.
+Connect reports a fixed message without exposing response bodies, headers or
+session details, and preserves the current source. A failed Claude Desktop
+method offers **Open Claude usage**. This user-initiated action opens only
+`https://claude.ai/settings/usage` from normal Settings. Demo, candidate and
+isolated test profiles cannot open it. The renderer supplies no URL, account
+or profile. The page is a manual fallback; opening it does not connect
+MeterUsage, import browser data or report quota.
+
+Cookie authentication is restricted to these bootstrap and UUID-bound usage
+routes. Requests use MeterUsage's own User-Agent, reject redirects, disable
+caching, support cancellation, time out after 30 seconds and limit each decoded
+response to 1 MiB. Only supported numeric allowance windows reach the renderer
+or quota archive. Preferences retain a `web-v1:` opaque account/organization
+hash, excluded from settings publication. Connected-account archives are cleared
+at app startup. Account/session changes, failed verification and cancellation
+reject late results; disconnect prevents further private reads. Account quota
+has no local CLI history attached. Source and synthetic checks do not prove
+native store compatibility or live server acceptance.
 
 An explicit **Connect Antigravity Desktop** action permits discovery of one
 same-user desktop language server and reading only its candidate process
@@ -317,6 +353,10 @@ plan/credit/reset metadata and observation timestamps for reset-aware pacing.
 Restored quota is shown as dated last-known data. Unreadable durable history is
 preserved and further history writes are suspended until repair and relaunch.
 Disposable scan caches store selected numeric results under opaque keys.
+`quota-activity.json` keeps, per provider slot, the tracking window label, the
+last used percentage and reset time, and daily percentage-point rises for up
+to 200 days. It is derived only from quota readings the app already makes; no
+new request, credential, prompt, or account identifier is involved.
 
 The Electron candidate retains temporary card images in the app support
 directory until normal quit, so a selected sharing service can read the file

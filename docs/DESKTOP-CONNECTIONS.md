@@ -34,15 +34,13 @@ below it to apply the choice. Existing profiles keep their current source.
   Alternatively, choose **Codex CLI** and **Use CLI** to use an existing CLI
   sign-in for allowance and read local token activity.
 - Claude: sign in to Claude Desktop on the Mac, choose **Connect Claude
-  Desktop**, and approve MeterUsage's access explanation and any macOS
-  Keychain prompt. The candidate requests account allowance using Desktop's
-  current access token. This interface can change and is not a documented
-  third-party consumer API contract.
-  Duplicate eligible cache entries with the same access token count as one
-  credential. Different matching tokens remain ambiguous; MeterUsage does not
-  choose the first token or the one with the latest expiry. An ambiguous-token
-  failure leaves the previously selected CLI source available. This handling has
-  synthetic fixture coverage; live cache compatibility remains unverified.
+  Desktop**, and approve the new session-cookie explanation and any macOS
+  Keychain prompt. MeterUsage verifies the nested bootstrap account and unique
+  intended organization, then requests that organization's allowance using
+  the captured Desktop web session. Previous access-token approval requires
+  reconnecting. Conflicting session or organization cookies fail closed and
+  failed Connect preserves the selected CLI source. This compatibility
+  interface can change; native and live acceptance remain unverified.
   Alternatively, choose **Claude Code CLI** and **Use CLI** to read local Claude
   Code activity. CLI allowance requires a companion usage file; this option
   does not provide Claude website token history.
@@ -75,16 +73,33 @@ it does not sign out or erase data in another app.
 
 Claude Desktop **Connect** failures use fixed messages in the existing error
 banner. They distinguish foreground Keychain access, account configuration,
-the active organization cookie, cache decryption, missing or ambiguous current
-tokens, allowance request or response validation, post-request identity verification,
+the fixed session/organization cookies, cookie decryption, missing or conflicting
+sessions, allowance request or response validation, post-request identity verification,
 or saving MeterUsage's connection preferences. An identity recheck failure
-can include a failed background Keychain or cache read. Messages contain no
+can include a failed cookie read. Each allowance attempt reads Keychain once
+and keeps the password only in that attempt's main-process memory. It still
+rereads the local account and cookies after the request to reject changed
+accounts, organizations or sessions. Background attempts never request Keychain
+interaction. Messages contain no
 raw exceptions, responses, tokens, account identifiers or paths. Cancellation
 keeps its existing message. Background collection keeps its existing
 unavailable and not-signed-in results.
 The renderer error filter permits only these fixed diagnostics. Unknown
-exceptions still produce the generic action error. Missing or ambiguous current
-tokens keep collection disabled.
+exceptions still produce the generic action error. Missing or conflicting sessions keep collection disabled.
+
+If Claude returns HTTP 403 with an explicit `cf-mitigated: challenge` header,
+provider browser verification blocks automated allowance access. Connect shows:
+"Claude requires browser verification for account allowance. Open Claude usage
+to view it in your browser. Your current source is unchanged." Ordinary 403s
+keep their existing error handling. MeterUsage does not bypass the challenge.
+
+After a failed connection, select the **Claude Desktop** method in normal
+Settings and choose **Open Claude usage** to view allowance in your browser.
+The action opens only `https://claude.ai/settings/usage`. It is a manual
+fallback: it does not connect MeterUsage, import allowance or change your
+current source. It never opens automatically and is unavailable in demo,
+candidate and isolated test profiles. Browser verification does not establish
+that a later MeterUsage connection will succeed.
 
 These diagnostics have source and synthetic-fixture proof only. They do not
 identify the cause of a live connection failure or prove that Claude Desktop
@@ -159,29 +174,37 @@ quota refreshes. Cancelling makes no consume call. A disconnect aborts pending
 work; a request already sent to the provider cannot be undone. See
 [ADR 0017](adr/0017-connected-codex-menu-reset.md).
 
-Claude access requires explicit consent; a connection call without a consent
-callback denies access. A bundled native helper performs one
-fixed Keychain read. Background calls forbid interactive authentication. The
-main process decrypts the Desktop cache, reads the active organization cookie
-from a read-only database, and selects one valid account-scoped access token.
-Ambiguous, legacy, expired or unsupported caches fail closed. Refresh tokens
-are skipped, and MeterUsage never writes to Claude Desktop's stores. It uses
-its own User-Agent and requests no reset grants or model inference.
+Claude access requires explicit session-cookie consent; a call without a consent
+callback denies access. The fixed native Keychain helper allows prompts only
+during Connect. The reader selects the configured account UUID and the fixed
+`sessionKey` and `lastActiveOrg` cookies. Schema 24, encrypted v10, host binding,
+root Secure flags, HttpOnly session and exact expiry checks are required.
+Identical cookie values count once; conflicting values fail closed.
+Fixed read-only SQLite SELECTs run under a sandbox that denies writes to the
+canonical Desktop store root, including WAL and shared-memory files. Reads are
+bounded and no database is copied. A sandbox or shared-memory failure stays
+unavailable. No OAuth token cache or fallback is read.
 
-Only an opaque account/organization fingerprint is retained for Claude. It is
-not published to the renderer. The candidate checks it before and after the
-allowance request so a Desktop account switch cannot update the old account
-card. Switching the connection clears prior quota. Connected-account quota
-archives are discarded at launch, and authentication/data errors remove them.
-This avoids restoring a reading without proving its account identity.
-If an allowance request fails, the current account is checked again before a
-dated last-known reading can remain. Missing or revoked Desktop access clears
-that reading. A collection timeout clears account-bound quota because the
-identity check may not have completed. Disconnect prevents the post-request
-credential reread. Changing a connection also clears that slot's alert suppression.
+The captured session verifies the nested account and unique intended membership
+at GET `https://claude.ai/api/bootstrap`, then reads only the UUID-bound
+organization usage route. Bootstrap and local account/org/session stability
+are checked after usage, including failed requests. Requests reject redirects,
+disable caching and enforce a 30-second timeout, cancellation and a 1 MiB
+response limit. No GET `/api/account`, chats, refresh, inference or Desktop
+writes are involved. Server usage, not membership, establishes allowance.
+
+Only a `web-v1:` opaque account/organization hash persists in preferences.
+An old untagged identity requires a new Connect approval and cannot enable
+private reads or restore account quota. Empty selection still means CLI;
+`off` still means disconnected. Failed Connect restores the previous source
+and visibility. Account quota stays detached from CLI activity and plan data.
+Connection changes and app startup clear old account quota. Revocation,
+observed identity/session changes and cancellation reject late results and
+prevent another private read. Native compatibility and live acceptance remain
+unverified.
 
 Demo mode blocks live account connections, Keychain access and helper login.
-Synthetic tests cover protocol, consent, token selection, account switching,
+Synthetic tests cover protocol, consent, cookie selection, account switching,
 disconnect, numeric validation, stale source results and IPC boundaries.
 See [privacy](PRIVACY.md) and [ADR 0011](adr/0011-desktop-account-connections.md).
 

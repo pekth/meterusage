@@ -44,7 +44,8 @@ export const runCommand: Command = (binary, args, options = {}) => boundedChild(
   const chunks: Buffer[] = [];
   let ended = false, exitCode: number | null | undefined;
   const complete = () => { if (ended && exitCode !== undefined) finish(exitCode === 0 ? Buffer.concat(chunks).toString("utf8") : new Error("Provider command failed")); };
-  child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+  let capturedBytes = 0;
+  child.stdout.on("data", (chunk: Buffer) => { capturedBytes += chunk.length; if (capturedBytes <= (options.maxBytes ?? 16 * 1048576)) chunks.push(chunk); });
   child.stdout.on("end", () => { ended = true; complete(); });
   child.on("exit", code => { exitCode = code; complete(); });
   child.stdin.end();
@@ -84,38 +85,58 @@ export const endpoints = {
   openRouterActivity: "https://openrouter.ai/api/v1/activity",
   openCodeGo: "https://opencode.ai/zen/go/v1/usage",
   grok: "https://cli-chat-proxy.grok.com/v1/billing?format=credits",
-  claudeAllowance: "https://api.anthropic.com/api/oauth/usage",
+  claudeBootstrap: "https://claude.ai/api/bootstrap",
   cursorIdentity: "https://cursor.com/api/auth/me",
   cursorGrok: "https://cursor.com/api/dashboard/get-sand-usage-status",
   codexStatus: "https://status.openai.com/api/v2/components.json",
   claudeStatus: "https://status.claude.com/api/v2/components.json",
 } as const;
-export type Endpoint = typeof endpoints[keyof typeof endpoints];
+const claudeUsagePattern = /^https:\/\/claude\.ai\/api\/organizations\/[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}\/usage$/;
+export const isClaudeEndpoint = (url: string): boolean => url === endpoints.claudeBootstrap || claudeUsagePattern.test(url);
+export function claudeUsageURL(organization: string): `https://claude.ai/api/organizations/${string}/usage` {
+  const url = `https://claude.ai/api/organizations/${organization}/usage` as const;
+  if (!claudeUsagePattern.test(url)) throw new Unavailable("notSignedIn", "Claude Desktop");
+  return url;
+}
+export type Endpoint = typeof endpoints[keyof typeof endpoints] | ReturnType<typeof claudeUsageURL>;
 export type HTTP = (url: Endpoint, provider: Provider, key?: string, signal?: AbortSignal) => Promise<string>;
+export class ClaudeBrowserVerification extends Unavailable {
+  constructor() { super("notSignedIn", "Claude Desktop"); }
+}
 export function httpTransport(fetcher: typeof fetch = fetch): HTTP {
   return async (url, provider, key, signal) => {
-    if (!(Object.values(endpoints) as string[]).includes(url)) throw failed(provider);
-    const boundedSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
+    if (!(Object.values(endpoints) as string[]).includes(url) && !claudeUsagePattern.test(url)) throw failed(provider);
+    const controller = new AbortController();
+    const boundedSignal = AbortSignal.any([controller.signal, ...(signal ? [signal] : []), AbortSignal.timeout(30000)]);
+    let response: Response | undefined;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
       boundedSignal.throwIfAborted();
+      const claude = isClaudeEndpoint(url);
+      if (claude && (provider !== "claude" || !key || !/^sessionKey=[A-Za-z0-9._~-]{1,16384}$/.test(key)) || !claude && key?.startsWith("sessionKey=")) throw new Unavailable("notSignedIn", "Claude Desktop");
       const cursor = url === endpoints.cursorIdentity || url === endpoints.cursorGrok;
       if (cursor && (provider !== "grok" || !key || key.length > 17000 || !/^WorkosCursorSessionToken=[A-Za-z0-9._-]+%3A%3A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(key))) throw new Unavailable("notSignedIn", "Grok Bot via Cursor");
-      const response = await fetcher(url, { signal: boundedSignal, redirect: "error", cache: "no-store", ...(url === endpoints.cursorGrok ? { method: "POST", body: "{}" } : {}), headers: { Accept: "application/json", "User-Agent": "meterusage/0.2.41", ...(url === endpoints.claudeAllowance ? { "anthropic-beta": "oauth-2025-04-20" } : {}), ...(url === endpoints.cursorGrok ? { "Content-Type": "application/json", Origin: "https://cursor.com" } : {}), ...(key ? cursor ? { Cookie: key } : { Authorization: `Bearer ${key}` } : {}) } });
+      response = await fetcher(url, { signal: boundedSignal, redirect: "error", cache: "no-store", ...(url === endpoints.cursorGrok ? { method: "POST", body: "{}" } : {}), headers: { Accept: "application/json", "User-Agent": "meterusage/0.2.41", ...(url === endpoints.cursorGrok ? { "Content-Type": "application/json", Origin: "https://cursor.com" } : {}), ...(key ? cursor || claude ? { Cookie: key } : { Authorization: `Bearer ${key}` } : {}) } });
       boundedSignal.throwIfAborted();
+      if (claude && response.status === 403 && response.headers.get("cf-mitigated") === "challenge") throw new ClaudeBrowserVerification();
       if (cursor && response.status === 403) throw new Unavailable("notSignedIn", "Grok Bot via Cursor");
-      if (response.status === 401 || response.status === 403 && url === endpoints.claudeAllowance) throw new Unavailable("notSignedIn", provider === "claude" ? "Claude Desktop" : provider === "openCodeGo" ? "OpenCode Go" : provider === "openRouter" ? "OpenRouter" : "Grok");
+      if (response.status === 401 || response.status === 403 && claude) throw new Unavailable("notSignedIn", provider === "claude" ? "Claude Desktop" : provider === "openCodeGo" ? "OpenCode Go" : provider === "openRouter" ? "OpenRouter" : "Grok");
       if (response.status === 403 && url === endpoints.openRouterActivity) throw new Unavailable("dataNotFound", "OpenRouter Management Key");
       if (!response.ok || !response.body) throw failed(provider);
-      const reader = response.body.getReader(), chunks: Uint8Array[] = []; let size = 0;
-      try {
-        while (true) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > (cursor ? 1048576 : 16 * 1048576)) throw failed(provider); chunks.push(part.value); }
-      } finally { await reader.cancel(); }
+      reader = response.body.getReader();
+      const chunks: Uint8Array[] = []; let size = 0;
+      while (true) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > (cursor || claude ? 1048576 : 16 * 1048576)) throw failed(provider); chunks.push(part.value); }
+      boundedSignal.throwIfAborted();
       return Buffer.concat(chunks).toString("utf8");
     } catch (error) {
+      controller.abort();
       if (error instanceof Unavailable) throw error;
       const code = object(object(error).cause).code;
       if (["ENOTFOUND", "ENETUNREACH", "ECONNRESET", "EHOSTUNREACH"].includes(String(code))) throw new Unavailable("offline");
       throw failed(provider);
+    } finally {
+      if (reader) await reader.cancel().catch(() => {});
+      else if (response?.body && !response.body.locked) await response.body.cancel().catch(() => {});
     }
   };
 }

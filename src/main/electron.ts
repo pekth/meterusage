@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { launchConfiguration, type Launch } from "./launch";
 import { Preferences } from "./preferences";
 import { compose } from "./composition";
+import { desktopHTTP } from "./native-http";
 import { DesktopConnections } from "./connections";
 import { desktopReadErrors } from "./providers/claude-desktop";
 import { grokBotConnectionErrors } from "./providers/grok-bot-desktop";
@@ -51,6 +52,7 @@ async function start(launch: Launch) {
   mkdirSync(launch.data, { recursive: true });
   app.dock?.hide();
   const prefs = await Preferences.load(launch);
+  const http = desktopHTTP(launch, session);
   const documents = new Map<number, string>(), windows = new Map<Surface, BrowserWindow>();
   const connectionKeys = { codex: "desktopCodexConnection", claude: "desktopClaudeIdentity", antigravity: "desktopAntigravityIdentity", grok: "desktopGrokIdentity" } as const;
   const markers = { codex: prefs.values.desktopCodexConnection, claude: prefs.values.desktopClaudeIdentity, antigravity: prefs.values.desktopAntigravityIdentity, grok: prefs.values.desktopGrokIdentity };
@@ -61,8 +63,8 @@ async function start(launch: Launch) {
       coordinator.sources = sources();
     }
     publish();
-  });
-  const sources = () => compose(launch, prefs, { connections });
+  }, undefined, http);
+  const sources = () => compose(launch, prefs, { connections, http });
   const coordinator = new Coordinator(launch, prefs, sources(), Date.now, alert => {
     if (!launch.demo && !launch.candidate && Notification.isSupported()) new Notification({ title: alert.title, body: alert.body, silent: !alert.sound }).show();
   }, sources);
@@ -233,6 +235,9 @@ async function start(launch: Launch) {
       case "statusPage":
         if (surface !== "flyout") throw new Error("Invalid request");
         await shell.openExternal(statusPages[r.provider]); break;
+      case "claudeUsagePage":
+        if (surface !== "settings" || launch.demo || launch.candidate || launch.profile || launch.codexTest || launch.claudeTest) throw new Error("Invalid request");
+        await shell.openExternal("https://claude.ai/settings/usage"); break;
       case "close": source.hide(); break;
       case "quit": app.quit(); break;
       case "clearCache": await coordinator.clearCache(); break;
@@ -244,7 +249,7 @@ async function start(launch: Launch) {
             return consent.response === 1;
           }
           if (r.provider !== "claude") return true;
-          const consent = await dialog.showMessageBox(source, { type: "question", title: "Connect Claude Desktop?", message: "Allow MeterUsage to read your Claude allowance?", detail: "MeterUsage will read Claude Desktop's current access token through macOS Keychain and request account allowance from Anthropic. It will not read chats, use refresh tokens or change Claude Desktop. This connection depends on an interface that can change.", buttons: ["Cancel", "Allow access"], defaultId: 0, cancelId: 0, noLink: true });
+          const consent = await dialog.showMessageBox(source, { type: "question", title: "Connect Claude Desktop?", message: "Allow MeterUsage to read your Claude allowance?", detail: "MeterUsage will use Claude Desktop's session cookie, decrypted through its fixed macOS Keychain item, to read your account identity, organization membership and allowance from claude.ai. It will not read chats, use refresh tokens, save credentials or write Claude Desktop files. Previous access-token consent requires this new approval. This connection depends on an interface that can change.", buttons: ["Cancel", "Allow access"], defaultId: 0, cancelId: 0, noLink: true });
           return consent.response === 1;
         });
         if (!connected) break;

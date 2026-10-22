@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vite-plus/test";
 import { parseRequest, trustedSender, projectSettings } from "../src/main/ipc";
 describe("renderer boundary", () => {
+  it("accepts only no-argument Claude usage-page intent", () => {
+    expect(parseRequest({ action: "claudeUsagePage" })).toEqual({ action: "claudeUsagePage" });
+    for (const field of ["url", "account", "profile", "provider", "path", "cookie"]) expect(() => parseRequest({ action: "claudeUsagePage", [field]: "synthetic" })).toThrow("Invalid request");
+  });
   it("allows only fixed providers and no credential or selector in saved-key requests", () => {
     for (const provider of ["openai", "anthropic"]) expect(parseRequest({ action: "apiBillingFetchSaved", provider })).toEqual({ action: "apiBillingFetchSaved", provider });
     for (const provider of ["openAI", "claude", null, 1]) expect(() => parseRequest({ action: "apiBillingFetchSaved", provider })).toThrow("Invalid request");

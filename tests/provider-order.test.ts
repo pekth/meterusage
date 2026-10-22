@@ -56,6 +56,31 @@ it("writes defaults data only after validation and keeps saved order on failure"
   await expect(prefs.set("providerOrder", order)).rejects.toThrow("Fixture save failed"); expect(prefs.providerOrder).toEqual(providers);
   fail = false; await prefs.set("providerOrder", order); expect((await Preferences.load(launch, command, "fixture")).providerOrder).toEqual(order);
 });
+it("reloads full data when defaults abbreviates NSData and appends new providers to older orders", async () => {
+  const launch = { home: "/synthetic", data: "/synthetic", demo: false, candidate: false, env: {} };
+  const savedOrder = [...providers].reverse();
+  let stored = savedOrder;
+  const reads: string[][] = [];
+  const command = async (binary: string, args: string[]) => {
+    if (binary === "/usr/bin/osascript") {
+      expect(args.slice(0, 3)).toEqual(["-l", "JavaScript", "-e"]);
+      expect(args.slice(4)).toEqual(["dev.meterusage.order-fixture", "providerOrder"]);
+      reads.push(args);
+      return Buffer.from(JSON.stringify(stored)).toString("base64") + "\n";
+    }
+    expect(binary).toBe("/usr/bin/defaults");
+    expect(args[1]).toBe("dev.meterusage.order-fixture");
+    if (args[2] !== "providerOrder") throw new Error("Absent fixture key");
+    if (args[0] === "read-type") return "Type is data";
+    expect(args[0]).toBe("read");
+    return `{length = ${Buffer.byteLength(JSON.stringify(stored))}, bytes = 0x5b22636c ... 65225d}`;
+  };
+  expect(Buffer.byteLength(JSON.stringify(stored))).toBeGreaterThanOrEqual(100);
+  expect((await Preferences.load(launch, command, "dev.meterusage.order-fixture")).providerOrder).toEqual(savedOrder);
+  stored = savedOrder.slice(0, -2);
+  expect((await Preferences.load(launch, command, "dev.meterusage.order-fixture")).providerOrder).toEqual([...stored, ...providers.filter(p => !stored.includes(p))]);
+  expect(reads).toHaveLength(2);
+});
 it("orders every snapshot display while retaining account and Collect/Show independence", async () => {
   const root = mkdtempSync(join(tmpdir(), "meterusage-order-slots-")), launch = { home: root, data: root, demo: true, candidate: true, env: {} };
   try {

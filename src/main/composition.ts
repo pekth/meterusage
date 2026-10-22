@@ -1,3 +1,4 @@
+import { validClaudeIdentity } from "./providers/claude-desktop";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join, isAbsolute, resolve } from "node:path";
 import { type Quota, type AccountActivity, type Activity, type Usage, type ServiceStatus, type Slot, type ManagedAccount, primary, accountSlot, Unavailable, failed } from "../domain/models";
@@ -81,12 +82,12 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
   const codex = prefs.values.desktopCodexConnection !== "" ? connectedCodex() : makeCodex(primary("codex")), claude = makeClaude(primary("claude"), join(launch.home, ".claude"));
   if (prefs.values.desktopClaudeIdentity !== "") {
     claude.accountBound = true;
-    claude.quota = signal => options.connections ? options.connections.quota("claude", signal) : Promise.reject(new Unavailable("notSignedIn", "claude"));
+    claude.quota = signal => validClaudeIdentity(prefs.values.desktopClaudeIdentity) && options.connections ? options.connections.quota("claude", signal) : Promise.reject(new Unavailable("notSignedIn", "claude"));
     // Local CLI activity cannot be attributed to a separately connected account.
     delete claude.activity; delete claude.plan;
   }
   codex.status = async signal => parseStatus("codex", await http(endpoints.codexStatus, "codex", undefined, signal), now());
-  claude.status = async signal => parseStatus("claude", await http(endpoints.claudeStatus, "claude", undefined, signal), now());
+  if (prefs.values.desktopClaudeIdentity === "" || prefs.values.desktopClaudeIdentity === "off" || validClaudeIdentity(prefs.values.desktopClaudeIdentity)) claude.status = async signal => parseStatus("claude", await http(endpoints.claudeStatus, "claude", undefined, signal), now());
   const antigravityIdentity = String(prefs.values.desktopAntigravityIdentity);
   const antigravity: Source = antigravityIdentity !== "" ? {
     slot: primary("antigravity"), accountBound: true,

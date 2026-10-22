@@ -22,7 +22,7 @@ export interface ViewState {
   update?: { version: string; state: "idle" | "downloading" | "installing" | "failed" };
 }
 export type Request =
-  | { action: "state" | "refresh" | "settings" | "close" | "quit" | "clearCache" | "copyDiagnostics" | "sendReport" | "copyJSON" | "dragStart" | "dragEnd" | "notchContext" | "updateInstall" | "updateDismiss" }
+  | { action: "state" | "refresh" | "settings" | "close" | "quit" | "clearCache" | "copyDiagnostics" | "sendReport" | "claudeUsagePage" | "copyJSON" | "dragStart" | "dragEnd" | "notchContext" | "updateInstall" | "updateDismiss" }
   | { action: "share"; key: string }
   | { action: "statusPage"; provider: keyof typeof statusPages }
   | { action: "setPreference"; key: string; value: boolean | number | string }

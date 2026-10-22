@@ -34,16 +34,17 @@ describe("coordinator refresh journey", () => {
   });
   it.each(["switch", "revoke"])("discards unverified account quota on deadline after a Claude %s", async action => {
     const { c: initial, root, prefs } = await setup([]), launch = { ...initial.launch, demo: false };
-    let identity = "a".repeat(64), denied = false, hold = false, release!: () => void, started!: () => void;
+    let identity = "web-v1:" + "a".repeat(64), denied = false, hold = false, release!: () => void, started!: () => void;
     const response = new Promise<void>(resolve => { release = resolve; });
     const ready = new Promise<void>(resolve => { started = resolve; });
     prefs.values.desktopClaudeIdentity = identity; prefs.values.showProviderClaude = true;
     const credentials = vi.spyOn(claudeDesktop, "readDesktopCredential").mockImplementation(async () => {
       if (denied) throw new Unavailable("notSignedIn");
-      return { identity, token: "synthetic-access" };
+      return { identity, account: "11111111-1111-1111-1111-111111111111", organization: "22222222-2222-2222-2222-222222222222", cookie: "sessionKey=synthetic-session" };
     });
     const http: transport.HTTP = async url => {
-      if (url !== transport.endpoints.claudeAllowance) return '{"components":[]}';
+      if (url === transport.endpoints.claudeBootstrap) return '{"account":{"uuid":"11111111-1111-1111-1111-111111111111","memberships":[{"organization":{"uuid":"22222222-2222-2222-2222-222222222222"}}]}}';
+      if (!url.endsWith("/usage")) return '{"components":[]}';
       if (hold) { started(); await response; throw new Unavailable("offline"); }
       return '{"five_hour":{"utilization":42}}';
     };
@@ -53,13 +54,13 @@ describe("coordinator refresh journey", () => {
     await c.refresh(); expect(c.snapshot().archived.claude.windows[0].usedPercent).toBe(42);
     hold = true; vi.useFakeTimers();
     const pending = c.refresh(); await ready;
-    if (action === "switch") identity = "b".repeat(64); else denied = true;
+    if (action === "switch") identity = "web-v1:" + "b".repeat(64); else denied = true;
     await vi.advanceTimersByTimeAsync(30000); await pending;
     // The deadline wins before the source can verify the post-request identity.
     expect(credentials).toHaveBeenCalledTimes(3);
     const snapshot = c.snapshot(), archive = readFileSync(join(root, "quota-archive.json"), "utf8");
     release(); await vi.advanceTimersByTimeAsync(0);
-    expect(credentials).toHaveBeenCalledTimes(4);
+    expect(credentials).toHaveBeenCalledTimes(3);
     expect(c.quotas.claude).toMatchObject({ status: "missing", code: "failed" });
     expect(snapshot.archived.claude).toBeUndefined();
     expect(c.snapshot().archived.claude).toBeUndefined();
@@ -68,11 +69,12 @@ describe("coordinator refresh journey", () => {
 
   it("retains account quota only after an offline request completes Claude identity verification", async () => {
     const { c: initial, root, prefs } = await setup([]), launch = { ...initial.launch, demo: false };
-    const identity = "a".repeat(64); let offline = false;
+    const identity = "web-v1:" + "a".repeat(64); let offline = false;
     prefs.values.desktopClaudeIdentity = identity; prefs.values.showProviderClaude = true;
-    const credentials = vi.spyOn(claudeDesktop, "readDesktopCredential").mockResolvedValue({ identity, token: "synthetic-access" });
+    const credentials = vi.spyOn(claudeDesktop, "readDesktopCredential").mockResolvedValue({ identity, account: "11111111-1111-1111-1111-111111111111", organization: "22222222-2222-2222-2222-222222222222", cookie: "sessionKey=synthetic-session" });
     const http: transport.HTTP = async url => {
-      if (url !== transport.endpoints.claudeAllowance) return '{"components":[]}';
+      if (url === transport.endpoints.claudeBootstrap) return '{"account":{"uuid":"11111111-1111-1111-1111-111111111111","memberships":[{"organization":{"uuid":"22222222-2222-2222-2222-222222222222"}}]}}';
+      if (!url.endsWith("/usage")) return '{"components":[]}';
       if (offline) throw new Unavailable("offline");
       return '{"five_hour":{"utilization":42}}';
     };
@@ -102,7 +104,7 @@ describe("coordinator refresh journey", () => {
     vi.spyOn(transport, "runCommand").mockRejectedValue(new Error("Synthetic command unavailable"));
     vi.spyOn(transport, "httpTransport").mockReturnValue(async () => { throw new Unavailable("offline"); });
     const { c: initial, prefs } = await setup([]), launch = { ...initial.launch, demo: false };
-    prefs.values.desktopClaudeIdentity = "a".repeat(64); prefs.values.showProviderClaude = true;
+    prefs.values.desktopClaudeIdentity = "web-v1:" + "a".repeat(64); prefs.values.showProviderClaude = true;
     const connections = new DesktopConnections(launch, prefs, "synthetic-helper", () => {});
     vi.spyOn(connections, "quota").mockResolvedValue(quota("claude", [window("Weekly · All models", 42)], now));
     const factory = () => compose(launch, prefs, { connections, http: async () => { throw new Unavailable("offline"); } }).filter(s => s.slot.provider === "claude");
@@ -113,7 +115,7 @@ describe("coordinator refresh journey", () => {
   });
   it("uses established connections for JSON without starting sign-in or consent", async () => {
     const { c, prefs } = await setup([]), launch = { ...c.launch, demo: false };
-    prefs.values.desktopCodexConnection = "00000000-0000-0000-0000-000000000001"; prefs.values.desktopClaudeIdentity = "a".repeat(64);
+    prefs.values.desktopCodexConnection = "00000000-0000-0000-0000-000000000001"; prefs.values.desktopClaudeIdentity = "web-v1:" + "a".repeat(64);
     vi.spyOn(launchModule, "launchConfiguration").mockReturnValue(launch);
     vi.spyOn(Preferences, "load").mockResolvedValue(prefs);
     vi.spyOn(transport, "runCommand").mockRejectedValue(new Error("Synthetic command unavailable"));

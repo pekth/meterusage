@@ -6,7 +6,7 @@ import { notchEntries } from "../domain/notch";
 import { normalizeProviderOrder, validProviderOrder } from "../domain/provider-order";
 import { providers } from "../domain/models";
 import { editableBooleans, providerKey, trayKey, statusPages, panelScales, type Request } from "../shared/ipc";
-const empty = new Set(["state", "refresh", "settings", "close", "quit", "clearCache", "copyDiagnostics", "sendReport", "copyJSON", "dragStart", "dragEnd", "notchContext", "updateInstall", "updateDismiss"]);
+const empty = new Set(["state", "refresh", "settings", "close", "quit", "clearCache", "copyDiagnostics", "sendReport", "claudeUsagePage", "copyJSON", "dragStart", "dragEnd", "notchContext", "updateInstall", "updateDismiss"]);
 const id = (v: unknown) => typeof v === "string" && /^[A-Za-z0-9-]{1,80}$/.test(v);
 const key = (v: unknown) => typeof v === "string" && providers.some(p => v === p || (v.startsWith(p + "#") && id(v.slice(p.length + 1))));
 const string = (v: unknown, max: number) => typeof v === "string" && v.length <= max && !/[\r\n\0]/.test(v);

@@ -7,6 +7,10 @@ Electron Settings saves a `providerOrder` list of known provider names. Installe
 profiles use JSON encoded as defaults data, as managed accounts do. Isolated
 candidate profiles use their existing preferences JSON file.
 
+Read complete stored data when macOS prints an abbreviated NSData description.
+Reuse the saved list after relaunches and app updates. New providers append under
+the same normalization rule.
+
 Stored input is normalized: keep the first occurrence of each known provider,
 ignore invalid entries and append missing providers in the default sequence.
 IPC writes require a complete, unique list of known providers and come only

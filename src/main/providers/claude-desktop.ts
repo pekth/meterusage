@@ -1,6 +1,7 @@
-import { readFileSync, statSync, existsSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { createDecipheriv, createHash, pbkdf2Sync } from "node:crypto";
+import { runCommand, type Command } from "./transport";
 import { selectJSON } from "../select-json";
 import { date, object, text } from "./parsers";
 import { Unavailable, quota, window } from "../../domain/models";
@@ -8,11 +9,15 @@ import { Unavailable, quota, window } from "../../domain/models";
 const uuid = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 const unavailable = () => new Unavailable("notSignedIn", "Claude Desktop");
 export const desktopReadErrors = {
+  challenge: "Claude requires browser verification for account allowance. Open Claude usage to view it in your browser. Your current source is unchanged.",
   configuration: "Could not read Claude Desktop's account configuration.",
   organization: "Could not read Claude Desktop's active organization cookie.",
-  decryption: "Could not decrypt Claude Desktop's sign-in cache with its Keychain entry.",
-  selection: "Claude Desktop's cache has no current allowance token for the active account and organization.",
-  ambiguous: "Claude Desktop's cache has multiple matching allowance tokens. MeterUsage cannot safely choose one.",
+  decryption: "Could not decrypt Claude Desktop's session cookies with its Keychain entry.",
+  request: "Could not read Claude account allowance. Try connecting again later.",
+  verification: "Could not verify the same Claude Desktop account and session after the allowance request. Try connecting again.",
+  response: "Claude did not report a supported account allowance.",
+  selection: "Claude Desktop's cache has no current session for the active account and organization.",
+  ambiguous: "Claude Desktop's cache has conflicting session or organization cookies. MeterUsage cannot safely choose one.",
 } as const;
 type ReadStage = (stage: keyof typeof desktopReadErrors) => void;
 export function decryptDesktop(bytes: Uint8Array, password: string): Buffer {
@@ -25,63 +30,99 @@ export function decryptDesktop(bytes: Uint8Array, password: string): Buffer {
   } catch { throw unavailable(); }
   finally { key.fill(0); }
 }
-export function desktopCredential(config: string, organization: string, password: string, now: number, reading?: ReadStage) {
+export const validClaudeIdentity = (value: unknown): value is string => typeof value === "string" && /^web-v1:[a-f\d]{64}$/.test(value);
+export const claudeIdentity = (account: string, organization: string) => "web-v1:" + createHash("sha256").update(account.toLowerCase() + ":" + organization.toLowerCase()).digest("hex");
+export interface DesktopCredential { account: string; organization: string; cookie: string; identity: string }
+// Query only the two fixed cookies. Ciphertext and metadata remain in bounded RAM.
+export const desktopCookieSQL = "SELECT host_key, name, path, is_secure, is_httponly, CAST(expires_utc AS TEXT) AS expires_utc, hex(encrypted_value) AS encrypted_value FROM cookies WHERE name IN ('sessionKey', 'lastActiveOrg') AND host_key IN ('.claude.ai', 'claude.ai') LIMIT 33";
+export const desktopSchemaSQL = "SELECT CAST(value AS TEXT) AS version FROM meta WHERE key = 'version' LIMIT 2";
+export function desktopCredential(config: string, stores: { version: string; cookies: string }[], password: string, now: number, reading?: ReadStage): DesktopCredential {
   try {
     reading?.("configuration");
-    const root = object(selectJSON(config, { lastKnownAccountUuid: true, "oauth:tokenCacheV2": true }));
-    const account = text(root.lastKnownAccountUuid)?.toLowerCase();
-    if (!account || !uuid.test(account) || !uuid.test(organization)) throw unavailable();
-    const cache = text(root["oauth:tokenCacheV2"]); if (!cache || cache.length > 1400000) throw unavailable();
-    reading?.("decryption");
-    const plaintext = decryptDesktop(Buffer.from(cache, "base64"), password);
-    try {
-      // Select only scoped access tokens and expiry. Refresh tokens stay skipped.
-      const entries = object(selectJSON(plaintext.toString("utf8"), { "*": { token: true, expiresAt: true } }));
-      reading?.("selection");
-      const candidates = Object.entries(entries).filter(([key, value]) => {
-        const match = /^acct:([^|]+)\|([^:]+):([^:]+):https:\/\/api\.anthropic\.com:(.*)$/.exec(key);
-        const entry = object(value), scopes = match?.[4].split(/\s+/);
-        return match && match[1].toLowerCase() === account && uuid.test(match[2]) && match[3].toLowerCase() === organization.toLowerCase() && scopes?.includes("user:profile") && scopes.includes("user:inference") && typeof entry.expiresAt === "number" && Number.isFinite(entry.expiresAt) && entry.expiresAt > now + 120000 && !!text(entry.token);
-      });
-      // Identical eligible tokens are one credential; distinct tokens stay ambiguous.
-      const tokens = [...new Set(candidates.map(([, value]) => object(value).token))];
-      if (tokens.length !== 1) {
-        if (tokens.length > 1) reading?.("ambiguous");
-        throw unavailable();
+    if (Buffer.byteLength(config) > 2 * 1048576 || !Number.isSafeInteger(now) || stores.length < 1 || stores.length > 2) throw unavailable();
+    const account = text(object(selectJSON(config, { lastKnownAccountUuid: true }, undefined, true)).lastKnownAccountUuid)?.toLowerCase();
+    if (!account || !uuid.test(account)) throw unavailable();
+    reading?.("organization");
+    const values = { sessionKey: new Set<string>(), lastActiveOrg: new Set<string>() };
+    const expiry = (BigInt(now) + 120000n + 11644473600000n) * 1000n;
+    for (const store of stores) {
+      if (Buffer.byteLength(store.version) > 1024 || Buffer.byteLength(store.cookies) > 2 * 1048576) throw unavailable();
+      const versions = JSON.parse(store.version), rows = JSON.parse(store.cookies);
+      if (!Array.isArray(versions) || versions.length !== 1 || versions[0].version !== "24" || !Array.isArray(rows) || rows.length > 32) throw unavailable();
+      for (const raw of rows) {
+        const row = object(raw), name = row.name;
+        if (name !== "sessionKey" && name !== "lastActiveOrg" || row.host_key !== ".claude.ai" && row.host_key !== "claude.ai" || row.path !== "/" || row.is_secure !== 1 || name === "sessionKey" && row.is_httponly !== 1 || typeof row.expires_utc !== "string" || !/^[1-9]\d{0,18}$/.test(row.expires_utc) || BigInt(row.expires_utc) > 9223372036854775807n || BigInt(row.expires_utc) <= expiry || typeof row.encrypted_value !== "string" || row.encrypted_value.length > 65536 || !/^(?:[a-f\d]{2})+$/i.test(row.encrypted_value)) throw unavailable();
+        reading?.("decryption");
+        const plaintext = decryptDesktop(Buffer.from(row.encrypted_value, "hex"), password);
+        let value: string;
+        try {
+          const digest = createHash("sha256").update(row.host_key).digest();
+          if (!plaintext.subarray(0, 32).equals(digest)) throw unavailable();
+          value = plaintext.subarray(32).toString("utf8");
+        } finally { plaintext.fill(0); }
+        if (name === "sessionKey" ? !/^[A-Za-z0-9._~-]{1,16384}$/.test(value) : !uuid.test(value)) throw unavailable();
+        values[name].add(name === "lastActiveOrg" ? value.toLowerCase() : value);
       }
-      return { token: text(tokens[0])!, identity: createHash("sha256").update(account + ":" + organization.toLowerCase()).digest("hex") };
-    } finally { plaintext.fill(0); }
+    }
+    reading?.("selection");
+    if (values.sessionKey.size !== 1 || values.lastActiveOrg.size !== 1) {
+      if (values.sessionKey.size > 1 || values.lastActiveOrg.size > 1) reading?.("ambiguous");
+      throw unavailable();
+    }
+    const organization = [...values.lastActiveOrg][0];
+    return { account, organization, cookie: "sessionKey=" + [...values.sessionKey][0], identity: claudeIdentity(account, organization) };
   } catch { throw unavailable(); }
 }
-function configFile(home: string) {
-  const path = join(home, "Library/Application Support/Claude/config.json");
-  if (statSync(path).size > 2 * 1048576) throw unavailable();
-  return readFileSync(path, "utf8");
-}
-export async function readDesktopCredential(home: string, password: string, now: number, reading?: ReadStage) {
+function configFile(root: string) {
+  const fd = openSync(join(root, "config.json"), constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
-    reading?.("configuration");
-    const config = configFile(home);
+    const stat = fstatSync(fd);
+    if (!stat.isFile() || stat.size > 2 * 1048576) throw unavailable();
+    const bytes = Buffer.alloc(2 * 1048576 + 1);
+    let length = 0, count: number;
+    do { count = readSync(fd, bytes, length, bytes.length - length, null); length += count; } while (count && length < bytes.length);
+    if (length > 2 * 1048576) throw unavailable();
+    return bytes.subarray(0, length).toString("utf8");
+  } finally { closeSync(fd); }
+}
+export async function readDesktopCredential(home: string, password: string, now: number, reading?: ReadStage, command: Command = runCommand, signal?: AbortSignal): Promise<DesktopCredential> {
+  try {
+    signal?.throwIfAborted(); reading?.("configuration");
+    const root = realpathSync(join(home, "Library/Application Support/Claude"));
+    const config = configFile(root), stores: { version: string; cookies: string }[] = [];
+    // Canonical paths keep the deny rule on the actual store, including WAL/SHM.
+    const sandbox = `(version 1)(allow default)(deny file-write* (subpath ${JSON.stringify(root)}))`;
     reading?.("organization");
-    const { DatabaseSync } = await import("node:sqlite");
     for (const relative of ["Cookies", "Network/Cookies"]) {
-      const path = join(home, "Library/Application Support/Claude", relative); if (!existsSync(path)) continue;
-      const db = new DatabaseSync(path, { readOnly: true });
-      try {
-        const rows = db.prepare("SELECT host_key, value, encrypted_value FROM cookies WHERE name = 'lastActiveOrg' AND host_key IN ('.claude.ai', 'claude.ai') ORDER BY last_update_utc DESC LIMIT 1").all();
-        for (const row of rows) {
-          let organization = typeof row.value === "string" ? row.value : "";
-          if (!organization && row.encrypted_value instanceof Uint8Array && typeof row.host_key === "string") {
-            const decrypted = decryptDesktop(row.encrypted_value, password), hash = createHash("sha256").update(row.host_key).digest();
-            try { if (decrypted.subarray(0, 32).equals(hash)) organization = decrypted.subarray(32).toString("utf8"); }
-            finally { decrypted.fill(0); }
-          }
-          if (!uuid.test(organization)) throw unavailable();
-          return desktopCredential(config, organization, password, now, reading);
-        }
-      } finally { db.close(); }
+      const path = join(root, relative);
+      if (!existsSync(path)) continue;
+      if (realpathSync(path) !== path || !lstatSync(path).isFile()) throw unavailable();
+      const read = async (sql: string, maxBytes: number) => {
+        signal?.throwIfAborted();
+        const raw = await command("/usr/bin/sandbox-exec", ["-p", sandbox, "/usr/bin/sqlite3", "-init", "/dev/null", "-batch", "-readonly", "-json", path, sql], { signal, timeoutMs: 5000, maxBytes });
+        signal?.throwIfAborted(); return raw;
+      };
+      stores.push({ version: await read(desktopSchemaSQL, 1024), cookies: await read(desktopCookieSQL, 2 * 1048576) });
     }
-    throw unavailable();
+    signal?.throwIfAborted();
+    const result = desktopCredential(config, stores, password, now, reading);
+    const after = object(selectJSON(configFile(root), { lastKnownAccountUuid: true }, undefined, true)).lastKnownAccountUuid;
+    if (typeof after !== "string" || after.toLowerCase() !== result.account) throw unavailable();
+    return result;
+  } catch { throw unavailable(); }
+}
+export function verifyDesktopAccount(raw: string, credential: DesktopCredential) {
+  try {
+    if (Buffer.byteLength(raw) > 1048576) throw unavailable();
+    const account = object(object(selectJSON(raw, { account: { uuid: true, memberships: { "*": { organization: { uuid: true } } } } }, undefined, true)).account);
+    if (typeof account.uuid !== "string" || !uuid.test(account.uuid) || account.uuid.toLowerCase() !== credential.account || !Array.isArray(account.memberships)) throw unavailable();
+    let matches = 0;
+    for (const membership of account.memberships) {
+      const id = object(object(membership).organization).uuid;
+      if (typeof id !== "string" || !uuid.test(id)) throw unavailable();
+      if (id.toLowerCase() === credential.organization) matches++;
+    }
+    if (matches !== 1) throw unavailable();
   } catch { throw unavailable(); }
 }
 export function desktopQuota(raw: string, now: number) {

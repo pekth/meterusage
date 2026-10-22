@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Launch } from "./launch";
 import { Preferences } from "./preferences";
-import { boundedChild, cliEnvironment, cliPath, codexRPC, endpoints, httpTransport, runCommand, type Command, type HTTP } from "./providers/transport";
+import { ClaudeBrowserVerification, boundedChild, cliEnvironment, cliPath, codexRPC, endpoints, claudeUsageURL, httpTransport, runCommand, type Command, type HTTP } from "./providers/transport";
 import { object, parseCodex } from "./providers/parsers";
 import { parseCodexAccountUsage } from "./providers/codex-account-usage";
-import { desktopQuota, readDesktopCredential, desktopReadErrors } from "./providers/claude-desktop";
+import { desktopQuota, readDesktopCredential, desktopReadErrors, validClaudeIdentity, verifyDesktopAccount } from "./providers/claude-desktop";
 import { readAntigravityDesktop, antigravityRPC, type AntigravityRPC } from "./providers/antigravity-desktop";
 import { cursorGrokQuota, cursorIdentity, readCursorCredential } from "./providers/cursor-grok";
 import { readGrokBotCredential, grokBotQuota, grokBotTransport, grokBotConnectionErrors, GrokBotFailure, type GrokBotRPC } from "./providers/grok-bot-desktop";
@@ -69,12 +69,13 @@ export class DesktopConnections {
   private resetController?: AbortController;
   private stopping?: Promise<void>;
   private cleanupController = new AbortController();
+  private claudeController = new AbortController();
   private grokController = new AbortController();
   constructor(readonly launch: Launch, readonly prefs: Preferences, readonly helper: string, readonly changed: () => void, readonly command: Command = runCommand, readonly http: HTTP = httpTransport(), readonly now = Date.now, readonly antigravity: AntigravityRPC = antigravityRPC, readonly grokBot: GrokBotRPC = grokBotTransport()) {}
   get state(): ConnectionState[] {
     return (["codex", "claude", "antigravity", "grok"] as const).map(provider => ({ provider, status: this.launch.codexTest && provider !== "codex" || this.launch.claudeTest && provider !== "claude" ? "unsupported" : this.pending.has(provider) ? "connecting" : this.enabled(provider) ? "connected" : this.errors.has(provider) ? "failed" : "disconnected", source: this.configured(provider) ? "account" : "cli", ...(provider === "grok" && /^[a-f\d]{64}$/.test(String(this.prefs.values.desktopGrokIdentity)) ? { accountMethod: this.prefs.values.desktopGrokSource === "bot" ? "bot" as const : "cursor" as const } : {}), localAvailable: !this.launch.demo && !this.launch.codexTest && !this.launch.claudeTest }));
   }
-  enabled(provider: ConnectionProvider) { const value = this.prefs.values[this.key(provider)]; return (!this.launch.codexTest || provider === "codex") && (!this.launch.claudeTest || provider === "claude") && !this.stopped && !this.pending.has(provider) && !(provider === "codex" && this.prefs.values.desktopCodexCleanup !== "") && typeof value === "string" && value !== "" && value !== "off"; }
+  enabled(provider: ConnectionProvider) { const value = this.prefs.values[this.key(provider)]; return (!this.launch.codexTest || provider === "codex") && (!this.launch.claudeTest || provider === "claude") && !this.stopped && !this.pending.has(provider) && !(provider === "codex" && this.prefs.values.desktopCodexCleanup !== "") && (provider !== "claude" || validClaudeIdentity(value)) && typeof value === "string" && value !== "" && value !== "off"; }
   configured(provider: ConnectionProvider) { return this.prefs.values[this.key(provider)] !== ""; }
   private key(provider: ConnectionProvider) { return provider === "codex" ? "desktopCodexConnection" : provider === "claude" ? "desktopClaudeIdentity" : provider === "antigravity" ? "desktopAntigravityIdentity" : "desktopGrokIdentity"; }
   private binary() {
@@ -89,11 +90,50 @@ export class DesktopConnections {
     mkdirSync(home, { recursive: true, mode: 0o700 });
     return { HOME: this.launch.home, PATH: cliEnvironment(this.launch.home, { PATH: this.launch.env.PATH }).PATH, CODEX_HOME: home, TMPDIR: this.launch.env.TMPDIR };
   }
-  private async claude(allowUI: boolean, signal?: AbortSignal, readingCache?: (stage: keyof typeof desktopReadErrors) => void) {
+  private async claudePassword(allowUI: boolean, signal?: AbortSignal, guard: () => void = () => {}) {
     try {
+      guard(); signal?.throwIfAborted();
       const password = await this.command(this.helper, allowUI ? ["--allow-ui"] : [], { signal, timeoutMs: allowUI ? 60000 : 5000, maxBytes: 4096 });
-      return await readDesktopCredential(this.launch.home, password, this.now(), readingCache);
+      guard(); signal?.throwIfAborted();
+      return password;
     } catch { throw new Unavailable("notSignedIn", "Claude Desktop"); }
+  }
+  private async claudeQuota(allowUI: boolean, signal: AbortSignal, guard: () => void, expected?: string, reading?: (stage: keyof typeof desktopReadErrors) => void) {
+    const check = () => { guard(); signal.throwIfAborted(); };
+    check();
+    const password = await this.claudePassword(allowUI, signal, check);
+    check();
+    const credential = await readDesktopCredential(this.launch.home, password, this.now(), reading, this.command, signal);
+    check();
+    if (expected && credential.identity !== expected) throw new Unavailable("notSignedIn", "Claude Desktop");
+    let raw: string, verified = false;
+    const verify = async () => {
+      check();
+      try { verifyDesktopAccount(await this.http(endpoints.claudeBootstrap, "claude", credential.cookie, signal), credential); }
+      catch (error) { throw error instanceof ClaudeBrowserVerification ? error : new Unavailable("notSignedIn", "Claude Desktop"); }
+      check();
+    };
+    try {
+      reading?.("request");
+      await verify(); verified = true;
+      check();
+      raw = await this.http(claudeUsageURL(credential.organization), "claude", credential.cookie, signal);
+      check();
+    } finally {
+      reading?.("verification");
+      // Revoked consent or cancellation must prevent another private read.
+      check();
+      try { if (verified) await verify(); }
+      finally {
+        check();
+        const after = await readDesktopCredential(this.launch.home, password, this.now(), undefined, this.command, signal);
+        check();
+        if (after.identity !== credential.identity || after.cookie !== credential.cookie) throw new Unavailable("notSignedIn", "Claude Desktop");
+      }
+      reading?.("request");
+    }
+    reading?.("response");
+    return { identity: credential.identity, quota: desktopQuota(raw, this.now()) };
   }
   private checkCodexProfile(profile: string) {
     if (this.launch.demo || !this.enabled("codex") || this.prefs.values.desktopCodexConnection !== profile) throw new Unavailable("notSignedIn", "codex");
@@ -144,7 +184,7 @@ export class DesktopConnections {
     }
     return { identity: credential.identity, quota: grokBotQuota(raw, this.now()) };
   }
-  async quota(provider: ConnectionProvider, signal?: AbortSignal, profile = String(this.prefs.values[provider === "antigravity" ? "desktopAntigravityIdentity" : provider === "grok" ? "desktopGrokIdentity" : "desktopCodexConnection"])) {
+  async quota(provider: ConnectionProvider, signal?: AbortSignal, profile = String(this.prefs.values[provider === "antigravity" ? "desktopAntigravityIdentity" : provider === "grok" ? "desktopGrokIdentity" : provider === "claude" ? "desktopClaudeIdentity" : "desktopCodexConnection"])) {
     if (this.launch.demo || !this.enabled(provider)) throw new Unavailable("notSignedIn", provider);
     if (provider === "grok") {
       const generation = this.grokController;
@@ -169,17 +209,12 @@ export class DesktopConnections {
       if (!this.enabled(provider) || this.prefs.values.desktopAntigravityIdentity !== profile) throw new Unavailable("notSignedIn", "Antigravity Desktop");
       return result.quota;
     }
-    const credential = await this.claude(false, signal);
-    if (credential.identity !== this.prefs.values.desktopClaudeIdentity) throw new Unavailable("notSignedIn", "Claude Desktop");
-    let raw: string;
-    try { raw = await this.http(endpoints.claudeAllowance, "claude", credential.token, signal); }
-    finally {
-      // A failed request permits last-known allowance only for a verified account.
-      if (this.prefs.values.desktopClaudeIdentity !== credential.identity || !this.enabled("claude")) throw new Unavailable("notSignedIn", "Claude Desktop");
-      if ((await this.claude(false, signal)).identity !== credential.identity || this.prefs.values.desktopClaudeIdentity !== credential.identity || !this.enabled("claude")) throw new Unavailable("notSignedIn", "Claude Desktop");
-    }
-    return desktopQuota(raw, this.now());
+    const generation = this.claudeController;
+    const guard = () => { if (!this.enabled("claude") || this.claudeController !== generation || this.prefs.values.desktopClaudeIdentity !== profile) throw new Unavailable("notSignedIn", "Claude Desktop"); };
+    const active = signal ? AbortSignal.any([signal, generation.signal]) : generation.signal;
+    return (await this.claudeQuota(false, active, guard, profile)).quota;
   }
+
   async accountActivity(signal?: AbortSignal, profile = String(this.prefs.values.desktopCodexConnection)) {
     this.checkCodexProfile(profile);
     const raw = await codexRPC(this.binary(), { env: this.env(profile), signal }, undefined, configuration, "usage");
@@ -216,6 +251,8 @@ export class DesktopConnections {
     const { controller, finish } = this.begin(provider);
     let candidateID: string | undefined;
     let savedIdentity: string | undefined;
+    const previousClaudeIdentity = this.prefs.values.desktopClaudeIdentity;
+    const previousClaudeVisible = this.prefs.values.showProviderClaude;
     const previousGrokSource = this.prefs.values.desktopGrokSource;
     let grokSourceSaved = false;
     let grokError = "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect.";
@@ -247,16 +284,13 @@ export class DesktopConnections {
         controller.signal.throwIfAborted();
       } else {
         claudeError = "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.";
-        const credential = await this.claude(true, controller.signal, stage => {
-          claudeError = desktopReadErrors[stage];
-        });
-        claudeError = "Could not read Claude account allowance. Try connecting again later.";
-        const q = desktopQuota(await this.http(endpoints.claudeAllowance, "claude", credential.token, controller.signal), this.now());
-        if (!q.windows.length) throw new Unavailable("noData");
-        claudeError = "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.";
-        if ((await this.claude(false, controller.signal)).identity !== credential.identity) throw new Unavailable("noData");
+        const result = await this.claudeQuota(true, controller.signal, () => {
+          if (this.stopped || this.pending.get("claude")?.controller !== controller) throw new Unavailable("notSignedIn", "Claude Desktop");
+        }, undefined, stage => { claudeError = desktopReadErrors[stage]; });
         claudeError = "Could not save the Claude Desktop connection preferences. Try connecting again.";
-        controller.signal.throwIfAborted(); savedIdentity = credential.identity; await this.prefs.set("desktopClaudeIdentity", credential.identity);
+        controller.signal.throwIfAborted(); savedIdentity = result.identity;
+        await this.prefs.set("desktopClaudeIdentity", result.identity);
+        controller.signal.throwIfAborted();
       }
       await this.prefs.set(providerKey(provider), true);
       controller.signal.throwIfAborted();
@@ -268,13 +302,21 @@ export class DesktopConnections {
       }
       return true;
     } catch (error) {
+      if (provider === "claude" && !controller.signal.aborted && error instanceof ClaudeBrowserVerification) claudeError = desktopReadErrors.challenge;
       if (provider === "grok" && !controller.signal.aborted && error instanceof GrokBotFailure) grokError = grokBotConnectionErrors[error.stage];
       if (candidateID) {
         await this.disable("codex", candidateID);
         try { await this.cleanup(candidateID); }
         catch { this.errors.add(provider); throw new Error("Could not clear the cancelled Codex connection"); }
       }
-      if (savedIdentity && this.prefs.values[this.key(provider)] === savedIdentity) {
+      if (provider === "claude" && savedIdentity) {
+        for (const [key, value] of [["desktopClaudeIdentity", previousClaudeIdentity], ["showProviderClaude", previousClaudeVisible]] as const) {
+          this.prefs.values[key] = value;
+          try { await this.prefs.set(key, value); } catch { this.prefs.values[key] = value; }
+        }
+        if (!this.stopped) this.changed();
+      }
+      if (provider !== "claude" && savedIdentity && this.prefs.values[this.key(provider)] === savedIdentity) {
         // Disabling clears consent in memory first; keep a failed rollback write private.
         try { await this.disable(provider); } catch { /* Report the fixed preference-save message. */ }
       }
@@ -287,13 +329,14 @@ export class DesktopConnections {
     finally { finish(); }
   }
   private begin(provider: ConnectionProvider, local = false) {
+    if (provider === "claude") { this.claudeController.abort(); this.claudeController = new AbortController(); }
     if (provider === "grok") { this.grokController.abort(); this.grokController = new AbortController(); }
     if (provider === "codex") this.resetController?.abort();
     if (provider === "antigravity") { this.antigravityController.abort(); this.antigravityController = new AbortController(); }
     const controller = new AbortController();
     let settle!: () => void;
     const done = new Promise<void>(resolve => { settle = resolve; });
-    this.pending.set(provider, { controller, done, settleBeforeQuit: local || provider === "antigravity" || provider === "grok" }); this.errors.delete(provider); this.changed();
+    this.pending.set(provider, { controller, done, settleBeforeQuit: local || provider === "claude" || provider === "antigravity" || provider === "grok" }); this.errors.delete(provider); this.changed();
     return { controller, finish: () => { this.pending.delete(provider); if (!this.stopped) this.changed(); settle(); } };
   }
   cancel(provider: ConnectionProvider) { this.pending.get(provider)?.controller.abort(); }
@@ -322,7 +365,7 @@ export class DesktopConnections {
     if (this.launch.demo) throw new Error("Connections are disabled in demo mode");
     if (this.launch.codexTest && provider !== "codex") throw new Error("Connection unavailable in Codex test mode");
     if (this.launch.claudeTest && provider !== "claude") throw new Error("Connection unavailable in Claude test mode");
-    if (provider === "grok" && this.pending.has(provider)) { const operation = this.pending.get(provider)!; operation.controller.abort(); await operation.done; }
+    if ((provider === "grok" || provider === "claude") && this.pending.has(provider)) { const operation = this.pending.get(provider)!; operation.controller.abort(); await operation.done; }
     if (this.stopped || this.pending.has(provider)) throw new Error("Connection unavailable");
     const wasVisible = this.prefs.values[providerKey(provider)] === true;
     const id = String(this.prefs.values.desktopCodexCleanup || this.prefs.values.desktopCodexConnection);
@@ -360,7 +403,7 @@ export class DesktopConnections {
   }
   stop(timeoutMs = 5000): Promise<void> {
     if (this.stopping) return this.stopping;
-    this.stopped = true; this.resetController?.abort(); this.grokController.abort(); this.antigravityController.abort();
+    this.stopped = true; this.resetController?.abort(); this.grokController.abort(); this.claudeController.abort(); this.antigravityController.abort();
     const pending = [...this.pending.values()];
     for (const operation of pending) operation.controller.abort();
     let timer: ReturnType<typeof setTimeout>;

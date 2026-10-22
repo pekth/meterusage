@@ -6,6 +6,7 @@ import { tmpdir, hostname } from "node:os";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { providers, type Provider } from "../src/domain/models";
+import type { HTTP } from "../src/main/providers/transport";
 import type { Source } from "../src/main/composition";
 
 it.each([
@@ -20,8 +21,10 @@ it.each([
   const root = mkdtempSync(join(tmpdir(), "meterusage-lifecycle-"));
   const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
   const resourcesPath = Object.getOwnPropertyDescriptor(process, "resourcesPath");
+  let finishReady!: () => void;
+  const ready = new Promise<void>(resolve => { finishReady = resolve; });
   const application = Object.assign(new EventEmitter(), {
-    isPackaged: true, setName: vi.fn(), setPath: vi.fn(), whenReady: vi.fn(() => Promise.resolve()),
+    isPackaged: true, setName: vi.fn(), setPath: vi.fn(), whenReady: vi.fn(() => ready),
     getLoginItemSettings: vi.fn(() => ({ openAtLogin: false })), setLoginItemSettings: vi.fn(),
     requestSingleInstanceLock: vi.fn(() => true), getVersion: () => "0.0.0", quit: vi.fn(), exit: vi.fn(),
   });
@@ -45,6 +48,7 @@ it.each([
   const savedCommand = vi.fn(async () => "synthetic-saved-admin");
   vi.doMock("../src/main/providers/transport", async original => ({ ...await original<typeof import("../src/main/providers/transport")>(), runCommand: savedCommand }));
   vi.stubGlobal("fetch", reportFetch);
+  const openExternal = vi.fn(async (_url: string) => {});
   const notify = vi.fn();
   const showErrorBox = vi.fn();
   const showMessageBox = vi.fn(async (_window: unknown, _options: { title: string; detail: string; defaultId: number; cancelId: number }) => ({ response: 0 }));
@@ -80,16 +84,20 @@ it.each([
   const recover = vi.fn(() => recovery), start = vi.fn(async () => {});
   const connect = vi.fn(async (_provider: string, _open: unknown, consent: () => Promise<boolean>) => { await consent(); return false; });
   const useLocal = vi.fn(async (_provider: string) => {}), disconnect = vi.fn(async (_provider: string) => {});
-  const composition = vi.fn<() => Source[]>(() => []), refresh = vi.fn(async () => {}), forgetQuota = vi.fn();
+  const composition = vi.fn<(_launch: unknown, _prefs: unknown, _options: { http: HTTP }) => Source[]>(() => []), refresh = vi.fn(async () => {}), forgetQuota = vi.fn();
   let activeSources: readonly Source[] = [];
   let connectionChanged!: () => void;
-  vi.doMock("electron", () => ({ app: application, Tray: TestTray, BrowserWindow: TestWindow,
+  let injectedHTTP: HTTP | undefined;
+  const nativeFetch = vi.fn<typeof fetch>(async () => Response.json({}));
+  const fromPartition = vi.fn(() => ({ isPersistent: () => false, storagePath: null, fetch: nativeFetch }));
+  vi.doMock("electron", () => ({ app: application, Tray: TestTray, BrowserWindow: TestWindow, shell: { openExternal },
     screen: display, nativeTheme: theme, powerMonitor: new EventEmitter(), ipcMain: { handle: ipc }, dialog: { showErrorBox, showMessageBox },
     Notification: Object.assign(class { show = notify; }, { isSupported: () => true }),
     nativeImage: { createFromPath: () => ({ resize: () => ({ setTemplateImage: vi.fn() }) }) },
-    session: { defaultSession: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } } },
+    session: { fromPartition, defaultSession: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } } },
   }));
-  vi.doMock("../src/main/launch", () => ({ launchConfiguration: () => ({ data: root, home: root, demo: false, candidate, profile: candidate ? root : undefined }) }));
+  const launch = { data: root, home: root, demo: false, candidate, profile: candidate ? root : undefined, codexTest: false, claudeTest: false };
+  vi.doMock("../src/main/launch", () => ({ launchConfiguration: () => launch }));
   const values: Record<string, boolean | number | string | Provider[]> = { onboardingCompleted: onboarding, panelSize: "medium", sideNotchPanelPinned: notchTest };
   const setPreference = vi.fn(async (key: string, value: boolean | number | string | Provider[]) => { await Promise.resolve(); values[key] = value; });
   let finishLoad!: () => void;
@@ -98,7 +106,7 @@ it.each([
   vi.doMock("../src/main/preferences", () => ({ Preferences: { load } }));
   vi.doMock("../src/main/composition", () => ({ compose: composition }));
   vi.doMock("../src/main/connections", () => ({ DesktopConnections: class {
-    constructor(_launch: unknown, _prefs: unknown, _helper: unknown, changed: () => void) { connectionChanged = changed; }
+    constructor(_launch: unknown, _prefs: unknown, _helper: unknown, changed: () => void, _command: unknown, http: HTTP) { connectionChanged = changed; injectedHTTP = http; }
     state = []; configured = () => false; recover = recover; stop = async () => {};
     connect = connect; useLocal = useLocal; disconnect = disconnect;
   } }));
@@ -118,12 +126,20 @@ it.each([
     Object.defineProperty(process, "resourcesPath", { value: root, configurable: true });
     vi.stubGlobal("__dirname", root);
     await import("../src/main/electron");
+    expect(application.whenReady).toHaveBeenCalledOnce();
+    expect(fromPartition).not.toHaveBeenCalled();
+    finishReady();
     await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
     application.emit("second-instance");
     expect(windows).toHaveLength(0);
     finishLoad();
     await vi.waitFor(() => expect(recover).toHaveBeenCalledOnce());
     expect(start).not.toHaveBeenCalled();
+    expect(fromPartition).toHaveBeenCalledOnce();
+    expect(fromPartition.mock.calls[0]).toEqual([expect.stringMatching(/^meterusage-claude-[a-f0-9-]+$/), { cache: false }]);
+    expect(application.whenReady.mock.invocationCallOrder[0]).toBeLessThan(fromPartition.mock.invocationCallOrder[0]);
+    expect(injectedHTTP).toBeTypeOf("function");
+    expect(composition).toHaveBeenCalledWith(launch, expect.anything(), expect.objectContaining({ http: injectedHTTP }));
     const preloaded = windows.find(w => w.surface === "flyout");
     if (onboarding) {
       expect(preloaded).toBeDefined();
@@ -194,6 +210,26 @@ it.each([
     expect(flyout.bounds).toMatchObject({ width: 420, height: 593 });
     await invoke(windows[2], { action: "settings" });
     const settings = windows[3];
+    const usageRequest = { action: "claudeUsagePage" };
+    expect(openExternal).not.toHaveBeenCalled();
+    const sourceBeforeUsage = activeSources, refreshesBeforeUsage = refresh.mock.calls.length, writesBeforeUsage = setPreference.mock.calls.length;
+    for (const window of windows.filter(w => w.surface !== "settings")) expect((await invoke(window, usageRequest)).ok).toBe(false);
+    for (const flag of ["demo", "candidate", "codexTest", "claudeTest"] as const) {
+      const previous = launch[flag]; launch[flag] = true;
+      expect((await invoke(settings, usageRequest)).ok).toBe(false); launch[flag] = previous;
+    }
+    const previousProfile = launch.profile; launch.profile = root;
+    expect((await invoke(settings, usageRequest)).ok).toBe(false); launch.profile = previousProfile;
+    expect(openExternal).not.toHaveBeenCalled();
+    if (!candidate) {
+      expect(await invoke(settings, usageRequest)).toEqual({ ok: true });
+      expect(openExternal).toHaveBeenCalledExactlyOnceWith("https://claude.ai/settings/usage");
+      openExternal.mockRejectedValueOnce(new Error("SYNTHETIC_PRIVATE_SHELL_FAILURE"));
+      expect(await invoke(settings, usageRequest)).toEqual({ ok: false, error: "Could not complete action" });
+    } else expect((await invoke(settings, usageRequest)).ok).toBe(false);
+    expect(activeSources).toBe(sourceBeforeUsage); expect(refresh).toHaveBeenCalledTimes(refreshesBeforeUsage);
+    expect(setPreference).toHaveBeenCalledTimes(writesBeforeUsage); expect(connect).not.toHaveBeenCalled();
+
     const stableSource: Source = { slot: { provider: "codex", slotID: "", label: "" } }, museSource: Source = { slot: { provider: "muse", slotID: "", label: "" } };
     activeSources = [stableSource];
     composition.mockReturnValueOnce([stableSource, museSource]);
@@ -347,6 +383,7 @@ it.each([
       expect(await invoke(settings, { action: "connect", provider: "grok" })).toEqual({ ok: false, error: "Could not complete action" });
       useLocal.mockImplementationOnce(async () => { values.desktopGrokIdentity = ""; connectionChanged(); });
       values.desktopGrokIdentity = "a".repeat(64); connectionChanged();
+      expect(composition.mock.calls.every(call => call[2].http === injectedHTTP)).toBe(true);
       expect(forgetQuota).toHaveBeenCalledWith("grok");
       expect(await invoke(settings, { action: "connectionLocal", provider: "grok" })).toEqual({ ok: true });
       expect(forgetQuota).toHaveBeenCalledWith("grok");
@@ -354,10 +391,11 @@ it.each([
         "Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.",
         "Could not read Claude Desktop's account configuration.",
         "Could not read Claude Desktop's active organization cookie.",
-        "Could not decrypt Claude Desktop's sign-in cache with its Keychain entry.",
-        "Claude Desktop's cache has no current allowance token for the active account and organization.",
-        "Claude Desktop's cache has multiple matching allowance tokens. MeterUsage cannot safely choose one.",
+        "Could not decrypt Claude Desktop's session cookies with its Keychain entry.",
+        "Claude Desktop's cache has no current session for the active account and organization.",
+        "Claude Desktop's cache has conflicting session or organization cookies. MeterUsage cannot safely choose one.",
         "Could not read Claude account allowance. Try connecting again later.",
+        "Claude requires browser verification for account allowance. Open Claude usage to view it in your browser. Your current source is unchanged.",
         "Could not verify the same Claude Desktop account after the allowance request. Try connecting again.",
         "Could not save the Claude Desktop connection preferences. Try connecting again.",
         "OMIT_PRIVATE_CONNECT_ERROR token=synthetic-secret account=synthetic-account path=/private/store",
@@ -365,6 +403,9 @@ it.each([
         showMessageBox.mockResolvedValueOnce({ response: 1 });
         connect.mockImplementationOnce(async (_provider, _open, consent) => { expect(await consent()).toBe(true); throw new Error(message); });
         expect(await invoke(settings, { action: "connect", provider: "claude" })).toEqual({ ok: false, error: message.startsWith("OMIT") ? "Could not complete action" : message });
+        expect(showMessageBox.mock.lastCall?.[1].detail).toContain("session cookie");
+        expect(showMessageBox.mock.lastCall?.[1].detail).toContain("account identity, organization membership and allowance");
+        expect(showMessageBox.mock.lastCall?.[1].detail).toContain("Previous access-token consent requires this new approval");
       }
     }
     if (retainedZoom) {
@@ -450,6 +491,7 @@ it.each([
       vi.useFakeTimers();
       await invoke(settings, { action: "setPreference", key: "sideNotchPanelEnabled", value: true });
       const panel = windows.find(w => w.surface === "notch")!;
+      expect((await invoke(panel, { action: "claudeUsagePage" })).ok).toBe(false);
       expect(panel.options).toMatchObject({ type: "panel", focusable: false });
       expect(panel.bounds.width).toBe(36);
       expect(panel.showInactive).toHaveBeenCalled(); expect(panel.focus).not.toHaveBeenCalled();
@@ -487,6 +529,7 @@ it.each([
       // A pending share render retains details outside the panel; failure releases it.
       cursor = { x: panel.bounds.x + 10, y: panel.bounds.y + 10 }; await hover(true);
       const sharing = invoke(panel, { action: "share", key: "codex" });
+      expect((await invoke(windows.find(w => w.surface === "share")!, { action: "claudeUsagePage" })).ok).toBe(false);
       cursor = { x: 0, y: 0 }; vi.advanceTimersByTime(1000);
       expect(panel.bounds.width).toBe(256);
       vi.advanceTimersByTime(4000);
@@ -691,7 +734,7 @@ it.each([
     Menu: { buildFromTemplate: (items: unknown[]) => ({ items }) },
     screen: display, nativeTheme: new EventEmitter(), powerMonitor: new EventEmitter(), ipcMain: { handle: ipc },
     nativeImage: { createFromPath: () => ({ resize: () => ({ setTemplateImage: vi.fn() }) }) },
-    session: { defaultSession: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } } },
+    session: { fromPartition: () => ({ isPersistent: () => false, storagePath: null, fetch: vi.fn() }), defaultSession: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), webRequest: { onBeforeRequest: vi.fn() } } },
   }));
   vi.doMock("../src/main/launch", () => ({ launchConfiguration: () => launch }));
   vi.spyOn(Preferences, "load").mockResolvedValue(prefs);
@@ -742,5 +785,30 @@ it.each([
     vi.restoreAllMocks(); vi.unstubAllGlobals();
     for (const path of ["electron", "../src/main/launch", "../src/main/composition", "../src/main/connections", "../src/main/updater"]) vi.doUnmock(path);
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+it("keeps JSON startup outside app readiness and native sessions", async () => {
+  vi.resetModules();
+  const argv = process.argv, platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+  const fromPartition = vi.fn(() => { throw new Error("JSON cannot create a native session"); });
+  const application = { isPackaged: false, setName: vi.fn(), whenReady: vi.fn(), exit: vi.fn() };
+  const runJSON = vi.fn(async () => "synthetic-report"), load = vi.fn();
+  vi.doMock("electron", () => ({ app: application, session: { fromPartition } }));
+  vi.doMock("../src/main/launch", () => ({ launchConfiguration: () => ({ demo: false, candidate: false }) }));
+  vi.doMock("../src/main/cli", () => ({ runJSON }));
+  vi.doMock("../src/main/preferences", () => ({ Preferences: { load } }));
+  const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+  try {
+    Object.defineProperty(process, "platform", { value: "darwin" });
+    process.argv = [argv[0], "meterusage", "--json"];
+    vi.stubGlobal("__dirname", tmpdir());
+    await import("../src/main/electron");
+    await vi.waitFor(() => expect(application.exit).toHaveBeenCalledWith(0));
+    expect(runJSON).toHaveBeenCalledOnce(); expect(stdout).toHaveBeenCalledWith("synthetic-report\n");
+    expect(application.whenReady).not.toHaveBeenCalled(); expect(fromPartition).not.toHaveBeenCalled(); expect(load).not.toHaveBeenCalled();
+  } finally {
+    process.argv = argv; Object.defineProperty(process, "platform", platform); vi.restoreAllMocks(); vi.unstubAllGlobals();
+    for (const name of ["electron", "../src/main/launch", "../src/main/cli", "../src/main/preferences"]) vi.doUnmock(name);
   }
 });

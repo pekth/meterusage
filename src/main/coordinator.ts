@@ -13,6 +13,7 @@ import { Preferences, trayPreference } from "./preferences";
 import { type Launch } from "./launch";
 import { type Source, compose, accountHome } from "./composition";
 import { HistoryStore, readArchive, saveArchive } from "./history";
+import { QuotaActivityStore } from "./quota-activity";
 import { limitsReport, canonicalJSON } from "../domain/report";
 type Kind = "accountActivity" | "quota" | "activity" | "usage" | "plan" | "status";
 // Grok observations belong to the live source session; dated quota may survive it.
@@ -31,6 +32,7 @@ export class Coordinator {
   statuses: Partial<Record<Provider, Loaded<ServiceStatus>>> = Object.create(null);
   archived: Record<string, Quota>;
   readonly history: HistoryStore;
+  readonly quotaActivity: QuotaActivityStore;
   archiveWriteFailed = false;
   clearingCache = false;
   lastRefreshedAt?: number;
@@ -47,7 +49,7 @@ export class Coordinator {
   private currentSources: readonly Source[];
   constructor(readonly launch: Launch, readonly preferences: Preferences, sources: Source[], readonly now: () => number = Date.now, readonly notify: (alert: Alert) => void = () => {}, readonly sourceFactory: () => Source[] = () => compose(launch, preferences)) {
     this.currentSources = sources;
-    this.history = new HistoryStore(join(launch.data, "durable-daily-history.json")); this.archived = readArchive(join(launch.data, "quota-archive.json"));
+    this.history = new HistoryStore(join(launch.data, "durable-daily-history.json")); this.quotaActivity = new QuotaActivityStore(join(launch.data, "quota-activity.json")); this.archived = readArchive(join(launch.data, "quota-archive.json"));
     for (const key of Object.keys(this.archived)) this.archived[key] = archiveQuota(this.archived[key]);
   }
   get sources(): readonly Source[] { return this.currentSources; }
@@ -82,7 +84,7 @@ export class Coordinator {
     const quotas = Object.fromEntries(Object.entries(this.quotas).map(([key, state]) => [key, state.status === "value" ? value({ ...state.value, canConsumeReset: resettable.has(key) }) : state]));
     const statuses = { ...this.statuses };
     for (const source of this.sources) if (source.status && !statuses[source.slot.provider]) statuses[source.slot.provider] = { status: "idle" };
-    return structuredClone({ ...(this.apiBilling ? { apiBilling: this.apiBilling } : {}), demo: this.launch.demo, refreshing: !!this.inflight, clock: this.now(), lastRefreshedAt: this.lastRefreshedAt, slots, traySlots: tray.filter(s => s.provider !== "openRouter"), notchSlots: tray, quotas, archived: this.archived, accountActivities: Object.fromEntries(this.sources.filter(s => s.accountActivity).map(s => [slotKey(s.slot), this.accountActivities[slotKey(s.slot)] ?? { status: "idle" }])), activities: this.activities, usages: this.usages, plans: this.plans, statuses, appearance: { theme: p.appearanceTheme as string, accent: p.accentTheme as string, heatmap: p.showHeatmap === true, claudeHeatmap: p.showClaudeHeatmap === true, codexHeatmap: p.showCodexHeatmap === true, pacing: p.showPacingBurnRate === true, telemetry: p.showActivityTelemetry === true, chart: p.showDailyActivityChart === true, resetButton: p.showSideNotchResetButton === true, compactTray: p.menuBarCompactEnabled === true, notch: p.sideNotchPanelEnabled === true, pinned: false, onboarding: p.onboardingCompleted === true }, historyError: this.history.error, archiveWriteFailed: this.archiveWriteFailed, clearingCache: this.clearingCache });
+    return structuredClone({ ...(this.apiBilling ? { apiBilling: this.apiBilling } : {}), demo: this.launch.demo, refreshing: !!this.inflight, clock: this.now(), lastRefreshedAt: this.lastRefreshedAt, slots, traySlots: tray.filter(s => s.provider !== "openRouter"), notchSlots: tray, quotas, archived: this.archived, accountActivities: Object.fromEntries(this.sources.filter(s => s.accountActivity).map(s => [slotKey(s.slot), this.accountActivities[slotKey(s.slot)] ?? { status: "idle" }])), activities: this.activities, quotaActivity: this.launch.demo ? {} : Object.fromEntries(slots.map(s => [slotKey(s), this.quotaActivity.days(slotKey(s))]).filter(([, days]) => days.length)), usages: this.usages, plans: this.plans, statuses, appearance: { theme: p.appearanceTheme as string, accent: p.accentTheme as string, heatmap: p.showHeatmap === true, claudeHeatmap: p.showClaudeHeatmap === true, codexHeatmap: p.showCodexHeatmap === true, pacing: p.showPacingBurnRate === true, telemetry: p.showActivityTelemetry === true, chart: p.showDailyActivityChart === true, resetButton: p.showSideNotchResetButton === true, compactTray: p.menuBarCompactEnabled === true, notch: p.sideNotchPanelEnabled === true, pinned: false, onboarding: p.onboardingCompleted === true }, historyError: this.history.error, archiveWriteFailed: this.archiveWriteFailed, clearingCache: this.clearingCache });
   }
   subscribe(observer: (state: Snapshot) => void) { this.observers.add(observer); return () => this.observers.delete(observer); }
   publish() { const state = this.snapshot(); for (const observe of this.observers) observe(state); }
@@ -123,7 +125,7 @@ export class Coordinator {
     if (this.stopped) return;
     for (const source of this.sources.filter(s => this.visible(s))) {
       const key = slotKey(source.slot), q = this.quotas[key], a = this.activities[key];
-      if (q?.status === "value") this.archived[key] = archiveQuota(q.value);
+      if (q?.status === "value") { this.archived[key] = archiveQuota(q.value); if (!this.launch.demo) this.quotaActivity.record(key, q.value, q.value.capturedAt); }
       if (a?.status === "value") {
         this.history.record(key, a.value.daily, q?.status === "value" ? Math.max(0, ...q.value.windows.map(w => w.usedPercent)) : undefined);
         const durable = this.history.records(key);

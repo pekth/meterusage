@@ -70,3 +70,20 @@ export function heatmapCells(daily: Daily[], now: number, mode: HeatmapMode) {
     });
   }).flat();
 }
+
+/** 26 weeks of one slot's daily quota rise, aggregated like `heatmapCells`. */
+export function quotaHeatmapCells(days: { day: number; percent: number; estimated?: boolean }[], now: number, mode: HeatmapMode) {
+  const today = localDay(now), weekday = new Date(today).getDay(), start = shiftDay(today, -(25 * 7 + weekday));
+  const totals = new Map<number, number>(), estimated = new Set<number>();
+  for (const d of days) { const day = localDay(d.day); totals.set(day, (totals.get(day) ?? 0) + d.percent); if (d.estimated) estimated.add(day); }
+  let running = 0;
+  return Array.from({ length: 26 }, (_, week) => {
+    const span = Array.from({ length: 7 }, (_, i) => shiftDay(start, week * 7 + i));
+    const sum = span.filter(d => d <= today).reduce((n, day) => n + (totals.get(day) ?? 0), 0);
+    return span.map(day => {
+      if (day > today) return null;
+      const percent = totals.get(day) ?? 0; running += percent;
+      return { day, percent: mode === "weekly" ? sum : mode === "cumulative" ? running : percent, estimated: mode === "daily" && estimated.has(day) };
+    });
+  }).flat();
+}

@@ -41,13 +41,21 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 ## Product and source facts
 
+- Claude Connect recognizes HTTP 403 responses with an explicit
+  `cf-mitigated: challenge` header as provider browser verification blocking
+  automation. It reports a fixed message and preserves the current source.
+  The failed Desktop method offers a manual usage-page action in normal
+  Settings. Opening that page does not connect MeterUsage or report quota.
+  Synthetic checks do not establish native or live-provider acceptance.
+
 - Electron Claude plan labels recognize known organization, seat and user tiers
   in that order. An unknown higher-priority value permits a known fallback;
   unknown-only metadata stays unavailable instead of exposing internal labels.
-  Claude Desktop treats identical eligible access tokens as one credential,
-  while distinct tokens remain ambiguous. Ambiguous-token Desktop connection
-  failures preserve selected CLI collection. These changes have synthetic fixture proof; live
-  Desktop compatibility remains separate.
+  Claude Desktop now uses consent-tagged web-session cookies instead of OAuth
+  cache selection. Nested bootstrap identity and unique intended membership
+  gate UUID-bound usage. Identical cookies deduplicate; conflicting sessions
+  fail closed. Failed Connect preserves CLI selection. Synthetic checks do
+  not establish native compatibility or live allowance.
 
 - Unreleased Electron source adds opt-in Muse Code allowance with `muse serve`
   and the official experimental MSP `usage/read` method. The source starts
@@ -176,7 +184,13 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   profiles retain their preference. [ADR 0014](adr/0014-settings-onboarding.md)
   records this placement; native acceptance is separate from source validation.
 
-- The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, read-only Desktop cache/cookie selection and the OAuth allowance endpoint after consent. New Grok Bot Desktop connections select the active account-bound encrypted access token and optional team through a fixed Keychain item and bounded Connect allowance request. Saved Cursor connections retain their immutable SQLite reader and fixed identity-before-allowance requests. Both use opaque account binding. Nonempty WAL/journal files, ambiguous evidence and observed races fail closed. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md), ADR 0011, [ADR 0027](adr/0027-grok-cursor-closed-reader.md) and [ADR 0028](adr/0028-grok-bot-desktop-reader.md) define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
+- The Electron candidate implements opt-in desktop account setup in `src/main/connections.ts`, `src/main/providers/claude-desktop.ts` and the renderer. Codex discovers an existing app helper and uses a separate generated keyring-only profile with browser login. Claude uses a fixed native Keychain helper, bounded sandboxed read-only schema-24 cookie selection, nested bootstrap verification and UUID-bound web usage after new session-cookie consent. Old untagged identities require reconnecting and authorize no private reads. No OAuth cache fallback remains. New Grok Bot Desktop connections select the active account-bound encrypted access token and optional team through a fixed Keychain item and bounded Connect allowance request. Saved Cursor connections retain their immutable SQLite reader and fixed identity-before-allowance requests. Both use opaque account binding. Nonempty WAL/journal files, ambiguous evidence and observed races fail closed. These are source and synthetic-fixture facts, not native or live-provider proof. [Desktop connections](DESKTOP-CONNECTIONS.md), ADR 0011, [ADR 0027](adr/0027-grok-cursor-closed-reader.md) and [ADR 0028](adr/0028-grok-bot-desktop-reader.md) define setup, data coverage, privacy and acceptance gaps. Connected-account cards omit local CLI activity, clear old quota on account changes and do not restore quota archives across launches.
+
+- Each Claude Desktop allowance attempt obtains the Keychain password once
+  and reuses it only in attempt-local memory. Local account and session stores
+  are still read before and after requests. This avoids a second Keychain
+  authorization during one Connect without weakening identity checks.
+  Synthetic regression coverage does not prove live connection acceptance.
 
 - Antigravity Desktop quota uses compact model headings and limit labels.
   It preserves provider-reported bucket values and resets; duration metadata
@@ -244,6 +258,26 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
 
 - Electron Settings persists provider group order through validated IPC. Drag handles, arrow keys and move buttons use the same saved order for usage cards, service health, menu bar and side notch. Stored lists retain known providers once and append missing providers in default order. Additional accounts remain grouped, with independent Collect and Show settings. Failed saves and canceled drags retain the saved order. Synthetic proof does not establish rendered or native drag, focus, VoiceOver or notch-anchor behavior. See [ADR 0021](adr/0021-provider-group-order.md).
 
+- The macOS preferences reader accepts complete legacy hex data and reads
+  complete NSData through Foundation when `defaults` prints an abbreviated
+  description. Provider order and managed accounts retain their saved format.
+  Relaunches and app updates reuse the saved order; newly added providers append
+  after the retained entries.
+
+- Every provider card with a quota reading shows a "Quota activity" heatmap
+  (`src/main/quota-activity.ts`) unless it already shows Codex account token
+  history. Each slot records the rise in its own tracking window (weekly
+  all-models when present, else the longest window) per local day, so usage
+  from desktop apps and other devices appears. The first reading spreads
+  the current window's usage evenly over its elapsed days, marked estimated;
+  earlier windows are never backfilled.
+  Quota activity stays in percentage points: providers report no account
+  token totals for desktop or web use, so tokens are never inferred. When
+  Claude Code (or Codex) ran on this Mac that day, the tooltip adds the
+  measured local tokens, labelled "on this Mac". A rise seen after the
+  Mac was offline lands on the next reading's day. A reset-time change over
+  one hour, or a drop, counts the new window from zero. Demo mode is excluded.
+
 - Connected Codex account history uses `account/usage/read` without `threadId`
   through the existing managed ChatGPT helper and effective keyring guard. It
   publishes only valid unique calendar labels, safe nonnegative token counts
@@ -257,6 +291,12 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   device or product coverage. See [ADR 0022](adr/0022-codex-account-token-history.md).
 
 ## Verification gaps
+
+- Claude Desktop GUI connections and subsequent allowance polling share one HTTP
+  transport. Only the fixed bootstrap and UUID-bound usage routes use a unique
+  nonpersistent Electron session with caching disabled and ambient credentials
+  omitted. Demo, JSON and Codex test paths do not use this native session. Source
+  and synthetic checks do not establish native cookie handling or provider acceptance.
 
 - The Electron candidate still needs native GUI launch/relaunch, preferences/account/offline journeys, tray/focus/accessibility, notification/login/share/updater paths, drag/display persistence and two different-height notch captures. Verified packaging and headless JSON cannot close migration or cutover.
 - Repository files do not prove current provider authentication, quota freshness, network responses, local machine state, app installation, signed-bundle state, GitHub Release state, or runtime UI behavior.

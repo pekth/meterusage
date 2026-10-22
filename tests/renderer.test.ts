@@ -984,3 +984,21 @@ it.each(["cursor", "bot"] as const)("names the saved Grok %s account source accu
   expect(markup).toContain(`Current source: ${accountMethod === "cursor" ? "Grok Bot via Cursor (legacy Beta)" : "Grok Bot Desktop (Beta)"}`);
   expect(markup).toContain('>Grok Bot Desktop (Beta)</option>');
 });
+
+it("offers manual Claude usage only on a failed Desktop method and sends only intent", () => {
+  const view = state(), action = vi.fn(async () => {});
+  view.snapshot.demo = false;
+  for (const provider of ["claude", "codex", "grok", "antigravity"] as const) for (const status of ["failed", "disconnected", "connecting", "connected", "unsupported"] as const) for (const method of ["account", "cli"] as const) {
+    view.connections = [{ provider, source: "cli", localAvailable: true, status }];
+    const row = Connections({ state: view, action }).props.children[3].props.children[0];
+    vi.mocked(useState).mockReturnValueOnce([method, () => {}]).mockReturnValueOnce([true, () => {}]);
+    const detail = row.type(row.props).props.children[1];
+    const buttons = detail.props.children[4].props.children.filter((node: any) => node?.type === "button");
+    const usage = buttons.find((node: any) => node.props.children === "Open Claude usage");
+    expect(Boolean(usage)).toBe(provider === "claude" && status === "failed" && method === "account");
+    if (usage) {
+      expect(action).not.toHaveBeenCalled(); usage.props.onClick();
+      expect(action).toHaveBeenCalledExactlyOnceWith({ action: "claudeUsagePage" }); action.mockClear();
+    }
+  }
+});

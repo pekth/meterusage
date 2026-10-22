@@ -6,6 +6,53 @@ import { IssueReports } from "../src/main/issue-reports";
 import { Preferences } from "../src/main/preferences";
 import type { Command } from "../src/main/providers/transport";
 
+it("reads managed-account data in legacy and machine-readable forms without accepting failed or invalid reads", async () => {
+  const accounts = [{ id: "fixture-account", provider: "claude", label: "Synthetic account", path: "~/fixture", enabled: true }];
+  const launch = { home: "/synthetic", data: "/synthetic", demo: false, candidate: false, env: {} };
+  let legacy = true, failRead = false, failWrite = false, type = "data", stored: unknown = accounts, nativeReads = 0;
+  const writes: string[][] = [];
+  const command: Command = async (binary, args, options) => {
+    expect(options?.timeoutMs).toBe(5000);
+    if (binary === "/usr/bin/osascript") {
+      expect(args.slice(4)).toEqual(["dev.meterusage.accounts-fixture", "managedAccounts"]);
+      nativeReads++;
+      if (failRead) throw new Error("Fixture read failed");
+      return Buffer.from(JSON.stringify(stored)).toString("base64");
+    }
+    expect(binary).toBe("/usr/bin/defaults");
+    expect(args[1]).toBe("dev.meterusage.accounts-fixture");
+    if (args[2] !== "managedAccounts") throw new Error("Absent fixture key");
+    if (args[0] === "read-type") return `Type is ${type}`;
+    if (args[0] === "read") return legacy ? `<${Buffer.from(JSON.stringify(stored)).toString("hex")}>` : "{length = 120, bytes = 0x5b7b2269 ... 657d5d}";
+    expect(args.slice(0, 4)).toEqual(["write", "dev.meterusage.accounts-fixture", "managedAccounts", "-data"]);
+    if (failWrite) throw new Error("Fixture save failed");
+    writes.push(args); stored = JSON.parse(Buffer.from(args[4], "hex").toString()); return "";
+  };
+  expect((await Preferences.load(launch, command, "dev.meterusage.accounts-fixture")).accounts).toEqual(accounts);
+  expect(nativeReads).toBe(0);
+  legacy = false;
+  const prefs = await Preferences.load(launch, command, "dev.meterusage.accounts-fixture");
+  expect(prefs.accounts).toEqual(accounts);
+  failWrite = true;
+  await expect(prefs.set("managedAccounts", [])).rejects.toThrow("Fixture save failed");
+  expect(prefs.accounts).toEqual(accounts);
+  failWrite = false;
+  await expect(prefs.set("managedAccounts", [...accounts, ...accounts])).rejects.toThrow("Invalid preference");
+  expect(writes).toEqual([]);
+  await prefs.set("managedAccounts", []);
+  expect((await Preferences.load(launch, command, "dev.meterusage.accounts-fixture")).accounts).toEqual([]);
+  for (const invalid of [{}, ["claude"], [...accounts, ...accounts]]) {
+    stored = invalid;
+    expect((await Preferences.load(launch, command, "dev.meterusage.accounts-fixture")).accounts).toEqual([]);
+  }
+  stored = accounts; failRead = true;
+  expect((await Preferences.load(launch, command, "dev.meterusage.accounts-fixture")).accounts).toEqual([]);
+  failRead = false; type = "string";
+  const before = nativeReads;
+  expect((await Preferences.load(launch, command, "dev.meterusage.accounts-fixture")).accounts).toEqual([]);
+  expect(nativeReads).toBe(before);
+});
+
 it("defaults to Medium and persists only the three panel sizes in an isolated profile", async () => {
   const root = mkdtempSync(join(tmpdir(), "meterusage-size-"));
   const launch = { home: root, data: root, demo: true, candidate: true, env: {} };
@@ -107,5 +154,18 @@ it("defaults saved Grok source to Cursor and accepts only fixed internal methods
     expect(prefs.values.desktopGrokSource).toBe("cursor");
     for (const source of ["bot", "cursor"]) { await prefs.set("desktopGrokSource", source); expect((await Preferences.load(launch)).values.desktopGrokSource).toBe(source); }
     for (const source of ["", "unknown", "Bot", 1]) await expect(prefs.set("desktopGrokSource", source)).rejects.toThrow("Invalid preference");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+it("validates tagged Claude web consent separately from legacy reconnect markers", async () => {
+  const root = mkdtempSync(join(tmpdir(), "meterusage-claude-pref-fixture-"));
+  try {
+    const launch = { home: root, data: root, demo: true, candidate: true, env: {} };
+    const prefs = await Preferences.load(launch);
+    for (const marker of ["", "off", "a".repeat(64), "web-v1:" + "b".repeat(64)]) {
+      await prefs.set("desktopClaudeIdentity", marker);
+      expect((await Preferences.load(launch)).values.desktopClaudeIdentity).toBe(marker);
+    }
+    for (const marker of ["web-v2:" + "a".repeat(64), "web-v1:bad", "web-v1:" + "a".repeat(65)]) await expect(prefs.set("desktopClaudeIdentity", marker)).rejects.toThrow("Invalid preference");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

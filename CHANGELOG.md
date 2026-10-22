@@ -6,6 +6,48 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0-beta.4] - 2026-10-22
+
+### Quota activity heatmaps
+
+- Show a "Quota activity" heatmap on every provider card with a quota reading.
+  Each provider keeps its own series of daily percentage-point rises in its
+  weekly (or longest) window, so desktop apps, the web and other devices count.
+  The current window's existing usage is spread over its elapsed days and
+  marked estimated; later rises land on the day observed. Earlier weeks are
+  not backfilled. Codex keeps account token history when available.
+- Quota activity never infers tokens. Tooltips add measured Claude Code or
+  Codex tokens from this Mac when that day has them.
+
+### Claude Desktop connection
+
+- Abort failed provider HTTP requests before awaiting response cleanup, including
+  size-limit failures. Cleanup rejection preserves the original provider error;
+  successful requests are not aborted. Native closure remains unverified.
+
+- Route Claude Desktop bootstrap and organization allowance requests through an
+  isolated, nonpersistent Electron session after app readiness. Keep the explicit
+  cookie, request bounds, consent and identity checks. Other endpoints keep their
+  existing transport. Native cookie handling and live allowance remain unverified.
+
+- Report explicit provider browser-verification challenges during Connect and
+  preserve the current source. A failed Claude Desktop method offers **Open
+  Claude usage** in normal Settings as a manual allowance fallback. Opening
+  the page does not connect MeterUsage or import allowance.
+
+- Read Keychain once per allowance attempt and reuse that password only in
+  attempt-local memory for fresh account and session checks. A one-time
+  Keychain approval no longer requires a second access during verification.
+  Keep cancellation, account binding and failed-Connect CLI preservation.
+  Synthetic regression proof does not establish live provider acceptance.
+- Replace OAuth cache selection with explicit Desktop web-session consent,
+  sandboxed read-only cookie selection and nested bootstrap account/membership
+  verification before UUID-bound allowance requests. Recheck account, organization
+  and session before publishing. Old consent requires reconnecting. Preserve
+  CLI selection on failed Connect and keep account quota separate from CLI history.
+  No chats, refresh tokens, credential persistence or Desktop writes are used.
+  Native compatibility and live allowance remain unverified.
+
 ### Added
 
 - Add opt-in Muse Code subscription allowance through the official CLI's
@@ -52,6 +94,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Reload saved provider order and managed accounts when macOS abbreviates
+  defaults data output. Read complete stored bytes and retain the existing
+  preference format across relaunches and app updates.
 - Read known Claude plan labels from the available tier fields without showing
   internal identifiers or guessing a plan from an unrelated substring.
 - Accept duplicate Claude Desktop cache entries when their eligible access
