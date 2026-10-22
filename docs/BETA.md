@@ -1,13 +1,13 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.3, build 61** is an opt-in macOS beta. The ZIP supports
+MeterUsage **0.3.0-beta.4, build 73** is an opt-in macOS beta. The ZIP supports
 Apple silicon and macOS 13 or later. It is Developer ID signed, notarized and
 stapled. Swift `0.2.41` remains the stable release and updater download.
 
 ## Install
 
-1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.3/MeterUsage-0.3.0-beta.3-mac-arm64.zip)
-   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.3/SHA256SUMS).
+1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.4/MeterUsage-0.3.0-beta.4-mac-arm64.zip)
+   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.4/SHA256SUMS).
 2. Quit MeterUsage and keep a copy of your existing app and its saved data for
    rollback. The beta shares the app identity and data locations with Swift.
 3. Unzip the download, move `MeterUsage.app` to Applications, and open it.
@@ -27,7 +27,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-6bc074f8753330c7b8bcf975ba3696fa249890230737d8c7580e7b93c3321439
+a86cc1eba95b0b7ce3badb294f1357c1800ce05c2d3160123cd12b82590c1ae1
 ```
 
 ## Provider coverage
@@ -41,6 +41,14 @@ Expected ZIP SHA-256:
   read current allowance through a compatibility endpoint. Some accounts,
   including free accounts, may have no allowance token. This does not sign the
   user out of Claude Desktop. Desktop chat/token history is not collected.
+- Every provider card with a quota reading shows a **Quota activity** heatmap:
+  the daily rise in that provider's weekly (or longest) allowance, counting
+  desktop, web and other-device use. Each provider keeps its own history.
+  On first run, the current window's usage is spread over its elapsed days and
+  marked estimated; earlier weeks are not backfilled. Days count only while
+  MeterUsage refreshes; offline usage lands on the next reading's day. Values
+  are percentage points, never inferred tokens. Tooltips add measured Claude
+  Code or Codex tokens from this Mac when present.
 - Claude Code CLI reads local transcript activity. Quota requires an optional
   companion file. Local activity does not cover other devices.
 - Antigravity Desktop reads account allowance from one running, signed-in
@@ -61,8 +69,8 @@ Expected ZIP SHA-256:
   preserved and newly pasted keys are not saved. OpenRouter keeps its existing
   balance and aggregate activity source. Read [API setup and limits](API_USAGE_BETA.md).
 
-See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs/electron/README.md#source-choices),
-[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs/PRIVACY.md).
+See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/electron/README.md#source-choices),
+[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/PRIVACY.md).
 
 ## Known limits
 
@@ -85,19 +93,22 @@ See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.
-Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs/REPORTING.md) before sending.
+Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/REPORTING.md) before sending.
 Never include tokens, passwords or raw account files in an issue.
 
 ## Build and screenshot identity
 
 The signed artifact was built from source
-`c2d092cb92180b37a686582a904dbd0129bc371c`. Release documentation and new
-screenshots are a documentation-only descendant; executable inputs are unchanged.
-Source manifests retain `0.2.41`; beta packaging explicitly set `0.3.0-beta.3`.
+`3c56bd0d4ebf6d51996b9ebdc0a9b09f5570f182`. Release documentation is a documentation-only descendant; executable
+inputs are unchanged. Screenshots are from build 61 and do not show the Quota
+activity heatmap. Source manifests retain `0.2.41`; beta packaging explicitly
+set `0.3.0-beta.4`.
 
-Matching validation recorded 739 tests across 28 files on macOS, TypeScript
-checking, native helper compilation and production bundling. Exact-source CI
-also passed Swift build and tests. Signing, notarization, stapling, Gatekeeper,
+Matching validation recorded 846 tests across 33 files on macOS, TypeScript
+checking and production bundling. Swift build and tests were not rerun for this
+beta. The installed build was observed recording quota activity for Claude,
+Codex, Antigravity and Grok. Native rendering of filled heatmaps
+remains unverified. Signing, notarization, stapling, Gatekeeper,
 installed bundle identity and ZIP bytes were verified separately. These checks
 do not close the native acceptance gaps above.
 
