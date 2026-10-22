@@ -149,7 +149,8 @@ export class Coordinator {
       this.archiveWriteFailed = false;
     } catch { this.archiveWriteFailed = true; }
   }
-  forgetQuota(key: string) {
+  forgetQuota(key: string, preserveActivity = false) {
+    if (!preserveActivity) this.quotaActivity.retire(key);
     delete this.accountActivities[key]; delete this.quotas[key]; delete this.archived[key]; delete this.plans[key];
     this.evaluator.forgetSlot(key);
     this.backoffs.delete(`quota-${key}`); this.persistArchive();

@@ -70,8 +70,8 @@ async function start(launch: Launch) {
   }, sources);
   const issueReports = new IssueReports(() => coordinator.diagnostics(app.getVersion()), publish, prefs);
   const apiBillingFetch = new ApiBillingFetch(launch, () => coordinator.refresh(), fetch, (provider, signal) => runCommand(desktopHelper, [`--api-${provider}`, "--allow-ui"], { signal, timeoutMs: 60000, maxBytes: 8192 }));
-  // Do not restore a legacy archive under a newly connected account.
-  for (const p of ["codex", "claude", "antigravity", "grok"] as const) if (connections.configured(p)) coordinator.forgetQuota(p);
+  // Invalidate the restored quota archive while retaining this connection's activity.
+  for (const p of ["codex", "claude", "antigravity", "grok"] as const) if (connections.configured(p)) coordinator.forgetQuota(p, true);
   const notch = { expanded: false, cardOnRight: false, selected: "codex", dragging: false };
   let notchHeight = 200, anchor: { x: number; y: number } | undefined;
   let flyoutHeight = 700, settingsHeight: number | undefined;

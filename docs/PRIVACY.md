@@ -356,7 +356,9 @@ Disposable scan caches store selected numeric results under opaque keys.
 `quota-activity.json` keeps, per provider slot, the tracking window label, the
 last used percentage and reset time, and daily percentage-point rises for up
 to 200 days. It is derived only from quota readings the app already makes; no
-new request, credential, prompt, or account identifier is involved.
+new request, credential, prompt, or account identifier is involved. Connection
+changes retain the previous series under an opaque generated key outside the
+active heatmap; replacement accounts start a fresh series.
 
 The Electron candidate retains temporary card images in the app support
 directory until normal quit, so a selected sharing service can read the file

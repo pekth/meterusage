@@ -151,6 +151,32 @@ describe("coordinator refresh journey", () => {
     notifications.length = 0; next.forgetQuota("codex"); await next.refresh();
     expect(notifications).toEqual(["codex/threshold", "codex/expiringCredit"]);
   });
+  it("isolates quota activity after disconnect/reconnect and preserves the new series on relaunch", async () => {
+    const { c: initial, prefs } = await setup([]), launch = { ...initial.launch, demo: false };
+    let clock = now, percent = 20;
+    const reading = () => quota("claude", [window("Weekly", percent, now + 5 * 86400000, 10080)], clock);
+    const source = (): Source => ({ slot: primary("claude"), accountBound: true, quota: async () => reading() });
+    prefs.values.showProviderClaude = true;
+    const c = new Coordinator(launch, prefs, [source()], () => clock); controllers.push(c);
+    await c.refresh();
+    const previous = c.snapshot().quotaActivity!.claude;
+    c.quotaActivity.record("codex", quota("codex", [window("Weekly", 7)], now), now);
+    c.forgetQuota("claude"); c.sources = [];
+    expect(c.quotaActivity.days("claude")).toEqual([]);
+    const retired = Object.values(JSON.parse(readFileSync(join(launch.data, "quota-activity.json"), "utf8"))) as { days: unknown[] }[];
+    expect(retired.some(series => JSON.stringify(series.days) === JSON.stringify(previous))).toBe(true);
+    expect(c.quotaActivity.days("codex").map(d => d.percent)).toEqual([7]);
+    clock += 86400000; percent = 60;
+    c.forgetQuota("claude"); c.sources = [source()]; await c.refresh();
+    const replacement = c.snapshot().quotaActivity!.claude;
+    expect(replacement).toHaveLength(4);
+    expect(replacement.every(d => d.percent === 15 && d.estimated)).toBe(true);
+    c.stop();
+    const next = new Coordinator(launch, prefs, [source()], () => clock); controllers.push(next);
+    next.forgetQuota("claude", true); // Startup invalidates quota, not the current account's activity.
+    expect(next.snapshot().quotaActivity!.claude).toEqual(replacement);
+    await next.refresh(); expect(next.snapshot().quotaActivity!.claude).toEqual(replacement);
+  });
   it("drops prior-account quota when a desktop connection expires and discards replaced-source results", async () => {
     let resolve!: (q: ReturnType<typeof quota>) => void;
     const old: Source = { slot: primary("claude"), quota: () => new Promise(r => { resolve = r; }) };

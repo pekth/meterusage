@@ -280,7 +280,10 @@ Release documentation refresh: 2026-10-22 for build 75.
   all-models when present, else the longest window) per local day, so usage
   from desktop apps and other devices appears. The first reading spreads
   the current window's usage evenly over its elapsed days, marked estimated;
-  earlier windows are never backfilled.
+  earlier windows are never backfilled. Connection changes retire the previous
+  series under an opaque generated key, so replacement accounts never inherit
+  its days or baseline. Retired observations remain on disk outside active
+  heatmaps; normal relaunch retains the active series.
   Quota activity stays in percentage points: providers report no account
   token totals for desktop or web use, so tokens are never inferred. When
   Claude Code (or Codex) ran on this Mac that day, the tooltip adds the

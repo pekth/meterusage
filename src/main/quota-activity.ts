@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { type Quota, type QuotaWindow, localDay } from "../domain/models";
 import { atomicJSON } from "./history";
 
@@ -63,6 +64,12 @@ export class QuotaActivityStore {
     } catch { /* A missing or unreadable file starts a fresh history. */ }
   }
   days(key: string): QuotaDay[] { return (this.data[key]?.days ?? []).map(d => ({ ...d })); }
+  retire(key: string) {
+    if (!this.data[key]) return;
+    // Preserve old observations without attributing them to the replacement account.
+    this.data[`${key}#retired-${randomUUID()}`] = this.data[key];
+    delete this.data[key]; this.save();
+  }
   record(key: string, q: Quota, at: number) {
     const w = trackingWindow(q); if (!w) return;
     const prior = this.data[key], current = w.usedPercent;

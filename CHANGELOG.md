@@ -8,6 +8,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Electron source integration
 
+- Start a fresh quota activity series when a connection changes. Retain prior
+  observations outside the replacement account's heatmap, and preserve the
+  current series on normal relaunch.
+
 - Preserve the TypeScript 7 upgrade, stale Claude CLI quota rejection and Grok
   provider mark centering from the parallel Electron branches.
 - Run Electron typecheck, synthetic tests and production build in CI alongside
