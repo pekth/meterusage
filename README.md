@@ -12,7 +12,7 @@ Swift app remains the stable download and rollback option during migration.
 
 | Edition | Current status | Setup and behavior |
 | --- | --- | --- |
-| Electron 0.3.0-beta.1, build 54 | Public beta for Apple silicon, macOS 13+; signed and notarized | [Download beta](https://github.com/pekth/meterusage/releases/tag/v0.3.0-beta.1) · [Beta guide](docs/BETA.md) |
+| Electron 0.3.0-beta.4, build 73 | Public beta for Apple silicon, macOS 13+; signed and notarized | [Download beta](https://github.com/pekth/meterusage/releases/tag/v0.3.0-beta.4) · [Beta guide](docs/BETA.md) |
 | Legacy Swift 0.2.41 | Frozen for new features; published stable download and migration rollback | [Swift guide](docs/swift/README.md) |
 
 Electron is the active app for new features. Swift remains the stable download
@@ -29,26 +29,19 @@ and the [version strategy](docs/VERSIONS.md).
   <img src="docs/images/beta-notch-claude.png" alt="Electron beta hover card and compact side-notch usage rail" width="256">
 </p>
 
-Synthetic demo captures of build 54's renderer. Claude Desktop provides allowance,
-not a chat-history heatmap. See the [full screenshot gallery and capture details](docs/SCREENSHOTS.md)
+Synthetic demo captures of build 61's renderer. Claude Desktop provides allowance,
+not chat history; its heatmap shows daily quota used across devices. See the [full screenshot gallery and capture details](docs/SCREENSHOTS.md)
 for Codex, Claude, side notch and Settings.
 
 The beta includes Codex browser sign-in/account history, optional Claude Desktop
 allowance, existing CLI sources, compact provider tabs and hover cards, provider
 reordering and readable token totals. Account coverage depends on the source.
-Build 54 keeps Grok Beta CLI-only; Antigravity desktop login is follow-up work.
-Current source additionally offers opt-in [Grok Bot Desktop Beta](docs/DESKTOP-CONNECTIONS.md#grok-bot-desktop-beta).
-Sign in through Grok Bot Desktop first, then approve read-only access.
-Native/live allowance, X and shared-pool coverage remain unverified.
-Current source also adds separate [OpenAI API and Anthropic API billing snapshots](docs/API_USAGE_BETA.md)
-through Settings → API connections with a saved legacy Admin key, a one-time
-Admin key, or the bundled environment-only helper. Existing Keychain entries
-are preserved; pasted keys are not saved. OpenRouter keeps its existing
-account balance and aggregate activity integration.
-Unreleased source adds opt-in [Muse Code CLI allowance](docs/DESKTOP-CONNECTIONS.md#muse-code-cli).
-Muse.ai cloud/Desktop connection is separate and remains pending.
-Build 54's Settings footer incorrectly says `0.2.41`; the packaged version is
-`0.3.0-beta.1`. See [known beta limits](docs/BETA.md#known-limits).
+The beta also includes Antigravity Desktop allowance, Grok Bot Desktop (Beta),
+key-free OpenCode Go local setup and separate [API billing](docs/API_USAGE_BETA.md)
+under Settings → API connections. Reuse a legacy saved Admin key or enter a
+one-time key. Pasted keys are not saved. OpenRouter retains its existing balance
+and activity integration. Desktop compatibility and billing coverage vary;
+see [known beta limits](docs/BETA.md#known-limits).
 
 ## Stable Swift installation
 
@@ -74,38 +67,40 @@ fall back to compilation. See the [Swift installation guide](docs/swift/README.m
 
 ## Setup and data coverage
 
-The original nine provider adapters remain in the retained Swift and candidate source:
+All nine provider adapters remain in the retained Swift and candidate source:
 Codex, Claude Code, Antigravity, OpenRouter, Grok, OpenCode Go, Cursor, Copilot
 CLI and Gemini CLI. Their inputs and available measurements differ. The
 [Swift provider matrix](docs/swift/README.md#provider-matrix) describes existing
-CLI/local collection. The [Electron source choices](docs/electron/README.md#source-choices)
+CLI/local collection. The [Electron source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/electron/README.md#source-choices)
 also describe optional Codex browser sign-in and Claude Desktop allowance.
 
 Local activity covers this Mac. Provider-reported account data has its own
 coverage limits. Missing tokens remain unknown. Local token costs are estimates; optional API
 billing cards label provider-reported amounts separately. Provider dashboards
-remain the billing source of record. Read the [privacy contract](docs/PRIVACY.md)
-before changing a data source or sharing screenshots.
+remain the billing source of record. Read the [beta privacy contract](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/PRIVACY.md)
+for Electron or the [Swift privacy contract](docs/PRIVACY.md) before changing a
+data source or sharing screenshots.
 
 ## Can both editions coexist?
 
-Both source trees remain during migration; the intended end state is one
+The beta tag contains the Electron source and retained Swift tree. The default
+branch retains stable Swift source during migration; the intended end state is one
 Electron app. Normal-profile side-by-side installation is unsafe:
 the app name, bundle ID and default preferences/data locations are shared.
-Use only the documented [isolated candidate QA profiles](docs/electron/README.md#isolated-qa)
+Use only the documented [isolated candidate QA profiles](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/electron/README.md#isolated-qa)
 for testing. A separate app identity and data root require a later decision;
-there is no automatic cutover. See [ADR 0010](docs/adr/0010-macos-typescript-electron.md).
+there is no automatic cutover. See [ADR 0010](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/adr/0010-macos-typescript-electron.md).
 
 ## Documentation
 
 - [Beta download, verification and limits](docs/BETA.md)
 - [Current beta screenshots](docs/SCREENSHOTS.md)
 - [Swift guide](docs/swift/README.md)
-- [Electron guide and known gaps](docs/electron/README.md)
+- [Electron guide and known gaps](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/electron/README.md)
 - [Versions and staged Swift retirement](docs/VERSIONS.md)
 - [Contributing](CONTRIBUTING.md)
 - [Project knowledge](docs/KB.md) and [decision index](docs/adr/README.md)
-- [Desktop connections](docs/DESKTOP-CONNECTIONS.md), [demo mode](docs/DEMO.md)
+- [Desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/DESKTOP-CONNECTIONS.md), [demo mode](docs/DEMO.md)
   and [side notch](docs/SIDE-NOTCH.md)
 - [Concept mockups](docs/mockups/README.md) and [changelog](CHANGELOG.md)
 
@@ -118,11 +113,11 @@ the Swift guide; product screenshots now show the Electron beta.
 See [downloads](#download).
 
 <a id="macos-electron-migration-candidate"></a>
-See the [Electron candidate guide](docs/electron/README.md).
+See the [Electron candidate guide](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/electron/README.md).
 
 <a id="second-accounts"></a>
 See [Swift additional local accounts](docs/swift/README.md#second-accounts) and
-[Electron advanced local accounts](docs/electron/README.md#advanced-local-accounts).
+[Electron advanced local accounts](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/electron/README.md#advanced-local-accounts).
 
 <a id="requirements"></a>
 See [Swift requirements](docs/swift/README.md#requirements).
@@ -132,7 +127,7 @@ See [contributor setup](CONTRIBUTING.md).
 
 <a id="agent-budget-cli"></a>
 See the [Swift Agent Budget CLI](docs/swift/README.md#agent-budget-cli) and
-[Electron commands](docs/electron/README.md#build-and-test).
+[Electron commands](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/electron/README.md#build-and-test).
 
 <a id="showcase"></a><a id="-showcase"></a>
 <a id="ambient-time-to-empty--side-notch-hud"></a>
@@ -149,8 +144,13 @@ See [Swift behavior](docs/swift/README.md#key-features).
 <a id="privacy--architecture"></a><a id="-privacy--architecture"></a>
 See [privacy and data handling](docs/PRIVACY.md).
 
+<a id="download-and-installation"></a>
 <a id="install-the-prebuilt-app"></a><a id="from-a-git-checkout-no-swift"></a>
 See [installation details](docs/swift/README.md#download-and-installation).
+
+<a id="report-a-problem"></a>
+See [beta diagnostics and bug reports](docs/BETA.md#known-limits) and the
+[beta reporting guide](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/REPORTING.md).
 
 <a id="-tldr"></a><a id="tldr"></a>
 See [downloads](#download).

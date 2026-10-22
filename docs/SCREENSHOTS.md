@@ -1,10 +1,11 @@
 # Beta screenshots
 
-These captures show Electron **0.3.0-beta.1, build 54** using invented demo
+These captures show Electron **0.3.0-beta.3, build 61** using invented demo
 data. They use the release renderer at source revision
-`6ce695324e54bb09bf6e5ab36fd4733875c94427`, captured in a browser at 2x pixel
-density. Required generated provider marks come from the signed release bundle.
-Only unused canvas below the app is cropped. Browser fonts and window framing
+`c2d092cb92180b37a686582a904dbd0129bc371c`, captured in a browser at 2x pixel
+density. The capture tool scales wide Settings images to 1280 pixels. Required generated provider marks come from the signed release bundle.
+Only unused canvas below the app is cropped. The social preview combines two
+current captures without changing their contents. Browser fonts and window framing
 can differ from macOS; these images do not prove native behavior.
 
 ## Usage
@@ -35,8 +36,10 @@ positioning on a Mac. Details open on hover; the rail has one design and no pin.
 
 ![Appearance and panel sizing](images/beta-settings-appearance.png)
 
-Build 54's Settings footer still says `0.2.41`. The packaged app version is
-`0.3.0-beta.1`; the footer is a known cosmetic issue in this beta.
+![Separate API connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs/images/beta-settings-api.png)
+
+API access is disabled in the synthetic demo. Source previews omit the version
+footer when bundle metadata is absent; the installed app shows its bundle version.
 
 ## Sharing
 

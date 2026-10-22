@@ -1,6 +1,6 @@
 # Project knowledge
 
-Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
+Release documentation refresh: 2026-10-22 for build 73.
 
 ## Edition documentation
 
@@ -10,7 +10,7 @@ Release documentation refresh: 2026-10-16; build 54 source review is unchanged.
   native acceptance, deliberate cutover and retrievable archive checks pass.
   Source retirement is pending. Electron-required Swift helpers and assets stay.
 - [Swift 0.2.41](swift/README.md) is the published default install route.
-  [Electron 0.3.0-beta.1, build 54](BETA.md) is an opt-in public prerelease,
+  [Electron 0.3.0-beta.4, build 73](BETA.md) is an opt-in public prerelease,
   signed and notarized for Apple silicon. Native acceptance remains incomplete.
   Source manifests and its cosmetic Settings footer still say 0.2.41; packaging
   explicitly sets the beta version. Stable updaters do not offer the beta.
