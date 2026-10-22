@@ -1,6 +1,6 @@
 # Project knowledge
 
-Release documentation refresh: 2026-10-22 for build 74.
+Release documentation refresh: 2026-10-22 for build 75.
 
 ## Edition documentation
 
@@ -10,10 +10,10 @@ Release documentation refresh: 2026-10-22 for build 74.
   native acceptance, deliberate cutover and retrievable archive checks pass.
   Source retirement is pending. Electron-required Swift helpers and assets stay.
 - [Swift 0.2.41](swift/README.md) is the published default install route.
-  [Electron 0.3.0-beta.5, build 74](BETA.md) is an opt-in public prerelease,
+  [Electron 0.3.0-beta.6, build 75](BETA.md) is an opt-in public prerelease,
   signed and notarized for Apple silicon. Native acceptance remains incomplete.
-  Source manifests and its cosmetic Settings footer still say 0.2.41; packaging
-  explicitly sets the beta version. Stable updaters do not offer the beta.
+  Source manifests retain 0.2.41; packaging sets the beta version and Settings
+  shows the running bundle version. Stable updaters do not offer the beta.
 - Both implementations remain in their current source trees. Shared app name,
   bundle ID and default data/preferences prevent safe normal-profile coexistence.
   Use only documented isolated QA profiles.
@@ -24,13 +24,21 @@ Release documentation refresh: 2026-10-22 for build 74.
   Electron beta builds (version `-beta.N`) read the release list and accept
   `-mac-arm64` assets, so betas update in-app from beta 5; see
   [update channels](VERSIONS.md#update-channels).
+- Swift-to-Electron native upgrade and rollback remain blocked pending a
+  separate macOS test user or VM. Swift 0.2.41 requires the unsuffixed
+  `MeterUsage-<version>.zip` release asset and a GitHub SHA-256 digest. Its
+  install script re-signs the replacement ad hoc, so the installed signature
+  and native helper behavior need explicit acceptance. Both editions share
+  the preferences domain, durable history and quota archive without a bulk
+  migration. Neither updater retains a persistent rollback copy. See the
+  [stable cutover checklist](VERSIONS.md#stable-cutover-checklist).
 - Candidate gaps include Settings account overview, seven-day sparkline, reset
   timing display, update feedback and tray refresh. Smaller display omissions
   remain distinct. Current source adds AG Desktop/OpenCode setup, restores Bun
   discovery and matches activity grid geometry. See the candidate guide.
 - Edition documentation was reconciled against revision
   build source `6ce695324e54bb09bf6e5ab36fd4733875c94427`.
-- Current product screenshots use build 54's renderer and synthetic demo data.
+- Current product screenshots use build 61's renderer and synthetic demo data.
   Old product captures are removed; see [capture provenance](SCREENSHOTS.md).
 
 ## Repository state

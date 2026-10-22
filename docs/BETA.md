@@ -1,13 +1,13 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.5, build 74** is an opt-in macOS beta. The ZIP supports
+MeterUsage **0.3.0-beta.6, build 75** is an opt-in macOS beta. The ZIP supports
 Apple silicon and macOS 13 or later. It is Developer ID signed, notarized and
 stapled. Swift `0.2.41` remains the stable release and updater download.
 
 ## Install
 
-1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.5/MeterUsage-0.3.0-beta.5-mac-arm64.zip)
-   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.5/SHA256SUMS).
+1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.6/MeterUsage-0.3.0-beta.6-mac-arm64.zip)
+   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.6/SHA256SUMS).
 2. Quit MeterUsage and keep a copy of your existing app and its saved data for
    rollback. The beta shares the app identity and data locations with Swift.
 3. Unzip the download, move `MeterUsage.app` to Applications, and open it.
@@ -30,7 +30,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-cc5cb4fdb573f37999685e263a574aa7df2d9a07b6ab7cb1d62deabde8afbf4f
+c8d8c629fdd8a3332efdc2cfe5ae93aeff9e6ab5a6b8c7117450c025efa6775c
 ```
 
 ## Provider coverage
@@ -72,8 +72,8 @@ cc5cb4fdb573f37999685e263a574aa7df2d9a07b6ab7cb1d62deabde8afbf4f
   preserved and newly pasted keys are not saved. OpenRouter keeps its existing
   balance and aggregate activity source. Read [API setup and limits](API_USAGE_BETA.md).
 
-See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.5/docs/electron/README.md#source-choices),
-[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.5/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.5/docs/PRIVACY.md).
+See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/electron/README.md#source-choices),
+[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/PRIVACY.md).
 
 ## Known limits
 
@@ -96,23 +96,24 @@ See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.5/docs
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.
-Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.5/docs/REPORTING.md) before sending.
+Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/REPORTING.md) before sending.
 Never include tokens, passwords or raw account files in an issue.
 
 ## Build and screenshot identity
 
 The signed artifact was built from source
-`321dd8a71474326ec29ce98c9d48d2e69d893933`. Release documentation is a documentation-only descendant; executable
+`023b753cfa1c248774efecb28a1770ee8de0950b`. Release documentation is a documentation-only descendant; executable
 inputs are unchanged. Screenshots are from build 61 and do not show the Quota
 activity heatmap. Source manifests retain `0.2.41`; beta packaging explicitly
-set `0.3.0-beta.5`.
+set `0.3.0-beta.6`.
 
 Matching validation recorded 849 tests across 33 files on macOS, TypeScript
-checking and production bundling. Swift build and tests were not rerun for this
-beta. The installed build was observed recording quota activity for Claude,
+checking and production bundling. Swift build and 394 tests also passed on macOS for this source. The installed build was observed recording quota activity for Claude,
 Codex, Antigravity and Grok. Native rendering of filled heatmaps
 remains unverified. Signing, notarization, stapling, Gatekeeper,
-installed bundle identity and ZIP bytes were verified separately. These checks
+bundle identity and ZIP bytes were verified separately. Beta 6 changes only
+packaging metadata to version 0.3.0-beta.6, build 75; its executable source
+matches beta 5. Live beta.5-to-beta.6 update acceptance is pending. These checks
 do not close the native acceptance gaps above.
 
 The [screenshot gallery](SCREENSHOTS.md) uses invented demo data and the actual

@@ -6,6 +6,16 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0-beta.6] - 2026-10-22
+
+### Beta update verification
+
+- Package the beta 5 executable source as version 0.3.0-beta.6, build 75,
+  to exercise discovery, download, verification, replacement and relaunch
+  through the installed beta updater. No provider or UI behavior changes.
+- Document the stable Swift updater asset contract, signature changes and
+  the isolated upgrade and rollback checks still required before cutover.
+
 ## [0.3.0-beta.5] - 2026-10-22
 
 ### Beta updates
