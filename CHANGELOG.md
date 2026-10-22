@@ -8,6 +8,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Electron source integration
 
+- Merge the active Electron source stack onto main through PR #76. Retain
+  Swift maintenance and rollback source, and keep Swift 0.2.41 stable. The
+  published beta.6 artifact predates the following history fixes.
+
 - Start a fresh quota activity series when a connection changes. Retain prior
   observations outside the replacement account's heatmap, and preserve the
   current series on normal relaunch and Muse collection Stop/Start.

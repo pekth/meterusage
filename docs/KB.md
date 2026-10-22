@@ -45,7 +45,11 @@ Release documentation refresh: 2026-10-22 for build 75.
 
 ## Repository state
 
-- Default branch: `main`.
+- Default branch: `main`. The Electron integration merged through PR #76 as
+  `0d514dd`, with 855 TypeScript tests, typecheck/build, Swift build and 410
+  tests, passing hosted CI and independent source review. The published beta.6
+  remains the earlier artifact; these checks do not prove its native updater
+  installation or the isolated Swift cutover.
 - Swift baseline revision: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. The Electron candidate is the accompanying migration change; native acceptance remains open.
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 
