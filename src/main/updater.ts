@@ -10,19 +10,41 @@ import { runCommand, type Command } from "./providers/transport";
 export interface Release { version: string; tag: string; asset: { url: string; digest: string } }
 export type InstallState = "idle" | "downloading" | "installing" | "failed";
 export const releaseEndpoint = "https://api.github.com/repos/pekth/meterusage/releases/latest";
+/** Beta builds read the release list: GitHub's "latest" never includes prereleases. */
+export const releasesEndpoint = "https://api.github.com/repos/pekth/meterusage/releases?per_page=20";
+const versionPattern = /^v?(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/i;
+export const isPrerelease = (version: string) => /-beta\.\d+$/i.test(version);
+/** Semantic order for x.y.z and x.y.z-beta.n; a final release outranks its betas. */
 export function newer(candidate: string, current: string) {
-  const parts = (v: string) => v.replace(/^v/i, "").split(".").map(s => Number(s.match(/^\d+/)?.[0] ?? 0));
-  const a = parts(candidate), b = parts(current);
-  for (let i = 0; i < Math.max(a.length, b.length); i++) if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0);
+  const parse = (v: string) => { const m = v.trim().match(versionPattern); return m ? [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? Infinity : Number(m[4])] : undefined; };
+  const a = parse(candidate), b = parse(current);
+  if (!a || !b) return false;
+  for (let i = 0; i < 4; i++) if (a[i] !== b[i]) return a[i] > b[i];
   return false;
 }
+type RawRelease = { tag_name?: unknown; draft?: unknown; assets?: { name?: unknown; browser_download_url?: unknown; digest?: unknown }[] };
+const releaseShape = { tag_name: true, draft: true, assets: { '*': { name: true, browser_download_url: true, digest: true } } } as const;
+function releaseFrom(data: RawRelease): Release {
+  if (typeof data.tag_name !== "string" || !versionPattern.test(data.tag_name) || data.draft === true) throw new Error("Invalid release");
+  const version = data.tag_name.replace(/^v/i, "");
+  // Stable Swift assets are MeterUsage-<v>.zip; Electron betas add -mac-arm64.
+  for (const expected of [`MeterUsage-${version}.zip`, `MeterUsage-${version}-mac-arm64.zip`]) {
+    const asset = data.assets?.find(a => a.name === expected), url = `https://github.com/pekth/meterusage/releases/download/${data.tag_name}/${expected}`;
+    if (asset && asset.browser_download_url === url && typeof asset.digest === "string" && /^sha256:[a-f\d]{64}$/i.test(asset.digest)) return { version, tag: data.tag_name, asset: { url, digest: asset.digest.toLowerCase() } };
+  }
+  throw new Error("Invalid update asset");
+}
 export function parseRelease(raw: string): Release {
-  const data = selectJSON(raw, { tag_name: true, assets: { '*': { name: true, browser_download_url: true, digest: true } } }) as { tag_name?: unknown; assets?: { name?: unknown; browser_download_url?: unknown; digest?: unknown }[] };
-  if (typeof data.tag_name !== "string" || !/^v?\d+\.\d+\.\d+$/i.test(data.tag_name)) throw new Error("Invalid release");
-  const version = data.tag_name.replace(/^v/i, ""), expected = `MeterUsage-${version}.zip`, asset = data.assets?.find(a => a.name === expected);
-  const url = `https://github.com/pekth/meterusage/releases/download/${data.tag_name}/${expected}`;
-  if (!asset || asset.browser_download_url !== url || typeof asset.digest !== "string" || !/^sha256:[a-f\d]{64}$/i.test(asset.digest)) throw new Error("Invalid update asset");
-  return { version, tag: data.tag_name, asset: { url, digest: asset.digest.toLowerCase() } };
+  return releaseFrom(selectJSON(raw, releaseShape) as RawRelease);
+}
+/** The newest valid, non-draft release in a GitHub release list. */
+export function parseReleases(raw: string): Release {
+  const list = selectJSON(raw, { '*': releaseShape }) as RawRelease[] | undefined;
+  if (!Array.isArray(list)) throw new Error("Invalid release list");
+  let best: Release | undefined;
+  for (const data of list) { try { const release = releaseFrom(data); if (!best || newer(release.version, best.version)) best = release; } catch { /* Skip drafts and unusable releases. */ } }
+  if (!best) throw new Error("No usable release");
+  return best;
 }
 export function verifyDigest(data: Uint8Array, expected: string) {
   if (!/^sha256:[a-f\d]{64}$/i.test(expected) || createHash("sha256").update(data).digest("hex") !== expected.slice(7).toLowerCase()) throw new Error("Invalid update digest");
@@ -92,7 +114,9 @@ export class Updater {
     const pending: Promise<void> = (async () => {
       await this.prefs.set("updateLastCheckDate", now);
       if (generation !== this.generation || this.prefs.values.updateCheckEnabled !== true) return;
-      const release = parseRelease((await this.download(releaseEndpoint, 1048576, controller.signal)).toString("utf8"));
+      const beta = isPrerelease(this.currentVersion);
+      const raw = (await this.download(beta ? releasesEndpoint : releaseEndpoint, 1048576, controller.signal)).toString("utf8");
+      const release = beta ? parseReleases(raw) : parseRelease(raw);
       if (generation !== this.generation || this.prefs.values.updateCheckEnabled !== true || !newer(release.version, this.currentVersion)) return;
       this.available = release;
       if (this.prefs.values.updateAnnouncedVersion !== release.version) { await this.prefs.set("updateAnnouncedVersion", release.version); if (generation !== this.generation || this.prefs.values.updateCheckEnabled !== true) return; this.announce(release); }

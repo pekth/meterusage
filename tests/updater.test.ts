@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
-import { Updater, parseRelease, newer, verifyDigest, stageUpdate, releaseEndpoint } from "../src/main/updater";
+import { Updater, parseRelease, parseReleases, newer, verifyDigest, stageUpdate, releaseEndpoint, releasesEndpoint } from "../src/main/updater";
 import { launchConfiguration } from "../src/main/launch";
 import { Preferences } from "../src/main/preferences";
 const bytes = Buffer.from("synthetic update bytes"), digest = "sha256:" + createHash("sha256").update(bytes).digest("hex");
@@ -85,4 +85,31 @@ describe("verified explicit updates", () => {
     respond(bytes); await rejected; expect(staged).toBe(false); expect(updater.installState).toBe("failed");
   });
 
+describe("beta update channel", () => {
+  const beta = (tag: string, extra: Record<string, unknown> = {}) => { const v = tag.slice(1); return { tag_name: tag, draft: false, assets: [{ name: `MeterUsage-${v}-mac-arm64.zip`, browser_download_url: `https://github.com/pekth/meterusage/releases/download/${tag}/MeterUsage-${v}-mac-arm64.zip`, digest }], ...extra }; };
+  it("orders betas below their final release", () => {
+    expect(newer("0.3.0-beta.5", "0.3.0-beta.4")).toBe(true);
+    expect(newer("0.3.0-beta.10", "0.3.0-beta.9")).toBe(true);
+    expect(newer("0.3.0", "0.3.0-beta.9")).toBe(true);
+    expect(newer("0.3.0-beta.1", "0.3.0")).toBe(false);
+    expect(newer("0.2.41", "0.3.0-beta.4")).toBe(false);
+    expect(newer("0.3.0-beta.4", "0.3.0-beta.4")).toBe(false);
+  });
+  it("picks the newest non-draft release with a verified beta asset", () => {
+    const list = JSON.stringify([beta("v0.3.0-beta.6", { draft: true }), beta("v0.3.0-beta.5"), beta("v0.3.0-beta.4"), JSON.parse(payload())]);
+    const release = parseReleases(list);
+    expect(release.version).toBe("0.3.0-beta.5");
+    expect(release.asset.url).toBe("https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.5/MeterUsage-0.3.0-beta.5-mac-arm64.zip");
+  });
+  it("checks the release list from a beta and announces a newer beta once", async () => {
+    const root = temp(), prefs = await Preferences.load({ demo: false, candidate: false, home: root, data: root, env: {} }, async (_binary, args) => { if (args[0] !== "write") throw new Error("absent fixture defaults"); return ""; }, "fixture.meterusage");
+    await prefs.set("updateCheckEnabled", true);
+    let announced = 0, url = "";
+    const updater = new Updater(prefs, "0.3.0-beta.4", () => {}, async u => { url = u; return Buffer.from(JSON.stringify([beta("v0.3.0-beta.5")])); }, () => announced++);
+    await updater.checkIfDue(Date.now());
+    expect(url).toBe(releasesEndpoint);
+    expect(updater.visible?.version).toBe("0.3.0-beta.5");
+    expect(announced).toBe(1);
+  });
+});
 });

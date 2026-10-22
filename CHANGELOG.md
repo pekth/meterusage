@@ -6,6 +6,17 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0-beta.5] - 2026-10-22
+
+### Beta updates
+
+- Beta builds now check GitHub's release list for newer betas, since the
+  latest-release endpoint never returns prereleases. They accept
+  `-mac-arm64` beta assets and order `x.y.z-beta.N` versions, with a final
+  release ranked above its betas. The existing digest, bundle-identity and
+  signature checks still gate installation. Beta 4 and earlier need one
+  manual install.
+
 ## [0.3.0-beta.4] - 2026-10-22
 
 ### Quota activity heatmaps

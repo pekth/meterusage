@@ -1,6 +1,6 @@
 # Project knowledge
 
-Release documentation refresh: 2026-10-22 for build 73.
+Release documentation refresh: 2026-10-22 for build 74.
 
 ## Edition documentation
 
@@ -10,7 +10,7 @@ Release documentation refresh: 2026-10-22 for build 73.
   native acceptance, deliberate cutover and retrievable archive checks pass.
   Source retirement is pending. Electron-required Swift helpers and assets stay.
 - [Swift 0.2.41](swift/README.md) is the published default install route.
-  [Electron 0.3.0-beta.4, build 73](BETA.md) is an opt-in public prerelease,
+  [Electron 0.3.0-beta.5, build 74](BETA.md) is an opt-in public prerelease,
   signed and notarized for Apple silicon. Native acceptance remains incomplete.
   Source manifests and its cosmetic Settings footer still say 0.2.41; packaging
   explicitly sets the beta version. Stable updaters do not offer the beta.
@@ -20,10 +20,10 @@ Release documentation refresh: 2026-10-22 for build 73.
 - [Versions](VERSIONS.md) records the accepted one-app development direction
   and staged retirement. It makes no layout, version, CI, identity or cutover
   change. ADR 0010's acceptance and compatibility requirements remain in force.
-- Both updaters use GitHub's latest-release endpoint and the same versioned ZIP
-  name. Electron rejects prerelease tags. Separate beta/edition update channels
-  require code and asset-routing changes; see the
-  [update-channel prerequisites](VERSIONS.md#update-channel-prerequisites).
+- Swift and stable Electron updaters use GitHub's latest-release endpoint.
+  Electron beta builds (version `-beta.N`) read the release list and accept
+  `-mac-arm64` assets, so betas update in-app from beta 5; see
+  [update channels](VERSIONS.md#update-channels).
 - Candidate gaps include Settings account overview, seven-day sparkline, reset
   timing display, update feedback and tray refresh. Smaller display omissions
   remain distinct. Current source adds AG Desktop/OpenCode setup, restores Bun
