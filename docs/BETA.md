@@ -77,6 +77,11 @@ See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs
 
 ## Known limits
 
+- Beta.6 can retain the previous account's quota activity after disconnecting
+  and connecting a replacement account. Main isolates that series and preserves
+  Muse history across collection Stop/Start. Those source fixes have not been
+  packaged in this beta.
+
 - Settings now shows the running bundle version. Source previews omit it when
   packaging metadata is absent.
 - The tray renderer preloads after completed onboarding. Native first-click

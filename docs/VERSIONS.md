@@ -7,10 +7,13 @@ Swift is retained for critical maintenance and rollback.
 | Version | Source | Download |
 | --- | --- | --- |
 | Electron beta | [v0.3.0-beta.6](https://github.com/pekth/meterusage/tree/v0.3.0-beta.6) | [Manual signed/notarized Apple silicon ZIP](BETA.md) |
-| Swift stable | Default branch and [v0.2.41](https://github.com/pekth/meterusage/tree/v0.2.41) | [Swift guide](swift/README.md) |
+| Swift stable | Retained `Sources/` and [v0.2.41](https://github.com/pekth/meterusage/tree/v0.2.41) | [Swift guide](swift/README.md) |
 
-The beta source is published through its tag while the Electron PR stack stays
-unmerged. The tag includes current documentation and build 61 synthetic screenshots;
+The Electron source stack is on main through [PR #76](https://github.com/pekth/meterusage/pull/76),
+merge `0d514dd`. That integration preserves the newer Swift reporting source and
+adds account-isolated quota activity and Muse Stop/Start history preservation.
+These later fixes are not included in beta.6. The beta tag includes release
+documentation and build 61 synthetic screenshots;
 its executable inputs match build source
 `023b753cfa1c248774efecb28a1770ee8de0950b`. The beta's package version was set
 at packaging time; its source manifest retains 0.2.41. Settings shows the
