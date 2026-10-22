@@ -12,7 +12,7 @@ import { burnBreakdown } from "../domain/telemetry";
 import { pricingSnapshot } from "../domain/pricing";
 const accents: Record<string, string> = { blue: "#0a84ff", violet: "#a78bfa", teal: "#2dd4bf", amber: "#fbbf24", rose: "#fb7185", graphite: "#aeaeb2" };
 const colours: Record<Provider, string> = { codex: "var(--accent)", claude: "var(--claude)", antigravity: "var(--antigravity)", grok: "var(--grok)", openCodeGo: "var(--opencode)", openRouter: "var(--openrouter)", cursor: "#1ab3e6", copilot: "#6699ff", gemini: "#4d80f2", muse: "#588cf5" };
-const logos: Partial<Record<Provider, string>> = { codex: "codex-logo.png", grok: "grok-logo.png", antigravity: "antigravity-logo.png", openCodeGo: "opencode-logo.png" };
+const logos: Partial<Record<Provider, string>> = { codex: "codex-logo.png", grok: "grok-logo.png", antigravity: "antigravity-logo.png", openCodeGo: "opencode-logo.png", muse: "muse-code-logo.svg" };
 const n = (x: number) => new Intl.NumberFormat("en", { notation: x >= 1000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(x);
 const money = (x: number) => new Intl.NumberFormat("en", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(x);
 const extract = <T,>(s?: Loaded<T>) => s?.status === "value" ? s.value : undefined;
@@ -23,7 +23,6 @@ function Mark({ slot, state }: { slot: Slot; state: ViewState }) {
   const status = extract(state.snapshot.statuses[slot.provider])?.severity;
   const tint = status === undefined || status === "operational" ? colours[slot.provider] : status === "degraded" ? "var(--warn)" : status === "unknown" ? "var(--muted)" : "var(--alert)";
   if (logos[slot.provider]) return <span aria-hidden="true" className="mark" data-provider={slot.provider} style={{ background: tint, maskImage: `url(./${logos[slot.provider]})`, WebkitMaskImage: `url(./${logos[slot.provider]})` }} />;
-  if (slot.provider === "muse") return <svg aria-hidden="true" className="mark" viewBox="0 0 24 24" style={{ color: tint }}><path d="M3 20V4l9 11 9-11v16" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" /></svg>;
   if (slot.provider === "claude") return <svg aria-hidden="true" className="mark" viewBox="0 0 1 1" style={{ color: tint }}><defs><mask id={`eyes-${id}`}><rect width="1" height="1" fill="white" /><rect x=".27" y=".28" width=".15" height=".20" fill="black" /><rect x=".58" y=".28" width=".15" height=".20" fill="black" /></mask></defs><g fill="currentColor" mask={`url(#eyes-${id})`}><rect x=".08" y=".10" width=".84" height=".60" rx=".16" />{[.16, .35, .54, .73].map((x, i) => <rect key={x} x={x} y=".66" width=".11" height={i === 0 || i === 3 ? .22 : .24} />)}</g></svg>;
   return <span aria-hidden="true" className="mark" style={{ background: tint, maskImage: `url(./${slot.provider}-symbol.png)`, WebkitMaskImage: `url(./${slot.provider}-symbol.png)` }} />;
 }
