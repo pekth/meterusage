@@ -1,13 +1,13 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.4, build 73** is an opt-in macOS beta. The ZIP supports
+MeterUsage **0.3.0-beta.5, build 74** is an opt-in macOS beta. The ZIP supports
 Apple silicon and macOS 13 or later. It is Developer ID signed, notarized and
 stapled. Swift `0.2.41` remains the stable release and updater download.
 
 ## Install
 
-1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.4/MeterUsage-0.3.0-beta.4-mac-arm64.zip)
-   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.4/SHA256SUMS).
+1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.5/MeterUsage-0.3.0-beta.5-mac-arm64.zip)
+   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.5/SHA256SUMS).
 2. Quit MeterUsage and keep a copy of your existing app and its saved data for
    rollback. The beta shares the app identity and data locations with Swift.
 3. Unzip the download, move `MeterUsage.app` to Applications, and open it.
@@ -15,8 +15,11 @@ stapled. Swift `0.2.41` remains the stable release and updater download.
    Selecting a method alone does not connect it. Use its connection button.
 
 No Node, pnpm, Swift or Xcode installation is needed to use this prebuilt beta.
-Do not run the two editions together against a normal profile. Updating to later
-betas is manual. `Scripts/make-app.sh` still prepares the stable Swift download.
+Do not run the two editions together against a normal profile. Beta 5 and later check GitHub
+hourly while **Check for updates** is on and offer newer betas or a newer
+stable release in the app, with a notification. **Install update** downloads the ZIP, verifies
+its GitHub SHA-256 digest, bundle identity and signature, then replaces the app
+and relaunches. Beta 4 and earlier cannot see betas; install beta 5 manually once. `Scripts/make-app.sh` still prepares the stable Swift download.
 
 To check the ZIP in its download directory:
 
@@ -27,7 +30,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-a86cc1eba95b0b7ce3badb294f1357c1800ce05c2d3160123cd12b82590c1ae1
+cc5cb4fdb573f37999685e263a574aa7df2d9a07b6ab7cb1d62deabde8afbf4f
 ```
 
 ## Provider coverage
@@ -69,8 +72,8 @@ a86cc1eba95b0b7ce3badb294f1357c1800ce05c2d3160123cd12b82590c1ae1
   preserved and newly pasted keys are not saved. OpenRouter keeps its existing
   balance and aggregate activity source. Read [API setup and limits](API_USAGE_BETA.md).
 
-See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/electron/README.md#source-choices),
-[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/PRIVACY.md).
+See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.5/docs/electron/README.md#source-choices),
+[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.5/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.5/docs/PRIVACY.md).
 
 ## Known limits
 
@@ -93,18 +96,18 @@ See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.
-Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.4/docs/REPORTING.md) before sending.
+Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.5/docs/REPORTING.md) before sending.
 Never include tokens, passwords or raw account files in an issue.
 
 ## Build and screenshot identity
 
 The signed artifact was built from source
-`3c56bd0d4ebf6d51996b9ebdc0a9b09f5570f182`. Release documentation is a documentation-only descendant; executable
+`321dd8a71474326ec29ce98c9d48d2e69d893933`. Release documentation is a documentation-only descendant; executable
 inputs are unchanged. Screenshots are from build 61 and do not show the Quota
 activity heatmap. Source manifests retain `0.2.41`; beta packaging explicitly
-set `0.3.0-beta.4`.
+set `0.3.0-beta.5`.
 
-Matching validation recorded 846 tests across 33 files on macOS, TypeScript
+Matching validation recorded 849 tests across 33 files on macOS, TypeScript
 checking and production bundling. Swift build and tests were not rerun for this
 beta. The installed build was observed recording quota activity for Claude,
 Codex, Antigravity and Grok. Native rendering of filled heatmaps

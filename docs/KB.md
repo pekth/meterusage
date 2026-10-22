@@ -2,13 +2,13 @@
 
 ## Public beta
 
-Electron **0.3.0-beta.4, build 73** is an opt-in Apple silicon prerelease.
+Electron **0.3.0-beta.5, build 74** is an opt-in Apple silicon prerelease.
 [Installation and limits](BETA.md) and [current screenshots](SCREENSHOTS.md)
 describe it. Swift 0.2.41 remains stable. The default branch retains Swift
 source; Electron source and its full documentation are published at
-[`v0.3.0-beta.4`](https://github.com/pekth/meterusage/tree/v0.3.0-beta.4).
-The source PR stack is unmerged. The beta is a manual download, not an updater
-cutover. New feature development targets Electron. Native acceptance is incomplete
+[`v0.3.0-beta.5`](https://github.com/pekth/meterusage/tree/v0.3.0-beta.5).
+The source PR stack is unmerged. The beta is installed manually once; from beta 5 it
+offers newer betas in-app. The stable updater does not offer betas. New feature development targets Electron. Native acceptance is incomplete
 and disclosed in the beta guide. Beta 4 adds per-provider Quota activity
 heatmaps built from each provider's own quota readings.
 
