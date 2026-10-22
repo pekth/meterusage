@@ -1,6 +1,6 @@
 # API billing snapshots
 
-Electron 0.3.0-beta.3, build 61 includes separate OpenAI API and Anthropic API
+Electron 0.3.0-beta.6, build 75 includes separate OpenAI API and Anthropic API
 billing cards. OpenRouter keeps its existing account
 balance, key limits and aggregate activity integration.
 

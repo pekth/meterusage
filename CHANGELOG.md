@@ -6,7 +6,19 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
+### Electron source integration
+
+- Start a fresh quota activity series when a connection changes. Retain prior
+  observations outside the replacement account's heatmap, and preserve the
+  current series on normal relaunch and Muse collection Stop/Start.
+
+- Preserve the TypeScript 7 upgrade, stale Claude CLI quota rejection and Grok
+  provider mark centering from the parallel Electron branches.
+- Run Electron typecheck, synthetic tests and production build in CI alongside
+  the retained Swift build and tests. Keep Swift's newer diagnostic reporting
+  source and document its separate reporting contract.
+
+### Legacy Swift source
 
 - Agents can prepare bounded bug drafts with `report draft`. `report submit`
   shows the exact text and private Linear destination in a native consent
@@ -26,17 +38,145 @@ follows [Semantic Versioning](https://semver.org/).
   Pending reports and receipts survive leaving and returning to Settings,
   preventing a second submission while the first is in flight.
 
+## [0.3.0-beta.6] - 2026-10-22
+
+### Beta update verification
+
+- Package the beta 5 executable source as version 0.3.0-beta.6, build 75,
+  to exercise discovery, download, verification, replacement and relaunch
+  through the installed beta updater. No provider or UI behavior changes.
+- Document the stable Swift updater asset contract, signature changes and
+  the isolated upgrade and rollback checks still required before cutover.
+
+## [0.3.0-beta.5] - 2026-10-22
+
+### Beta updates
+
+- Beta builds now check GitHub's release list for newer betas, since the
+  latest-release endpoint never returns prereleases. They accept
+  `-mac-arm64` beta assets and order `x.y.z-beta.N` versions, with a final
+  release ranked above its betas. The existing digest, bundle-identity and
+  signature checks still gate installation. Beta 4 and earlier need one
+  manual install.
+
+## [0.3.0-beta.4] - 2026-10-22
+
+### Quota activity heatmaps
+
+- Show a "Quota activity" heatmap on every provider card with a quota reading.
+  Each provider keeps its own series of daily percentage-point rises in its
+  weekly (or longest) window, so desktop apps, the web and other devices count.
+  The current window's existing usage is spread over its elapsed days and
+  marked estimated; later rises land on the day observed. Earlier weeks are
+  not backfilled. Codex keeps account token history when available.
+- Quota activity never infers tokens. Tooltips add measured Claude Code or
+  Codex tokens from this Mac when that day has them.
+
+### Claude Desktop connection
+
+- Abort failed provider HTTP requests before awaiting response cleanup, including
+  size-limit failures. Cleanup rejection preserves the original provider error;
+  successful requests are not aborted. Native closure remains unverified.
+
+- Route Claude Desktop bootstrap and organization allowance requests through an
+  isolated, nonpersistent Electron session after app readiness. Keep the explicit
+  cookie, request bounds, consent and identity checks. Other endpoints keep their
+  existing transport. Native cookie handling and live allowance remain unverified.
+
+- Report explicit provider browser-verification challenges during Connect and
+  preserve the current source. A failed Claude Desktop method offers **Open
+  Claude usage** in normal Settings as a manual allowance fallback. Opening
+  the page does not connect MeterUsage or import allowance.
+
+- Read Keychain once per allowance attempt and reuse that password only in
+  attempt-local memory for fresh account and session checks. A one-time
+  Keychain approval no longer requires a second access during verification.
+  Keep cancellation, account binding and failed-Connect CLI preservation.
+  Synthetic regression proof does not establish live provider acceptance.
+- Replace OAuth cache selection with explicit Desktop web-session consent,
+  sandboxed read-only cookie selection and nested bootstrap account/membership
+  verification before UUID-bound allowance requests. Recheck account, organization
+  and session before publishing. Old consent requires reconnecting. Preserve
+  CLI selection on failed Connect and keep account quota separate from CLI history.
+  No chats, refresh tokens, credential persistence or Desktop writes are used.
+  Native compatibility and live allowance remain unverified.
+
+### Added
+
+- Add opt-in Muse Code subscription allowance through the official CLI's
+  read-only `usage/read` protocol. Show session and weekly windows with the
+  original observation time. Do not send prompts or read CLI credentials.
+  Honor saved opt-in in headless reports, cancel reads when stopped, retain
+  observation time in JSON and keep allowance out of the shared archive for
+  compatibility with older app versions on rollback.
+  Muse.ai Desktop import and native/live validation remain pending.
+- Show Grok Bot Desktop quota burn in percentage points per hour from recent
+  same-account readings. Collect for at least a minute, discard old/reset
+  observations and show an estimated run-out only when measured.
+- Add separate OpenAI API and Anthropic API billing cards backed by projected
+  owner-only snapshots. A bundled one-run helper uses existing environment-only
+  organization Admin keys. Keep API billing distinct from subscription quota
+  and estimates; show report periods, capture age and stale state. Live billing
+  acceptance remains pending.
+- Add an explicit Antigravity Desktop connection in Electron setup and Settings.
+  Read account allowance from one running, signed-in desktop language server
+  without requiring `agy`. Keep CLI selection explicit and local activity
+  separate. Synthetic fixtures cover identity changes, unavailable quota,
+  transport limits and cancellation. Native and live-provider acceptance remain
+  pending; the published beta is unchanged.
+
+### Changed
+
+- Move API setup to its own Settings sidebar page. OpenAI and Anthropic API
+  setup now accepts a one-time Admin key and fetches billing directly, with no
+  Terminal steps. Existing legacy Admin keys can be reused through a read-only
+  Keychain action; newly pasted keys are not saved. Account connections and
+  onboarding stay separate.
+
+- Connect new Grok Bot accounts through **Grok Bot Desktop (Beta)** after
+  explicit consent. Read only the active account-bound encrypted access token and team
+  through a fixed Keychain item; use a bounded read-only allowance request with
+  MeterUsage's own headers. Reject identity/team/store changes and cancelled
+  results. Keep saved Cursor connections compatible and CLI selection explicit.
+  No token refresh, app writes or separate xAI sign-in is added. Native store,
+  Keychain and endpoint compatibility remain unverified; the published build
+  is unchanged.
+- Shorten heatmap hover/focus totals to values such as `42.4B tokens` and
+  `1.6K sessions` across local and account history. Keep exact grouped counts
+  in tooltips and accessibility labels. Summary counts compact from 1,000.
+
 ### Fixed
 
-- `Scripts/make-app.sh` now downloads and verifies the prebuilt app by default,
-  so installation from a Git checkout does not need Swift. Source builds require
-  `--build-from-source`. Failed downloads or verification never trigger compilation.
-  Copy and verify the replacement in staging so a failed copy or signature check
-  preserves the existing generated app.
-- Make the prebuilt app download the default installation path. Clarify that
-  Swift and Xcode Command Line Tools are needed only to build from source,
-  link directly to the current Apple silicon app ZIP, and keep build commands
-  in the contributor guide instead of the README.
+- Reload saved provider order and managed accounts when macOS abbreviates
+  defaults data output. Read complete stored bytes and retain the existing
+  preference format across relaunches and app updates.
+- Read known Claude plan labels from the available tier fields without showing
+  internal identifiers or guessing a plan from an unrelated substring.
+- Accept duplicate Claude Desktop cache entries when their eligible access
+  tokens are identical. Distinct matching tokens still require a clear login;
+  an ambiguous-token failure preserves the selected CLI source.
+- Preload the tray usage window hidden after completed onboarding, before
+  connection recovery or provider collection. The first click reuses the loaded
+  renderer instead of starting its initial load.
+- Read Grok Bot's account-bound encrypted legacy v10 access values and correct
+  its fixed Keychain account to Grok Bot Key. Preserve scope, expiry, identity,
+  cancellation and store checks; reject plaintext and unsupported encryption.
+- Give 30-day provider activity the same 26-column, seven-row heatmap layout.
+  Keep older unavailable dates distinct from measured zero-token days.
+- Add **Use local OpenCode** setup for key-free Go session history and restore
+  executable Bun-install discovery for the read-only SQL fallback.
+- Name saved legacy Grok connections as Cursor sources while new connections
+  use Grok Bot Desktop.
+
+- Group Antigravity Desktop limits under compact model headings and shorten
+  remaining-allowance labels to match the CLI presentation. Preserve every
+  reported bucket, its used percentage and reset. Keep account allowance
+  separate from CLI activity, and describe unavailable saved connections
+  without claiming a live connection.
+- Exclude Apple's system `CursorUIViewService` from the Cursor editor process
+  guard. Continue rejecting active Cursor processes and unsafe database state.
+- Show the running app bundle's version in Settings instead of the legacy
+  hardcoded version. Source previews omit the version when none is supplied.
 
 ## [0.3.0-beta.3] - 2026-10-17
 
@@ -112,14 +252,304 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [0.3.0-beta.1] - 2026-10-16
 
+### Release
+
+- Publish signed and notarized Electron build 54 as an opt-in Apple silicon beta. Keep Swift 0.2.41
+  as the stable download and preserve its updater and installer contracts.
+- Replace old product screenshots with current synthetic Codex, Claude, notch
+  and Settings captures. Refresh download, source-choice and beta-limit docs.
+- Disclose the cosmetic 0.2.41 Settings footer and incomplete native acceptance.
+  The signed build is unchanged; Antigravity/Grok desktop login is follow-up work.
+
+
 ### Added
 
-- Publish signed/notarized Electron build 54 as an opt-in Apple silicon beta.
-  Keep Swift 0.2.41 stable; beta downloads are manual.
-- Replace old product screenshots with current synthetic Codex, Claude, side
-  notch and Settings captures. Document setup, artifact verification and limits.
-- Keep the known cosmetic 0.2.41 Settings footer and incomplete native acceptance
-  visible in the beta guide. Antigravity/Grok desktop login is follow-up work.
+- Label the Grok integration **Beta** in usage cards, setup and provider settings.
+
+- Restore **Send report** in Electron Diagnostics with sanitized status summaries,
+  duplicate-safe retries and confirmed private support references.
+
+### Fixed
+
+- Limit diagnostic report attempts to once every 10 minutes across app relaunches,
+  with a visible retry time and no transmission if the cooldown cannot be saved.
+
+- Fit Electron Settings to its active page and expanded controls within the display
+  work area. Remove the fixed-height blank space and oversized heatmap readout
+  reservation. Exact daily counts wrap below the grid on hover or focus.
+- Match the compact side-notch rail: provider marks inside 22 px usage rings,
+  small percentages below and a neutral 36 px body. Settings remains in each
+  expanded card footer; remove the duplicate strip gear and its reserved space.
+  Keep detail cards on hover and preserve the fixed top and strip anchor.
+
+- Remove the bright focus outline around the Electron usage and Settings
+  panels. Keep keyboard scrolling and focus indicators on individual controls.
+
+### Changed
+
+- Make buttons smaller throughout the Electron menu, Settings and side-notch
+  cards. Keep Settings in each card footer and remove the duplicate strip gear.
+- Align heatmap menu labels with a fixed selection-checkmark column.
+
+- Keep Service status at the top of the Electron menu. Switch between provider
+  and account tabs instead of stacking every usage card. Preserve saved order
+  and keyboard navigation.
+- Compact menu and side-notch usage cards with tighter spacing and shorter
+  sparklines. Keep quota, reset actions and heatmaps visible. Extra activity
+  statistics, period comparisons and burn breakdowns expand on demand; shared
+  cards retain their complete data.
+
+- Organize Electron Settings into a compact category sidebar with provider
+  summaries and setup details under Configure. Keep existing settings, account
+  controls and explicit connection actions. Show the current source, collection
+  state and reading availability separately.
+- Keep service health above usage cards. Use exact grouped heatmap totals on
+  hover and focus, with one Tab entry per heatmap and arrow-key navigation.
+  Keep control focus visible without highlighting the panel edge.
+
+- Make Electron the sole active feature-development target in contributor and
+  version guidance. Freeze the legacy Swift app for new features and record
+  staged retirement in ADR 0024. Keep the published Swift download, rollback
+  source and Electron-required Swift helpers until the applicable checks pass.
+
+- Split edition setup into Swift and Electron guides with root download routing
+  and compatibility links. Document source/build/release/installation boundaries,
+  candidate parity gaps and isolated QA. Record a proposed same-repository
+  strategy without changing identity, versions, layout, CI or release state.
+  Explain the updater changes required before beta or edition-specific assets.
+
+- Keep summary token metrics compact with totals such as `12.5K`, `1.2M` and
+  `2.4B`. Heatmap hover, focus, tooltips and accessible labels show exact counts.
+
+- Unify provider heatmaps with compact headings, a shared intensity legend and
+  exact hover or keyboard readouts, tooltips and accessible labels.
+  Unreported account days use quiet solid
+  outlines, distinct from reported zeroes. Keep each source's time range and
+  token or session units.
+
+- Report fixed Claude Desktop Connect errors for Keychain access, account
+  configuration, active-organization cookie, cache decryption, missing or ambiguous
+  current token, allowance request, identity recheck and preference save in the
+  existing error banner through the renderer error filter. Messages contain no
+  account identifiers or token data. Source and synthetic tests only; native and
+  live acceptance remain open.
+
+- Narrow the Electron side notch strip from 44 to 36 px and its hover card from
+  250 to 220 px. Keep the share capture at 250 px and preserve whole-pixel
+  typography and the anchored strip edge.
+
+### Added
+
+- Choose a usage source during onboarding or in Settings: Codex browser sign-in
+  or CLI, Claude Desktop or Claude Code CLI, and Grok CLI. Apply CLI selection
+  explicitly after disconnecting only the MeterUsage account connection.
+
+- Show provider-reported account token activity in connected Codex main, notch
+  and shared cards through the existing managed ChatGPT helper. Daily dates and
+  exact counts remain separate from local usage. Missing history and unreported
+  days stay unavailable; reported zero remains zero. Native and live coverage
+  acceptance remain open.
+
+- Reorder provider groups in Electron Settings with drag handles, arrow keys or
+  move buttons. The saved order applies to usage cards, menu bar and side notch;
+  additional accounts stay with their provider. Failed saves keep the saved order.
+
+- Add a separate Claude cloud test profile for the existing candidate UI.
+  It starts without consent, reads only connected account allowance, and keeps
+  preferences and Electron state separate from installed-app and Codex profiles.
+  Native Keychain, Desktop compatibility and live allowance remain unverified.
+- Show **Use reset** beside eligible Codex menu credits for the connected
+  account, including the isolated Codex test profile. Native confirmation
+  defaults to Cancel. Redemption rechecks availability and the same connection
+  profile before using the official helper, then refreshes quota. Synthetic
+  tests consume no real credits; native and live redemption proof remain open.
+
+- Add Small, Medium and Large panel sizes in candidate Settings. The choice
+  persists and applies to main-panel and Settings text and controls. Main-panel
+  width scales with the choice; its height fits content up to the display edge.
+  Small uses 80% scale and a 336-point main-panel width before display clamping.
+  Ctrl/Cmd plus and minus select these sizes; Ctrl/Cmd 0 restores Medium.
+  These shortcuts keep the content scale, saved choice and main-panel fit together.
+
+- Add an isolated Codex cloud test profile for the existing candidate UI. It
+  starts disconnected, reads account allowance after browser sign-in, and
+  excludes demo data, local activity and other providers. Candidate profiles
+  cannot check or install updates, change login items or send notifications.
+  Profile validation rejects nested symlinks before app or helper writes.
+
+- Add candidate account setup for Codex browser sign-in and opt-in Claude
+  Desktop allowance, with automatic refresh, account isolation and disconnect.
+  Grok consumer connection remains unavailable. Native and provider acceptance
+  are pending; the published Swift app is unchanged.
+
+- Add a macOS TypeScript/Electron/React migration candidate and headless
+  schema-1 JSON CLI, with synthetic provider, account, history, pacing and IPC
+  tests. Use pnpm, Vite+, Tailwind, Vitest and electron-builder. Retain Swift as
+  the behavior oracle until native acceptance passes. No Electron release or
+  installed-app replacement is included.
+
+### Changed
+
+- Compact candidate Settings onboarding and repeated rows. Explain demo account
+  restrictions before disabled connections, align provider controls, and stack
+  labelled controls on narrow windows. Keep action failures visible in Settings
+  and wrap long account, quota and status text.
+- Compact Service status and the three-metric local activity summary. Separate
+  recorded activity from account/local totals, retain dated quota warnings, and
+  keep controls out of static shared cards. Live heatmaps retain their exact
+  hover/focus readout; exports retain data without the unused readout space.
+- Use the existing brighter dark secondary tone and 100 ms pointer color
+  feedback across candidate Usage and Settings. Press and keyboard focus stay
+  immediate. Existing sizes, notch geometry and data/action behavior remain.
+  Renderer fixtures do not establish browser or native visual acceptance.
+
+- Brighten secondary labels in the candidate notch card, separate telemetry
+  with a border and size-specific padding, and add 100 ms color feedback on
+  enabled control hover with a fine pointer. Press and keyboard focus stay
+  immediate; reduced motion disables transitions. Card opening, provider
+  switching, the 450 ms close delay and integer text sizes are unchanged.
+
+- Require an explicit consent callback for Claude Desktop connection. Omitting
+  it denies access before the Keychain helper or allowance request runs.
+- Show Codex public service status in the isolated live Codex test profile.
+  The Service status panel, notch card, tray tooltip and copied diagnostics mark
+  retained readings as stale or last known with their age and refresh failure. Public-feed errors use
+  service-status wording while retaining their retry behavior. Requests use no
+  account credentials and add no other provider source.
+
+- Move candidate onboarding into Settings. First-time setup reuses account
+  connections and allows Done without signing in. Done saves completion before
+  returning to usage; a save failure keeps setup open. The main panel shows usage
+  without the welcome and account-setup card.
+
+- Group candidate Settings by task, show six accent color swatches, and label
+  provider collection separately from menu-bar and side-notch display.
+  Turning collection off retains the saved display preference.
+  Appearance sits below account connections, with visible size choices,
+  grouped rows and aligned provider controls. Settings content scales with the
+  size choice while its window frame stays fixed.
+
+- Label local activity as activity on this Mac, keep folder-based accounts
+  under advanced settings, and omit local CLI activity from separately
+  connected account cards. Record the new opt-in authentication boundary.
+
+- Record synthetic Claude and Codex source-scanner timings alongside the Swift
+  baseline. Counts and cache transitions pass; packaged-app performance, idle
+  RSS and native GUI acceptance remain open.
+- Verify the current Apple silicon Electron candidate with 128 macOS fixtures,
+  TypeScript checking, production bundles, extracted ZIP signature checks and
+  the native schema-1 demo CLI. The candidate is ad-hoc signed and unpublished;
+  native GUI acceptance and cutover remain open.
+- Replace the earlier React Native/Tauri Windows plan with the selected macOS
+  Electron direction. Windows implementation, installers, CI, testing and
+  release are paused until a test machine is available.
+- Correct privacy documentation for Codex token/model ledger reads, transient
+  project paths, existing Grok/OpenCode keys, managed accounts and hourly
+  update checks. Provider files and credentials stay in the main process.
+
+### Fixed
+
+- Keep Electron side-notch details open on hover and close them after the
+  existing 450 ms exit delay. Remove Pin detail card and Keep open controls;
+  legacy pin data no longer retains a card. The strip always shows usage rings
+  and percentages, with no design selector or dots option. Disable/hide clears
+  expanded state so re-enabling starts with the 44 px strip.
+- Replace side-notch CSS zoom with integer pixel text, controls and spacing.
+  Small uses an 11 px body and 10 px secondary text. Small, Medium and Large
+  keep the strip and card widths fixed. Flyout, Settings and shared cards keep
+  their existing rendering scales. Browser and native acceptance remain separate.
+
+- Match Codex Use reset buttons to compact footer controls in the Electron
+  candidate. Keep eligibility, account labels and Cancel-default confirmation.
+- Show exact heatmap counts and dates immediately on hover or keyboard focus.
+  Weekly and cumulative views name their scope. Count-only data does not claim
+  measured token totals. The readout reserves space inside the scrolling card.
+- Recover missed side-notch pointer exits through a cursor check limited to an
+  open interaction, then use the existing 450 ms fold delay. Keep the provider
+  strip anchor, drag and native share/reset guards.
+
+- Abort confirmed Codex resets when their source is replaced or the coordinator
+  stops. Replacement during the fresh eligibility check now prevents consume
+  dispatch, including after Clear local scan cache. Cancellation cannot undo a
+  request already sent to the provider.
+
+- Handle opening an already-running candidate without an uncaught startup
+  popup. Validate Electron's singleton metadata before requesting its lock,
+  retain all other symlink checks, and reveal the existing panel after startup.
+  Invalid profiles exit with a fixed error; activation cannot reopen a panel
+  during Quit.
+
+- Stop display updates when Quit begins so a late usage refresh cannot reopen
+  the side notch or restart update checks during shutdown.
+
+- Launch Codex account helpers with the documented stdio transport. Keep
+  interpreter search paths available without inheriting credential variables.
+- Keep provider display controls available for active additional accounts when
+  primary collection is off, and isolate connection-test helper discovery.
+
+- Bound browser-demo notch cards and strips to the viewport height. Keep
+  provider rings at full width while the strip scrolls.
+- Hide scrollbar indicators throughout the candidate while retaining scrolling.
+- Ignore display and theme publications after the candidate tray is destroyed.
+- Retain each window's document ID before destruction so closing a candidate
+  window does not access destroyed web contents or remove its replacement.
+
+- Reject malformed connection provider values before consent and target the
+  bundled Desktop Keychain helper explicitly at arm64/macOS 13.
+- Disable cancelled or disconnected account collection before cleanup, recover
+  unfinished sign-in profiles, and verify Claude identity after HTTP failures.
+  Preserve connection readers across cache clearing and headless reports.
+- Stop Claude credential rereads after disconnect, discard unverified account
+  allowance on collection timeout, and retry retained Codex cleanup from the
+  sign-in button before opening a new login.
+- Show general weekly Claude allowance, hide unsupported reset actions, clear
+  replaced-account alert suppression, and exclude remote usage from local totals.
+
+- Check repaired cache token fields directly in the synthetic regression test;
+  a raw substring check could also match an unrelated timestamp or opaque ID.
+
+- Rescan corrupt Claude cache entries with non-finite costs or unsupported
+  dates. Ignore unsupported optional provider timestamps before JSON output.
+- Use canonical temporary paths in candidate fixtures and demo commands.
+  Check the packaged executable's exact directory-entry spelling on both
+  case-sensitive and case-insensitive filesystems. Preserve symlink rejection.
+- Remove unknown daily-history fields before saving or publishing renderer
+  state, while preserving larger historic totals and account separation.
+- Keep readable sessions when a sibling disappears or cannot be opened.
+  Preserve Codex metadata/ledger fallbacks and propagate scan cancellation.
+- Scope the reset-button setting to side-notch details and context menus;
+  retain flyout redemption with the same availability and confirmation checks.
+- Restore 30-day rolling cost/token share bars and the existing adaptive
+  Claude, Antigravity, OpenCode Go and OpenRouter identity colours.
+- Validate optional archive metadata and restore only known fields. Reject
+  reset redemption unless the credit is reported available and unexpired,
+  including after the confirmation dialog.
+- Restore the primary Claude companion-file order and file modification time
+  fallback. Keep valid required quota when optional OpenRouter credits stall
+  or additional Codex model limits are malformed.
+- Show today's usage counts and reading age, restore textual tray outage/reset
+  summaries, and adapt the existing Grok mark tint to light and dark appearance.
+- Keep candidate service health visible when provider usage is hidden, with
+  buttons for the existing public status pages. Restore notch ambient ETA
+  from raw window pace and hide it when pacing is off.
+- Invalidate live readings and reset confirmations when a candidate account
+  source changes. Reject late results and reset completion from the old source
+  while keeping dated slot archives and durable history.
+- Measure shared cards at full height. Reject captures above 8,192 pixels with
+  an explicit error instead of exporting a cropped image.
+- Hide candidate accounts whose configured directory disappears. Bind sharing
+  to the displayed card, hide forecasts when pacing is off, restore active-window
+  burn detail and bound tall notch cards to the display work area.
+
+- `Scripts/make-app.sh` now downloads and verifies the prebuilt app by default,
+  so installation from a Git checkout does not need Swift. Source builds require
+  `--build-from-source`. Failed downloads or verification never trigger compilation.
+  Copy and verify the replacement in staging so a failed copy or signature check
+  preserves the existing generated app.
+- Make the prebuilt app download the default installation path. Clarify that
+  Swift and Xcode Command Line Tools are needed only to build from source,
+  link directly to the current Apple silicon app ZIP, and keep build commands
+  in the contributor guide instead of the README.
 
 ## [0.2.41] - 2026-10-05
 

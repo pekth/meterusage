@@ -24,7 +24,7 @@ This guide describes the published Swift 0.2.41 app and retained Swift sources.
 The Swift app is frozen for new features. New feature work targets Electron;
 Swift receives only critical fixes and transition compatibility work. Keep this
 release as the stable download and rollback until the
-[retirement conditions](https://github.com/pekth/meterusage/blob/v0.3.0-beta.1/docs/adr/0024-electron-primary-swift-retirement.md#retirement-conditions)
+[retirement conditions](../adr/0024-electron-primary-swift-retirement.md#retirement-conditions)
 pass. Removing the old app source later will preserve its retrievable history.
 Current product images are in the [Electron beta gallery](../SCREENSHOTS.md).
 Old Swift product captures have been removed from the active documentation.
@@ -59,7 +59,7 @@ Swift guide retains its behavior and installation reference without old images.
 
 | Provider | Live Cloud Quota | Local Activity & Tokens | Reset Countdowns | 26-Week Heatmap | Source Mechanism |
 |---|:---:|:---:|:---:|:---:|---|
-| **Codex** | ✅ | ✅ | ✅ | ✅ | Local JSON-RPC via `codex app-server --stdio` |
+| **Codex** | ✅ | ✅ | ✅ | ✅ | Local JSON-RPC via `codex app-server --listen stdio://` |
 | **Antigravity** | ✅ | ✅ | ✅ |. | CLI `/usage` & local conversation SQLite |
 | **Claude Code** | Optional* | ✅ | ✅* | ✅ | Local session JSONL streams (`limits[]` file optional) |
 | **OpenRouter** | ✅ | ✅ | ✅ |. | Public account API & `/api/v1/activity` telemetry |

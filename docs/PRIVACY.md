@@ -1,69 +1,444 @@
-# Privacy & security design
+# Privacy and security design
 
-meterusage reads AI coding-assistant usage from your own machine. That means it runs in close proximity to live credentials, so its boundaries are deliberate and narrow. This document states exactly what it does and does not do, and how each claim is enforced rather than merely promised.
+MeterUsage reads quota and usage from existing local provider stores, provider
+CLIs and aggregate endpoints. It has no telemetry service, analytics or
+automatic crash-upload endpoint. Electron Diagnostics has an explicit optional
+**Send report** action described below. The Electron candidate adds opt-in account connections;
+Codex sign-in occurs in the provider browser page, not a MeterUsage password form. The optional API billing page accepts a one-time organization Admin key as
+described below. MeterUsage does not send prompts, code or tool payloads to a provider.
 
----
+The published Swift app retains the existing local/CLI boundaries. The
+TypeScript/Electron candidate adds the opt-in boundaries described below. The candidate has source/fixture checks, but native behavior and
+cutover acceptance remain pending. See [ADR 0010](adr/0010-macos-typescript-electron.md).
 
-### ⚡ TL;DR
+## Provider inputs and requests
 
-* 🛡️ **Zero Credential Exposure**: Never touches Claude or Codex authentication tokens, passwords, or macOS Keychain items. OpenRouter uses an existing environment variable/local key strictly for aggregate balances in memory.
-* 🚫 **No Prompts, Code, or Message Inspection**: Only reads numeric token tallies and event timestamps from local CLI stores. Message bodies, prompts, tool inputs/outputs, and workspace paths are never decoded or transmitted.
-* 🧼 **Sanitized at the Boundary**: User paths (`/Users/<username>/`), terminal IDs, hostnames, and emails are structurally dropped before reaching memory or the UI.
-* 🔒 **Strict Network Isolation**: No automatic diagnostic uploads or analytics. Connects to provider endpoints and public feeds; the support relay is contacted only when you request a report.
-* 🧪 **Enforced by Automated Tests**: Privacy guarantees are asserted by unit tests and locked with a pre-commit git hook that fails closed on credentials or paths.
+Claude Desktop GUI requests use a unique nonpersistent Electron session after
+app readiness, with caching disabled and ambient credentials omitted. Only the
+existing bootstrap and UUID-bound usage routes receive the explicitly selected
+session cookie. Other endpoints keep their existing transport. The same HTTP
+function serves Connect and subsequent allowance reads. Demo, JSON and Codex test
+paths do not use this native session. Native cookie behavior remains unverified.
 
----
+The shared provider HTTP transport aborts failed requests before awaiting body
+or reader cancellation. Cleanup rejection does not replace the original provider
+error. Successful requests are not aborted. Synthetic tests cover this ordering;
+they do not establish native connection closure.
 
-## What meterusage never does
+| Provider | Read or request | Retained data |
+| --- | --- | --- |
+| Codex | `codex app-server --listen stdio://` initializes the CLI and calls `account/rateLimits/read`. The CLI uses its own existing authentication. Local rollout headers, model context and cumulative token-ledger events are selected from `sessions/**/*.jsonl`. | Quota windows/groups, plan, balances, reset credits, timestamps, numeric tokens and model. Session paths become opaque IDs; workspace directories become basenames. |
+| Muse Code, unreleased Electron source | Opt-in `muse serve` subprocess using existing official CLI authentication. MSP initialization enables experimental methods, then `usage/read` reads the host's last observation. No model session, prompt, login or logout is started. MeterUsage does not open Muse credential files. | Session and weekly allowance percentages, reset timestamps, session duration, a restricted tier identifier and the provider observation timestamp. Missing or expired observations remain unavailable. No token ledger, cost or Muse.ai allowance is inferred. |
+| Claude | Local transcript usage fields under `projects/`, three tier keys from `.claude.json`, and optional companion quota JSON. | Numeric tokens/cost estimates, model, dates, project basename, plan tier and quota windows. Transcript message content and identifying tier metadata are skipped. |
+| OpenRouter | Existing `OPENROUTER_API_KEY` or supported local key file for `/api/v1/key` and `/api/v1/credits`. An existing management key, with configured API-key fallback, is used for `/api/v1/activity`. | Aggregate usage, balances, limits, dates, request counts and token totals. |
+| OpenCode Go | Existing `opencode-go` key in the local auth store for `https://opencode.ai/zen/go/v1/usage`. Read-only session SQL, with `opencode db --format json` fallback, selects tokens, cost, message counts, dates and directory. | Quota windows, numeric usage and project basename. No message bodies, prompts or tool arguments are selected. |
+| Grok | Existing OIDC key from `.grok/auth.json`, re-read for each billing refresh, sent to `cli-chat-proxy.grok.com/v1/billing?format=credits`. Session `summary.json` files supply dates and message counts. | Allowance, period/reset, plan and session/count metadata. No chat-history content is decoded. |
+| Antigravity | Existing agy container CLI `/usage`; numeric fields from conversation SQLite/protobuf stores, native first and container-volume fallback. Older stores use only history conversation ID/timestamp fields. | Model-group quota, numeric token totals, turn times and aggregate counts. Older history has unknown tokens. No prompt/tool payload or workspace text is decoded. |
+| Cursor, Copilot, Gemini | Existing local quota/usage JSON candidates and local presence checks. | Snapshot quota windows when present. These readers do not fetch cloud quota or provide a token ledger. Presence alone never becomes a zero-usage reading. |
 
-- **Never reads Codex or Claude credentials.** It does not open `~/.codex/auth.json`, `~/.claude/.credentials.json`, or any macOS Keychain item. OpenRouter is the explicit exception: when configured, it reads an existing `OPENROUTER_API_KEY` or supported local key file in memory only to call OpenRouter's aggregate usage and balance endpoints; it never displays, logs, or stores that key.
-- **Never asks you to paste a key.** There is no login screen, no token field, and no account connection flow.
-- **Never uses undocumented provider APIs.** It does not reuse another application's OAuth client id, and it does not call private endpoints.
-- **Never sends prompts or code anywhere.** Provider requests are limited to the documented Codex/OpenRouter usage calls and public status feeds. There is no automatic telemetry, analytics or crash upload. User-requested diagnostic reports use the support relay described below.
-- **Never reads your prompts or code.** It parses only usage and metadata fields from local transcripts. Message content is skipped, not stored.
+Muse Code allowance stays in memory and is not written to the shared quota
+archive. This preserves archive compatibility with older app versions. Its
+collection preference remains saved; allowance is read again after relaunch.
 
-## Where the numbers actually come from
+Codex and Claude additional accounts use separate user-selected configuration
+directories. Enabled existing directories get distinct sources; an absent or
+disabled directory is not polled. An additional Claude source never falls back
+to the primary account's plan or companion file. Codex subprocesses receive the
+selected `CODEX_HOME`; MeterUsage does not open Codex `auth.json`.
 
-| Source | Mechanism | Network? |
-|---|---|---|
-| Codex quota | Spawns `codex app-server --stdio` and makes a JSON-RPC `account/rateLimits/read` call with the CLI's experimental rate-limit detail capability enabled. That returns general/model-specific windows and earned reset-credit expiry details when the account provides them. This is a supported CLI surface; the subprocess authenticates itself using your existing `codex login`. meterusage never sees the token. | Yes, by the CLI subprocess |
-| Second Codex account | The same subprocess mechanism with `CODEX_HOME` pointed at the alternate account's config directory (`METERUSAGE_CODEX_ALT_HOME` or a stored default). The child authenticates itself from that home; meterusage still never opens any auth file, and only spawns the subprocess when that directory exists. | Yes, by the CLI subprocess |
-| OpenRouter quota | Calls the documented `/api/v1/key` and `/api/v1/credits` endpoints with an existing API key and retains only aggregate dollar usage, account balance, optional limit, and reset cadence. It does not send prompts or model requests. | Yes |
-| OpenRouter activity | Calls `https://openrouter.ai/api/v1/activity` with an OpenRouter Management Key (`OPENROUTER_MANAGEMENT_KEY` or `~/.cli-proxy-api/openrouter-management-key`) to fetch aggregate daily token volume (input, output, reasoning) over the last 30 days. | Yes |
-| Grok quota | Calls the billing endpoint the Grok CLI itself uses (`cli-chat-proxy.grok.com/v1/billing`). The OIDC bearer token is re-read from `~/.grok/auth.json` on every refresh — never cached from launch — and is sent only in the request Authorization header. Only the allowance percent, period type, and reset time are retained; no prompts or model requests are sent. | Yes |
-| Claude activity | Streams your own transcript files under `~/.claude/projects/`, summing token-usage fields. | No |
-| Second Claude account | The same local-only mechanisms pointed at the alternate account's config directory (`METERUSAGE_CLAUDE_ALT_CONFIG` or a stored default): transcripts under `<dir>/projects/`, the plan tier via the same narrow decode of `<dir>/.claude.json`, and a companion quota snapshot inside that directory. Nothing is read outside that directory for the second account — in particular, the primary account's `.claude.json` is never consulted for it, because a wrong-but-plausible plan badge is worse than none. | No |
-| Codex activity | Counts sessions per day from `~/.codex/sessions/**/*.jsonl`, reading only the start timestamp on each rollout's first event (falling back to the file's modification date). Session payloads are never opened. | No |
-| Claude quota *(optional)* | Read-only parse of a local usage snapshot if a companion already wrote one (`~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). Supports legacy `five_hour` / `seven_day` / `weekly` shapes and, when present, a `limits[]` array (session / weekly_all / weekly_scoped, including Fable). meterusage does **not** fetch Anthropic quota and does **not** read Claude credentials. Absent by default and never requested. | No |
-| Antigravity quota | Selects a healthy available Docker or Podman runtime, then runs `agy -p "/usage"` inside the same container image and volumes the user's agy wrapper uses. If no runtime is healthy, it may start only an existing `podman-machine-default` after inspecting that machine. It never creates a machine. It reads only each row's model group, window label, percent remaining, and reset timestamp. No prompt or model request is sent; the CLI's own backend quota refresh runs inside the container. No credential leaves the volume. | Yes, by the CLI |
-| Antigravity usage | Uses the same bounded runtime selection and existing-default-machine recovery as quota. It decodes only numeric token-usage fields and turn timestamps from agy's per-conversation SQLite stores under `~/.gemini/antigravity-cli/conversations/`, preferring the native location and falling back to the `antigravity-config` container volume when agy is containerised. Prompt text, tool payloads, workspace paths, and identifiers inside the stores are never decoded. Older installs without conversation stores fall back to `history.jsonl`, where only the `conversationId` and `timestamp` fields of each line are read and token totals remain unknown. | No |
-| Grok usage | Reads only date and message-count fields from `~/.grok/sessions/**/summary.json`. It does not open chat-history content or context-window signal files. | No |
-| OpenCode Go usage | Invokes the local `opencode db --format json` command with a read-only SQL query selecting numeric token/cost fields, message counts, and timestamps from `session`. It never selects message bodies, prompts, tool arguments, or paths. | No |
-| Codex service health | Public, unauthenticated Statuspage JSON at `status.openai.com`, filtered to Codex, CLI, and login components. | Yes |
-| Claude service health | Public, unauthenticated Statuspage JSON at `status.claude.com`, filtered to Claude/API components. | Yes |
+Primary Claude quota checks `Library/Application Support/MeterUsage/claude-usage.json`
+before its two `.claude` companion files. The selected file's modification time
+supplies capture age when the payload omits `updated_at`; polling does not make
+an old reading fresh.
 
-### Optional Claude quota file (including Fable)
+The published Swift app does not open Claude `.credentials.json` or macOS
+Keychain items. The Electron candidate still skips `.credentials.json`, but
+explicit Claude Desktop connection permits one fixed Keychain read and
+read-only account-selector and session-cookie access. See the opt-in connection section below.
+Grok, OpenCode Go and OpenRouter are explicit existing-key readers. Keys stay
+in main-process memory and request headers; they are not displayed, logged,
+written to cache or sent to the renderer. Antigravity and Codex CLIs manage
+their own authentication.
 
-Claude quota bars are a pure bonus. A companion tool must already have written a small JSON snapshot to disk; meterusage never prompts for it and never creates it. Implementation lives in `Sources/MeterUsage/Services/OptionalQuotaFileSource.swift`.
+Antigravity runtime recovery may start only an already-existing
+`podman-machine-default` after inspection. It does not create a machine or pull
+an image. A healthy runtime is not restarted to repair internet or auth errors.
+SQLite usage reads are read-only. Antigravity copies the database and WAL to an
+owned temporary directory for a coherent read, then removes that copy.
 
-Honest limits of that path:
+## Opt-in candidate account connections
 
-- **No direct Anthropic quota fetch.** meterusage does not call the usage API and does not open `~/.claude/.credentials.json` or Keychain items for this purpose (or any other).
-- **`limits[]` is parsed when present.** When the snapshot includes a non-empty `limits` array, those windows fully replace legacy 5-hour / 7-day / weekly keys so the same window is not drawn twice. A `weekly_scoped` entry with `scope.model.display_name == "Fable"` can render as a real Fable plan-allowance bar.
-- **Fable display depends on the writer.** The parser can handle `limits[]`, but the bar only appears if the local companion emits that shape. Current claudewatch JSON may still contain only legacy fields (`five_hour`, `seven_day`, `extra_usage`); until a writer includes `limits[]` (or an equivalent weekly breakdown), no Fable quota bar is shown.
-- **Credits stay orthogonal.** Extra-usage / credit balance is separate from plan windows and is not how Fable is labelled.
+The candidate offers connection buttons in setup and Settings. No terminal,
+folder picker or credential copying is part of the primary connection flow.
+Existing local account directories remain an advanced option.
 
-### Why there is no "sign in with Claude" button
+Setup also offers the existing CLI sources through an explicit **Use CLI**
+action. Selecting an option alone performs no account access. Applying CLI
+selection disconnects only MeterUsage-owned account state and waits for its
+logout cleanup before enabling local collection. Cleanup failure prevents the
+switch. Ordinary Disconnect never silently falls back to local data. The
+CLI transition adds no credential store, provider endpoint or authentication flow;
+CLI sources retain the input and coverage limits above. The separately consented
+Grok Bot Desktop Beta account option is described below.
 
-Anthropic publishes no supported API for Claude subscription quota. The only sanctioned channel is Claude Code's own statusline. A third-party app could reach the same numbers by lifting Claude Code's OAuth token out of the Keychain and calling an undocumented endpoint with Anthropic's first-party client id — meterusage deliberately does not, because that impersonates the official client and can break without notice.
+Codex browser sign-in uses the official app-server helper discovered in an
+existing Codex app, with existing command installations as a compatibility path.
+MeterUsage creates a separate generated profile under its own support directory
+and checks effective `cli_auth_credentials_store=keyring` before login or
+polling. Any other mode is refused. It never opens the user's Codex `auth.json`.
+Login opens only an approved HTTPS OpenAI host and uses the helper's local
+callback. Requests are initialization, effective config read, account login,
+rate-limit read, account daily-token read, explicitly confirmed reset redemption and own-profile logout. No model session or prompt is started.
+The provider helper handles tokens in OS storage; no plaintext fallback is
+permitted. Cancelling login attempts own-profile logout and reports cleanup
+failure. Disconnect does not sign out the user's Codex desktop session.
+Unfinished sign-in profiles are retained only for cleanup and cannot enable
+collection. Cancellation and disconnect disable collection before logout.
+GUI startup and explicit sign-in retry recover owned-profile cleanup before
+starting another login. Normal quit gives authentication helpers up to five
+seconds, then cancels them. Pending CLI-selection preference saves and rollback
+must settle before the app exits. Headless reports
+do not sign in or perform cleanup logout.
 
-The consequence is honest rather than hidden: Codex shows real live quota, including Codex's 2,500-credits-to-$100 display conversion; OpenRouter shows provider-reported dollar usage and remaining account balance, local usage rows show only the fields each provider can prove, and Claude quota bars appear only if a usage file is already present — and only with the windows that file actually contains. Nothing is silently estimated and labelled as authoritative.
+Connected Codex daily history uses `account/usage/read` without `threadId`
+through that same managed ChatGPT profile and keyring guard. The main process
+projects only valid unique date labels, safe nonnegative integer token counts
+and a capture timestamp before publication. Summary fields, unknown fields and
+provider error text are discarded. No raw response, account identifier or
+credential reaches the renderer or a new durable cache. Account token history
+stays in memory, clears after failed reads, replacement or disconnect, and never
+enters local rollups or durable daily history. Captured-profile and cancellation
+checks reject late results. Missing history and unreported dates remain
+unavailable. The provider contract does not establish complete product, device
+or cloud coverage. See [ADR 0022](adr/0022-codex-account-token-history.md).
 
-## Cost figures are estimates
+Claude requires explicit consent to use its Desktop web session. Previous
+access-token consent does not authorize this reader: an untagged identity
+requires Connect again and cannot start private reads or restore account quota.
+The bundled native helper reads only `Claude Safe Storage` / `Claude Key`.
+Background reads forbid interaction. Helper output stays in bounded main-process
+memory, outside logs, settings and diagnostics. Each allowance attempt obtains
+the password once and reuses it only within that attempt for the fresh local
+reads before and after requests. It is not cached between attempts.
 
-Costs are computed locally from token counts against a rate table in `Sources/MeterUsage/Services/Pricing.swift`. That table covers Claude list rates and OpenAI/Codex Standard list rates (the GPT-6 and GPT-5.6 families and `gpt-5.3-codex`); Codex sessions are priced using the model recorded in the local rollout, and cache writes are free because Codex does not charge for them. Published rates change, and the table can drift. Treat every cost in this app as an approximation for awareness — never as a billing figure. Your provider's dashboard is the only source of truth for what you owe.
+The reader selects only `lastKnownAccountUuid` from Desktop configuration and
+the fixed `sessionKey` and `lastActiveOrg` cookies. It supports schema 24,
+encrypted v10 values with their host digest, root-path Secure cookies, an
+HttpOnly session cookie and exact integer expiry checks. Identical values are
+deduplicated; conflicting sessions or organizations fail closed. Fixed
+`/usr/bin/sqlite3` SELECTs run read-only under `/usr/bin/sandbox-exec`, which
+denies all file writes beneath the canonical Claude store root. Reads have
+row, file, memory and time limits. Missing shared-memory support or sandbox
+failure makes collection unavailable. No private database is copied.
 
-## User-requested diagnostic reports
+The captured session cookie authenticates GET `https://claude.ai/api/bootstrap`.
+Its nested account UUID must match the local account selector, and the intended
+organization must appear exactly once in that account's memberships. Only then
+can MeterUsage request GET
+`https://claude.ai/api/organizations/{organization-uuid}/usage`.
+Bootstrap is checked again and the local account, organization and session are
+reread before publishing allowance, including after a failed usage request.
+Membership alone does not establish allowance entitlement. No GET `/api/account`,
+OAuth cache selection, bearer fallback, refresh token, chat or inference request
+is used. Claude stores are never modified and credentials are never persisted.
+
+A Claude HTTP 403 response with `cf-mitigated: challenge` means provider
+browser verification blocks the automated request. MeterUsage does not bypass
+that challenge or change its TLS, User-Agent, headers or cookies to evade it.
+Connect reports a fixed message without exposing response bodies, headers or
+session details, and preserves the current source. A failed Claude Desktop
+method offers **Open Claude usage**. This user-initiated action opens only
+`https://claude.ai/settings/usage` from normal Settings. Demo, candidate and
+isolated test profiles cannot open it. The renderer supplies no URL, account
+or profile. The page is a manual fallback; opening it does not connect
+MeterUsage, import browser data or report quota.
+
+Cookie authentication is restricted to these bootstrap and UUID-bound usage
+routes. Requests use MeterUsage's own User-Agent, reject redirects, disable
+caching, support cancellation, time out after 30 seconds and limit each decoded
+response to 1 MiB. Only supported numeric allowance windows reach the renderer
+or quota archive. Preferences retain a `web-v1:` opaque account/organization
+hash, excluded from settings publication. Connected-account archives are cleared
+at app startup. Account/session changes, failed verification and cancellation
+reject late results; disconnect prevents further private reads. Account quota
+has no local CLI history attached. Source and synthetic checks do not prove
+native store compatibility or live server acceptance.
+
+An explicit **Connect Antigravity Desktop** action permits discovery of one
+same-user desktop language server and reading only its candidate process
+arguments for the current CSRF credential. Multiple matching servers are
+rejected. MeterUsage verifies PID-owned IPv4 loopback listeners before each
+fixed `GetUserStatus` or `RetrieveUserQuotaSummary` request. HTTPS is preferred;
+a certificate exemption applies only to that request to `127.0.0.1`. HTTP is
+allowed only on the declared, PID-owned extension-server port. Redirects are
+rejected, responses are limited to 1 MiB, each request to three seconds and
+collection to fifteen seconds. No cloud credential file is opened or copied.
+
+The Antigravity account email is checked before and after quota collection.
+Only a provider-scoped SHA-256 fingerprint is saved in MeterUsage preferences,
+excluded from settings publication and diagnostics. CSRF credentials and raw
+responses stay in main-process memory and are not logged, cached or persisted.
+No provider store is changed and no credential is refreshed. Connection
+changes, cancellation and disconnect invalidate old reads. Missing or expired
+quota stays unavailable. Empty modern summaries cannot select stale legacy
+quota; legacy model fractions are allowed only for an explicitly unsupported
+modern RPC. See [ADR 0026](adr/0026-antigravity-desktop-local-quota.md).
+
+Connected Codex/Claude/Antigravity sources do not attach local CLI activity to
+the connected account. Quota archives are cleared on connection changes and candidate launch;
+authentication or absent-data failures clear the connected archive. Tokens,
+passwords, raw caches, plaintext account identifiers and responses are not logged or
+persisted by MeterUsage. In-memory strings remain subject to garbage collection.
+Demo mode blocks live connection code before helper or key discovery.
+[ADR 0011](adr/0011-desktop-account-connections.md) amends the Codex/Claude
+candidate boundary; it does not change the published Swift release.
+
+Grok Bot Desktop offers the primary opt-in **Connect Grok Bot Desktop (Beta)**
+flow under [ADR 0028](adr/0028-grok-bot-desktop-reader.md). After consent, the main
+process opens only the fixed `Grok Bot/sand-secrets.json` store under Application
+Support and the helper's fixed `Grok Bot Safe Storage` / `Grok Bot Key` Keychain item.
+Only explicit Connect permits Keychain UI; polling forbids it. The bounded JSON
+reader rejects symlinks, duplicate keys, unsupported versions and changed stores.
+It selects only the active account's encrypted access token and optional team;
+refresh tokens and other accounts' credential values remain skipped. Plaintext and unsupported encryption are rejected. Canonical encrypted v10
+legacy values use the same full JWT-subject hash binding as scoped values. Decrypted byte buffers are cleared
+when projected; in-memory strings remain subject to garbage collection.
+
+The full JWT subject hash must match the active account and any present envelope scope,
+and expiry must exceed sixty seconds. The optional team must be a safe
+nonnegative integer. Both account and team bind the stored opaque fingerprint.
+Connect JSON POST `{}` goes only to
+`https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus` with a
+bearer token, optional `x-cursor-team-id` and MeterUsage's own User-Agent. No Bot
+machine identity, client impersonation, app-code invocation, token refresh or
+inference is used. Redirects are refused; response and request bounds are 1 MiB
+and thirty seconds. Account, team and store stability are checked after every
+attempt while consent remains valid. Cancellation prevents further private reads.
+Only projected quota and a reported reset reach the renderer/archive. Pooled
+enterprise allowance and contradictory limit flags stay unavailable; trial expiry
+is never treated as a reset. Native metadata confirms the encrypted legacy store format and fixed Keychain
+label. Successful access and server acceptance remain unverified. MeterUsage does not
+initiate an xAI OAuth flow or modify Bot's account state.
+
+Previously saved Grok Bot connections via Cursor retain the legacy reader under
+[ADR 0027](adr/0027-grok-cursor-closed-reader.md). New connections always select
+Bot Desktop; no failed Bot request falls back to Cursor. Sign in to Cursor, check
+allowance, then quit Cursor before polling a saved legacy connection.
+Pre/post process and filesystem guards reject
+active Cursor, unavailable or ambiguous evidence, nonempty WAL/journal files
+and observed changes. These snapshots detect races; they do not exclude other
+processes or prove Cursor never ran. The original SQLite database is opened
+with `immutable=1&mode=ro`, which disables reader writes, locking and sidecar
+bookkeeping regardless of other processes. No credential stores are copied to
+temporary files. Read access times are controlled by the filesystem.
+
+The main process selects only `ItemTable`'s `cursorAuth/accessToken`, requires
+JWT expiry beyond 60 seconds, constructs the established
+`WorkosCursorSessionToken` cookie, verifies the exact subject through fixed
+`https://cursor.com/api/auth/me`, then sends POST `{}` to fixed
+`https://cursor.com/api/dashboard/get-sand-usage-status` with
+`Origin: https://cursor.com`. Redirects are refused; each request has a
+30-second timeout and 1 MiB response cap. Token strings stay in memory and
+request headers. They are never rendered, logged or persisted. No refresh or
+model requests occur. Only an opaque account fingerprint/source preference and
+projected aggregate quota persist; store fingerprints stay in memory.
+
+The account and store are checked before allowance and after each attempt.
+Cancellation or disconnect prevents further credential reads and rejects late
+results. Revoked access, missing quota and expiry clear account-bound archives;
+ordinary transport failures can retain dated quota only after account/store
+verification. After expiry, reopen Cursor and quit it to resume the saved source.
+Disconnect and connect again to switch to Bot Desktop. No local CLI
+history is attached. Trial expiry is not a replenishment timestamp. Universal
+Grok Desktop, X and shared-pool coverage is unverified, as are native/live
+compatibility and packaged acceptance. See [setup](DESKTOP-CONNECTIONS.md).
+
+## Optional API billing snapshots
+
+OpenAI API and Anthropic API billing use separate normalized snapshots under
+`Library/Application Support/MeterUsage/api-usage`. The optional bundled helper
+reads the selected organization Admin key from its environment for one fetch,
+removes that key from its own environment and calls only the documented
+OpenAI `/v1/organization/costs` or Anthropic `/v1/organizations/cost_report`
+HTTPS endpoint. The Settings → API connections page also accepts a one-time
+Admin key in a masked field. An explicit Fetch billing action passes it through
+the registered Settings bridge to the main process, using the same collector.
+The field clears on submit; leaving the page clears unsubmitted input. Keys are
+not saved in preferences, Keychain, snapshots, diagnostics or renderer state
+publications. An explicit **Use saved key** action instead reads the selected
+provider's existing `com.meterusage.api-keys` generic-password item, account
+`openAI` or `anthropic`, through the fixed native helper. Only that action may
+request Keychain UI. The original item is not changed or deleted; the key stays
+in main-process/helper memory and never reaches the renderer. Missing, denied
+and ambiguous requests do not fall back to another credential. Startup and
+polling never read these Keychain items. Fixed errors exclude key values and provider response bodies.
+Only one request per provider may run; quit cancels pending fetches. Requests
+reject redirects, cap response size and pagination, and never start inference.
+
+The helper writes only schema/provider, capture/period timestamps, currency and
+daily USD totals. Identifiers, headers and raw responses/errors are discarded.
+Files and their final directory are owner-only; replacement is atomic and a
+failed request preserves the previous file. The app validates the fixed files
+and publishes only projected fields. Demo and isolated provider tests never
+read live API billing files. Demo, candidate and isolated profiles cannot use
+the Settings fetch action. Polling rereads snapshots and never fetches billing.
+Reports older than 24 hours or from a prior UTC month are marked stale.
+Anthropic Priority Tier costs are excluded. See [setup](API_USAGE_BETA.md) and
+[ADR 0029](adr/0029-api-billing-snapshots.md) and
+[ADR 0032](adr/0032-one-time-api-setup.md).
+
+## Selective parsing and display boundary
+
+The Swift readers use narrow decoding structs. The TypeScript candidate uses
+`src/main/select-json.ts` to traverse JSON syntax and materialize only selected
+fields. It does not `JSON.parse` a whole Claude transcript or tier object and
+then project fields. Tests cover unknown nested values, escaped strings and
+keys, malformed input and scalar-materialization tracing. The scanner still
+reads file bytes to skip unwanted values; it does not turn skipped prompt or
+identifying values into application objects.
+
+Absolute project paths are transient input to basename reduction. A claim that
+workspace paths are never decoded would be inaccurate. The app retains project
+names for attribution, opaque local session IDs for list/cache identity, and
+provider-reported model names. These values may appear in screenshots. Keep
+public screenshots in demo mode.
+
+Managed accounts have app-generated IDs, user labels, paths and enable state.
+Generated IDs key history/archive state; renaming a label does not change the
+key. The JSON report includes a label only for additional accounts, with no
+provider account identity or config path. Settings may show a reduced label for
+the directory the user selected. Diagnostics use fixed provider/error codes
+and additional-account markers, without raw paths, labels, payloads or keys.
+
+Provider files, credentials, transports and raw responses stay in the Electron
+main process. Renderer windows have no Node integration and use context
+isolation and sandboxing. A narrow preload exposes named requests and sanitized
+state; main checks the registered window, main frame, exact loaded document and
+request fields. Navigation/new-window restrictions keep that bridge attached to
+app documents. Source controls and tests do not replace native runtime proof.
+
+## What leaves the machine
+
+- Provider aggregate requests above, authenticated with existing provider keys
+  or by the provider CLI. They contain no prompts or model-generation requests.
+- Public unauthenticated status feeds at
+  `https://status.openai.com/api/v2/components.json` and
+  `https://status.claude.com/api/v2/components.json`.
+- An explicit service-status button opens the provider's existing public status
+  page in the default browser. Main selects a fixed Codex, Claude, Cursor or
+  Copilot URL; the renderer cannot supply a destination. No usage or account
+  data is added to that URL.
+- An unauthenticated GitHub latest-release check, at most hourly while enabled.
+  It has no usage data or account identifier. GitHub sees the network address
+  and User-Agent. Disable it in Settings. An explicit Install action downloads
+  the selected release ZIP and requires its SHA-256, bundle identity/version
+  and code signature to verify. Automatic checks do not install an update.
+- Explicit Codex reset redemption calls
+  `account/rateLimitResetCredit/consume` after native user confirmation for that
+  account and credit. Cancel makes no consume call. Tests use synthetic credits
+  and never consume live credits.
+- An explicit Share card action sends the captured card through the chosen
+  native sharing service. Those services have their own privacy behavior.
+
+Local usage file reads and SQL do not add an outbound request. Errors from
+provider subprocess stderr are drained and not retained or forwarded.
+
+## Local persistence
+
+Daily history and quota archive remain JSON under the app's existing support
+directory. History reads and writes project only known record fields and the
+five numeric token counters before coordinator merge or renderer publication;
+unknown JSON fields are discarded. History retains numeric daily summaries; the archive retains quota,
+plan/credit/reset metadata and observation timestamps for reset-aware pacing.
+Restored quota is shown as dated last-known data. Unreadable durable history is
+preserved and further history writes are suspended until repair and relaunch.
+Disposable scan caches store selected numeric results under opaque keys.
+`quota-activity.json` keeps, per provider slot, the tracking window label, the
+last used percentage and reset time, and daily percentage-point rises for up
+to 200 days. It is derived only from quota readings the app already makes; no
+new request, credential, prompt, or account identifier is involved. Connection
+changes retain the previous series under an opaque generated key outside the
+active heatmap; replacement accounts start a fresh series.
+
+The Electron candidate retains temporary card images in the app support
+directory until normal quit, so a selected sharing service can read the file
+after its menu closes. A crash can leave those images on disk.
+
+Preferences retain the existing macOS domain and known keys. Managed accounts
+remain UserDefaults Data containing JSON. Dates and booleans keep their native
+types. The Electron adapter reads/writes only known keys, without a new storage
+migration. Native Swift-to-Electron-to-Swift round-trip proof is still required.
+
+Demo selects synthetic sources before composition and isolates preferences,
+history, caches and Electron state. The `--candidate-profile` option requires
+`--demo` and an empty test directory on first use. Demo blocks live provider/key
+discovery, update installation and login-item changes. It does write its own
+isolated files. Candidate QA must leave the installed app and provider data
+untouched.
+
+The separate `--codex-test-profile` mode uses the real UI and opt-in Codex
+connection with isolated JSON preferences, app data and Electron state. It
+retains the OS home for Keychain and helper discovery. It excludes all other
+provider sources, local activity and Claude status. Its only status request is
+an unauthenticated GET to the public OpenAI status feed above. It blocks updates,
+login-item changes and notifications. Explicitly confirmed Codex reset redemption
+uses the same captured keyring-only connection profile and a fresh eligibility
+check. [ADR 0017](adr/0017-connected-codex-menu-reset.md) supersedes only ADR 0012's
+reset prohibition. Its Codex credential boundary is the same keyring-only boundary
+described above.
+
+`--claude-test-profile` uses a separate profile marker and the existing Claude
+consent and allowance flow. It starts without consent and collects only Claude
+account allowance. It cannot use a Codex or demo profile. JSON preferences and
+Electron state remain isolated; OS home is retained for the read-only Desktop
+reader. Codex access and cleanup, other providers, local activity, status feeds
+and reset redemption are blocked. Candidate update, login-item and notification
+guards apply. It adds no credential source, refresh flow or provider request.
+
+## Installation and enforcement
+
+`Scripts/make-app.sh` downloads a pinned public ZIP by default, checks SHA-256
+and code signature, and copies/verifies replacement output in staging. Failure
+preserves the previous generated app. It does not install an app or developer
+tools. Source compilation requires `--build-from-source`. Electron candidate
+packaging uses `--publish never` and does not replace that installation path.
+
+Synthetic tests assert parser/privacy, account, history, schema and IPC
+contracts. The repository pre-commit hook scans staged diffs for credential
+shapes and personal paths; `.gitignore` excludes credential-shaped files and
+live captures. These controls reduce accidental disclosure. They do not prove
+provider authentication, live payload correctness or native UI behavior.
+
+Cost figures are local estimates from the pricing table. A recorded zero is a
+value; missing tokens or cost stay unknown. Provider dashboards remain the
+billing source of record.
+
+## Optional diagnostic reports
+
+Only clicking **Send report** in live Settings submits a generated diagnostic
+summary to the existing HTTPS support relay, which creates a private Linear
+issue. There is no automatic upload or login requirement. The summary includes
+the app version, mode, refresh interval/age, enabled provider names and bounded
+status codes for quota, activity, usage, service status, plan and history/cache
+failures. It excludes raw logs and errors, personal paths, account labels and
+identifiers, credentials, usage contents, prompts and transcripts.
+
+Main generates the summary; renderer requests cannot supply report text, IDs or
+URLs. Reports have a random UUID for duplicate-safe retries. Pending summaries
+and confirmed references remain in memory for the app session. A next-allowed
+submission time is saved locally to enforce a 10-minute cooldown across app
+relaunches. No report content or receipt is persisted. Requests omit
+cookies and stored credentials, reject redirects, and enforce byte limits and a
+timeout. The relay sees the network source IP for rate limiting; Cloudflare and
+Linear process the submission. MeterUsage does not attach provider credentials.
+See [REPORTING.md](REPORTING.md) for the delivery contract and proof limits.
+
+## Legacy Swift source diagnostic reports
+
+The retained Swift source includes a separate reporting feature absent from
+the published Swift 0.2.41 app. Its [reporting contract](swift/REPORTING.md)
+also describes the native-consent agent feedback CLI.
+
 
 Settings **Report issue** sends a generated diagnostic summary to the configured
 HTTPS support relay. The relay creates an issue in the maintainers' Linear
@@ -86,86 +461,3 @@ Linear under the maintainers' workspace access and retention settings.
 A failed request is not reported as sent; uncertain retries reuse the report ID
 and snapshot across Settings navigation. Pending reports and receipts stay in
 app memory until the app quits. They are not saved to disk.
-
-## What leaves your machine
-
-### Installation downloads
-
-`Scripts/make-app.sh` downloads a pinned public release ZIP from GitHub by
-default. It sends no credentials, account data, or local source files. The
-script checks the recorded SHA-256 and the app's code signature before replacing
-generated output in `dist/`, and deletes its temporary download on exit. It does
-not read provider stores or install developer tools. Source compilation is a
-separate, explicit `--build-from-source` mode.
-
-### App requests
-
-Outbound requests or subprocess-backed provider checks, all of which you can verify in the source:
-
-1. The `codex` CLI subprocess contacts OpenAI's backend to read your rate limits. This is the same call the CLI makes for itself.
-2. meterusage fetches `https://status.openai.com/api/v2/components.json`, a public status feed. No credentials, no identifiers, no usage data is sent.
-3. meterusage fetches `https://status.claude.com/api/v2/components.json`, a public status feed.
-4. meterusage fetches OpenRouter's documented `/api/v1/key` and `/api/v1/credits` endpoints with the existing key, retaining only aggregate dollar usage and balance fields. When an OpenRouter Management Key is configured, it queries `/api/v1/activity` for 30-day token volumes.
-5. meterusage fetches Grok's billing endpoint (`cli-chat-proxy.grok.com/v1/billing`) with the OIDC bearer token re-read from `~/.grok/auth.json`, retaining only the allowance percent, period type, and reset time. No prompts or model requests are sent.
-6. At most once a day, meterusage fetches `https://api.github.com/repos/pekth/meterusage/releases/latest` to check for a newer release. The request is unauthenticated, carries no body, no identifier, and no usage data — the server sees only your IP and a User-Agent string, the same as any web visit. The response's version tag is compared to the running build; a failed or rate-limited check is silently ignored. This check can be switched off in Settings → General → "Check for updates". When you click Install, the release zip is downloaded from the same release's asset URL and its SHA-256 is verified against the digest GitHub publishes with the asset; a missing or mismatched digest aborts the install.
-
-7. When you click Report issue, meterusage posts its diagnostic summary to the configured HTTPS relay. The relay forwards it to the private Linear project. No background diagnostic upload occurs.
-
-The local usage commands and file reads above add no outbound request. There is no analytics endpoint to disable because there is none.
-
-## The one file we read that also contains personal data
-
-To show which plan you're on (Pro, Max 5×, Max 20×), meterusage reads a single value from `~/.claude.json`: `oauthAccount.organizationRateLimitTier`, with `seatTier` and `userRateLimitTier` as fallbacks.
-
-That file also contains your email address, display name, account UUID, organization UUID, and organization name. None of them are read — and that is structural, not a promise:
-
-`ClaudePlanSource` decodes with a `Decodable` struct declaring **only** the three tier keys. Swift's `Decodable` silently drops every undeclared key, so the identifying fields are never materialised into a Swift value at all. There is no dictionary decode, no `[String: Any]`, and no code path that could read them. Tests feed a fixture containing an obviously-identifying email and org name, then assert neither can appear in the produced value.
-
-If you extend that struct, you break this guarantee. The file says so in a header comment for exactly that reason.
-
-## Identifying data is stripped at the boundary
-
-Provider payloads and local transcripts both carry material that should not reach the screen, a cache, or a screenshot. `Privacy` in `Sources/MeterUsage/Services/DataSource.swift` is the single chokepoint:
-
-- Absolute paths contain your OS username, so project directories are reduced to their final component before entering the model layer.
-- Session UUIDs are replaced with opaque, non-reversible ids used only for list diffing.
-- The Codex RPC handshake returns a machine `installationId`, a hostname, and a user-agent string identifying your terminal. All three are dropped on read.
-
-Second-account slots follow the same boundary with one addition: a slot is identified by **position only** ("Codex second account", digit "2"). No email, account id, org name, or any provider-issued identity is read to name it — the tools keep multiple accounts in separate config directories, and meterusage keys the slot on the directory you configured, nothing inside it. The directory path is rendered only back to you in Settings, reduced to `~` form, and never enters caches, diagnostics, or the JSON report.
-
-Because these conversions happen in the source layer rather than the view layer, there is no code path that renders the raw value.
-
-The supplemental sources apply the same boundary by construction: Antigravity reduces its conversation stores to numeric token fields and turn timestamps, Grok reduces its stores to counts and dates, and OpenCode Go asks its database command for numeric usage columns only. Provider names and metric colours are rendered alongside written labels, so colour is never the only meaningful signal.
-
-## How this is enforced
-
-The local quota archive stores the displayed quota windows and groups,
-balances, plan and reset-credit metadata, and capture times. After a manual
-Codex reset, it also stores the reset time and numeric quota observations used
-for pacing. These observations contain percentages and timestamps. The archive
-contains no authentication material, prompts, or provider account identity.
-Restored readings are displayed as dated, stale data.
-
-Stated policy is not a control. These are:
-
-- **Tests** assert that no `SessionSummary` contains a path separator or the substring `Users`, and that parsed quota carries no hostname or installation id.
-- **A pre-commit hook** (`.githooks/pre-commit`) scans staged diffs for token prefixes, JWTs, private-key blocks, `/Users/<name>/` paths, Apple team ids, and credential-shaped filenames. It fails closed.
-- **`.gitignore`** refuses credential-shaped files by name as a second layer.
-- **Test fixtures are synthetic.** Captured live payloads are excluded by `.gitignore`; fixtures are hand-written with invented values.
-
-## Reporting a problem
-
-If you find a case where meterusage exposes something it should not, please open an issue. If it involves a live credential, do not paste it into the issue — describe the shape and location instead.
-
-## Agent bug drafts
-
-The `report draft` and `report submit` commands read bounded descriptions,
-steps, expected behavior and actual behavior from stdin. The CLI does not read
-arbitrary files, transcripts, provider credentials or saved account state.
-It appends app and system metadata from the existing diagnostics builder;
-provider and history state are not observed. User prose is not automatically
-safe: common paths, links, email addresses, credential patterns and controls
-are rejected, but private facts and unrecognized secrets must be omitted by
-the agent and checked by the user. The read-only native preview shows all text,
-the relay and the fixed private Linear destination before each explicit send.
-No confirmation flag or automatic retry exists. See [REPORTING.md](REPORTING.md).

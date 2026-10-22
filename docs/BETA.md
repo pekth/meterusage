@@ -1,13 +1,13 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.3, build 61** is an opt-in macOS beta. The ZIP supports
+MeterUsage **0.3.0-beta.6, build 75** is an opt-in macOS beta. The ZIP supports
 Apple silicon and macOS 13 or later. It is Developer ID signed, notarized and
 stapled. Swift `0.2.41` remains the stable release and updater download.
 
 ## Install
 
-1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.3/MeterUsage-0.3.0-beta.3-mac-arm64.zip)
-   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.3/SHA256SUMS).
+1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.6/MeterUsage-0.3.0-beta.6-mac-arm64.zip)
+   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.6/SHA256SUMS).
 2. Quit MeterUsage and keep a copy of your existing app and its saved data for
    rollback. The beta shares the app identity and data locations with Swift.
 3. Unzip the download, move `MeterUsage.app` to Applications, and open it.
@@ -15,8 +15,11 @@ stapled. Swift `0.2.41` remains the stable release and updater download.
    Selecting a method alone does not connect it. Use its connection button.
 
 No Node, pnpm, Swift or Xcode installation is needed to use this prebuilt beta.
-Do not run the two editions together against a normal profile. Updating to later
-betas is manual. `Scripts/make-app.sh` still prepares the stable Swift download.
+Do not run the two editions together against a normal profile. Beta 5 and later check GitHub
+hourly while **Check for updates** is on and offer newer betas or a newer
+stable release in the app, with a notification. **Install update** downloads the ZIP, verifies
+its GitHub SHA-256 digest, bundle identity and signature, then replaces the app
+and relaunches. Beta 4 and earlier cannot see betas; install beta 5 manually once. `Scripts/make-app.sh` still prepares the stable Swift download.
 
 To check the ZIP in its download directory:
 
@@ -27,7 +30,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-6bc074f8753330c7b8bcf975ba3696fa249890230737d8c7580e7b93c3321439
+c8d8c629fdd8a3332efdc2cfe5ae93aeff9e6ab5a6b8c7117450c025efa6775c
 ```
 
 ## Provider coverage
@@ -41,6 +44,14 @@ Expected ZIP SHA-256:
   read current allowance through a compatibility endpoint. Some accounts,
   including free accounts, may have no allowance token. This does not sign the
   user out of Claude Desktop. Desktop chat/token history is not collected.
+- Every provider card with a quota reading shows a **Quota activity** heatmap:
+  the daily rise in that provider's weekly (or longest) allowance, counting
+  desktop, web and other-device use. Each provider keeps its own history.
+  On first run, the current window's usage is spread over its elapsed days and
+  marked estimated; earlier weeks are not backfilled. Days count only while
+  MeterUsage refreshes; offline usage lands on the next reading's day. Values
+  are percentage points, never inferred tokens. Tooltips add measured Claude
+  Code or Codex tokens from this Mac when present.
 - Claude Code CLI reads local transcript activity. Quota requires an optional
   companion file. Local activity does not cover other devices.
 - Antigravity Desktop reads account allowance from one running, signed-in
@@ -61,8 +72,8 @@ Expected ZIP SHA-256:
   preserved and newly pasted keys are not saved. OpenRouter keeps its existing
   balance and aggregate activity source. Read [API setup and limits](API_USAGE_BETA.md).
 
-See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs/electron/README.md#source-choices),
-[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs/PRIVACY.md).
+See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/electron/README.md#source-choices),
+[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/PRIVACY.md).
 
 ## Known limits
 
@@ -85,20 +96,26 @@ See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.
-Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.3/docs/REPORTING.md) before sending.
+Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/REPORTING.md) before sending.
 Never include tokens, passwords or raw account files in an issue.
 
 ## Build and screenshot identity
 
 The signed artifact was built from source
-`c2d092cb92180b37a686582a904dbd0129bc371c`. Release documentation and new
-screenshots are a documentation-only descendant; executable inputs are unchanged.
-Source manifests retain `0.2.41`; beta packaging explicitly set `0.3.0-beta.3`.
+`023b753cfa1c248774efecb28a1770ee8de0950b`. Release documentation is a documentation-only descendant; executable
+inputs are unchanged. Screenshots are from build 61 and do not show the Quota
+activity heatmap. Source manifests retain `0.2.41`; beta packaging explicitly
+set `0.3.0-beta.6`.
 
-Matching validation recorded 739 tests across 28 files on macOS, TypeScript
-checking, native helper compilation and production bundling. Exact-source CI
-also passed Swift build and tests. Signing, notarization, stapling, Gatekeeper,
-installed bundle identity and ZIP bytes were verified separately. These checks
+Matching validation recorded 849 tests across 33 files on macOS, TypeScript
+checking and production bundling. Swift build and 394 tests also passed on macOS for this source. The installed build was observed recording quota activity for Claude,
+Codex, Antigravity and Grok. Native rendering of filled heatmaps
+remains unverified. Signing, notarization, stapling, Gatekeeper,
+bundle identity and ZIP bytes were verified separately. Beta 6 changes only
+packaging metadata to version 0.3.0-beta.6, build 75; its executable source
+matches beta 5. Installed beta 5 recorded discovery of beta 6. Installation
+and relaunch through its updater remain pending because native UI automation
+was unavailable. These checks
 do not close the native acceptance gaps above.
 
 The [screenshot gallery](SCREENSHOTS.md) uses invented demo data and the actual

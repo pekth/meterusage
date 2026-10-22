@@ -1,10 +1,10 @@
 # Side notch panel
 
 The side notch is the floating strip of provider rings on the screen edge. This
-document describes what it does and the geometry it must hold. The decision
+document describes the retained Swift behavior and the Electron candidate. The decision
 record is [`docs/adr/0004`](adr/0004-side-notch-anchor-invariant.md).
 
-## States
+## Retained Swift states
 
 | State | Trigger | What shows |
 | --- | --- | --- |
@@ -85,7 +85,86 @@ floats at the status-bar level, and accepts mouse events only on itself. Because
 the window never takes key focus, each ring is an accessibility element with an
 explicit "Show details" action rather than a focusable control.
 
+## Electron candidate interaction
+
+The candidate panel is non-focusable and uses `showInactive`, so it cannot rely
+on a window blur event to dismiss a card. Pointer exit hides the detail card
+through the existing 450 ms fold delay and leaves the usage strip.
+During an open hover or selection interaction, main checks the native cursor
+against the panel bounds every 100 ms. A missed renderer exit therefore enters
+the same fold path on the next cursor check. The check stops on exit, hide, close, drag or
+quit. It does not install a global input hook.
+
+The Electron strip is a neutral charcoal 36 px rail. Each 22 px usage ring
+contains its provider mark, with the used percentage below. The strip has no
+Settings button or reserved button slot. Open Settings from the expanded
+usage card footer or the menu-bar context menu.
+The rail stays visible while details are closed or open. There is one design, with no dots markup or design selector.
+Small, Medium and Large change size only. Hover opens details, ring hover
+switches providers, and pointer exit closes details after 450 ms.
+Disable/hide clears expanded state, so re-enabling with the pointer outside
+starts with the 36 px strip and the next hover opens details normally.
+
+The candidate has no Pin detail card or Keep open control. Legacy saved
+`sideNotchPanelPinned=true` remains stored but cannot open or retain details.
+The share menu, reset confirmation and drag retain their temporary guards.
+Drag completion reads the current cursor rather than restoring stale hover
+state. Dismissal does not change a preference. [ADR 0019](adr/0019-single-design-notch.md)
+records this candidate correction; the retained Swift implementation is unchanged.
+
+Heatmap cells show a dated readout immediately on hover or keyboard focus.
+Daily cells name their date, weekly cells name the week starting Sunday, and
+cumulative cells name the date through which the displayed history is summed.
+Counts use the existing history scope and full numeric formatting. OpenRouter
+ledger dates retain their UTC calendar day. Count-only
+providers show session counts and report token totals unavailable. The readout
+uses a natural-height row below the grid. Long exact counts wrap and may grow
+the card without moving its top edge or rail. No blank readout area is reserved.
+Keyboard focus has a visible outline. The non-activating native notch's keyboard
+access still needs native proof; source fixtures cover focus labels and styles.
+Notch card actions, including Codex Use reset, use compact 20 px minimum-height buttons with 2 px vertical
+and 5 px horizontal padding. Labels use 10 px text in the menu and Small/Medium
+notch cards, and 12 px in Large. Heatmap menu options share a fixed checkmark
+column and aligned labels. Settings panel size uses explicit integer pixel sizes for notch
+text, buttons and spacing, without CSS zoom. Small uses an 11 px body and
+10 px secondary text; Medium uses 13 px and 10 px; Large uses 15 px and
+12 px. The visible card stays 220 pixels wide and the strip stays 36 pixels
+wide. Changing size preserves their horizontal anchor. Content scrolls within
+the display work area. Flyout and Settings retain their existing scaling.
+Shared cards keep their original scale. Eligibility, account labels and Cancel-default confirmation remain.
+
+Secondary labels in the Electron notch card use `#b0b0b8`, without changing
+provider status or quota colors. Telemetry starts with a border and 6/8/10 px
+of top padding for Small/Medium/Large. Existing metric margins remain.
+Enabled detail buttons transition only the background color for 120 ms on
+fine-pointer hover when reduced motion is off. Press and keyboard focus stay
+immediate, and reduced motion disables transitions. Card, window, ring and
+provider-switch states do not animate. Browser and native checks must verify
+these rendered states and scrolling after the added telemetry spacing.
+
+Live cards use the natural-height heatmap readout and show Daily, Weekly and
+Cumulative choices with their existing values. Quota, eligible reset actions and
+heatmaps remain visible. Recorded activity starts with two available metrics;
+More activity opens the remaining metrics. Usage by period and Active window
+breakdown open the existing period and burn details. These rows start closed.
+Tighter spacing and a shorter sparkline reduce card height without changing the
+saved font-size choice or the rail. Static exports retain all metrics and full
+period/burn data. Recorded activity headings and
+Recorded sessions/messages labels distinguish telemetry from account/local
+summary counts. Static shared cards omit footer actions, reset buttons and the
+heatmap selector while retaining credit details and the 26 weeks label. They
+also omit the unused hover readout space. Export width, full-height sizing and
+frozen selected-account behavior retain their existing implementation. Native
+export completeness remains a separate check.
+
 ## Verifying a change
+
+The Electron candidate bounds the card and strip independently. The native
+window supplies the display work-area height; the browser demo uses the viewport
+height when that value is absent. Tall content scrolls inside each column. The
+candidate hides scrollbar indicators throughout its windows while retaining
+scrolling. The strip is 36 pixels wide around the provider marks and rings. The shared-card
+capture keeps its 250-pixel width, full height and does not use the notch's scrolling bounds.
 
 Automated tests cover geometry and in-process drag events, but cannot see the
 rendered result. For any change to side notch layout or motion, capture the
