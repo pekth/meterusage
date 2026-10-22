@@ -141,10 +141,13 @@ describe("Muse Code allowance", () => {
     const old: Source = { slot: primary("muse"), quota: signal => { oldSignal = signal; ready(); return new Promise(resolve => { release = resolve; }); } };
     const stable: Source = { slot: primary("claude"), quota: async signal => { stableSignal = signal; await held; return { ...q, provider: "claude" }; } };
     const coordinator = new Coordinator(launch, prefs, [old, stable], () => now);
+    coordinator.quotaActivity.record("muse", q, now);
+    const previousDays = coordinator.quotaActivity.days("muse"), previousFile = readFileSync(join(root, "quota-activity.json"), "utf8");
     const pending = coordinator.refresh();
     try {
       await started; await prefs.set("showProviderMuse", false);
-      coordinator.sources = [stable]; coordinator.forgetQuota("muse");
+      coordinator.sources = [stable]; coordinator.forgetQuota("muse", true);
+      expect(coordinator.quotaActivity.days("muse")).toEqual(previousDays);
       expect(oldSignal?.aborted).toBe(true); expect(stableSignal?.aborted).toBe(false);
       await prefs.set("showProviderMuse", true);
       const next: Source = { slot: primary("muse"), quota: async () => q };
@@ -152,6 +155,8 @@ describe("Muse Code allowance", () => {
       const stale = usage(); stale.window.usedPercent = 99;
       release(museCodeQuota(response(stale), now)); releaseStable(); await pending;
       expect(coordinator.quotas.muse).toMatchObject({ status: "value", value: { windows: [{ usedPercent: 27 }, { usedPercent: 52 }] } });
+      expect(coordinator.quotaActivity.days("muse")).toEqual(previousDays);
+      expect(readFileSync(join(root, "quota-activity.json"), "utf8")).toBe(previousFile);
     } finally { coordinator.stop(); release?.(q); releaseStable(); await pending; }
   });
   it("renders its separate setup and dated allowance without inventing activity", async () => {

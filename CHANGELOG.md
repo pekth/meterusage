@@ -10,7 +10,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 - Start a fresh quota activity series when a connection changes. Retain prior
   observations outside the replacement account's heatmap, and preserve the
-  current series on normal relaunch.
+  current series on normal relaunch and Muse collection Stop/Start.
 
 - Preserve the TypeScript 7 upgrade, stale Claude CLI quota rejection and Grok
   provider mark centering from the parallel Electron branches.

@@ -234,14 +234,14 @@ it.each([
     activeSources = [stableSource];
     composition.mockReturnValueOnce([stableSource, museSource]);
     expect(await invoke(settings, { action: "setPreference", key: "showProviderMuse", value: true })).toEqual({ ok: true });
-    expect(activeSources).toEqual([stableSource, museSource]); expect(forgetQuota).toHaveBeenCalledWith("muse");
+    expect(activeSources).toEqual([stableSource, museSource]); expect(forgetQuota).toHaveBeenLastCalledWith("muse", true);
     const oldSources = activeSources, invalidations = forgetQuota.mock.calls.length;
     setPreference.mockRejectedValueOnce(new Error("Synthetic Muse save failure"));
     expect(await invoke(settings, { action: "setPreference", key: "showProviderMuse", value: false })).toEqual({ ok: false, error: "Could not complete action" });
     expect(activeSources).toBe(oldSources); expect(forgetQuota).toHaveBeenCalledTimes(invalidations);
     composition.mockReturnValueOnce([stableSource]);
     expect(await invoke(settings, { action: "setPreference", key: "showProviderMuse", value: false })).toEqual({ ok: true });
-    expect(activeSources).toEqual([stableSource]);
+    expect(activeSources).toEqual([stableSource]); expect(forgetQuota).toHaveBeenLastCalledWith("muse", true);
     expect(reportFetch).not.toHaveBeenCalled();
     expect(await invoke(flyout, { action: "sendReport" })).toEqual({ ok: false, error: "Could not complete action" });
     expect(reportFetch).not.toHaveBeenCalled();

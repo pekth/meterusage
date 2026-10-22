@@ -280,7 +280,7 @@ async function start(launch: Launch) {
         }
         await prefs.set(r.key, r.value);
         if (r.key === "showProviderMuse") {
-          coordinator.forgetQuota("muse");
+          coordinator.forgetQuota("muse", true);
           coordinator.sources = [...coordinator.sources.filter(s => s.slot.provider !== "muse"), ...sources().filter(s => s.slot.provider === "muse")];
         }
         if (r.key === "onboardingCompleted" && r.value === true && surface === "settings" && !quitting && !source.isDestroyed()) { source.hide(); showFlyout(); }

@@ -283,7 +283,8 @@ Release documentation refresh: 2026-10-22 for build 75.
   earlier windows are never backfilled. Connection changes retire the previous
   series under an opaque generated key, so replacement accounts never inherit
   its days or baseline. Retired observations remain on disk outside active
-  heatmaps; normal relaunch retains the active series.
+  heatmaps; normal relaunch and Muse collection Stop/Start retain the active
+  series.
   Quota activity stays in percentage points: providers report no account
   token totals for desktop or web use, so tokens are never inferred. When
   Claude Code (or Codex) ran on this Mac that day, the tooltip adds the
