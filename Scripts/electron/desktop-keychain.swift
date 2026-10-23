@@ -23,6 +23,8 @@ if api { query[kSecAttrSynchronizable as String] = false }
 var result: CFTypeRef?
 let status = SecItemCopyMatching(query as CFDictionary, &result)
 if api && status == errSecItemNotFound { exit(0) }
+// Distinct exit for a background read that would need an access prompt ("Allow" was chosen, not "Always Allow").
+if context.interactionNotAllowed && status == errSecInteractionNotAllowed { exit(2) }
 guard status == errSecSuccess,
       let password = result as? Data, !password.isEmpty else { exit(1) }
 // Only the owning main process receives stdout. Never run this helper for QA.

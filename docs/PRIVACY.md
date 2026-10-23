@@ -82,7 +82,7 @@ CLI sources retain the input and coverage limits above. The separately consented
 Grok Bot Desktop Beta account option is described below.
 
 Codex browser sign-in uses the official app-server helper discovered in an
-existing Codex app, with existing command installations as a compatibility path.
+existing Codex app (`ChatGPT.app` or `Codex.app` in Applications), with existing command installations as a compatibility path.
 MeterUsage creates a separate generated profile under its own support directory
 and checks effective `cli_auth_credentials_store=keyring` before login or
 polling. Any other mode is refused. It never opens the user's Codex `auth.json`.

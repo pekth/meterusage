@@ -137,6 +137,17 @@ it.each(["Connect", "background"])("uses one Keychain read and two fresh local r
   expect(f.command.mock.calls.filter(([binary]) => binary === "/usr/bin/sandbox-exec").map(([, args]) => args.at(-1))).toEqual([desktopSchemaSQL, desktopCookieSQL, desktopSchemaSQL, desktopCookieSQL]);
   expect(f.http.mock.calls.map(([url]) => url)).toEqual([endpoints.claudeBootstrap, claudeUsageURL(org), endpoints.claudeBootstrap]);
 });
+it.each([[2, "keychainDenied", "Keychain access for Claude Desktop was not kept. Disconnect, connect again and choose Always Allow"], [1, "notSignedIn", "Not signed in to Claude Desktop"]] as const)("maps background helper exit %s to %s without reading cookies", async (exitCode, code, message) => {
+  const f = await fixture(); f.prefs.values.desktopClaudeIdentity = identity;
+  f.command.mockImplementation(async () => { throw new transport.CommandFailure(exitCode); });
+  await expect(f.connections.quota("claude")).rejects.toMatchObject({ code, message });
+  expect(f.command).toHaveBeenCalledTimes(1); expect(f.http).not.toHaveBeenCalled();
+});
+it("keeps the Connect Keychain failure on the access-prompt message", async () => {
+  const f = await fixture();
+  f.command.mockImplementation(async () => { throw new transport.CommandFailure(2); });
+  await expect(f.connections.connect("claude", async () => {}, async () => true)).rejects.toThrow("Could not access Claude Desktop through macOS Keychain. Check the access prompt, then try connecting again.");
+});
 it("shares Connect/background verification, detaches CLI data, and reloads only tagged consent", async () => {
   const f = await fixture(true), before = ["config.json", "Cookies"].map(name => readFileSync(join(f.root, name)));
   expect(await f.connections.connect("claude", async () => {}, async () => true)).toBe(true);

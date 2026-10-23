@@ -27,10 +27,12 @@ below it to apply the choice. Existing profiles keep their current source.
   explicit alternative for the existing local integration. Desktop allowance
   includes no CLI-local history. Native and live-provider checks are pending.
 - Codex: choose **Sign in to Codex** and complete browser sign-in. The candidate
-  finds the helper in an existing Codex app in Applications, with existing
-  command installations as a compatibility path. Users do not open a terminal
-  or choose a configuration folder. A missing helper produces an unavailable
-  message. The Codex app's authentication is not changed.
+  finds the helper in an existing Codex app in Applications (current
+  downloads install as `ChatGPT.app` with the helper in
+  `Contents/Resources/codex-cli/bin`; older `Codex.app` layouts remain
+  supported), with existing command installations as a compatibility path.
+  Users do not open a terminal or choose a configuration folder. A missing
+  helper reports that the Codex app was not found in Applications. The Codex app's authentication is not changed.
   Alternatively, choose **Codex CLI** and **Use CLI** to use an existing CLI
   sign-in for allowance and read local token activity.
 - Claude: sign in to Claude Desktop on the Mac, choose **Connect Claude
@@ -80,7 +82,9 @@ can include a failed cookie read. Each allowance attempt reads Keychain once
 and keeps the password only in that attempt's main-process memory. It still
 rereads the local account and cookies after the request to reject changed
 accounts, organizations or sessions. Background attempts never request Keychain
-interaction. Messages contain no
+interaction. If the Connect prompt was answered with **Allow** rather than
+**Always Allow**, background reads are refused; the card reports that Keychain
+access was not kept and asks the user to reconnect and choose **Always Allow**. Messages contain no
 raw exceptions, responses, tokens, account identifiers or paths. Cancellation
 keeps its existing message. Background collection keeps its existing
 unavailable and not-signed-in results.

@@ -542,8 +542,8 @@ it("keeps Codex helper authentication isolated and removes only its own login on
   expect(readFileSync(join(profile, "requests"), "utf8")).toContain("account/logout");
   expect(binary).toBe(join(root, "codex"));
 });
-it("discovers a synthetic installed Codex app without permitting a real installed helper to execute", async () => {
-  const root = temp(), resources = join(root, "Applications/Codex.app/Contents/Resources");
+it.each(["ChatGPT.app/Contents/Resources/codex-cli/bin", "Codex.app/Contents/Resources/codex-cli/bin", "Codex.app/Contents/Resources"])("discovers a synthetic installed Codex app helper in %s without permitting a real installed helper to execute", async layout => {
+  const root = temp(), resources = join(root, "Applications", layout);
   mkdirSync(resources, { recursive: true }); const binary = fakeCodex(resources);
   const launch = launchConfiguration([], {}, root), preferences = await Preferences.load(launch, async () => "");
   const connections = new DesktopConnections(launch, preferences, "/not-a-helper", () => {});
@@ -552,6 +552,22 @@ it("discovers a synthetic installed Codex app without permitting a real installe
   expect(await connections.connect("codex", async () => {})).toBe(true);
   expect(vi.mocked(spawn).mock.calls.at(-1)![0]).toBe(binary);
   expect(transport.cliPath).not.toHaveBeenCalled();
+});
+it("prefers the current ChatGPT.app Codex helper over an older Codex.app helper", async () => {
+  const root = temp(), current = join(root, "Applications/ChatGPT.app/Contents/Resources/codex-cli/bin"), older = join(root, "Applications/Codex.app/Contents/Resources");
+  mkdirSync(current, { recursive: true }); mkdirSync(older, { recursive: true });
+  const binary = fakeCodex(current); fakeCodex(older);
+  const launch = launchConfiguration([], {}, root), preferences = await Preferences.load(launch, async () => "");
+  expect(await new DesktopConnections(launch, preferences, "/not-a-helper", () => {}).connect("codex", async () => {})).toBe(true);
+  expect(vi.mocked(spawn).mock.calls.at(-1)![0]).toBe(binary);
+});
+it("reports a missing Codex app distinctly before creating a connection profile", async () => {
+  const root = temp(), launch = launchConfiguration([], { PATH: "/synthetic/empty" }, root), preferences = await Preferences.load(launch, async () => "");
+  vi.mocked(transport.cliPath).mockImplementation(() => { throw new Unavailable("cliNotFound", "codex"); });
+  const open = vi.fn(async () => {});
+  await expect(new DesktopConnections(launch, preferences, "/not-a-helper", () => {}).connect("codex", open)).rejects.toThrow("Codex app not found in Applications. Install or update Codex, then try connecting again");
+  expect(open).not.toHaveBeenCalled(); expect(preferences.values.desktopCodexConnection).toBe("");
+  expect(existsSync(join(launch.data, "connections/codex"))).toBe(false);
 });
 it("uses the MeterUsage identity and bounded HTTP without provider CLI impersonation", async () => {
   const calls: RequestInit[] = [];

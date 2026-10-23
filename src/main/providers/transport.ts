@@ -40,10 +40,11 @@ export function boundedChild(binary: string, args: string[], options: CommandOpt
     exchange(child, finish);
   });
 }
+export class CommandFailure extends Error { constructor(readonly exitCode: number | null) { super("Provider command failed"); } }
 export const runCommand: Command = (binary, args, options = {}) => boundedChild(binary, args, options, (child, finish) => {
   const chunks: Buffer[] = [];
   let ended = false, exitCode: number | null | undefined;
-  const complete = () => { if (ended && exitCode !== undefined) finish(exitCode === 0 ? Buffer.concat(chunks).toString("utf8") : new Error("Provider command failed")); };
+  const complete = () => { if (ended && exitCode !== undefined) finish(exitCode === 0 ? Buffer.concat(chunks).toString("utf8") : new CommandFailure(exitCode)); };
   let capturedBytes = 0;
   child.stdout.on("data", (chunk: Buffer) => { capturedBytes += chunk.length; if (capturedBytes <= (options.maxBytes ?? 16 * 1048576)) chunks.push(chunk); });
   child.stdout.on("end", () => { ended = true; complete(); });
