@@ -14,28 +14,34 @@ Release documentation refresh: 2026-10-22 for build 77.
   infinity paths. It is a Meta mark, not a separate Muse product logo.
   The renderer applies the existing provider and service-status tint.
 
-## Edition documentation
+## Distribution and recovery
 
-- [ADR 0024](adr/0024-electron-primary-swift-retirement.md) makes Electron the
-  sole active feature-development target. Freeze the legacy Swift app for new
-  features; retain critical maintenance, compatibility and rollback until
-  native acceptance, deliberate cutover and retrievable archive checks pass.
-  Source retirement is pending. Electron-required Swift helpers and assets stay.
-- [Swift 0.2.41](swift/README.md) is the published default install route.
-  [Electron 0.3.0-beta.7, build 77](BETA.md) is an opt-in public prerelease,
-  signed and notarized for Apple silicon. Native acceptance remains incomplete.
-  Source manifests retain 0.2.41; packaging sets the beta version and Settings
-  shows the running bundle version. Stable updaters do not offer the beta.
+- [ADR 0034](adr/0034-electron-beta-default.md) makes Electron beta the sole
+  offered app and default installer target. [ADR 0024](adr/0024-electron-primary-swift-retirement.md)
+  keeps Electron as the sole feature target. Historical Swift source/releases
+  remain recovery/reference material; explicit `--build-from-source` builds
+  legacy Swift. Source retirement is pending. Required Swift helpers/assets stay.
+- `Scripts/make-app.sh` pins [Electron 0.3.0-beta.7, build 77](BETA.md), its
+  `-mac-arm64.zip` filename and SHA-256. It verifies the download and staged
+  signature before replacement, preserves the published signature, and never
+  falls back to a compiler. Preparing output does not install the app.
+- This remains a beta, signed/notarized for Apple silicon. Stable/native
+  acceptance is incomplete. Source manifests retain 0.2.41; packaging sets the
+  beta version and Settings shows the running bundle version.
 - Both implementations remain in their current source trees. Shared app name,
   bundle ID and default data/preferences prevent safe normal-profile coexistence.
-  Use only documented isolated QA profiles.
-- [Versions](VERSIONS.md) records the accepted one-app development direction
-  and staged retirement. It makes no layout, version, CI, identity or cutover
-  change. ADR 0010's acceptance and compatibility requirements remain in force.
+  Use only documented isolated QA profiles. Default distribution changes do not
+  alter data, identity, workflows, releases or stable acceptance requirements.
 - Swift and stable Electron updaters use GitHub's latest-release endpoint.
   Electron beta builds (version `-beta.N`) read the release list and accept
-  `-mac-arm64` assets, so betas update in-app from beta 5; see
-  [update channels](VERSIONS.md#update-channels).
+  `-mac-arm64` assets, so beta 5 onward offers newer betas or a newer stable
+  release. Checks run hourly when enabled, with a notification and installation
+  confirmation. See [update channels](VERSIONS.md#update-channels).
+- Current source shares an inline-icon update notice between Usage and Settings
+  > General using `state.update` and existing Install/Retry/Dismiss actions.
+  Pending requests/downloads/installs disable both actions; failed offers retain
+  retry. Existing projection hides absent/dismissed/disabled/demo offers. This
+  source change is after beta.7; it does not change the published ZIP.
 - Installed beta 5 recorded discovery of beta 6 on 2026-10-22. Automated
   installation and relaunch were not completed; native UI control was unavailable.
 - Swift-to-Electron native upgrade and rollback remain blocked pending a
@@ -47,10 +53,10 @@ Release documentation refresh: 2026-10-22 for build 77.
   migration. Neither updater retains a persistent rollback copy. See the
   [stable cutover checklist](VERSIONS.md#stable-cutover-checklist).
 - Candidate gaps include Settings account overview, seven-day sparkline, reset
-  timing display, update feedback and tray refresh. Smaller display omissions
-  remain distinct. Current source adds AG Desktop/OpenCode setup, restores Bun
+  timing display, detailed update progress/release notes and tray refresh.
+  Smaller display omissions remain distinct. Current source adds AG Desktop/OpenCode setup, restores Bun
   discovery and matches activity grid geometry. See the candidate guide.
-- Edition documentation was reconciled against revision
+- Earlier edition documentation was reconciled against revision
   build source `6ce695324e54bb09bf6e5ab36fd4733875c94427`.
 - Current product screenshots use build 61's renderer and synthetic demo data.
   Old product captures are removed; see [capture provenance](SCREENSHOTS.md).
@@ -229,13 +235,13 @@ Release documentation refresh: 2026-10-22 for build 77.
   retaining active-editor and database guards.
 
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
-- The published app is Swift Package Manager based, targets macOS 13 or later, and includes an executable target and a test target. `Package.swift` is the source for this package structure. Its AppKit and SwiftUI imports require macOS for package build and test checks; Swift itself supports other platforms. `AGENTS.md` describes a generic macOS SSH route for Linux development without private host aliases.
-- `README.md` links directly to the prebuilt v0.2.41 app ZIP as the default installation path. Installing and running it does not require Swift, Xcode, Command Line Tools, or Git; its Swift runtime ships with macOS. `Scripts/make-app.sh` also downloads that pinned release by default, checks its SHA-256 and code signature, and prepares `dist/MeterUsage.app` without compiling or installing developer tools. It copies and verifies the replacement in staging on the destination filesystem before replacing existing output, so copy or verification failures preserve the previous generated app. It rejects unsupported platforms and never falls back to a source build. Source builds require `--build-from-source` and are documented in `CONTRIBUTING.md`. The v0.2.41 asset targets Apple silicon and macOS 13 or later, is ad-hoc signed, and is not notarized. GitHub's source archives contain source and scripts, not an app bundle. ADR 0009 records the script's default.
+- The retained legacy Swift app uses Swift Package Manager, targets macOS 13 or later, and includes an executable target and a test target in `Package.swift`. Its AppKit and SwiftUI imports require macOS for build/test checks. Electron is the offered beta; its source/build commands are in `CONTRIBUTING.md`.
+- `README.md` and `Scripts/make-app.sh` select the prebuilt Electron 0.3.0-beta.7 Apple silicon ZIP for macOS 13+. Installation needs no Node, pnpm, Swift, Xcode or Git. The script verifies SHA-256 and downloaded/staged signatures before replacing generated output, preserving the published signature and existing output on copy/verification failures. It rejects unsupported platforms and never falls back to compilation. Explicit `--build-from-source` builds legacy Swift for recovery/reference. Historical Swift 0.2.41 remains retrievable, ad-hoc signed and not notarized. GitHub source archives contain source and scripts, not an app bundle. See ADRs 0009 and 0034.
 - Swift provider data sources are implemented under `Sources/MeterUsage/Services/`; the candidate adapters live under `src/main/providers/` and `src/main/composition.ts`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
 - Antigravity CLI quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
 - `Resources/Info.plist` and `CHANGELOG.md` record version 0.2.41, build 46, dated 2026-10-05. This release collects fresh quota observations after an accepted manual Codex reset, derives pacing and ETA from later usage growth, and removes the redeemed reset credit from archived quota data. The previous release was 0.2.40, which added accent colour themes, Codex cost estimates, and refreshed model prices. Repository version and release-note entries do not prove that a GitHub Release or its downloadable asset has been published.
-- `CONTRIBUTING.md` requires focused changes, synthetic fixtures, and `swift build`, `swift test`, and `Scripts/make-app.sh --build-from-source` before a code pull request. `Tests/Scripts/make-app-tests.sh` covers default preparation, explicit source selection, and download, verification, argument, and platform failures without network or compiler access.
+- `CONTRIBUTING.md` requires focused changes, synthetic fixtures and affected-path checks: Electron typecheck/tests/build, or Swift build/tests and explicit legacy source preparation for Swift changes. `Tests/Scripts/make-app-tests.sh` checks the exact default beta pin, signature preservation, explicit source selection and staged/download/verification/argument/platform failures without network or compiler access.
 - The side notch panel is anchored by the strip's top-right corner and uses whole-point frames, so switching providers never moves the strip. `docs/SIDE-NOTCH.md` describes the states, geometry invariants, and required evidence. ADR 0004 records the decision.
 - Window-shape displays report the raw pace (`QuotaPace.pace(now:)`): a quota bar, side-notch banner/row, or menu-bar chip keeps a deficit's projected run-out even when the burn that caused it has gone quiet. Present-tense claims are gated on burn recency (`BurnRecency` in `Sources/MeterUsage/Models/UsageModels.swift`): the failover nudge, pace alerts, and the machine report consume `QuotaPace.effective(lastBurn:now:)`, which demotes a burn-quiet deficit to on-pace, and require the provider to have burned within a 30-minute quiet period. A headline window at 80%+ without a current burn renders as "near its limit", not "burning fast". Providers without a local session store have no burn evidence: they keep the 80%/95% threshold alerts but never raise pace alerts.
 - Burn attribution renders only measured burn (`BurnAttributionCalculator.calculate` in `Sources/MeterUsage/Services/BurnAttributionCalculator.swift`): sessions without a token ledger (for example Codex realtime sessions whose rollout records no `token_count` event) are excluded, and a scope with no token-bearing sessions yields no breakdown, so the burn card hides instead of showing all-zero rows.

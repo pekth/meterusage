@@ -1,13 +1,11 @@
 # MeterUsage versions
 
-Electron 0.3.0-beta.7, build 77, is the opt-in public beta. Swift 0.2.41 stays
-stable and remains the updater/installer download. New features target Electron;
-Swift is retained for critical maintenance and rollback.
-
-| Version | Source | Download |
-| --- | --- | --- |
-| Electron beta | [v0.3.0-beta.7](https://github.com/pekth/meterusage/tree/v0.3.0-beta.7) | [Manual signed/notarized Apple silicon ZIP](BETA.md) |
-| Swift stable | Retained `Sources/` and [v0.2.41](https://github.com/pekth/meterusage/tree/v0.2.41) | [Swift guide](swift/README.md) |
+Electron **0.3.0-beta.7, build 77** is the sole offered distribution and default
+installer download. It remains a beta, with stable acceptance open. New features
+target Electron. Historical Swift 0.2.41 releases and retained `Sources/` remain
+recovery/reference material, including explicit `--build-from-source` builds.
+See the [beta download](BETA.md), [historical Swift reference](swift/README.md)
+and [distribution decision](adr/0034-electron-beta-default.md).
 
 The Electron source stack is on main through [PR #76](https://github.com/pekth/meterusage/pull/76),
 merge `0d514dd`. That integration preserves the newer Swift reporting source and
@@ -21,8 +19,11 @@ shows the running bundle version. See [known beta limits](BETA.md#known-limits).
 
 The apps share an identity and normal data locations. Quit one before replacing
 it and preserve a rollback copy. Do not run both against a normal profile.
-Stable cutover and Swift retirement remain separate work, defined in the
-[beta repository strategy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/VERSIONS.md).
+The default installer pins the beta's version, `-mac-arm64.zip` asset and SHA-256
+as one target, verifies the staged bundle, and preserves its published signature.
+Stable acceptance and Swift source retirement remain separate work under
+[ADR 0010](adr/0010-macos-typescript-electron.md) and
+[ADR 0024](adr/0024-electron-primary-swift-retirement.md).
 
 ## Update channels
 
@@ -33,6 +34,11 @@ newest release with a verified `MeterUsage-<version>.zip` or
 `MeterUsage-<version>-mac-arm64.zip` asset. A final release outranks its betas,
 so beta users are offered the stable release that follows. Beta 4 and earlier
 predate this and need one manual install.
+
+Current source reuses the projected update offer in Usage and Settings > General,
+with a local icon, Install/Retry and Dismiss. Busy requests/downloads/installs
+disable both actions. Dismissed, disabled, demo and absent offers stay hidden
+through the existing updater projection. This UI change is not in beta.7's ZIP.
 
 ## Stable cutover checklist
 
@@ -71,6 +77,8 @@ following requirements; it does not prove an installed Swift upgrade.
   isolated account. Neither updater provides a persistent rollback backup:
   both remove their temporary old-bundle backup after replacement. Do not
   assume an older reader accepts every new provider or archive value.
-- Keep the default installer, README and release metadata on Swift until the
-  isolated upgrade and rollback evidence passes and stable publication is
-  authorized. Merging Electron source does not publish a stable release.
+- Keep stable publication and the existing Swift updater transition separate
+  from the default beta download. The default installer and README offer the
+  Electron beta under [ADR 0034](adr/0034-electron-beta-default.md); they do not
+  change `/releases/latest`, install an update for existing users, or close the
+  isolated upgrade/rollback and native acceptance checks above.

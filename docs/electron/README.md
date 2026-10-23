@@ -1,14 +1,15 @@
 # MeterUsage Electron beta
 
-Electron is the sole active target for new MeterUsage features. The legacy
-Swift app is frozen as the current stable download and rollback option until
-[staged retirement](../adr/0024-electron-primary-swift-retirement.md) passes.
+Electron is the sole offered app, default download and active target for new
+MeterUsage features. Historical Swift source/releases remain recovery/reference
+material under [ADR 0034](../adr/0034-electron-beta-default.md).
 
-The public beta is **0.3.0-beta.1, build 54**, for Apple silicon and macOS 13+.
-Use the [beta download and installation guide](../BETA.md). The ZIP is Developer
-ID signed and notarized. This is an opt-in manual download; Swift stays stable.
-Source manifests and build 54's cosmetic Settings footer still say `0.2.41`.
-Packaging explicitly sets the beta version. Full native acceptance remains open.
+The default public beta is **0.3.0-beta.7, build 77**, for Apple silicon and
+macOS 13+. Use the [beta installation guide](../BETA.md) or run
+`Scripts/make-app.sh` for verified prebuilt preparation. The ZIP is Developer ID
+signed and notarized. Source manifests retain `0.2.41`; packaging sets the beta
+version and Settings shows the running bundle version. Stable/native acceptance
+remains open. Explicit `--build-from-source` builds retained legacy Swift only.
 
 See the [current beta screenshots](../SCREENSHOTS.md) for Usage, notch and Settings.
 
@@ -149,8 +150,11 @@ The source comparison identifies five primary UI omissions/reductions:
   30-day chart and aggregate seven-day total remain.
 - Reset countdown/date is not independent of projected exhaustion. ETA can
   replace the reset date field; notch header countdown is absent.
-- Update feedback lacks release notes and visible download/relaunch progress.
-  Install/Retry exists; native update completion remains unverified.
+- Current source shares an update notice with an inline icon between Usage and
+  Settings > General. Install/Retry and Dismiss reuse existing actions; pending
+  requests/downloads/installs disable both. Release notes and detailed progress
+  remain absent. Native update completion remains unverified; the notice change
+  is not included in the published beta.7 ZIP.
 - The tray context menu lacks **Refresh Now**. Usage and notch refresh remain.
 
 Smaller display gaps include today's session count in token-unavailable
@@ -221,9 +225,10 @@ implementation, packaging, CI, testing and release remain paused.
 
 [ADR 0010](../adr/0010-macos-typescript-electron.md) keeps Swift as the behavior
 reference and rollback path. No automatic cutover, data migration, release or
-installed-app replacement follows from these docs. The [repository strategy](../VERSIONS.md#proposed-same-repository-strategy)
-records the accepted development direction and the checks still required for
-source retirement and stable cutover. This opt-in beta does not close those checks. Electron's required Swift helpers remain.
+installed-app replacement follows from these docs. The [version strategy](../VERSIONS.md)
+records the default beta distribution and the checks still required for source
+retirement and stable cutover. Offering the beta by default does not close those
+checks. Electron's required Swift helpers remain.
 
 Desktop account research for Grok/Cursor, Antigravity and OpenCode Go is recorded
 in [DESKTOP-LOGIN-RESEARCH.md](../DESKTOP-LOGIN-RESEARCH.md). It separates

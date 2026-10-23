@@ -1,7 +1,7 @@
 import { it, expect, vi } from "vite-plus/test";
 import { createElement, useEffect, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings, UsagePanel } from "../src/renderer/app";
+import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings, UpdateNotice, UsagePanel } from "../src/renderer/app";
 import { tokens, providers, primary, quota, value, window, localDay, shiftDay, utcDay } from "../src/domain/models";
 import type { ViewState } from "../src/shared/ipc";
 import { openRouterUsage } from "../src/main/providers/usage";
@@ -1025,5 +1025,77 @@ it("offers manual Claude usage only on a failed Desktop method and sends only in
       expect(action).not.toHaveBeenCalled(); usage.props.onClick();
       expect(action).toHaveBeenCalledExactlyOnceWith({ action: "claudeUsagePage" }); action.mockClear();
     }
+  }
+});
+
+
+it.each(["flyout", "settings"])("shows the update notice with a local icon in %s", surface => {
+  const view = state();
+  view.update = { version: "0.3.0-beta.8", state: "idle" };
+  const markup = renderApp(view, surface);
+  expect(markup).toContain("MeterUsage 0.3.0-beta.8 available");
+  expect(markup).toMatch(/<svg(?=[^>]*class="update-icon")(?=[^>]*aria-hidden="true")/);
+  expect(markup).toContain("Install update…");
+  expect(markup).toContain(">Dismiss</button>");
+  if (surface === "settings") expect(markup).toMatch(/<section hidden=""><h2>General<\/h2>[\s\S]*?MeterUsage 0.3.0-beta.8 available/);
+  delete view.update;
+  expect(renderApp(view, surface)).not.toContain("update-icon");
+});
+it.each(["downloading", "installing", "failed"] as const)("projects the %s update state on both notices", status => {
+  const view = state(); view.update = { version: "0.3.0-beta.8", state: status };
+  for (const surface of ["flyout", "settings"]) {
+    const markup = renderApp(view, surface);
+    if (status === "failed") {
+      expect(markup).toContain(">Retry update</button>");
+      expect(markup).not.toMatch(/<button[^>]*disabled[^>]*>Retry update/);
+    } else {
+      expect(markup).toContain(status === "downloading" ? "Downloading…" : "Installing…");
+      expect(markup).toMatch(/<button[^>]*disabled[^>]*>Dismiss/);
+    }
+  }
+});
+
+it("opens General with the same update actions", () => {
+  const view = state(); view.update = { version: "0.3.0-beta.8", state: "idle" };
+  vi.mocked(useState).mockReturnValueOnce(["General", () => {}]);
+  const markup = renderToStaticMarkup(createElement(Settings, { state: view, action: async () => {}, saveOrder: async () => true }));
+  expect(markup).toMatch(/<section><h2>General<\/h2>[\s\S]*?aria-label="App update"/);
+  expect(markup).toContain('aria-current="page">General');
+});
+it("dispatches update intents once while confirmation is pending and allows retry afterward", async () => {
+  const view = state(); view.update = { version: "0.3.0-beta.8", state: "idle" };
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  const action = vi.fn(() => pending), setPending = vi.fn();
+  vi.mocked(useState).mockReturnValueOnce([false, setPending]);
+  vi.mocked(useRef).mockReturnValueOnce({ current: false });
+  const notice = UpdateNotice({ state: view, action })!;
+  const install = notice.props.children.props.children[2], dismiss = notice.props.children.props.children[3];
+  install.props.onClick(); install.props.onClick(); dismiss.props.onClick();
+  expect(action.mock.calls).toEqual([[{ action: "updateInstall" }]]);
+  expect(setPending).toHaveBeenLastCalledWith(true);
+  finish(); await pending;
+  expect(setPending).toHaveBeenLastCalledWith(false);
+  dismiss.props.onClick();
+  expect(action.mock.calls[1]).toEqual([{ action: "updateDismiss" }]);
+  await pending;
+});
+it.each(["downloading", "installing"] as const)("blocks update actions while %s", status => {
+  const view = state(); view.update = { version: "0.3.0-beta.8", state: status };
+  const action = vi.fn(async () => {});
+  vi.mocked(useState).mockReturnValueOnce([false, () => {}]);
+  vi.mocked(useRef).mockReturnValueOnce({ current: false });
+  const notice = UpdateNotice({ state: view, action })!;
+  for (const button of notice.props.children.props.children.slice(2)) {
+    expect(button.props.disabled).toBe(true); button.props.onClick();
+  }
+  expect(action).not.toHaveBeenCalled();
+});
+it("keeps the existing action error and retry visible on both update notices", () => {
+  const view = state(); view.update = { version: "0.3.0-beta.8", state: "failed" };
+  for (const surface of ["flyout", "settings"]) {
+    const markup = renderApp(view, surface, "Could not complete action");
+    expect(markup).toMatch(/role="alert"><span>Could not complete action/);
+    expect(markup).toContain(">Retry update</button>");
   }
 });

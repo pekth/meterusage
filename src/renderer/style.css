@@ -143,6 +143,7 @@
 .flyout > footer, .update-actions { flex-wrap: wrap; }
 .update-actions > span { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
 .update-actions button { flex-shrink: 0; }
+.update-icon { flex-shrink: 0; color: var(--accent); }
 @media (max-width: 360px) { .surface-flyout .activity-summary .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .provider-tabs { display: flex; align-items: center; gap: 3px; overflow-x: auto; padding: 4px; margin-bottom: 8px; border-radius: 8px; background: var(--well); }
 .provider-tabs [role="tab"] { display: flex; align-items: center; gap: 5px; min-height: 28px; padding: 5px 6px; flex-shrink: 0; border-color: transparent; background: transparent; }

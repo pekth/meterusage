@@ -1,7 +1,12 @@
 # ADR 0009: Prepare the prebuilt app by default
 
-- Status: Accepted
+- Status: Accepted; default artifact amended by ADR 0034
 - Date: 2026-10-06
+
+[ADR 0034](0034-electron-beta-default.md) selects the Electron beta as the
+prebuilt default. Explicit `--build-from-source` retains legacy Swift recovery
+builds. The download, verification, staging and no-fallback contract below stays
+in force; the published Electron signature is preserved.
 
 ## Context
 

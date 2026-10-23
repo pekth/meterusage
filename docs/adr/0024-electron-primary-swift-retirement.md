@@ -1,8 +1,17 @@
 # ADR 0024: Develop Electron and retire the legacy Swift app in stages
 
-- Status: Accepted development direction; source retirement and public cutover pending
+- Status: Accepted development direction; distribution amended by ADR 0034; source retirement and stable cutover pending
 - Date: 2026-10-14
 - Amends: [ADR 0010](0010-macos-typescript-electron.md), for ongoing development and eventual Swift retirement only
+
+## Distribution amendment (2026-10-22)
+
+[ADR 0034](0034-electron-beta-default.md) supersedes this record's Swift-default
+and optional-beta distribution statements. Electron beta is now the sole offered
+app and default installer target; historical Swift source/releases remain
+recovery/reference material. The original decision below records the earlier
+direction. Source retirement and stable/native acceptance remain open. The beta
+updater now uses the release list as documented in [versions](../VERSIONS.md#update-channels).
 
 ## Decision
 

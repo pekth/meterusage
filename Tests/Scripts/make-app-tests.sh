@@ -28,10 +28,11 @@ case "$name" in
     sysctl)
         if [ "$TEST_CASE" = unsupported-arch ]; then echo 0; else echo 1; fi ;;
     curl)
+        printf '%s\n' "$@" > "$TEST_URL_ARGS"
         [ "$TEST_CASE" != download-failed ] || exit 22
         printf 'synthetic archive\n' > "${!#}" ;;
     shasum)
-        cat >/dev/null
+        cat > "$TEST_DIGEST_INPUT"
         [ "$TEST_CASE" != checksum-failed ] ;;
     ditto)
         if [ "$1" = -x ]; then
@@ -48,6 +49,7 @@ case "$name" in
             cp -R "$1" "$2"
         fi ;;
     codesign)
+        printf '%s\n' "$@" >> "$TEST_SIGN_ARGS"
         [ "$TEST_CASE" != signature-failed ] || exit 1
         if [ "$TEST_CASE" = staged-signature-failed ] && [[ "${!#}" != */unpacked/* ]]; then
             exit 1
@@ -69,7 +71,8 @@ run_case() {
     mkdir -p "${WORK}/repo/dist/MeterUsage.app"
     printf 'existing bundle\n' > "${WORK}/repo/dist/MeterUsage.app/preserve"
     : > "${WORK}/calls"
-    PATH="${WORK}/bin:$PATH" TEST_CASE="$scenario" TEST_CALLS="${WORK}/calls" STAGING_DIR="${WORK}/foreign-stage" \
+    : > "${WORK}/sign-args"
+    PATH="${WORK}/bin:$PATH" TEST_CASE="$scenario" TEST_CALLS="${WORK}/calls" TEST_URL_ARGS="${WORK}/url-args" TEST_DIGEST_INPUT="${WORK}/digest-input" TEST_SIGN_ARGS="${WORK}/sign-args" STAGING_DIR="${WORK}/foreign-stage" \
         bash "${WORK}/repo/Scripts/make-app.sh" "$@" > "${WORK}/output" 2>&1 || result=$?
     if [ "$result" -ne "$expected" ]; then
         cat "${WORK}/output" >&2
@@ -85,6 +88,11 @@ run_case() {
         fi
     fi
     if [ "$expected" -eq 0 ]; then
+        grep -qx 'https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.7/MeterUsage-0.3.0-beta.7-mac-arm64.zip' "${WORK}/url-args" || { echo 'FAIL: default Electron beta asset URL' >&2; exit 1; }
+        grep -q '^e36a7f589788da21809ca6b1bff5fa91134ca820b96f756bc153cc5fe90eeaca  ' "${WORK}/digest-input" || { echo 'FAIL: default Electron beta digest' >&2; exit 1; }
+        grep -q 'MeterUsage 0.3.0-beta.7' "${WORK}/output"
+        test "$(grep -c '^--verify$' "${WORK}/sign-args")" -eq 2
+        if grep -Eq '^--(force|sign)$' "${WORK}/sign-args"; then echo 'FAIL: default path changed the published signature' >&2; exit 1; fi
         test -x "${WORK}/repo/dist/MeterUsage.app/Contents/MacOS/meterusage"
         test ! -e "${WORK}/repo/dist/MeterUsage.app/preserve"
     else
