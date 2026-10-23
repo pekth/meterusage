@@ -4,6 +4,10 @@ Release documentation refresh: 2026-10-23 for build 78.
 
 ## Renderer provider marks
 
+- Side-notch rings center an 18-pixel inner disc and 14-pixel provider mark
+  inside the 22-pixel meter. Even frame sizes avoid half-pixel icon origins;
+  Grok retains its existing optical correction for asymmetric artwork.
+
 - The OpenRouter, Cursor, Copilot and Gemini masks are checked-in PNG exports
   of the existing SF Symbol stand-ins. Renderer builds copy `Resources/`
   without requiring a fresh macOS symbol export.

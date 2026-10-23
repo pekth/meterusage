@@ -8,6 +8,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Center side-notch provider marks on whole-pixel frames inside their quota rings.
+
 - Find the Codex helper in current Codex desktop installs, which ship as
   `ChatGPT.app` with the helper under `Contents/Resources/codex-cli/bin`.
   Desktop-only users previously could not connect Codex and saw "Open Codex on
