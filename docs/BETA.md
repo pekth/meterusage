@@ -1,14 +1,14 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.8, build 78** is the sole offered app and default
+MeterUsage **0.3.0-beta.9, build 79** is the sole offered app and default
 download. It remains a beta. The ZIP supports Apple silicon and macOS 13 or
 later and is Developer ID signed, notarized and stapled. Historical Swift
 source/releases remain available for recovery; stable acceptance is still open.
 
 ## Install
 
-1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.8/MeterUsage-0.3.0-beta.8-mac-arm64.zip)
-   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.8/SHA256SUMS).
+1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.9/MeterUsage-0.3.0-beta.9-mac-arm64.zip)
+   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.9/SHA256SUMS).
 2. Quit MeterUsage and keep a copy of your existing app and its saved data for
    rollback. The beta shares the app identity and data locations with Swift.
 3. Unzip the download, move `MeterUsage.app` to Applications, and open it.
@@ -19,7 +19,7 @@ No Node, pnpm, Swift or Xcode installation is needed to use this prebuilt beta.
 Do not run Electron and a historical Swift app together against a normal profile.
 Beta 5 and later check GitHub
 hourly while **Check for updates** is on and offer newer betas or a newer
-stable release in the app, with a notification. Beta 8 shows one update
+stable release in the app, with a notification. Beta 8 and later show one update
 notice with an inline icon in Usage and Settings > General. Install and Dismiss
 are disabled while a request, download or installation is pending; failed offers
 retain Retry update. **Install update** asks for confirmation, downloads the ZIP, verifies
@@ -38,7 +38,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-c0f28a79dd59eef82c9eb251a83f7c377b6da4d46bf40f61e4304ee0447c9f00
+ea671095fed77dcb51eb7b826c42bbe0b0dfee4d8c8b945c1800e6d111a31159
 ```
 
 ## Provider coverage
@@ -80,8 +80,8 @@ c0f28a79dd59eef82c9eb251a83f7c377b6da4d46bf40f61e4304ee0447c9f00
   preserved and newly pasted keys are not saved. OpenRouter keeps its existing
   balance and aggregate activity source. Read [API setup and limits](API_USAGE_BETA.md).
 
-See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.8/docs/electron/README.md#source-choices),
-[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.8/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.8/docs/PRIVACY.md).
+See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.9/docs/electron/README.md#source-choices),
+[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.9/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.9/docs/PRIVACY.md).
 
 ## Known limits
 
@@ -111,24 +111,28 @@ See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.8/docs
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.
-Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.8/docs/REPORTING.md) before sending.
+Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.9/docs/REPORTING.md) before sending.
 Never include tokens, passwords or raw account files in an issue.
 
 ## Build and screenshot identity
 
 The signed artifact was built from a source tree identical to main
-`dd2ed5f4bd94d7d521b762eace9d988c10fc963f`, which adds the shared update notice
-(#80) and the reset-time fix (#81) to beta.7. Source manifests retain `0.2.41`;
-packaging sets `0.3.0-beta.8`, build 78. Screenshots are from build 61 and do
-not show the Quota activity heatmap or the reset line beside pace estimates.
+`c74ed544748b7dfc26d3e07ff543ea2e36834594`, which adds the desktop-only
+connection fixes (#83) to beta.8: Codex helper discovery in current `ChatGPT.app`
+installs and a distinct Claude Desktop message when background Keychain access
+was not kept. Source manifests retain `0.2.41`; packaging sets `0.3.0-beta.9`,
+build 79. Screenshots are from build 61 and do not show the Quota activity
+heatmap or the reset line beside pace estimates.
 
-Source validation recorded typecheck and 869 of 870 TypeScript tests; the
-remaining `notch-shell` packaging test times out identically on the parent
-commit. Hosted CI passed for #81. Apple accepted notarization; stapling,
-Gatekeeper (`Notarized Developer ID`), bundle version and the uploaded ZIP's
-SHA-256 were verified separately. Installation from the published ZIP was
-verified on one Mac; installation and relaunch through the in-app updater
-remain unverified. The new artifact does
+Source validation recorded typecheck and 877 TypeScript tests on Linux; hosted
+CI passed for #83. On the packaging Mac, the same 75 environment-dependent tests
+fail identically on beta.8's source, and every test added by #83 passes. Apple
+accepted notarization; stapling, Gatekeeper (`Notarized Developer ID`), bundle
+version and the uploaded ZIP's SHA-256 were verified separately. Installation
+from the published ZIP was verified on one Mac. Codex browser sign-in through
+the new helper and the Keychain-denied message were not exercised against real
+accounts. Installation and relaunch through the in-app updater remain
+unverified. The new artifact does
 not close the native acceptance gaps above.
 
 The [screenshot gallery](SCREENSHOTS.md) uses invented demo data and the actual
