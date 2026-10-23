@@ -261,7 +261,7 @@ it("collects Grok observations before displaying a rate and preserves measured z
 
 it("hides forecasts when pacing is disabled and retains the reported reset time", () => {
   const render = (pacing: boolean) => renderToStaticMarkup(createElement(Meter, { w, now, pacing }));
-  expect(render(true)).toContain("left");
+  expect(render(true)).toContain("left"); expect(render(true)).toContain("Resets ");
   expect(render(false)).not.toContain("left"); expect(render(false)).toContain("Resets ");
 });
 
