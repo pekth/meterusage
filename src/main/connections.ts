@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Launch } from "./launch";
 import { Preferences } from "./preferences";
-import { ClaudeBrowserVerification, boundedChild, cliEnvironment, cliPath, codexRPC, endpoints, claudeUsageURL, httpTransport, runCommand, type Command, type HTTP } from "./providers/transport";
+import { ClaudeBrowserVerification, CommandFailure, boundedChild, cliEnvironment, cliPath, codexRPC, endpoints, claudeUsageURL, httpTransport, runCommand, type Command, type HTTP } from "./providers/transport";
 import { object, parseCodex } from "./providers/parsers";
 import { parseCodexAccountUsage } from "./providers/codex-account-usage";
 import { desktopQuota, readDesktopCredential, desktopReadErrors, validClaudeIdentity, verifyDesktopAccount } from "./providers/claude-desktop";
@@ -79,9 +79,12 @@ export class DesktopConnections {
   configured(provider: ConnectionProvider) { return this.prefs.values[this.key(provider)] !== ""; }
   private key(provider: ConnectionProvider) { return provider === "codex" ? "desktopCodexConnection" : provider === "claude" ? "desktopClaudeIdentity" : provider === "antigravity" ? "desktopAntigravityIdentity" : "desktopGrokIdentity"; }
   private binary() {
+    // Current Codex downloads install as ChatGPT.app with the helper under codex-cli; older installs keep Codex.app.
     for (const root of ["/Applications", join(this.launch.home, "Applications")]) {
-      const path = join(root, "Codex.app/Contents/Resources/codex");
-      try { accessSync(path, constants.X_OK); return path; } catch { /* Existing command installations remain supported. */ }
+      for (const helper of ["ChatGPT.app/Contents/Resources/codex-cli/bin/codex", "Codex.app/Contents/Resources/codex-cli/bin/codex", "Codex.app/Contents/Resources/codex"]) {
+        const path = join(root, helper);
+        try { accessSync(path, constants.X_OK); return path; } catch { /* Existing command installations remain supported. */ }
+      }
     }
     return cliPath("codex", this.launch.home, this.launch.env);
   }
@@ -96,7 +99,10 @@ export class DesktopConnections {
       const password = await this.command(this.helper, allowUI ? ["--allow-ui"] : [], { signal, timeoutMs: allowUI ? 60000 : 5000, maxBytes: 4096 });
       guard(); signal?.throwIfAborted();
       return password;
-    } catch { throw new Unavailable("notSignedIn", "Claude Desktop"); }
+    } catch (error) {
+      // Exit 2: the Keychain item exists but background reads were not granted Always Allow.
+      throw new Unavailable(!allowUI && error instanceof CommandFailure && error.exitCode === 2 ? "keychainDenied" : "notSignedIn", "Claude Desktop");
+    }
   }
   private async claudeQuota(allowUI: boolean, signal: AbortSignal, guard: () => void, expected?: string, reading?: (stage: keyof typeof desktopReadErrors) => void) {
     const check = () => { guard(); signal.throwIfAborted(); };
@@ -257,11 +263,15 @@ export class DesktopConnections {
     let grokSourceSaved = false;
     let grokError = "Could not connect Grok Bot Desktop. Sign in to Grok Bot, check allowance and Keychain access, then reconnect.";
     let claudeError = "Open Claude Desktop and sign in, then try connecting again";
+    let codexError = "Open Codex on this Mac, then try connecting again";
     try {
       if (!await consent()) return false;
       controller.signal.throwIfAborted();
       if (provider === "codex") {
-        const binary = this.binary(), id = randomUUID();
+        let binary: string;
+        try { binary = this.binary(); }
+        catch (error) { if (error instanceof Unavailable && error.code === "cliNotFound") codexError = "Codex app not found in Applications. Install or update Codex, then try connecting again"; throw error; }
+        const id = randomUUID();
         // An unfinished profile permits cleanup, never collection.
         await this.disable("codex");
         await this.prefs.set("desktopCodexCleanup", id); candidateID = id;
@@ -324,7 +334,7 @@ export class DesktopConnections {
         try { await this.prefs.set("desktopGrokSource", previousGrokSource); }
         catch { this.prefs.values.desktopGrokSource = previousGrokSource; }
       }
-      this.errors.add(provider); throw new Error(provider === "codex" ? "Open Codex on this Mac, then try connecting again" : provider === "antigravity" ? "Open one Antigravity Desktop account and sign in, then try connecting again" : provider === "grok" ? grokError : controller.signal.aborted ? "Open Claude Desktop and sign in, then try connecting again" : claudeError);
+      this.errors.add(provider); throw new Error(provider === "codex" ? codexError : provider === "antigravity" ? "Open one Antigravity Desktop account and sign in, then try connecting again" : provider === "grok" ? grokError : controller.signal.aborted ? "Open Claude Desktop and sign in, then try connecting again" : claudeError);
     }
     finally { finish(); }
   }

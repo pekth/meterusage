@@ -8,6 +8,13 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Find the Codex helper in current Codex desktop installs, which ship as
+  `ChatGPT.app` with the helper under `Contents/Resources/codex-cli/bin`.
+  Desktop-only users previously could not connect Codex and saw "Open Codex on
+  this Mac". A missing app now reports that Codex was not found.
+- Report a refused background Keychain read for Claude Desktop as "Keychain
+  access was not kept" with a reconnect-and-Always-Allow instruction, instead of
+  "Not signed in to Claude Desktop".
 - Keep the reported reset time visible on quota windows that show a pace
   estimate. A "burning fast" Codex window previously replaced its reset time
   with the time-left estimate; the reset now appears on its own line.
