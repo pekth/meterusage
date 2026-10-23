@@ -143,8 +143,8 @@ See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
 
 ## TypeScript Electron candidate
 
-The source manifest retains 0.2.41. The default Electron beta is 0.3.0-beta.7,
-build 77, with the version explicitly set during packaging. See the
+The source manifest retains 0.2.41. The default Electron beta is 0.3.0-beta.8,
+build 78, with the version explicitly set during packaging. See the
 [beta guide](docs/BETA.md) for the signed artifact and incomplete native
 acceptance, and the [Electron guide](docs/electron/README.md) for source choices
 and parity gaps.

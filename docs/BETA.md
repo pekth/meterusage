@@ -1,14 +1,14 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.7, build 77** is the sole offered app and default
+MeterUsage **0.3.0-beta.8, build 78** is the sole offered app and default
 download. It remains a beta. The ZIP supports Apple silicon and macOS 13 or
 later and is Developer ID signed, notarized and stapled. Historical Swift
 source/releases remain available for recovery; stable acceptance is still open.
 
 ## Install
 
-1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.7/MeterUsage-0.3.0-beta.7-mac-arm64.zip)
-   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.7/SHA256SUMS).
+1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.8/MeterUsage-0.3.0-beta.8-mac-arm64.zip)
+   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.8/SHA256SUMS).
 2. Quit MeterUsage and keep a copy of your existing app and its saved data for
    rollback. The beta shares the app identity and data locations with Swift.
 3. Unzip the download, move `MeterUsage.app` to Applications, and open it.
@@ -19,7 +19,7 @@ No Node, pnpm, Swift or Xcode installation is needed to use this prebuilt beta.
 Do not run Electron and a historical Swift app together against a normal profile.
 Beta 5 and later check GitHub
 hourly while **Check for updates** is on and offer newer betas or a newer
-stable release in the app, with a notification. Current source shows one update
+stable release in the app, with a notification. Beta 8 shows one update
 notice with an inline icon in Usage and Settings > General. Install and Dismiss
 are disabled while a request, download or installation is pending; failed offers
 retain Retry update. **Install update** asks for confirmation, downloads the ZIP, verifies
@@ -28,7 +28,6 @@ and relaunches. Beta 4 and earlier cannot see betas; install the current beta
 manually once. `Scripts/make-app.sh` now prepares the pinned Electron beta with
 checksum/signature verification, destination staging and no compiler fallback.
 It preserves the published signature. Preparing output does not install it.
-The notice changes are source changes after beta.7, not part of that published ZIP.
 
 To check the ZIP in its download directory:
 
@@ -39,7 +38,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-e36a7f589788da21809ca6b1bff5fa91134ca820b96f756bc153cc5fe90eeaca
+c0f28a79dd59eef82c9eb251a83f7c377b6da4d46bf40f61e4304ee0447c9f00
 ```
 
 ## Provider coverage
@@ -81,8 +80,8 @@ e36a7f589788da21809ca6b1bff5fa91134ca820b96f756bc153cc5fe90eeaca
   preserved and newly pasted keys are not saved. OpenRouter keeps its existing
   balance and aggregate activity source. Read [API setup and limits](API_USAGE_BETA.md).
 
-See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/electron/README.md#source-choices),
-[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/PRIVACY.md).
+See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.8/docs/electron/README.md#source-choices),
+[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.8/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.8/docs/PRIVACY.md).
 
 ## Known limits
 
@@ -112,25 +111,24 @@ See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.
-Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/REPORTING.md) before sending.
+Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.8/docs/REPORTING.md) before sending.
 Never include tokens, passwords or raw account files in an issue.
 
 ## Build and screenshot identity
 
-The signed artifact uses executable source
-`9cb8880ceedf7107558f7cf8197885753059e28b`, the merged provider-icon repair
-and account-history fixes on main. Release documentation is a documentation-only
-descendant. The beta.7 artifact reuses build 76's compiled code and changes only
-bundle/package version metadata, ASAR integrity and the resulting outer
-signature. Source manifests retain `0.2.41`; packaging sets `0.3.0-beta.7`,
-build 77. Screenshots are from build 61 and do not show the Quota activity heatmap.
+The signed artifact was built from a source tree identical to main
+`dd2ed5f4bd94d7d521b762eace9d988c10fc963f`, which adds the shared update notice
+(#80) and the reset-time fix (#81) to beta.7. Source manifests retain `0.2.41`;
+packaging sets `0.3.0-beta.8`, build 78. Screenshots are from build 61 and do
+not show the Quota activity heatmap or the reset line beside pace estimates.
 
-Matching source validation recorded 860 TypeScript tests, typecheck and production
-bundling. Hosted CI passed the TypeScript checks, Swift build and 410 Swift
-tests. Unchanged executable inputs reuse this evidence. Signing, notarization,
-stapling, Gatekeeper, bundle identity and ZIP bytes were verified separately.
-Installed beta 5 previously recorded discovery of beta 6; installation and
-relaunch through the in-app updater remain unverified. The new artifact does
+Source validation recorded typecheck and 869 of 870 TypeScript tests; the
+remaining `notch-shell` packaging test times out identically on the parent
+commit. Hosted CI passed for #81. Apple accepted notarization; stapling,
+Gatekeeper (`Notarized Developer ID`), bundle version and the uploaded ZIP's
+SHA-256 were verified separately. Installation from the published ZIP was
+verified on one Mac; installation and relaunch through the in-app updater
+remain unverified. The new artifact does
 not close the native acceptance gaps above.
 
 The [screenshot gallery](SCREENSHOTS.md) uses invented demo data and the actual
