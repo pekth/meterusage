@@ -1,13 +1,13 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.6, build 75** is an opt-in macOS beta. The ZIP supports
+MeterUsage **0.3.0-beta.7, build 77** is an opt-in macOS beta. The ZIP supports
 Apple silicon and macOS 13 or later. It is Developer ID signed, notarized and
 stapled. Swift `0.2.41` remains the stable release and updater download.
 
 ## Install
 
-1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.6/MeterUsage-0.3.0-beta.6-mac-arm64.zip)
-   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.6/SHA256SUMS).
+1. Download [the beta ZIP](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.7/MeterUsage-0.3.0-beta.7-mac-arm64.zip)
+   and [SHA256SUMS](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.7/SHA256SUMS).
 2. Quit MeterUsage and keep a copy of your existing app and its saved data for
    rollback. The beta shares the app identity and data locations with Swift.
 3. Unzip the download, move `MeterUsage.app` to Applications, and open it.
@@ -30,7 +30,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-c8d8c629fdd8a3332efdc2cfe5ae93aeff9e6ab5a6b8c7117450c025efa6775c
+e36a7f589788da21809ca6b1bff5fa91134ca820b96f756bc153cc5fe90eeaca
 ```
 
 ## Provider coverage
@@ -72,15 +72,17 @@ c8d8c629fdd8a3332efdc2cfe5ae93aeff9e6ab5a6b8c7117450c025efa6775c
   preserved and newly pasted keys are not saved. OpenRouter keeps its existing
   balance and aggregate activity source. Read [API setup and limits](API_USAGE_BETA.md).
 
-See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/electron/README.md#source-choices),
-[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/PRIVACY.md).
+See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/electron/README.md#source-choices),
+[desktop connections](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/PRIVACY.md).
 
 ## Known limits
 
-- Beta.6 can retain the previous account's quota activity after disconnecting
-  and connecting a replacement account. Main isolates that series and preserves
-  Muse history across collection Stop/Start. Those source fixes have not been
-  packaged in this beta.
+- Beta.7 starts a fresh quota activity series when a connection changes and
+  preserves Muse history across collection Stop/Start. Previous beta.6 users
+  should update to receive these fixes.
+- Provider masks for OpenRouter, Cursor, Copilot and Gemini ship in the app.
+  Muse Code uses the official Meta infinity mark from its site. Installed
+  rendering of these repaired icons remains visually unchecked.
 
 - Settings now shows the running bundle version. Source previews omit it when
   packaging metadata is absent.
@@ -101,27 +103,26 @@ See [source choices](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.
-Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.6/docs/REPORTING.md) before sending.
+Review the [report contents and privacy limits](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/REPORTING.md) before sending.
 Never include tokens, passwords or raw account files in an issue.
 
 ## Build and screenshot identity
 
-The signed artifact was built from source
-`023b753cfa1c248774efecb28a1770ee8de0950b`. Release documentation is a documentation-only descendant; executable
-inputs are unchanged. Screenshots are from build 61 and do not show the Quota
-activity heatmap. Source manifests retain `0.2.41`; beta packaging explicitly
-set `0.3.0-beta.6`.
+The signed artifact uses executable source
+`9cb8880ceedf7107558f7cf8197885753059e28b`, the merged provider-icon repair
+and account-history fixes on main. Release documentation is a documentation-only
+descendant. The beta.7 artifact reuses build 76's compiled code and changes only
+bundle/package version metadata, ASAR integrity and the resulting outer
+signature. Source manifests retain `0.2.41`; packaging sets `0.3.0-beta.7`,
+build 77. Screenshots are from build 61 and do not show the Quota activity heatmap.
 
-Matching validation recorded 849 tests across 33 files on macOS, TypeScript
-checking and production bundling. Swift build and 394 tests also passed on macOS for this source. The installed build was observed recording quota activity for Claude,
-Codex, Antigravity and Grok. Native rendering of filled heatmaps
-remains unverified. Signing, notarization, stapling, Gatekeeper,
-bundle identity and ZIP bytes were verified separately. Beta 6 changes only
-packaging metadata to version 0.3.0-beta.6, build 75; its executable source
-matches beta 5. Installed beta 5 recorded discovery of beta 6. Installation
-and relaunch through its updater remain pending because native UI automation
-was unavailable. These checks
-do not close the native acceptance gaps above.
+Matching source validation recorded 860 TypeScript tests, typecheck and production
+bundling. Hosted CI passed the TypeScript checks, Swift build and 410 Swift
+tests. Unchanged executable inputs reuse this evidence. Signing, notarization,
+stapling, Gatekeeper, bundle identity and ZIP bytes were verified separately.
+Installed beta 5 previously recorded discovery of beta 6; installation and
+relaunch through the in-app updater remain unverified. The new artifact does
+not close the native acceptance gaps above.
 
 The [screenshot gallery](SCREENSHOTS.md) uses invented demo data and the actual
 release renderer. It replaces old product captures without exposing real accounts.
