@@ -6,6 +6,12 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the reported reset time visible on quota windows that show a pace
+  estimate. A "burning fast" Codex window previously replaced its reset time
+  with the time-left estimate; the reset now appears on its own line.
+
 ### Electron beta distribution
 
 - Offer Electron beta as the sole/default app. Pin `Scripts/make-app.sh` to
