@@ -15,15 +15,16 @@ remain in this checkout; use the matching validation commands below.
 Fork the repository, make one focused change, run the checks below, and open a
 pull request.
 
-## Edition routing
+## Active app and legacy recovery
 
 New features target the [Electron implementation](docs/electron/README.md).
 The [legacy Swift app](docs/swift/README.md) is frozen for new features and kept
 for critical maintenance, transition compatibility and rollback. Both source
 trees remain until the [retirement conditions](docs/adr/0024-electron-primary-swift-retirement.md#retirement-conditions)
 pass. Validate both affected paths when a shared contract changes.
-`Scripts/make-app.sh` prepares the published Swift app by default and never
-builds Electron. Isolated demo/test profiles are required for candidate QA;
+`Scripts/make-app.sh` prepares the pinned Electron beta by default. Its explicit
+`--build-from-source` mode builds legacy Swift for recovery/reference only.
+Isolated demo/test profiles are required for candidate QA;
 shared normal profiles do not support safe side-by-side use.
 
 ## Before you start
@@ -32,9 +33,10 @@ Electron development uses the Node and pnpm versions declared in `package.json`.
 Follow [the Electron commands](#typescript-electron-candidate). Electron's macOS
 packaging still needs Swift for its Keychain helper and asset exporter.
 
-The published app is a macOS 13+ Swift menu-bar app. A TypeScript/Electron
-candidate is under development; see the candidate commands below. The package uses Swift tools
-version 5.9 and has no third-party package dependencies. Swift source builds need Xcode Command Line Tools:
+The offered app is the Electron beta for Apple silicon and macOS 13+; stable
+acceptance remains open. Retained Swift source uses Swift tools version 5.9
+and has no third-party package dependencies. Explicit legacy Swift builds need
+Xcode Command Line Tools:
 
 ```sh
 xcode-select --install
@@ -141,8 +143,8 @@ See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
 
 ## TypeScript Electron candidate
 
-The source manifest retains 0.2.41. The public Electron beta is 0.3.0-beta.6,
-build 75, with the version explicitly set during packaging. See the
+The source manifest retains 0.2.41. The default Electron beta is 0.3.0-beta.7,
+build 77, with the version explicitly set during packaging. See the
 [beta guide](docs/BETA.md) for the signed artifact and incomplete native
 acceptance, and the [Electron guide](docs/electron/README.md) for source choices
 and parity gaps.
@@ -186,7 +188,8 @@ pnpm package:mac
 `package:mac` exports the existing SF Symbol stand-ins, builds the app and
 packages an Apple silicon ZIP with publication disabled. It does not install
 or replace an app. Locally packaged output is not the verified public beta
-artifact. Keep the stable release and beta download routes separate.
+artifact. Historical Swift releases remain recovery material; stable Electron
+publication and acceptance are separate from the default beta download.
 Windows packaging, CI, native testing and release remain paused.
 
 electron-builder resolves `pnpm` from PATH when collecting production

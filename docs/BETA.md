@@ -1,8 +1,9 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.7, build 77** is an opt-in macOS beta. The ZIP supports
-Apple silicon and macOS 13 or later. It is Developer ID signed, notarized and
-stapled. Swift `0.2.41` remains the stable release and updater download.
+MeterUsage **0.3.0-beta.7, build 77** is the sole offered app and default
+download. It remains a beta. The ZIP supports Apple silicon and macOS 13 or
+later and is Developer ID signed, notarized and stapled. Historical Swift
+source/releases remain available for recovery; stable acceptance is still open.
 
 ## Install
 
@@ -15,11 +16,19 @@ stapled. Swift `0.2.41` remains the stable release and updater download.
    Selecting a method alone does not connect it. Use its connection button.
 
 No Node, pnpm, Swift or Xcode installation is needed to use this prebuilt beta.
-Do not run the two editions together against a normal profile. Beta 5 and later check GitHub
+Do not run Electron and a historical Swift app together against a normal profile.
+Beta 5 and later check GitHub
 hourly while **Check for updates** is on and offer newer betas or a newer
-stable release in the app, with a notification. **Install update** downloads the ZIP, verifies
+stable release in the app, with a notification. Current source shows one update
+notice with an inline icon in Usage and Settings > General. Install and Dismiss
+are disabled while a request, download or installation is pending; failed offers
+retain Retry update. **Install update** asks for confirmation, downloads the ZIP, verifies
 its GitHub SHA-256 digest, bundle identity and signature, then replaces the app
-and relaunches. Beta 4 and earlier cannot see betas; install beta 5 manually once. `Scripts/make-app.sh` still prepares the stable Swift download.
+and relaunches. Beta 4 and earlier cannot see betas; install the current beta
+manually once. `Scripts/make-app.sh` now prepares the pinned Electron beta with
+checksum/signature verification, destination staging and no compiler fallback.
+It preserves the published signature. Preparing output does not install it.
+The notice changes are source changes after beta.7, not part of that published ZIP.
 
 To check the ZIP in its download directory:
 

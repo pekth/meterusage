@@ -16,16 +16,18 @@
 
 ---
 
-## Released legacy Swift edition
+## Historical Swift recovery reference
 
-[Choose an edition](../../README.md) or read the [version comparison](../VERSIONS.md).
+Use the [Electron beta](../../README.md) for the offered app. This guide retains
+historical behavior and recovery instructions. See [versions](../VERSIONS.md).
 
 This guide describes the published Swift 0.2.41 app and retained Swift sources.
 The Swift app is frozen for new features. New feature work targets Electron;
-Swift receives only critical fixes and transition compatibility work. Keep this
-release as the stable download and rollback until the
-[retirement conditions](../adr/0024-electron-primary-swift-retirement.md#retirement-conditions)
-pass. Removing the old app source later will preserve its retrievable history.
+Swift receives only critical fixes and transition compatibility work. Preserve
+historical source/releases for recovery, with no separate offered edition.
+Source removal still requires the
+[retirement conditions](../adr/0024-electron-primary-swift-retirement.md#retirement-conditions).
+Stable acceptance and isolated Swift upgrade/rollback remain open.
 Current product images are in the [Electron beta gallery](../SCREENSHOTS.md).
 Old Swift product captures have been removed from the active documentation.
 
@@ -40,10 +42,10 @@ and reset times in the menu bar, popover and floating side notch.
 * **Existing provider access**: Uses existing provider setup; there is no account connection UI in Swift. Uses existing provider CLIs, local SQLite/JSON stores and aggregate usage endpoints.
 * **Agent Budget API**: Machine-readable JSON CLI (`meterusage json`) exporting burn rates, pacing, and time-to-empty for autonomous AI agents.
 
-[Download MeterUsage 0.2.41 for Apple silicon](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip),
+[Historical MeterUsage 0.2.41 ZIP for recovery](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip),
 unzip it, and drag `MeterUsage.app` to
 **Applications**. No Swift, Xcode, Command Line Tools, or Git is required.
-The current prebuilt release supports Apple silicon Macs with macOS 13 or later.
+The historical prebuilt release supports Apple silicon Macs with macOS 13 or later.
 See [installation](#download-and-installation) for first-launch steps.
 
 ---
@@ -122,30 +124,34 @@ MeterUsage reads selected numeric usage fields and existing provider access:
 
 ## Download and installation
 
-### Install the prebuilt app
+<a id="install-the-prebuilt-app"></a>
+### Recover the historical prebuilt app
 
 Installing and running MeterUsage does not require Swift, Xcode, Command Line
 Tools, or Git. The Swift runtime it uses ships with macOS.
 
-1. [Download MeterUsage 0.2.41 for Apple silicon](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip). This app ZIP is for Apple silicon Macs (M1 or later) with macOS 13 or later. Other versions are on [Releases](https://github.com/pekth/meterusage/releases). Choose the app ZIP, not GitHub's **Source code** archives.
+1. [Historical MeterUsage 0.2.41 ZIP for recovery](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip). This app ZIP is for Apple silicon Macs (M1 or later) with macOS 13 or later. Other versions are on [Releases](https://github.com/pekth/meterusage/releases). Choose the app ZIP, not GitHub's **Source code** archives.
 2. Unzip and drag `MeterUsage.app` to your `/Applications/` folder.
 3. Open `MeterUsage.app`. Releases are ad-hoc signed and are not notarized. If macOS blocks the first launch, right-click the app in Finder and choose **Open**, or use **Open Anyway** in System Settings → Privacy & Security.
 
 If a release has no app ZIP, use an earlier release that includes one or report
 the missing asset.
 
-### From a Git checkout (no Swift)
+<a id="from-a-git-checkout-no-swift"></a>
+### Explicit legacy source build
 
-If you already cloned this repository or downloaded its source archive, run:
+`./Scripts/make-app.sh` now prepares the Electron beta. For an explicit legacy
+Swift source build for recovery or reference, run:
 
 ```sh
-./Scripts/make-app.sh
+./Scripts/make-app.sh --build-from-source
 ```
 
-This downloads the verified prebuilt release to `dist/MeterUsage.app`. Drag
-that app to Applications and use the same first-launch steps above. It does
-not compile your checkout, install developer tools, or fall back to a source
-build when the download fails.
+That mode requires Swift and Xcode Command Line Tools and signs ad hoc. It does
+not reproduce the published Electron beta. The default download path never
+falls back to compilation. Use the historical ZIP above when recovering the
+published Swift release. Quit the active app and preserve app/data backups
+before replacement; native upgrade/rollback acceptance remains open.
 
 ---
 

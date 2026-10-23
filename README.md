@@ -5,23 +5,26 @@
 # MeterUsage
 
 MeterUsage monitors AI coding allowance and usage in a macOS menu bar and
-floating side notch. Electron is the active development target. The legacy
-Swift app remains the stable download and rollback option during migration.
+floating side notch. The Electron beta is the sole offered app and default
+download. Historical Swift source and releases remain available for recovery.
 
 ## Download
 
-| Edition | Current status | Setup and behavior |
-| --- | --- | --- |
-| Electron 0.3.0-beta.7, build 77 | Public beta for Apple silicon, macOS 13+; signed and notarized | [Download beta](https://github.com/pekth/meterusage/releases/tag/v0.3.0-beta.7) · [Beta guide](docs/BETA.md) |
-| Legacy Swift 0.2.41 | Frozen for new features; published stable download and migration rollback | [Swift guide](docs/swift/README.md) |
+[Download MeterUsage 0.3.0-beta.7, build 77](https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.7/MeterUsage-0.3.0-beta.7-mac-arm64.zip)
+for Apple silicon, macOS 13 or later. This is a **beta**, Developer ID signed
+and notarized. See [installation and known limits](docs/BETA.md).
 
-Electron is the active app for new features. Swift remains the stable download
-and rollback reference. Install the beta manually once. From beta 5 it checks
-GitHub for newer betas and offers to install them; the stable updater does
-not offer betas. Quit the existing MeterUsage before replacing it, and keep a copy
-for rollback. Both apps share their identity and saved data, so do not run them
-together against a normal profile. See [beta installation and limits](docs/BETA.md)
-and the [version strategy](docs/VERSIONS.md).
+Quit MeterUsage before replacing it and keep a recovery copy of the app and
+its saved data. Beta 5 and later check hourly for newer betas or a newer stable
+release when **Check for updates** is on. Current source adds an update notice
+in Usage and Settings > General for installation with confirmation or dismissal.
+Downloads and installation show busy states; failures offer retry. This notice
+change is not part of the published beta.7 ZIP.
+
+Stable acceptance remains open. Historical Swift releases and source are
+[recovery references](docs/swift/README.md), with no separate offered edition.
+Both implementations share app identity and saved data. Do not run them together
+against a normal profile. See [versions and recovery](docs/VERSIONS.md).
 
 ## Current beta UI
 
@@ -44,16 +47,11 @@ one-time key. Pasted keys are not saved. OpenRouter retains its existing balance
 and activity integration. Desktop compatibility and billing coverage vary;
 see [known beta limits](docs/BETA.md#known-limits).
 
-## Stable Swift installation
+## Installation
 
-The default installation is the published Swift app for Apple silicon Macs
-with macOS 13 or later. No Swift, Xcode, Command Line Tools or Git is required.
-
-1. [Download MeterUsage 0.2.41](https://github.com/pekth/meterusage/releases/download/v0.2.41/MeterUsage-0.2.41.zip).
-2. Unzip and drag `MeterUsage.app` to Applications.
-3. Open the app. The release is ad-hoc signed and not notarized. If macOS blocks
-   first launch, right-click the app in Finder and choose **Open**, or use
-   **Open Anyway** in System Settings > Privacy & Security.
+No Node, pnpm, Swift, Xcode, Command Line Tools or Git is required to use the
+prebuilt beta. Quit MeterUsage, unzip the download, drag `MeterUsage.app` to
+Applications, and open it. Keep your previous app and data backup for recovery.
 
 From a Git checkout or source archive, run:
 
@@ -61,10 +59,12 @@ From a Git checkout or source archive, run:
 ./Scripts/make-app.sh
 ```
 
-This downloads the pinned Swift ZIP, verifies its checksum and signature, and
-prepares `dist/MeterUsage.app`. Drag that app to Applications to install it.
-The script does not build Electron. A failed download or verification does not
-fall back to compilation. See the [Swift installation guide](docs/swift/README.md#download-and-installation).
+This downloads the pinned Electron beta ZIP, verifies its checksum and
+signature, and prepares `dist/MeterUsage.app` with its published signature
+unchanged. Drag that app to Applications to install it. Failed download,
+copy or verification leaves existing generated output intact and never falls
+back to compilation. Explicit `--build-from-source` remains a
+[legacy Swift recovery build](docs/swift/README.md#from-a-git-checkout-no-swift).
 
 ## Setup and data coverage
 
@@ -82,21 +82,20 @@ remain the billing source of record. Read the [beta privacy contract](https://gi
 for Electron or the [retained Swift reporting privacy contract](docs/PRIVACY.md#legacy-swift-source-diagnostic-reports) before changing a
 data source or sharing screenshots.
 
-## Can both editions coexist?
+## Identity and recovery
 
-The beta tag contains the Electron source and retained Swift tree. The default
-branch retains stable Swift source during migration; the intended end state is one
-Electron app. Normal-profile side-by-side installation is unsafe:
-the app name, bundle ID and default preferences/data locations are shared.
-Use only the documented [isolated candidate QA profiles](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/electron/README.md#isolated-qa)
-for testing. A separate app identity and data root require a later decision;
-there is no automatic cutover. See [ADR 0010](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/adr/0010-macos-typescript-electron.md).
+Electron and retained Swift source use the same app name, bundle ID and default
+preferences/data locations. Normal-profile side-by-side use is unsafe. Use only
+[isolated candidate QA profiles](docs/electron/README.md#isolated-qa) for testing.
+Historical Swift source/releases remain retrievable; recovery requires a saved
+app and data backup. The distribution default does not establish stable
+acceptance or verify Swift upgrade/rollback. See [ADR 0034](docs/adr/0034-electron-beta-default.md).
 
 ## Documentation
 
 - [Beta download, verification and limits](docs/BETA.md)
 - [Current beta screenshots](docs/SCREENSHOTS.md)
-- [Swift guide](docs/swift/README.md)
+- [Historical Swift recovery reference](docs/swift/README.md)
 - [Electron guide and known gaps](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/electron/README.md)
 - [Versions and staged Swift retirement](docs/VERSIONS.md)
 - [Contributing](CONTRIBUTING.md)
@@ -121,7 +120,7 @@ See [Swift additional local accounts](docs/swift/README.md#second-accounts) and
 [Electron advanced local accounts](https://github.com/pekth/meterusage/blob/v0.3.0-beta.7/docs/electron/README.md#advanced-local-accounts).
 
 <a id="requirements"></a>
-See [Swift requirements](docs/swift/README.md#requirements).
+See [beta requirements](docs/BETA.md#install).
 
 <a id="contributing"></a>
 See [contributor setup](CONTRIBUTING.md).
@@ -147,7 +146,7 @@ See [privacy and data handling](docs/PRIVACY.md).
 
 <a id="download-and-installation"></a>
 <a id="install-the-prebuilt-app"></a><a id="from-a-git-checkout-no-swift"></a>
-See [installation details](docs/swift/README.md#download-and-installation).
+See [installation](#installation).
 
 <a id="report-a-problem"></a>
 See [beta diagnostics and bug reports](docs/BETA.md#known-limits) and the

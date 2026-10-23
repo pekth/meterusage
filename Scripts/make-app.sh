@@ -2,9 +2,9 @@
 #
 # Prepares dist/MeterUsage.app from a verified prebuilt release by default.
 #
-# Contributors can opt into a source build with --build-from-source.
-# Only that mode requires Swift and Xcode Command Line Tools. Both modes use
-# ad-hoc signing: no Apple Developer account or provisioning profile is needed.
+# Explicit legacy Swift recovery builds use --build-from-source. Only that
+# mode requires Swift and Xcode Command Line Tools and signs ad hoc. The
+# default Electron beta download keeps its published signature unchanged.
 #
 # Usage:  ./Scripts/make-app.sh
 # Build:  ./Scripts/make-app.sh --build-from-source
@@ -43,9 +43,9 @@ if [ "$#" -eq 0 ]; then
     fi
 
     # Pin the reviewed release and digest together; never fall back to a build.
-    RELEASE_VERSION="0.2.41"
-    RELEASE_SHA256="b759aad8a410050ee9190a8848426ea2fa3d6600be7ade16b6abbd417bfefdb6"
-    RELEASE_URL="https://github.com/pekth/meterusage/releases/download/v${RELEASE_VERSION}/MeterUsage-${RELEASE_VERSION}.zip"
+    RELEASE_VERSION="0.3.0-beta.7"
+    RELEASE_SHA256="e36a7f589788da21809ca6b1bff5fa91134ca820b96f756bc153cc5fe90eeaca"
+    RELEASE_URL="https://github.com/pekth/meterusage/releases/download/v${RELEASE_VERSION}/MeterUsage-${RELEASE_VERSION}-mac-arm64.zip"
     TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/meterusage-download.XXXXXX")"
     STAGING_DIR=""
     trap 'rm -rf "${TEMP_DIR}" "${STAGING_DIR:-}"' EXIT
