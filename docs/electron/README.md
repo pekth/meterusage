@@ -4,7 +4,7 @@ Electron is the sole offered app, default download and active target for new
 MeterUsage features. Historical Swift source/releases remain recovery/reference
 material under [ADR 0034](../adr/0034-electron-beta-default.md).
 
-The default public beta is **0.3.0-beta.7, build 77**, for Apple silicon and
+The default public beta is **0.3.0-beta.8, build 78**, for Apple silicon and
 macOS 13+. Use the [beta installation guide](../BETA.md) or run
 `Scripts/make-app.sh` for verified prebuilt preparation. The ZIP is Developer ID
 signed and notarized. Source manifests retain `0.2.41`; packaging sets the beta
@@ -148,13 +148,12 @@ The source comparison identifies five primary UI omissions/reductions:
   remain on Usage cards.
 - The independent per-provider seven-day sparkline is absent; the optional
   30-day chart and aggregate seven-day total remain.
-- Reset countdown/date is not independent of projected exhaustion. ETA can
-  replace the reset date field; notch header countdown is absent.
+- Quota rows show the reset date beside any projected exhaustion. The notch
+  header countdown is absent.
 - Current source shares an update notice with an inline icon between Usage and
   Settings > General. Install/Retry and Dismiss reuse existing actions; pending
   requests/downloads/installs disable both. Release notes and detailed progress
-  remain absent. Native update completion remains unverified; the notice change
-  is not included in the published beta.7 ZIP.
+  remain absent. Native update completion remains unverified.
 - The tray context menu lacks **Refresh Now**. Usage and notch refresh remain.
 
 Smaller display gaps include today's session count in token-unavailable
