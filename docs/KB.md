@@ -1,6 +1,6 @@
 # Project knowledge
 
-Release documentation refresh: 2026-10-22 for build 75.
+Release documentation refresh: 2026-10-22 for build 77.
 
 ## Renderer provider marks
 
@@ -22,7 +22,7 @@ Release documentation refresh: 2026-10-22 for build 75.
   native acceptance, deliberate cutover and retrievable archive checks pass.
   Source retirement is pending. Electron-required Swift helpers and assets stay.
 - [Swift 0.2.41](swift/README.md) is the published default install route.
-  [Electron 0.3.0-beta.6, build 75](BETA.md) is an opt-in public prerelease,
+  [Electron 0.3.0-beta.7, build 77](BETA.md) is an opt-in public prerelease,
   signed and notarized for Apple silicon. Native acceptance remains incomplete.
   Source manifests retain 0.2.41; packaging sets the beta version and Settings
   shows the running bundle version. Stable updaters do not offer the beta.
@@ -59,9 +59,11 @@ Release documentation refresh: 2026-10-22 for build 75.
 
 - Default branch: `main`. The Electron integration merged through PR #76 as
   `0d514dd`, with 855 TypeScript tests, typecheck/build, Swift build and 410
-  tests, passing hosted CI and independent source review. The published beta.6
-  remains the earlier artifact; these checks do not prove its native updater
-  installation or the isolated Swift cutover.
+  tests, passing hosted CI and independent source review. Beta.7 includes the
+  account-history fixes and PR #78 provider-icon repair.
+  The latter passed 860 TypeScript tests, typecheck/build, Swift build and 410
+  hosted Swift tests, plus independent source review. These checks do not prove
+  native updater installation or the isolated Swift cutover.
 - Swift baseline revision: `4b913db3a3a8eb2602296489872af2ecaa5d0530`. The Electron candidate is the accompanying migration change; native acceptance remains open.
 - This index is public-safe repository documentation. It does not prove current local provider state, runtime behavior, release availability, or external service state.
 

@@ -6,17 +6,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-
-- Include the existing OpenRouter, Cursor, Copilot and Gemini masks in renderer
-  builds without a macOS symbol export. Replace Muse Code's placeholder M with
-  the official Meta infinity mark used on its site, retaining status tint.
-
 ### Electron source integration
 
 - Merge the active Electron source stack onto main through PR #76. Retain
   Swift maintenance and rollback source, and keep Swift 0.2.41 stable. The
-  published beta.6 artifact predates the following history fixes.
+  beta.7 artifact includes the following history fixes.
 
 - Start a fresh quota activity series when a connection changes. Retain prior
   observations outside the replacement account's heatmap, and preserve the
@@ -47,6 +41,25 @@ follows [Semantic Versioning](https://semver.org/).
   Settings states that diagnostics are sent only on request.
   Pending reports and receipts survive leaving and returning to Settings,
   preventing a second submission while the first is in flight.
+
+## [0.3.0-beta.7] - 2026-10-22
+
+### Fixed
+
+- Include the existing OpenRouter, Cursor, Copilot and Gemini masks in renderer
+  builds without a macOS symbol export. Replace Muse Code's placeholder M with
+  the official Meta infinity mark used on its site, retaining status tint.
+
+- Start a fresh quota activity series when a connection changes, and preserve
+  the current Muse series across collection Stop/Start. Beta.6 predates these
+  source fixes.
+
+### Beta package
+
+- Publish the merged Electron source as beta.7, build 77, signed, notarized and
+  stapled for Apple silicon. Swift 0.2.41 remains stable. In-app replacement and
+  relaunch, isolated Swift upgrade/rollback and other native acceptance remain
+  unverified.
 
 ## [0.3.0-beta.6] - 2026-10-22
 
