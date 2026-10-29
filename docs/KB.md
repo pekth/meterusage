@@ -2,6 +2,13 @@
 
 Release documentation refresh: 2026-10-23 for build 78.
 
+## Contributor checks
+
+- The pre-commit credential and personal-path checks consume complete staged
+  input so large diffs cannot hide matches through SIGPIPE under `pipefail`.
+  `python3 .githooks/test-pre-commit.py` exercises the hook in disposable repos
+  with synthetic data.
+
 ## Renderer provider marks
 
 - Side-notch rings center an 18-pixel inner disc and 14-pixel provider mark

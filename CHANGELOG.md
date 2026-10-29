@@ -8,6 +8,8 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Keep credential and personal-path checks effective on large staged diffs.
+
 - Center side-notch provider marks on whole-pixel frames inside their quota rings.
 
 - Find the Codex helper in current Codex desktop installs, which ship as

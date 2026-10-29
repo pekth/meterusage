@@ -20,7 +20,8 @@ staged=$(git diff --cached --name-only --diff-filter=ACM)
 added=$(git diff --cached --unified=0 -- $staged | grep '^+' | grep -v '^+++' || true)
 
 scan() { # <label> <regex>
-  if printf '%s' "$added" | grep -qE "$2"; then
+  # Drain input: grep -q can SIGPIPE the producer and hide a match with pipefail.
+  if printf '%s' "$added" | grep -E "$2" >/dev/null; then
     note "BLOCKED: $1"
     fail=1
   fi
@@ -49,7 +50,7 @@ scan "NAME_SECRET=value assignment"          '[A-Z_]*(SECRET|TOKEN|PASSWORD|APIK
 # outcome a secret guard must never have.
 if printf '%s' "$added" \
      | grep -oE '/Users/[A-Za-z0-9._-]+/' \
-     | grep -qvE '^/Users/(testuser|example)/'; then
+     | grep -vE '^/Users/(testuser|example)/' >/dev/null; then
   note "BLOCKED: absolute /Users/<name>/ path (use testuser/example in fixtures)"
   fail=1
 fi

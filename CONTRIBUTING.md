@@ -258,6 +258,9 @@ changing a data source or adding logging. That document defines the project
 boundary: do not display or log tokens, account identifiers, hostnames, absolute
 user paths, or raw transcripts.
 
+Run `python3 .githooks/test-pre-commit.py` to check the hook with synthetic
+staged diffs, including large inputs and unstaged-only content.
+
 The pre-commit hook scans staged changes for credential-shaped data and personal
 paths. If it blocks a commit, remove the sensitive content and check the diff.
 Do not bypass the hook until you have confirmed that a match is a false
