@@ -43,8 +43,8 @@ if [ "$#" -eq 0 ]; then
     fi
 
     # Pin the reviewed release and digest together; never fall back to a build.
-    RELEASE_VERSION="0.3.0-beta.8"
-    RELEASE_SHA256="c0f28a79dd59eef82c9eb251a83f7c377b6da4d46bf40f61e4304ee0447c9f00"
+    RELEASE_VERSION="0.3.0-beta.9"
+    RELEASE_SHA256="ea671095fed77dcb51eb7b826c42bbe0b0dfee4d8c8b945c1800e6d111a31159"
     RELEASE_URL="https://github.com/pekth/meterusage/releases/download/v${RELEASE_VERSION}/MeterUsage-${RELEASE_VERSION}-mac-arm64.zip"
     TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/meterusage-download.XXXXXX")"
     STAGING_DIR=""
