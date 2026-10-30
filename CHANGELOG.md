@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 follows [Semantic Versioning](https://semver.org/).
 
+## 2026-10-30
+
+- Move Ubuntu Actions jobs to Instabox runners; preserve job steps and existing triggers. Keep macOS jobs on macOS.
+
 ## [Unreleased]
 
 ### Fixed
