@@ -65,12 +65,49 @@ one-time key. Pasted keys are not saved. OpenRouter retains its existing balance
 and activity integration. Desktop compatibility and billing coverage vary;
 see [known beta limits](docs/BETA.md#known-limits).
 
+### Styles
+
 Settings → Appearance → **Style** reskins the usage panel, side notch and
-Settings. Choose Classic, Flight Deck (amber LED tapes), Orbit (rings that track
-time against quota), Ledger (serif newsprint), Terminal (green ASCII bars),
-Blueprint (dimension lines), Departures (split-flap board) or Arcade (quota left
-as hit points). Styles other than Classic collapse quiet weeks in activity
-charts. See [ADR 0042](docs/adr/0042-interface-styles.md).
+Settings. Each option shows a live preview. Styles other than Classic collapse
+quiet weeks in activity charts, and service status stays in every style. See
+[ADR 0042](docs/adr/0042-interface-styles.md).
+
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="docs/images/style-classic-panel.png" alt="Classic style usage panel with demo data" width="190"><br><b>Classic</b><br><sub>the default system look</sub></td>
+    <td align="center" width="25%"><img src="docs/images/style-flight-deck-panel.png" alt="Flight Deck style usage panel with demo data" width="190"><br><b>Flight Deck</b><br><sub>amber LED tapes with a pace needle</sub></td>
+    <td align="center" width="25%"><img src="docs/images/style-orbit-panel.png" alt="Orbit style usage panel with demo data" width="190"><br><b>Orbit</b><br><sub>rings that track time against quota</sub></td>
+    <td align="center" width="25%"><img src="docs/images/style-ledger-panel.png" alt="Ledger style usage panel with demo data" width="190"><br><b>Ledger</b><br><sub>serif figures on newsprint or ink</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="25%"><img src="docs/images/style-terminal-panel.png" alt="Terminal style usage panel with demo data" width="190"><br><b>Terminal</b><br><sub>green phosphor with ASCII bars</sub></td>
+    <td align="center" width="25%"><img src="docs/images/style-blueprint-panel.png" alt="Blueprint style usage panel with demo data" width="190"><br><b>Blueprint</b><br><sub>quotas drawn as dimension lines</sub></td>
+    <td align="center" width="25%"><img src="docs/images/style-departures-panel.png" alt="Departures style usage panel with demo data" width="190"><br><b>Departures</b><br><sub>split-flap board with reset times</sub></td>
+    <td align="center" width="25%"><img src="docs/images/style-arcade-panel.png" alt="Arcade style usage panel with demo data" width="190"><br><b>Arcade</b><br><sub>quota left shown as hit points</sub></td>
+  </tr>
+</table>
+
+The side notch keeps the same 36-pixel rail and 220-pixel card in every style:
+
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="docs/images/style-classic-notch.png" alt="Classic style side notch card and rail with demo data" width="160"><br><b>Classic</b></td>
+    <td align="center" width="25%"><img src="docs/images/style-flight-deck-notch.png" alt="Flight Deck style side notch card and rail with demo data" width="160"><br><b>Flight Deck</b></td>
+    <td align="center" width="25%"><img src="docs/images/style-orbit-notch.png" alt="Orbit style side notch card and rail with demo data" width="160"><br><b>Orbit</b></td>
+    <td align="center" width="25%"><img src="docs/images/style-ledger-notch.png" alt="Ledger style side notch card and rail with demo data" width="160"><br><b>Ledger</b></td>
+  </tr>
+  <tr>
+    <td align="center" width="25%"><img src="docs/images/style-terminal-notch.png" alt="Terminal style side notch card and rail with demo data" width="160"><br><b>Terminal</b></td>
+    <td align="center" width="25%"><img src="docs/images/style-blueprint-notch.png" alt="Blueprint style side notch card and rail with demo data" width="160"><br><b>Blueprint</b></td>
+    <td align="center" width="25%"><img src="docs/images/style-departures-notch.png" alt="Departures style side notch card and rail with demo data" width="160"><br><b>Departures</b></td>
+    <td align="center" width="25%"><img src="docs/images/style-arcade-notch.png" alt="Arcade style side notch card and rail with demo data" width="160"><br><b>Arcade</b></td>
+  </tr>
+</table>
+
+<p><img src="docs/images/style-settings.png" alt="Style picker in Settings, Appearance, with a live preview of each style" width="640"></p>
+
+Browser captures of invented demo data, 2x density. Browser fonts differ from
+macOS. See [capture details](docs/SCREENSHOTS.md#styles).
 
 ## Installation
 

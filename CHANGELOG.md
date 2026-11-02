@@ -18,6 +18,12 @@ follows [Semantic Versioning](https://semver.org/).
   live preview. Styles other than Classic replace the heatmap grid with a
   daily strip that collapses quiet weeks into one label. Service status stays
   in every style. Classic stays the default and looks the same as before.
+
+### Fixed
+
+- Ledger, Blueprint and Orbit side-notch cards no longer show the desktop
+  through the card. Settings opens wider, and the Style picker fits on two
+  rows. Ledger and other bar charts no longer collapse to a sliver.
 - Add **Install updates automatically** in Settings > General, off by default.
   When on, a newer version that hasn't been dismissed installs through the
   existing verified update path, without the confirmation dialog, only while

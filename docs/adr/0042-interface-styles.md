@@ -35,6 +35,17 @@ with another. People also disagree on taste.
   style class or a style-only part, and must override the shadcn utility layer
   that Classic keeps.
 
+## Amendment (beta.15 feedback)
+
+- The notch and share windows are transparent. Ledger, Blueprint and Orbit make
+  panel cards transparent or translucent, so in those windows every
+  non-Classic card is opaque. Otherwise the desktop shows through the card and
+  washes out its text.
+- Settings opens 780 px wide (was 620), and the Style picker uses four
+  compact columns, so the eight options take two rows.
+- The activity chart's outer modifier class is `strip-kind-<kind>`. It must
+  not reuse `strip-bars` or `strip-spark`, the inner row classes.
+
 ## Constraints kept
 
 ADR 0004 and 0019: the strip stays 36 px and the card 220 px. Every gauge fits

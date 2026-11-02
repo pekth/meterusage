@@ -135,6 +135,9 @@
 .surface-flyout .provider-card .telemetry, .surface-share .detail-card .telemetry { border-top: 1px solid var(--border); padding-top: 8px; }
 .metrics > div { min-width: 0; overflow-wrap: anywhere; }
 .provider-card > header .badge { min-width: 0; overflow-wrap: anywhere; }
+/* A short plan badge keeps its word; the heading wraps first. Long plan names still wrap within 45%. */
+.provider-card > header .badge { flex-shrink: 0; max-width: 45%; }
+.provider-card > header .provider-heading { flex: 1 1 auto; }
 .quota-window > .row:first-child > span, .reset-credit .row > span { min-width: 0; overflow-wrap: anywhere; }
 .quota-window > .row:first-child > strong, .reset-credit button { flex-shrink: 0; white-space: nowrap; }
 .reset-credit + .reset-credit { border-top: 1px solid var(--border); }
