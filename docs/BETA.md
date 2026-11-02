@@ -116,8 +116,8 @@ See [source choices](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta
 - Live Codex refresh was observed. Claude paid-account allowance was not
   live-tested. Optional support-report delivery and deployed relay limits
   were not verified end to end.
-- This beta has no Windows build. Windows work is in progress on CI under
-  [ADR 0038](adr/0038-windows-ci-test-machine.md). Intel Mac binaries are not provided by this beta.
+- This macOS beta has no Windows build; see [Windows beta 13](#windows-beta-13).
+  Intel Mac binaries are not provided by this beta.
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.
@@ -154,3 +154,54 @@ Applications. The new artifact does not close the native acceptance gaps above.
 
 The [screenshot gallery](SCREENSHOTS.md) uses invented demo data and the actual
 release renderer. It replaces old product captures without exposing real accounts.
+
+## Windows beta 13
+
+[MeterUsage 0.3.0-beta.13, build 83](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.13) is the first
+Windows build: an **unsigned** GitHub pre-release for x64 Windows 10/11. It
+carries Windows assets only, so macOS updaters skip it, and GitHub's latest
+release is unchanged.
+
+| Asset | SHA-256 |
+| --- | --- |
+| `MeterUsage-0.3.0-beta.13-win-x64.exe` (per-user installer) | `35d494813c28471b118309733b6527279c0572aabda32ec14a763cd7ac2c493f` |
+| `MeterUsage-0.3.0-beta.13-win-x64.zip` (portable; cannot update itself) | `6e777e770883a906bee414c97abf1f3757a2d3c0fe2f2a1d22bb5086383a44e5` |
+
+1. Download the installer and `SHA256SUMS` from the release.
+2. In PowerShell, run `Get-FileHash -Algorithm SHA256 .\MeterUsage-0.3.0-beta.13-win-x64.exe`
+   and compare it with `SHA256SUMS`.
+3. Run the installer. SmartScreen warns because there is no code-signing
+   certificate; choose **More info → Run anyway** only if the hash matches.
+   It installs to `%LOCALAPPDATA%\Programs\MeterUsage` without admin rights.
+4. MeterUsage runs in the notification area. Windows 11 may put a new icon in
+   the overflow (^); drag it to the taskbar to keep it visible.
+
+Data and settings are in `%APPDATA%\MeterUsage`. Uninstall from **Settings →
+Apps**; app data is kept. Later Windows pre-releases install through the
+in-app updater (digest-verified, unsigned; [ADR 0039](adr/0039-windows-updater.md)).
+
+Built from `176b409` by the **Windows release build** workflow
+([run 41380556038](https://github.com/tilorahdotco/meterusage/actions/runs/41380556038)).
+For that build, a GitHub Windows Server 2025 runner checked:
+
+- 650 Windows tests, including a real DPAPI round trip, npm and `cmd.exe` shim
+  handling and a synthetic Claude Desktop connection;
+- packaged headless JSON and a demo GUI launch and relaunch;
+- packaged `node:sqlite`;
+- silent install, the updater's `/S --updated --force-run` relaunch, and
+  silent uninstall.
+
+Unverified on a real PC:
+
+- desktop connections against real Claude Desktop, Grok Bot Desktop and
+  Antigravity installs ([ADR 0040](adr/0040-windows-desktop-connections.md));
+- Codex sign-in through Credential Manager;
+- real provider CLIs and accounts;
+- SmartScreen and antivirus behavior;
+- an in-app upgrade between two versions;
+- taskbar positions, multiple monitors and high DPI;
+- notifications, launch at login, sleep and resume, accessibility;
+- Windows 10, ARM64 and managed PCs.
+
+**Use saved key** and saved Grok-via-Cursor connections are macOS-only.
+

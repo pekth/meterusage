@@ -1,6 +1,6 @@
 # ADR 0038: Resume Windows with CI as the test machine
 
-- Status: Accepted; stage 1 (platform foundation and CI smoke) implemented
+- Status: Accepted; stages 1–4 implemented; unsigned 0.3.0-beta.13 published 2026-11-01; real-machine acceptance pending
 - Date: 2026-11-01
 - Amends: [ADR 0010](0010-macos-typescript-electron.md) ("Windows
   implementation, installers, CI, testing and releases are paused because there

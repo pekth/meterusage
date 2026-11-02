@@ -30,7 +30,8 @@ establish Windows behavior.
    paths) with synthetic fixtures; marked unverified against real accounts.
    Implemented under [ADR 0040](../adr/0040-windows-desktop-connections.md).
 4. Unsigned GitHub pre-release and user docs, after the CI smoke run passes.
-   GitHub's `latest` stays on the stable release.
+   GitHub's `latest` stays on the stable release. Published as
+   [0.3.0-beta.13](../BETA.md#windows-beta-13) on 2026-11-01.
 
 CI proves typecheck, Windows-safe tests, a production build, packaging and a
 packaged smoke run (headless JSON, a demo GUI that stays up, screenshots). It
