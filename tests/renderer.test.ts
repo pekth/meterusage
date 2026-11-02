@@ -33,16 +33,16 @@ it("shows the running bundle version in Settings without a stale fallback", () =
 });
 it("passes the saved size to notch details without scaling the strip or share surface", () => {
   const view = state();
-  for (const [size, scale] of [["small", "0.8"], ["medium", "1"], ["large", "1.15"]]) {
+  for (const [size, scale] of [["small", "0.9"], ["medium", "1"], ["large", "1.15"]]) {
     view.settings.values.panelSize = size;
     for (const surface of ["flyout", "settings"]) {
       const markup = renderApp(view, surface);
       expect(markup).toContain(`zoom:${scale}`);
-      expect(markup).toMatch(/class="panel-viewport[^"]*"[^>]*role="region"/);
-      expect(markup).not.toMatch(/class="panel-viewport[^"]*"[^>]*tabindex/);
+      expect(markup).toMatch(/<div(?=[^>]*class="[^"]*\bpanel-viewport\b)(?=[^>]*role="region")[^>]*>/);
+      expect(markup).not.toMatch(/<div(?=[^>]*class="[^"]*\bpanel-viewport\b)(?=[^>]*tabindex)[^>]*>/);
       if (surface === "settings") {
         expect(markup).toContain("<legend>Usage-panel size</legend>");
-        expect(markup).toContain("Settings fits the selected page and scrolls when needed.");
+        expect(markup).toContain("Small also hides service status and activity charts in the usage panel. Settings fits the selected page and scrolls when needed.");
         expect(markup).toMatch(new RegExp(`type="radio" name="panelSize"(?=[^>]*value="${size}")(?=[^>]*checked)`));
         for (const label of ["Small", "Medium", "Large"]) expect(markup).toContain(`>${label}</span>`);
       }
@@ -392,7 +392,7 @@ it("keeps reported service health visible when all usage providers are hidden", 
   expect(markup).toContain('aria-label="Service status"'); expect(markup).toContain("Synthetic service outage"); expect(markup).toContain("All systems operational");
   expect(markup).toContain("var(--alert)"); expect(markup).toContain("Enable a provider in Settings");
   expect(markup.indexOf("Service status")).toBeLessThan(markup.indexOf("Enable a provider"));
-  expect(markup.indexOf('aria-label="Service status"')).toBeLessThan(markup.indexOf("<details"));
+  expect(markup.indexOf('aria-label="Service status"')).toBeLessThan(markup.indexOf("All-provider activity breakdown"));
 });
 
 it("shows idle and failed public status sources without inventing unsupported providers", () => {
@@ -433,7 +433,7 @@ it.each(["openRouter", "cursor", "copilot", "gemini"] as const)("ships the exist
 it("uses the official Meta mark for Muse and preserves provider status tint", () => {
   const view = state();
   for (const provider of providers) {
-    for (const [severity, tint] of [["degraded", "var(--warn)"], ["unknown", "var(--muted)"], ["majorOutage", "var(--alert)"]] as const) {
+    for (const [severity, tint] of [["degraded", "var(--warn)"], ["unknown", "var(--text-muted)"], ["majorOutage", "var(--alert)"]] as const) {
       view.snapshot.statuses[provider] = value({ provider, severity, description: "Synthetic status", checkedAt: now });
       const card = renderToStaticMarkup(createElement(ProviderCard, { slot: primary(provider), state: view, action: async () => {} }));
       expect(card).toContain(provider === "claude" ? `color:${tint}` : `background:${tint}`);
@@ -465,7 +465,7 @@ it("keeps eligible menu resets accessible at Small, Medium and Large and hides a
   const view = state(), q = quota("codex", [w], now); q.canConsumeReset = true; q.resetCreditCount = 3;
   q.resetCredits = ["one", "two", "three"].map(id => ({ id, title: "Full reset", status: "available", expiresAt: now + 3600000 }));
   view.snapshot.quotas.codex = value(q);
-  for (const [size, scale] of [["small", "0.8"], ["medium", "1"], ["large", "1.15"]]) {
+  for (const [size, scale] of [["small", "0.9"], ["medium", "1"], ["large", "1.15"]]) {
     view.settings.values.panelSize = size;
     const markup = renderApp(view);
     expect(markup).toContain(`zoom:${scale}`);
@@ -498,7 +498,8 @@ it.each(["daily", "weekly", "cumulative"])("exposes exact heatmap values on hove
   expect(markup).toContain(`tabindex="-1" role="img" aria-label="${scope}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
   expect(markup).toContain(`title="${scope}: ${new Intl.NumberFormat().format(1234567)} tokens, 2 sessions"`);
   expect(markup).toContain(`data-readout="${scope} · 1.2M tokens · 2 sessions"`);
-  for (const name of ["daily", "weekly", "cumulative"]) expect(markup).toMatch(new RegExp(`<option value="${name}"[^>]*>${name[0].toUpperCase() + name.slice(1)}</option>`));
+  expect(markup).toContain('aria-label="Heatmap view"');
+  for (const [name, short] of [["daily", "Day"], ["weekly", "Week"], ["cumulative", "Total"]]) expect(markup).toMatch(new RegExp(`aria-pressed="${name === mode}"[^>]*aria-label="${name === "cumulative" ? "Cumulative" : name[0].toUpperCase() + name.slice(1)}"[^>]*>${short}</button>`));
   const css = readFileSync("src/renderer/style.css", "utf8");
   expect(markup).toContain('class="heatmap-readout"');
   expect(css).not.toContain("--readout-height");
@@ -806,7 +807,7 @@ it.each([false, true])("uses one heatmap Tab stop and navigates full-history %s 
   let active = 0;
   vi.mocked(useRef).mockReturnValueOnce({ current: null }); vi.mocked(useEffect).mockImplementationOnce(() => {});
   vi.mocked(useState).mockReturnValueOnce([undefined, () => {}]).mockReturnValueOnce([undefined, () => {}]);
-  const grid = ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Test calendar", fullHistory, children: "cells" }).props.children[2].props.children[0];
+  const grid = ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Test calendar", fullHistory, children: "cells" }).props.children[2].props.children[0].props.children[1];
   const cells = Array.from({ length: count }, (_, index) => ({
     tagName: "SPAN", dataset: {}, tabIndex: index === 0 ? 0 : -1,
     classList: { contains: (name: string) => name === "heatmap-cell" && index <= last },
@@ -858,7 +859,7 @@ it("shows exact heatmap hover and focus readings in a natural-height row", () =>
   vi.mocked(useRef).mockReturnValueOnce({ current: null }); vi.mocked(useEffect).mockImplementationOnce(() => {});
   vi.mocked(useState).mockReturnValueOnce([undefined, hover]).mockReturnValueOnce([undefined, focus]);
   const content = ActivityHeatmap({ title: "Activity", scope: "Synthetic", label: "Calendar", children: "cells" }).props.children[2];
-  const grid = content.props.children[0];
+  const grid = content.props.children[0].props.children[1];
   const cell = { dataset: { readout: "Oct 15, 2026 · 123,456,789 tokens · 12,345 sessions" }, classList: { contains: () => true }, tabIndex: 0 };
   grid.props.onPointerOver({ target: { closest: () => cell } });
   expect(hover).toHaveBeenLastCalledWith(cell.dataset.readout);

@@ -2,10 +2,12 @@ import "vite-plus/test/config";
 import { defineConfig } from "vite-plus";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: "./",
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   publicDir: "Resources",
   build: { outDir: "dist/renderer" },
   test: { include: ["tests/**/*.test.ts"], testTimeout: 15000 },

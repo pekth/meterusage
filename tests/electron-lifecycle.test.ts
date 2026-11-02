@@ -424,7 +424,7 @@ it.each([
       };
       expect(key(flyout, "-").preventDefault).toHaveBeenCalledOnce();
       await vi.waitFor(() => expect(values.panelSize).toBe("small"));
-      expect(flyout.bounds).toMatchObject({ width: 336, height: 475 });
+      expect(flyout.bounds).toMatchObject({ width: 378, height: 534 });
       expect(settings.contents.send.mock.lastCall?.[1].settings.values.panelSize).toBe("small");
       expect(key(flyout, "-").preventDefault).toHaveBeenCalledOnce();
       await Promise.resolve(); await Promise.resolve();
@@ -432,7 +432,7 @@ it.each([
       // Two inputs before persistence completes must advance twice, not lose a step.
       key(flyout, "="); key(flyout, "+", { control: false, meta: true, alt: false });
       await vi.waitFor(() => expect(values.panelSize).toBe("large"));
-      expect(flyout.bounds).toMatchObject({ width: 483, height: 682 });
+      expect(flyout.bounds).toMatchObject({ width: 483, height: 630 });
       key(settings, "+");
       await Promise.resolve(); await Promise.resolve();
       expect(values.panelSize).toBe("large");
@@ -462,26 +462,27 @@ it.each([
       expect(setPreference).toHaveBeenCalledTimes(writes);
     }
     expect(await invoke(windows[3], { action: "setPreference", key: "panelSize", value: "large" })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 483, height: 682 });
+    expect(flyout.bounds).toMatchObject({ width: 483, height: 630 });
     expect(await invoke(flyout, { action: "resize", height: 1200 })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 483, height: 900 });
+    // Tall content stops at 70% of the 900-point work area and scrolls inside the panel.
+    expect(flyout.bounds).toMatchObject({ width: 483, height: 630 });
     expect(await invoke(windows[3], { action: "setPreference", key: "panelSize", value: "small" })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 336, height: 835 });
+    expect(flyout.bounds).toMatchObject({ width: 378, height: 630 });
     expect(await invoke(flyout, { action: "resize", height: 400, width: 10000 })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 336, height: 400 });
+    expect(flyout.bounds).toMatchObject({ width: 378, height: 400 });
     workArea.height = 350;
     display.emit("display-metrics-changed");
-    expect(flyout.bounds).toMatchObject({ width: 336, height: 350 });
+    expect(flyout.bounds).toMatchObject({ width: 378, height: 245 });
     workArea.height = 900;
     display.emit("display-metrics-changed");
-    expect(flyout.bounds).toMatchObject({ width: 336, height: 400 });
+    expect(flyout.bounds).toMatchObject({ width: 378, height: 400 });
     expect(await invoke(windows[3], { action: "setPreference", key: "panelSize", value: "huge" })).toEqual({ ok: false, error: "Invalid request" });
-    expect(flyout.bounds).toMatchObject({ width: 336, height: 400 });
+    expect(flyout.bounds).toMatchObject({ width: 378, height: 400 });
     workArea.height = 2400;
     expect(await invoke(flyout, { action: "resize", height: 2800 })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 336, height: 2400 });
+    expect(flyout.bounds).toMatchObject({ width: 378, height: 1680 });
     expect(await invoke(flyout, { action: "resize", height: 2200 })).toEqual({ ok: true });
-    expect(flyout.bounds).toMatchObject({ width: 336, height: 2200 });
+    expect(flyout.bounds).toMatchObject({ width: 378, height: 1680 });
     workArea.height = 900;
     if (candidate) {
       expect(application.getLoginItemSettings).not.toHaveBeenCalled();
