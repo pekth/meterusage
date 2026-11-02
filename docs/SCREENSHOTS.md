@@ -48,3 +48,15 @@ footer when bundle metadata is absent; the installed app shows its bundle versio
 Older product screenshots have been removed from the current documentation.
 App icons, provider marks and the explicitly labeled historical concept mockups
 remain. Git history and earlier release archives retain their original files.
+
+## Styles
+
+The style captures in the [README](../README.md#styles) show the renderer at
+source revision `10cfd1c` (the fixes after 0.3.0-beta.15), with invented demo
+data. They were captured in headless Chromium at 2x pixel density from the
+browser demo build (`vp build --mode demo`, `?surface=…&style=…`). PNGs are
+reduced to a 256-colour palette. The notch captures put a neutral grey behind
+the transparent notch window. Fonts fall back to the browser's, so type differs
+from macOS. These images do not prove native notch geometry or Mac rendering;
+ADR 0004 captures on a Mac remain separate.
+
