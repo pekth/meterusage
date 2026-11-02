@@ -53,8 +53,8 @@
 .activity-strip { position: relative; display: flex; align-items: stretch; gap: 6px; height: 60px; margin: 8px 0 2px; border-radius: 4px; }
 .activity-strip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .strip-quiet { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; max-width: 32%; padding: 0 6px; text-align: center; font-size: 10px; line-height: 1.25; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 4px; background: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--text-muted) 14%, transparent) 4px 5px); }
-.strip-bars { display: flex; flex: 1; align-items: flex-end; gap: 2px; min-width: 0; overflow: hidden; }
-.strip-bars > span { display: flex; flex: 1 1 0; align-items: flex-end; min-width: 0; height: 100%; }
+.strip-bars { display: flex; flex: 1; align-items: flex-end; justify-content: flex-end; gap: 2px; min-width: 0; overflow: hidden; }
+.strip-bars > span { display: flex; flex: 1 1 0; align-items: flex-end; min-width: 0; max-width: 14px; height: 100%; }
 .strip-bars > span > i { display: block; width: 100%; border-radius: 1px 1px 0 0; background: var(--brand); }
 .strip-bars > span.active > i { background: var(--text); }
 .strip-bars > .unavailable-day { box-shadow: inset 0 -1px 0 var(--border); }
@@ -65,7 +65,8 @@
 .trace-cursor { stroke: var(--text); stroke-width: 1; stroke-dasharray: 2 2; }
 .strip-hits { position: absolute; inset: 0; display: flex; }
 .strip-hits > span { flex: 1 1 0; }
-.activity-strip.strip-spark { display: block; height: auto; }
+/* The outer modifier is strip-kind-*, so it never matches the inner .strip-bars or .strip-spark rows. */
+.activity-strip.strip-kind-spark { display: block; height: auto; }
 .strip-spark { display: block; font-family: var(--ui-mono); font-size: 13px; line-height: 1.15; word-break: break-all; color: var(--brand); }
 .strip-spark .strip-quiet { display: inline; max-width: none; padding: 0 4px; border: 0; background: none; font-size: 10px; }
 .strip-spark .active { color: var(--text); }
@@ -74,7 +75,9 @@
 .settings .style-picker { min-width: 0; margin: 0; padding: 14px 0; border: 0; }
 .settings .style-picker legend { float: left; width: 100%; margin-bottom: 9px; padding: 0; font-size: 13px; }
 .settings .style-picker > .secondary { clear: both; padding-top: 8px; }
-.style-options { clear: both; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+/* Four compact columns keep the eight options to two rows in the 780-pixel Settings window. */
+.style-options { clear: both; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 640px) { .style-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .settings .style-option { position: relative; display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--canvas); font-family: var(--ui-font, inherit); cursor: pointer; }
 .settings .style-option input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .settings .style-option:has(input:checked) { outline: 2px solid var(--brand); outline-offset: 1px; }
@@ -84,14 +87,15 @@
 .settings .style-option.ui-arcade:has(input:focus-visible) { outline: 0; box-shadow: inset 0 0 0 2px var(--text), inset 0 0 0 4px var(--brand); }
 .style-preview { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 4px; padding: 6px; border-radius: 6px; background: var(--surface); pointer-events: none; }
 .style-preview .quota-window { flex: 1; min-width: 0; margin: 0; font-size: 10px; }
-.style-preview .quota-window > .row.secondary { display: none; }
+.style-preview .quota-window > .row.secondary, .style-preview .quota-window > .row:first-child > span { display: none; }
+.style-preview .quota-window > .row:first-child { justify-content: flex-end; }
 .style-preview .quota-window strong { font-size: 10px; }
 .style-preview-gauge { display: flex; flex: 0 0 30px; flex-direction: column; align-items: center; gap: 2px; font-size: 8px; }
 .style-preview .style-preview-mark { display: block; width: 12px; height: 12px; border-radius: 3px; background: var(--text-muted); }
 .style-preview .gauge-twin .style-preview-mark { width: 9px; height: 9px; }
 .style-preview .usage-ring:not(.gauge-twin) { width: 22px; height: 22px; }
 .style-name { font-size: 12px; font-weight: 600; }
-.style-tagline { font-size: 10.5px; line-height: 1.3; color: var(--text-muted); }
+.style-tagline { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 10px; line-height: 1.3; color: var(--text-muted); }
 
 
 .style-option.ui-classic { --canvas: #1c1c1e; --surface: #262629; --well: #343438; --border: #ffffff19; --text: #efeff2; --text-muted: #b0b0b8; --good: #30d158; --warn: #ffb340; --alert: #ff6961; --brand: #0a84ff; --ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-family: var(--ui-font); }
@@ -207,3 +211,9 @@
 .ui-arcade .service-badge.service-badge { border-radius: 0; border: 0; background: var(--well); text-transform: uppercase; clip-path: polygon(3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px), 0 3px); }
 .ui-arcade .service-badge::before { border-radius: 0; width: 5px; height: 5px; }
 
+
+/* The notch and share windows are transparent. Styles whose panel cards are transparent or translucent
+   (Ledger, Blueprint, Orbit) would show the desktop behind the card, so these cards stay opaque. */
+.app:not(.ui-classic):is(.surface-notch, .surface-share) .detail-card { background: var(--surface); }
+.app.ui-blueprint:is(.surface-notch, .surface-share) .detail-card { border: 1px solid #ffffff66; background: linear-gradient(#ffffff0d 1px, transparent 1px) 0 0 / 12px 12px, linear-gradient(90deg, #ffffff0d 1px, transparent 1px) 0 0 / 12px 12px, var(--canvas); }
+.app.ui-ledger:is(.surface-notch, .surface-share) .detail-card { border-top: 3px double var(--text); }

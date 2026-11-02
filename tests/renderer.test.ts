@@ -1196,7 +1196,7 @@ it("collapses quiet weeks into one labelled block in strip-chart styles", () => 
   expect(render("classic")).toContain("heatmap-cell");
   for (const [style, kind] of [["ledger", "bars"], ["flightDeck", "trace"], ["terminal", "spark"]] as const) {
     const markup = render(style);
-    expect(markup).toContain(`activity-strip strip-${kind}`);
+    expect(markup).toContain(`activity-strip strip-kind-${kind}`);
     expect(markup).not.toContain("heatmap-cell");
     expect(markup).toMatch(/\d+ (?:quiet weeks|weeks \d days quiet)/);
     expect(markup).toMatch(/role="slider" tabindex="0" aria-label="Daily quota used over 12 weeks, \d+ (?:quiet weeks|weeks \d days quiet) collapsed" aria-valuemin="1" aria-valuemax="4" aria-valuenow="4" aria-valuetext="[^"]*: 10% of quota used/);
@@ -1229,4 +1229,16 @@ it("keeps the Claude and Codex service status row, with severity, in every style
     expect(markup).toMatch(/data-severity="operational"[^>]*aria-label="Codex status: Operational\. Open status page"|aria-label="Codex status: Operational\. Open status page"[^>]*data-severity="operational"/);
     expect(markup).toMatch(/data-severity="degraded"/);
   }
+});
+
+it("keeps style notch cards opaque and the strip container apart from its bar row", () => {
+  const css = readFileSync("src/renderer/interface-styles.css", "utf8");
+  // The notch and share windows are transparent; Ledger and Blueprint panel cards are not opaque.
+  expect(css).toContain(".app:not(.ui-classic):is(.surface-notch, .surface-share) .detail-card { background: var(--surface); }");
+  expect(css).toContain(".style-options { clear: both; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));");
+  const markup = renderToStaticMarkup(createElement(ActivityHeatmap, { title: "Activity", scope: "Synthetic", label: "Test strip", chart: "bars", children: [...Array(9).fill(0), 3].map((amount, i) => createElement(HeatmapCell, { key: i, label: `Day ${i}`, readout: `Day ${i}`, amount, peak: 1 })) }));
+  // The outer container must not carry the inner row's class, or bar sizing rules hit the quiet block.
+  expect(markup).toMatch(/class="activity-strip strip-kind-bars"/);
+  expect(markup).not.toMatch(/class="activity-strip strip-bars"/);
+  expect((markup.match(/class="strip-bars"/g) ?? []).length).toBe(1);
 });
