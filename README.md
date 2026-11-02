@@ -27,6 +27,18 @@ grants report or an estimate from a prepaid amount you enter. See
 [API billing](docs/API_USAGE_BETA.md#openai-remaining-balance). The repository moved to the tilorahdotco organization
 on 2026-11-01. Beta 12 and later accept updates from it. Apps that updated to beta 12 before the move keep updating; an app still on an earlier beta needs beta 12 or later installed manually.
 
+### Windows (unsigned pre-release)
+
+[Download MeterUsage 0.3.0-beta.13 for Windows](https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.13/MeterUsage-0.3.0-beta.13-win-x64.exe)
+(x64 per-user installer; a [portable zip and `SHA256SUMS`](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.13)
+are on the release page). This build is **unsigned**: SmartScreen shows "Windows
+protected your PC". Choose **More info → Run anyway** only after the file's
+SHA-256 matches `SHA256SUMS`. There is no Windows test PC. A GitHub Actions
+Windows runner tested this exact build; desktop account connections, real
+accounts, real upgrades and many native behaviors remain unverified on a real
+PC. See [Windows beta notes](docs/BETA.md#windows-beta-13) and
+[ADR 0038](docs/adr/0038-windows-ci-test-machine.md).
+
 Stable acceptance remains open. Historical Swift releases and source are
 [recovery references](docs/swift/README.md), with no separate offered edition.
 Both implementations share app identity and saved data. Do not run them together

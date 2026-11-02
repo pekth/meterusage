@@ -222,8 +222,9 @@ persistence and two different-height notch captures. Reuse matching source,
 packaging and installation receipts only for their recorded layer. Windows
 work resumed under [ADR 0038](../adr/0038-windows-ci-test-machine.md) with a CI
 runner as the only test machine. The `windows` CI job packages an unsigned
-build and smoke-tests it; real-machine acceptance and a Windows release remain
-open.
+build and smoke-tests it. The unsigned Windows pre-release
+[0.3.0-beta.13](../BETA.md#windows-beta-13) is published; real-machine
+acceptance remains open.
 
 [ADR 0010](../adr/0010-macos-typescript-electron.md) keeps Swift as the behavior
 reference and rollback path. No automatic cutover, data migration, release or
