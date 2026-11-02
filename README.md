@@ -29,14 +29,14 @@ on 2026-11-01. Beta 12 and later accept updates from it. Apps that updated to be
 
 ### Windows (unsigned pre-release)
 
-[Download MeterUsage 0.3.0-beta.13 for Windows](https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.13/MeterUsage-0.3.0-beta.13-win-x64.exe)
-(x64 per-user installer; a [portable zip and `SHA256SUMS`](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.13)
+[Download MeterUsage 0.3.0-beta.16 for Windows](https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.16/MeterUsage-0.3.0-beta.16-win-x64.exe)
+(x64 per-user installer; a [portable zip and `SHA256SUMS`](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.16)
 are on the release page). This build is **unsigned**: SmartScreen shows "Windows
 protected your PC". Choose **More info → Run anyway** only after the file's
 SHA-256 matches `SHA256SUMS`. There is no Windows test PC. A GitHub Actions
 Windows runner tested this exact build; desktop account connections, real
 accounts, real upgrades and many native behaviors remain unverified on a real
-PC. See [Windows beta notes](docs/BETA.md#windows-beta-13) and
+PC. See [Windows beta notes](docs/BETA.md#windows-beta-16) and
 [ADR 0038](docs/adr/0038-windows-ci-test-machine.md).
 
 Stable acceptance remains open. Historical Swift releases and source are

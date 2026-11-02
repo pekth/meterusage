@@ -198,8 +198,10 @@ the `windows` job runs typecheck, `pnpm test:windows`, the build,
 Windows-safe test files to `test:windows`. CI is not a real-machine acceptance
 run. Maintainers build Windows releases with the manual **Windows release
 build** workflow, which uploads unsigned artifacts and never publishes. The
-first, [0.3.0-beta.13](docs/BETA.md#windows-beta-13), is an unsigned
-pre-release.
+first was [0.3.0-beta.13](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.13), Windows-only. From
+[0.3.0-beta.16](docs/BETA.md#windows-beta-16), each release adds the Windows
+artifacts from the same main commit and version as the macOS build, with one
+merged `SHA256SUMS`.
 
 electron-builder resolves `pnpm` from PATH when collecting production
 dependencies. If an existing launcher incorrectly loads a standalone pnpm

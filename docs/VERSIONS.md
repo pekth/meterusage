@@ -46,9 +46,10 @@ newest release with a verified `MeterUsage-<version>.zip` or
 so beta users are offered the stable release that follows. Beta 4 and earlier
 predate this and need one manual install.
 
-Beta 13 (build 83) is a Windows-only, unsigned pre-release; macOS stays on
-beta 12. A later macOS release can use beta 14, or add its assets to the
-beta 13 release with one merged `SHA256SUMS`.
+Beta 13 (build 83) was a Windows-only, unsigned pre-release. From beta 16
+(build 86), one release carries both platforms at the same version and build,
+built from the same commit, with one merged `SHA256SUMS`. The Windows build
+stays unsigned. Beta 14 (build 84) was never published.
 
 Windows builds select only `MeterUsage-<version>-win-x64.exe` and macOS
 builds never select it, so each platform skips releases without its asset. The
