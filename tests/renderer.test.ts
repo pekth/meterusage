@@ -1173,6 +1173,13 @@ it("offers every style with a live preview and hides the accent for styles with 
   expect(orbit).toContain("Orbit brings its own palette");
   expect(settings("classic")).toContain('name="accentTheme"');
   expect(settings("ledger")).toContain("prints on paper in Light and on ink in Dark");
+  const themed = (appearanceTheme: string, systemDark: boolean) => { const view = state(); view.systemDark = systemDark; view.settings.values = { interfaceStyle: "orbit", accentTheme: "rose", appearanceTheme }; return renderToStaticMarkup(createElement(Settings, { state: view, action: async () => {}, saveOrder: async () => true })); };
+  const light = themed("light", true);
+  expect(light).toContain('class="style-option ui-classic theme-light" style="--brand:#fb7185"');
+  expect(light).toContain('class="style-option ui-ledger theme-light"');
+  expect(light).toContain('class="style-option ui-orbit"');
+  expect(themed("system", true)).toContain('class="style-option ui-ledger theme-dark"');
+  expect(themed("system", false)).toContain('class="style-option ui-classic theme-light"');
 });
 
 it("collapses quiet weeks into one labelled block in strip-chart styles", () => {
@@ -1185,8 +1192,8 @@ it("collapses quiet weeks into one labelled block in strip-chart styles", () => 
     const markup = render(style);
     expect(markup).toContain(`activity-strip strip-${kind}`);
     expect(markup).not.toContain("heatmap-cell");
-    expect(markup).toMatch(/\d+ quiet weeks/);
-    expect(markup).toMatch(/role="slider" tabindex="0" aria-label="Daily quota used over 12 weeks, \d+ quiet weeks collapsed" aria-valuemin="1" aria-valuemax="4" aria-valuenow="4" aria-valuetext="[^"]*: 10% of quota used/);
+    expect(markup).toMatch(/\d+ (?:quiet weeks|weeks \d days quiet)/);
+    expect(markup).toMatch(/role="slider" tabindex="0" aria-label="Daily quota used over 12 weeks, \d+ (?:quiet weeks|weeks \d days quiet) collapsed" aria-valuemin="1" aria-valuemax="4" aria-valuenow="4" aria-valuetext="[^"]*: 10% of quota used/);
     expect(markup).not.toContain("aria-live");
   }
 });
@@ -1201,6 +1208,8 @@ it("draws strip days without overflow, inventing light use or hiding the latest 
   expect(trace).toContain("9 quiet days");
   expect(trace).toMatch(/d="M0 [\d.]+V[\d.]+H300\.0"/);
   expect(strip("bars", [undefined, undefined])).toContain("Activity unavailable");
+  expect(strip("bars", [...Array(20).fill(0), 4])).toContain("2 weeks 6 days quiet");
+  expect(strip("bars", [...Array(21).fill(0), 4])).toContain("3 quiet weeks");
   expect(strip("bars", [undefined, ...Array(8).fill(0), 3])).not.toContain("quiet");
 });
 

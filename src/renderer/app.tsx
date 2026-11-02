@@ -96,7 +96,9 @@ function ActivityStrip({ kind, cells, label }: { kind: Exclude<ChartKind, "grid"
   const firstActive = cells.findIndex(c => (c.amount ?? 0) > 0), leadingZero = cells.findIndex(c => c.amount !== 0);
   const quiet = firstActive < 0 ? 0 : Math.min(firstActive, leadingZero < 0 ? cells.length : leadingZero);
   const collapsed = quiet >= 7, shown = collapsed ? cells.slice(quiet) : cells;
-  const quietLabel = quiet >= 14 ? `${Math.floor(quiet / 7)} quiet weeks` : `${quiet} quiet days`;
+  // The label accounts for every collapsed day: whole weeks plus any remainder.
+  const weeks = Math.floor(quiet / 7), days = quiet % 7;
+  const quietLabel = quiet < 14 ? `${quiet} quiet days` : days ? `${weeks} weeks ${days} days quiet` : `${weeks} quiet weeks`;
   const peak = Math.max(0.0001, ...shown.map(c => c.amount ?? 0)), level = (c: StripCell) => (c.amount ?? 0) / peak;
   const current = active ?? shown.length - 1, readout = active !== undefined ? shown[active]?.readout : undefined;
   const move = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -342,6 +344,8 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
   const [category, setCategory] = useState("Connections");
   const categories = ["Connections", "API connections", "Appearance", "General", "Providers", "Side notch", "Usage details", "Diagnostics"];
   const values = state.settings.values, style = styleOf(values.interfaceStyle);
+  // Classic and Ledger previews show the saved Theme (and Classic the saved Accent), as the app would.
+  const previewTheme = values.appearanceTheme === "light" || values.appearanceTheme === "dark" ? values.appearanceTheme : state.systemDark ? "dark" : "light";
   const reportCoolingDown = (state.issueReport?.retryAt ?? 0) > state.snapshot.clock;
   const set = (key: string, value: string | boolean | number) => void action({ action: "setPreference", key, value });
   const toggle = (key: string, text: string, ariaLabel?: string, disabled = false, describedBy?: string) => <label className="setting" key={key}><span>{text}</span><input type="checkbox" aria-label={ariaLabel} aria-describedby={describedBy} checked={values[key] === true} disabled={disabled || (key === "launchAtLogin" && state.snapshot.demo)} onChange={e => set(key, e.target.checked)} /></label>;
@@ -355,7 +359,7 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
     <section hidden={category !== "API connections"}>{category === "API connections" && <ApiBillingConnections state={state} action={action} />}</section>
     <section hidden={category !== "Appearance"}><h2>Appearance</h2><div className="settings-group">
       <fieldset className="style-picker" aria-describedby="style-help"><legend>Style</legend>
-        <div className="style-options">{interfaceStyles.map(id => <label key={id} className={`style-option ui-${id}`}><input type="radio" name="interfaceStyle" value={id} checked={style === id} onChange={() => set("interfaceStyle", id)} /><StylePreview id={id} now={state.snapshot.clock} /><span className="style-name">{styleInfo[id].name}</span><span className="style-tagline">{styleInfo[id].tagline}</span></label>)}</div>
+        <div className="style-options">{interfaceStyles.map(id => <label key={id} className={`style-option ui-${id}${styleInfo[id].palette === "fixed" ? "" : ` theme-${previewTheme}`}`} style={id === "classic" ? { "--brand": accents[String(values.accentTheme)] ?? accents.blue } as CSSProperties : undefined}><input type="radio" name="interfaceStyle" value={id} checked={style === id} onChange={() => set("interfaceStyle", id)} /><StylePreview id={id} now={state.snapshot.clock} /><span className="style-name">{styleInfo[id].name}</span><span className="style-tagline">{styleInfo[id].tagline}</span></label>)}</div>
         <p id="style-help" className="secondary">Reskins the usage panel, side notch and Settings. {styleInfo[style].palette === "follow" ? "Classic follows the Theme and Accent below." : styleInfo[style].palette === "theme" ? `${styleInfo[style].name} prints on paper in Light and on ink in Dark. It brings its own accent.` : `${styleInfo[style].name} brings its own palette, so Theme and Accent apply to Classic only.`}</p>
       </fieldset>
       <fieldset className="size-picker" aria-describedby="panel-size-help"><legend>Usage-panel size</legend>
