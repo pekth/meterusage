@@ -1,6 +1,6 @@
 # MeterUsage versions
 
-Electron **0.3.0-beta.12, build 82** is the sole offered distribution and default
+Electron **0.3.0-beta.16, build 86** is the sole offered distribution and default
 installer download. It remains a beta, with stable acceptance open. New features
 target Electron. Historical Swift 0.2.41 releases and retained `Sources/` remain
 recovery/reference material, including explicit `--build-from-source` builds.

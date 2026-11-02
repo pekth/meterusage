@@ -1,6 +1,6 @@
 # Project knowledge
 
-Release documentation refresh: 2026-11-01 for build 82.
+Release documentation refresh: 2026-11-02 for build 86.
 
 ## Contributor checks
 
@@ -32,7 +32,7 @@ Release documentation refresh: 2026-11-01 for build 82.
   keeps Electron as the sole feature target. Historical Swift source/releases
   remain recovery/reference material; explicit `--build-from-source` builds
   legacy Swift. Source retirement is pending. Required Swift helpers/assets stay.
-- `Scripts/make-app.sh` pins [Electron 0.3.0-beta.12, build 82](BETA.md), its
+- `Scripts/make-app.sh` pins [Electron 0.3.0-beta.16, build 86](BETA.md), its
   `-mac-arm64.zip` filename and SHA-256. It verifies the download and staged
   signature before replacement, preserves the published signature, and never
   falls back to a compiler. Preparing output does not install the app.
@@ -275,7 +275,7 @@ Release documentation refresh: 2026-11-01 for build 82.
 
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
 - The retained legacy Swift app uses Swift Package Manager, targets macOS 13 or later, and includes an executable target and a test target in `Package.swift`. Its AppKit and SwiftUI imports require macOS for build/test checks. Electron is the offered beta; its source/build commands are in `CONTRIBUTING.md`.
-- `README.md` and `Scripts/make-app.sh` select the prebuilt Electron 0.3.0-beta.12 Apple silicon ZIP for macOS 13+. Installation needs no Node, pnpm, Swift, Xcode or Git. The script verifies SHA-256 and downloaded/staged signatures before replacing generated output, preserving the published signature and existing output on copy/verification failures. It rejects unsupported platforms and never falls back to compilation. Explicit `--build-from-source` builds legacy Swift for recovery/reference. Historical Swift 0.2.41 remains retrievable, ad-hoc signed and not notarized. GitHub source archives contain source and scripts, not an app bundle. See ADRs 0009 and 0034.
+- `README.md` and `Scripts/make-app.sh` select the prebuilt Electron 0.3.0-beta.16 Apple silicon ZIP for macOS 13+. Installation needs no Node, pnpm, Swift, Xcode or Git. The script verifies SHA-256 and downloaded/staged signatures before replacing generated output, preserving the published signature and existing output on copy/verification failures. It rejects unsupported platforms and never falls back to compilation. Explicit `--build-from-source` builds legacy Swift for recovery/reference. Historical Swift 0.2.41 remains retrievable, ad-hoc signed and not notarized. GitHub source archives contain source and scripts, not an app bundle. See ADRs 0009 and 0034.
 - Swift provider data sources are implemented under `Sources/MeterUsage/Services/`; the candidate adapters live under `src/main/providers/` and `src/main/composition.ts`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
 - Antigravity CLI quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
