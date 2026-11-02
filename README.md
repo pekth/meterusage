@@ -65,6 +65,13 @@ one-time key. Pasted keys are not saved. OpenRouter retains its existing balance
 and activity integration. Desktop compatibility and billing coverage vary;
 see [known beta limits](docs/BETA.md#known-limits).
 
+Settings → Appearance → **Style** reskins the usage panel, side notch and
+Settings. Choose Classic, Flight Deck (amber LED tapes), Orbit (rings that track
+time against quota), Ledger (serif newsprint), Terminal (green ASCII bars),
+Blueprint (dimension lines), Departures (split-flap board) or Arcade (quota left
+as hit points). Styles other than Classic collapse quiet weeks in activity
+charts. See [ADR 0042](docs/adr/0042-interface-styles.md).
+
 ## Installation
 
 No Node, pnpm, Swift, Xcode, Command Line Tools or Git is required to use the

@@ -12,6 +12,12 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Add **Style** in Settings → Appearance with eight looks: Classic, Flight
+  Deck, Orbit, Ledger, Terminal, Blueprint, Departures and Arcade. Each one
+  reskins the usage panel, side notch and Settings, and each option shows a
+  live preview. Styles other than Classic replace the heatmap grid with a
+  daily strip that collapses quiet weeks into one label. Service status stays
+  in every style. Classic stays the default and looks the same as before.
 - Add **Install updates automatically** in Settings > General, off by default.
   When on, a newer version that hasn't been dismissed installs through the
   existing verified update path, without the confirmation dialog, only while

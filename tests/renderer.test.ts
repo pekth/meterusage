@@ -1,7 +1,9 @@
 import { it, expect, vi } from "vite-plus/test";
 import { createElement, useEffect, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings, UpdateNotice, UsagePanel } from "../src/renderer/app";
+import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings, StyleContext, UpdateNotice, UsagePanel } from "../src/renderer/app";
+import { interfaceStyles, styleInfo } from "../src/shared/styles";
+import { HeatmapCell } from "../src/renderer/app";
 import { tokens, providers, primary, quota, value, window, localDay, shiftDay, utcDay } from "../src/domain/models";
 import type { ViewState } from "../src/shared/ipc";
 import { openRouterUsage } from "../src/main/providers/usage";
@@ -1127,5 +1129,104 @@ it("keeps the existing action error and retry visible on both update notices", (
     const markup = renderApp(view, surface, "Could not complete action");
     expect(markup).toMatch(/role="alert"><span>Could not complete action/);
     expect(markup).toContain(">Retry update</button>");
+  }
+});
+
+it("renders every interface style's meter as the same accessible progress bar", () => {
+  for (const id of interfaceStyles) {
+    const markup = renderToStaticMarkup(createElement(StyleContext.Provider, { value: id }, createElement(Meter, { w, now, pacing: true })));
+    expect(markup).toContain(`meter meter-${styleInfo[id].meter}`);
+    expect(markup).toMatch(/role="progressbar"[^>]*aria-valuenow="80"[^>]*aria-valuetext="80% used"/);
+  }
+  const tape = renderToStaticMarkup(createElement(StyleContext.Provider, { value: "flightDeck" }, createElement(Meter, { w, now, pacing: true })));
+  expect(tape).toContain('class="meter-pace"');
+  expect((tape.match(/<i class="hot"/g) ?? []).length).toBeGreaterThan(0);
+  const hp = renderToStaticMarkup(createElement(StyleContext.Provider, { value: "arcade" }, createElement(Meter, { w, now, pacing: true })));
+  expect(hp).toContain('<span aria-hidden="true">20 HP</span><span class="sr-only">80% used</span>');
+  const flap = renderToStaticMarkup(createElement(StyleContext.Provider, { value: "departures" }, createElement(Meter, { w, now, pacing: true })));
+  expect(flap).toContain('role="img" aria-label="80% used"');
+});
+
+it("applies the saved style to every surface and lets only Classic take the accent", () => {
+  const view = state(); view.snapshot.appearance.style = "orbit"; view.snapshot.notchSlots = [primary("codex")]; view.settings.values = { accentTheme: "violet", interfaceStyle: "orbit" };
+  const flyout = renderApp(view);
+  expect(flyout).toContain("ui-orbit surface-flyout"); expect(flyout).not.toContain("--brand:");
+  expect(renderApp(view, "notch")).toContain("gauge-twin");
+  expect(renderApp(view, "tray")).toContain("ui-classic surface-tray");
+  view.snapshot.appearance.style = "arcade";
+  expect(renderApp(view, "notch")).toMatch(/gauge-hp[\s\S]*class="strip-percent"[^>]*>20</);
+  view.snapshot.appearance.style = "ledger"; view.snapshot.appearance.theme = "light";
+  expect(renderApp(view)).toContain("theme-light ui-ledger");
+  view.snapshot.appearance.style = "terminal";
+  expect(renderApp(view)).toContain("theme-dark ui-terminal");
+  view.snapshot.appearance.style = "neon"; view.snapshot.appearance.accent = "violet";
+  expect(renderApp(view)).toContain("ui-classic"); expect(renderApp(view)).toContain("--brand:#a78bfa");
+});
+
+it("offers every style with a live preview and hides the accent for styles with their own palette", () => {
+  const settings = (style: string) => { const view = state(); view.settings.values = { interfaceStyle: style, accentTheme: "blue" }; return renderToStaticMarkup(createElement(Settings, { state: view, action: async () => {}, saveOrder: async () => true })); };
+  const orbit = settings("orbit");
+  expect((orbit.match(/type="radio" name="interfaceStyle"/g) ?? []).length).toBe(interfaceStyles.length);
+  expect(orbit).toMatch(/type="radio" name="interfaceStyle"(?=[^>]*value="orbit")(?=[^>]*checked)/);
+  expect((orbit.match(/class="style-preview"/g) ?? []).length).toBe(interfaceStyles.length);
+  expect(orbit).not.toContain('name="accentTheme"');
+  expect(orbit).toContain("Orbit brings its own palette");
+  expect(settings("classic")).toContain('name="accentTheme"');
+  expect(settings("ledger")).toContain("prints on paper in Light and on ink in Dark");
+  const themed = (appearanceTheme: string, systemDark: boolean) => { const view = state(); view.systemDark = systemDark; view.settings.values = { interfaceStyle: "orbit", accentTheme: "rose", appearanceTheme }; return renderToStaticMarkup(createElement(Settings, { state: view, action: async () => {}, saveOrder: async () => true })); };
+  const light = themed("light", true);
+  expect(light).toContain('class="style-option ui-classic theme-light" style="--brand:#fb7185"');
+  expect(light).toContain('class="style-option ui-ledger theme-light"');
+  expect(light).toContain('class="style-option ui-orbit"');
+  // System follows prefers-color-scheme in CSS, like the page, not the native system-UI flag.
+  for (const systemDark of [true, false]) {
+    const system = themed("system", systemDark);
+    expect(system).toContain('class="style-option ui-classic theme-system"'); expect(system).toContain('class="style-option ui-ledger theme-system"');
+  }
+  const css = readFileSync("src/renderer/interface-styles.css", "utf8");
+  expect(css).toMatch(/@media \(prefers-color-scheme: light\) \{ \.style-option\.ui-classic\.theme-system \{ --canvas: #fafafc;/);
+  expect(css).toMatch(/@media \(prefers-color-scheme: dark\) \{ :is\(\.app, \.style-option\)\.ui-ledger\.theme-system \{ --canvas: #16140f;/);
+});
+
+it("collapses quiet weeks into one labelled block in strip-chart styles", () => {
+  const view = state(), today = localDay(now);
+  view.snapshot.demo = false; view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = true;
+  view.snapshot.quotaActivity = { codex: [3, 2, 1, 0].map(ago => ({ day: shiftDay(today, -ago), percent: 10 + ago })) };
+  const render = (style: "classic" | "ledger" | "flightDeck" | "terminal") => renderToStaticMarkup(createElement(StyleContext.Provider, { value: style }, createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {} })));
+  expect(render("classic")).toContain("heatmap-cell");
+  for (const [style, kind] of [["ledger", "bars"], ["flightDeck", "trace"], ["terminal", "spark"]] as const) {
+    const markup = render(style);
+    expect(markup).toContain(`activity-strip strip-${kind}`);
+    expect(markup).not.toContain("heatmap-cell");
+    expect(markup).toMatch(/\d+ (?:quiet weeks|weeks \d days quiet)/);
+    expect(markup).toMatch(/role="slider" tabindex="0" aria-label="Daily quota used over 12 weeks, \d+ (?:quiet weeks|weeks \d days quiet) collapsed" aria-valuemin="1" aria-valuemax="4" aria-valuenow="4" aria-valuetext="[^"]*: 10% of quota used/);
+    expect(markup).not.toContain("aria-live");
+  }
+});
+
+it("draws strip days without overflow, inventing light use or hiding the latest day", () => {
+  const strip = (kind: "bars" | "trace", amounts: (number | undefined)[]) => renderToStaticMarkup(createElement(ActivityHeatmap, { title: "Activity", scope: "Synthetic", label: "Test strip", chart: kind, children: amounts.map((amount, i) => createElement(HeatmapCell, { key: i, label: `Day ${i}`, readout: `Day ${i}`, amount, peak: 1 })) }));
+  const many = strip("bars", Array.from({ length: 182 }, (_, i) => i + 1));
+  expect(many).toContain("gap:0"); expect(many).not.toContain("quiet");
+  const zeros = strip("bars", [5, 0, 5]);
+  expect(zeros).toMatch(/<span title="Day 1"[^>]*><i style="height:0%"/);
+  const trace = strip("trace", [...Array(9).fill(0), 7]);
+  expect(trace).toContain("9 quiet days");
+  expect(trace).toMatch(/d="M0 [\d.]+V[\d.]+H300\.0"/);
+  expect(strip("bars", [undefined, undefined])).toContain("Activity unavailable");
+  expect(strip("bars", [...Array(20).fill(0), 4])).toContain("2 weeks 6 days quiet");
+  expect(strip("bars", [...Array(21).fill(0), 4])).toContain("3 quiet weeks");
+  expect(strip("bars", [undefined, ...Array(8).fill(0), 3])).not.toContain("quiet");
+});
+
+it("keeps the Claude and Codex service status row, with severity, in every style", () => {
+  const view = state();
+  view.snapshot.statuses = { codex: value({ severity: "operational", description: "All systems operational", checkedAt: now }), claude: value({ severity: "degraded", description: "Elevated errors", checkedAt: now }) } as ViewState["snapshot"]["statuses"];
+  for (const id of interfaceStyles) {
+    view.snapshot.appearance.style = id;
+    const markup = renderApp(view);
+    expect(markup).toContain('aria-label="Service status"');
+    expect(markup).toMatch(/data-severity="operational"[^>]*aria-label="Codex status: Operational\. Open status page"|aria-label="Codex status: Operational\. Open status page"[^>]*data-severity="operational"/);
+    expect(markup).toMatch(/data-severity="degraded"/);
   }
 });

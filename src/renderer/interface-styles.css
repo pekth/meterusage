@@ -1,0 +1,209 @@
+/* Interface styles. Each style overrides the app tokens on `.app.ui-<style>` and on its Settings preview card.
+   Tokens only: the notch, tray and share surfaces keep their transparent window backgrounds.
+   Unlayered on purpose: every rule is scoped to a style class or a style-only part, and must beat the
+   shadcn utility layer (rounded-*, bg-*) that Classic keeps. */
+
+/* ── Shared parts used by more than one style ── */
+.app .quota-window .meter:is(.meter-tape, .meter-flap, .meter-hp) { display: grid; grid-template-columns: repeat(var(--cells), minmax(0, 1fr)); gap: 2px; position: relative; height: 9px; margin: 5px 0 4px; overflow: visible; border-radius: 0; background: transparent; }
+.app .quota-window .meter.meter-tape { --cells: 30; }
+.app .quota-window .meter.meter-flap { --cells: 12; height: 12px; }
+.app .quota-window .meter.meter-hp { grid-template-columns: auto repeat(10, minmax(0, 1fr)); height: 11px; gap: 3px; }
+.meter:is(.meter-tape, .meter-flap, .meter-hp) > i { display: block; background: var(--well); border-radius: 1px; }
+.meter:is(.meter-tape, .meter-flap) > i.on { background: var(--brand); }
+.meter:is(.meter-tape, .meter-flap) > i.hot { background: var(--alert); }
+.meter-pace { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--text); }
+.app .quota-window .meter.meter-rule { position: relative; height: 1px; margin: 8px 0 7px; overflow: visible; border-radius: 0; background: var(--border); }
+.meter-rule .meter-fill { position: absolute; left: 0; top: -1.5px; height: 4px; background: var(--text); }
+.meter-rule .meter-pace { top: -5px; bottom: -5px; width: 1.5px; background: var(--brand); }
+.app .quota-window .meter.meter-orbit { position: relative; height: 10px; margin: 5px 0 4px; overflow: visible; border-radius: 0; background: linear-gradient(var(--border), var(--border)) top / 100% 1px no-repeat, linear-gradient(var(--well), var(--well)) bottom / 100% 6px no-repeat; }
+.meter-orbit .meter-time { position: absolute; left: 0; top: 0; height: 1px; background: var(--text); }
+.meter-orbit .meter-time::after { content: ""; position: absolute; right: -2.5px; top: -2px; width: 5px; height: 5px; border-radius: 50%; background: var(--text); }
+.meter-orbit .meter-fill { position: absolute; left: 0; bottom: 0; height: 6px; border-radius: 6px; background: var(--brand); }
+.app .quota-window .meter.meter-ascii { height: auto; margin: 3px 0; overflow: hidden; border-radius: 0; background: none; }
+.meter-ascii { display: block; white-space: nowrap; font-family: var(--ui-mono); font-size: 11px; line-height: 1.2; letter-spacing: -.5px; color: var(--brand); }
+.hp-label { align-self: center; padding-right: 2px; font-family: var(--ui-mono); font-size: 8px; font-weight: 800; line-height: 1; color: var(--warn); }
+.flap-digits { display: inline-flex; gap: 2px; vertical-align: middle; }
+.flap { position: relative; display: inline-grid; place-items: center; min-width: 1.05em; padding: 1px 2px; border-radius: 2px; font-family: var(--ui-mono); font-weight: 700; line-height: 1.15; color: var(--brand); background: linear-gradient(#26292d 50%, #1c1e21 50%); box-shadow: inset 0 -1px 0 #000, 0 1px 0 #ffffff12; }
+.flap::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: #000b; }
+
+/* Notch gauges keep the 36-pixel strip. */
+.usage-ring.gauge-twin { position: relative; width: 24px; height: 24px; background: none; }
+.gauge-twin svg { position: absolute; inset: 0; width: 24px; height: 24px; }
+.usage-ring.gauge-twin > span { position: relative; width: 12px; height: 12px; background: transparent; }
+.gauge-twin .mark { width: 10px; height: 10px; }
+.twin-track { fill: none; stroke: var(--border); stroke-width: 1; }
+.twin-track.twin-inner-track { stroke: var(--well); stroke-width: 2.6; }
+.twin-time { fill: none; stroke: var(--text); stroke-width: 1.2; }
+.twin-used { fill: none; stroke: var(--brand); stroke-width: 2.6; stroke-linecap: round; }
+.gauge-stack { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.gauge-cells { display: grid; grid-template-columns: repeat(6, 3px); gap: 1px; }
+.gauge-hp .gauge-cells { grid-template-columns: repeat(5, 4px); }
+.gauge-cells > i { display: block; height: 4px; background: var(--well); }
+.gauge-cells > i.on { background: var(--brand); }
+.gauge-cells > i.hot { background: var(--alert); }
+.gauge-text { font-family: var(--ui-mono); font-size: 7px; line-height: 1; letter-spacing: -.5px; color: var(--brand); }
+.strip-percent .flap { min-width: 8px; padding: 0 1px; font-size: 9px; }
+.app:not(.ui-classic) .strip { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+.app:not(.ui-classic) .usage-ring > span { background: var(--surface); }
+.app:not(.ui-classic) .strip-provider[aria-pressed="true"] { background: var(--well); }
+.app:not(.ui-classic) .strip-provider small { background: var(--well); color: var(--text); }
+.app:not(.ui-classic).surface-notch .detail-card :is(.secondary, dt, h3, .badge, summary) { color: var(--text-muted); }
+
+/* Sparse-aware activity strip. */
+.activity-strip { position: relative; display: flex; align-items: stretch; gap: 6px; height: 60px; margin: 8px 0 2px; border-radius: 4px; }
+.activity-strip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.strip-quiet { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; max-width: 32%; padding: 0 6px; text-align: center; font-size: 10px; line-height: 1.25; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 4px; background: repeating-linear-gradient(135deg, transparent 0 4px, color-mix(in srgb, var(--text-muted) 14%, transparent) 4px 5px); }
+.strip-bars { display: flex; flex: 1; align-items: flex-end; gap: 2px; min-width: 0; overflow: hidden; }
+.strip-bars > span { display: flex; flex: 1 1 0; align-items: flex-end; min-width: 0; height: 100%; }
+.strip-bars > span > i { display: block; width: 100%; border-radius: 1px 1px 0 0; background: var(--brand); }
+.strip-bars > span.active > i { background: var(--text); }
+.strip-bars > .unavailable-day { box-shadow: inset 0 -1px 0 var(--border); }
+.strip-plot { position: relative; flex: 1; min-width: 0; }
+.strip-trace { display: block; width: 100%; height: 100%; }
+.trace-line { fill: none; stroke: var(--brand); stroke-width: 1.5; }
+.trace-area { fill: color-mix(in srgb, var(--brand) 18%, transparent); }
+.trace-cursor { stroke: var(--text); stroke-width: 1; stroke-dasharray: 2 2; }
+.strip-hits { position: absolute; inset: 0; display: flex; }
+.strip-hits > span { flex: 1 1 0; }
+.activity-strip.strip-spark { display: block; height: auto; }
+.strip-spark { display: block; font-family: var(--ui-mono); font-size: 13px; line-height: 1.15; word-break: break-all; color: var(--brand); }
+.strip-spark .strip-quiet { display: inline; max-width: none; padding: 0 4px; border: 0; background: none; font-size: 10px; }
+.strip-spark .active { color: var(--text); }
+
+/* Style picker in Settings. */
+.settings .style-picker { min-width: 0; margin: 0; padding: 14px 0; border: 0; }
+.settings .style-picker legend { float: left; width: 100%; margin-bottom: 9px; padding: 0; font-size: 13px; }
+.settings .style-picker > .secondary { clear: both; padding-top: 8px; }
+.style-options { clear: both; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.settings .style-option { position: relative; display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--canvas); font-family: var(--ui-font, inherit); cursor: pointer; }
+.settings .style-option input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.settings .style-option:has(input:checked) { outline: 2px solid var(--brand); outline-offset: 1px; }
+.settings .style-option:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 3px; }
+/* Arcade clips its corners, which would clip an outside outline; draw its states inside. */
+.settings .style-option.ui-arcade:has(input:checked) { outline: 0; box-shadow: inset 0 0 0 2px var(--brand); }
+.settings .style-option.ui-arcade:has(input:focus-visible) { outline: 0; box-shadow: inset 0 0 0 2px var(--text), inset 0 0 0 4px var(--brand); }
+.style-preview { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 4px; padding: 6px; border-radius: 6px; background: var(--surface); pointer-events: none; }
+.style-preview .quota-window { flex: 1; min-width: 0; margin: 0; font-size: 10px; }
+.style-preview .quota-window > .row.secondary { display: none; }
+.style-preview .quota-window strong { font-size: 10px; }
+.style-preview-gauge { display: flex; flex: 0 0 30px; flex-direction: column; align-items: center; gap: 2px; font-size: 8px; }
+.style-preview .style-preview-mark { display: block; width: 12px; height: 12px; border-radius: 3px; background: var(--text-muted); }
+.style-preview .gauge-twin .style-preview-mark { width: 9px; height: 9px; }
+.style-preview .usage-ring:not(.gauge-twin) { width: 22px; height: 22px; }
+.style-name { font-size: 12px; font-weight: 600; }
+.style-tagline { font-size: 10.5px; line-height: 1.3; color: var(--text-muted); }
+
+
+.style-option.ui-classic { --canvas: #1c1c1e; --surface: #262629; --well: #343438; --border: #ffffff19; --text: #efeff2; --text-muted: #b0b0b8; --good: #30d158; --warn: #ffb340; --alert: #ff6961; --brand: #0a84ff; --ui-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-family: var(--ui-font); }
+.style-option.ui-classic.theme-light { --canvas: #fafafc; --surface: #fff; --well: #ececf1; --border: #00000018; --text: #242426; --text-muted: #696973; --good: #238636; --warn: #a86800; --alert: #c93636; color-scheme: light; }
+@media (prefers-color-scheme: light) { .style-option.ui-classic.theme-system { --canvas: #fafafc; --surface: #fff; --well: #ececf1; --border: #00000018; --text: #242426; --text-muted: #696973; --good: #238636; --warn: #a86800; --alert: #c93636; color-scheme: light; } }
+:root { --ui-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; }
+
+/* ── Flight Deck: amber LEDs on a graphite panel ── */
+:is(.app, .style-option).ui-flightDeck { --canvas: #11120d; --surface: #17180f; --well: #27281e; --border: #36372b; --text: #ece8d4; --text-muted: #9c9981; --good: #9be26b; --warn: #ffb000; --alert: #ff5434; --brand: #ffb000; --ui-font: var(--ui-mono); font-family: var(--ui-font); }
+.ui-flightDeck :is(h1, h2, h3, dt, legend, .badge, .heatmap-caption), .style-option.ui-flightDeck .style-name { text-transform: uppercase; letter-spacing: .12em; }
+.ui-flightDeck h1 { letter-spacing: .2em; }
+.ui-flightDeck h3 { font-size: 10px; }
+.ui-flightDeck .provider-card { border-radius: 8px; box-shadow: inset 0 1px 0 #ffffff0a; }
+.ui-flightDeck :is(.app-header, .flyout > footer, .detail-card footer, .settings-content) :is(button[data-slot="button"], button:not([data-slot])) { text-transform: uppercase; letter-spacing: .08em; border-bottom-width: 2px; background: linear-gradient(#2a2b20, #1c1d15); }
+.ui-flightDeck .meter-tape > i.on, .ui-flightDeck .gauge-cells > i.on { box-shadow: 0 0 4px color-mix(in srgb, var(--brand) 60%, transparent); }
+.ui-flightDeck .meter-tape > i.hot, .ui-flightDeck .gauge-cells > i.hot { box-shadow: 0 0 4px color-mix(in srgb, var(--alert) 60%, transparent); }
+.ui-flightDeck .trace-line { stroke-width: 2; filter: drop-shadow(0 0 2px var(--brand)); }
+.ui-flightDeck .quota-window > .row:first-child > strong { font-size: 13px; }
+
+/* ── Orbit: aurora glass and twin rings ── */
+:is(.app, .style-option).ui-orbit { --canvas: #0b0d18; --surface: #151829; --well: #252a45; --border: #ffffff17; --text: #eef0ff; --text-muted: #9298c0; --good: #5eead4; --warn: #fbbf6b; --alert: #ff7a59; --brand: #8b7bff; --ui-font: "SF Pro Rounded", ui-rounded, "Nunito", "Segoe UI Variable Display", system-ui, sans-serif; font-family: var(--ui-font); }
+.ui-orbit:is(.surface-flyout, .surface-settings), .panel-viewport.ui-orbit { background: radial-gradient(70% 45% at 90% 0%, #3a2a7a66, transparent), radial-gradient(60% 50% at 0% 100%, #0d5a6a55, transparent), var(--canvas); }
+.ui-orbit .flyout > .app-header, .ui-orbit .flyout > footer { background: color-mix(in srgb, var(--canvas) 88%, transparent); backdrop-filter: blur(12px); }
+.ui-orbit .provider-card { border-radius: 16px; background: color-mix(in srgb, var(--surface) 80%, transparent); }
+.ui-orbit :is(.app-header, .flyout > footer, .detail-card footer, .settings-content) :is(button[data-slot="button"], button:not([data-slot])) { border-radius: 99px; }
+.ui-orbit .strip { border-radius: 18px; }
+.ui-orbit .strip-provider { border-radius: 12px; }
+.ui-orbit .strip-bars > span > i { border-radius: 3px; background: linear-gradient(var(--brand), color-mix(in srgb, var(--brand) 40%, #3ee0d0)); }
+
+/* ── Ledger: newsprint by day, ink by night ── */
+:is(.app, .style-option).ui-ledger { --canvas: #f2ede1; --surface: #f7f3ea; --well: #e3dccb; --border: #1c1a1626; --text: #1c1a16; --text-muted: #6f6a5e; --good: #1f6b45; --warn: #9a6a00; --alert: #c4361b; --brand: #c4361b; --ui-font: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-family: var(--ui-font); color-scheme: light; }
+:is(.app, .style-option).ui-ledger.theme-dark { --canvas: #16140f; --surface: #1d1a14; --well: #2c2820; --border: #efe8d826; --text: #efe8d8; --text-muted: #a8a08e; --good: #7cc49a; --warn: #e0b04a; --alert: #ff6a4d; --brand: #ff6a4d; color-scheme: dark; }
+@media (prefers-color-scheme: dark) { :is(.app, .style-option).ui-ledger.theme-system { --canvas: #16140f; --surface: #1d1a14; --well: #2c2820; --border: #efe8d826; --text: #efe8d8; --text-muted: #a8a08e; --good: #7cc49a; --warn: #e0b04a; --alert: #ff6a4d; --brand: #ff6a4d; color-scheme: dark; } }
+.ui-ledger :is(h3, dt, legend, .badge), .style-option.ui-ledger .style-tagline { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; text-transform: uppercase; letter-spacing: .14em; font-size: 9px; }
+.ui-ledger h1 { font-style: italic; font-weight: 600; }
+.ui-ledger h2 { font-size: 16px; letter-spacing: -.01em; }
+.ui-ledger .provider-card { border: 0; border-top: 1px solid var(--text); border-radius: 0; background: transparent; }
+.ui-ledger .quota-window > .row:first-child > strong { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+.ui-ledger .quota-window > .row.secondary { font-style: italic; }
+.ui-ledger :is(.app-header, .flyout > footer, .detail-card footer, .settings-content) :is(button[data-slot="button"], button:not([data-slot])) { border-radius: 0; background: transparent; text-decoration: underline; text-underline-offset: 2px; }
+.ui-ledger .strip { border-radius: 2px; }
+.ui-ledger .strip-percent { font-size: 13px; font-weight: 600; line-height: 1; }
+.ui-ledger .strip-bars > span > i { border-radius: 0; background: var(--text); }
+.ui-ledger .strip-bars > span.latest > i { background: var(--brand); }
+.ui-ledger .strip-quiet { border: 0; border-left: 1px solid var(--text); border-right: 1px solid var(--text); border-radius: 0; background: none; font-style: italic; }
+
+/* ── Terminal: green phosphor CRT ── */
+:is(.app, .style-option).ui-terminal { --canvas: #050805; --surface: #0a110a; --well: #133313; --border: #1f4d1f; --text: #7dff8a; --text-muted: #45b552; --good: #7dff8a; --warn: #e6ff5c; --alert: #ff5c5c; --brand: #7dff8a; --ui-font: var(--ui-mono); font-family: var(--ui-font); text-shadow: 0 0 5px #7dff8a40; }
+.ui-terminal:is(.surface-flyout, .surface-settings), .panel-viewport.ui-terminal { background: repeating-linear-gradient(0deg, #ffffff06 0 1px, transparent 1px 3px), var(--canvas); }
+.ui-terminal .provider-card { border-style: dashed; border-radius: 0; }
+.ui-terminal h2::before { content: "> "; color: var(--text-muted); }
+.ui-terminal :is(h3, dt, legend) { text-transform: lowercase; }
+.ui-terminal :is(h3, legend)::before { content: "# "; }
+.ui-terminal :is(.app-header, .flyout > footer, .detail-card footer, .settings-content) :is(button[data-slot="button"], button:not([data-slot])) { border-radius: 0; background: transparent; text-transform: lowercase; }
+.ui-terminal :is(.app-header, .flyout > footer, .detail-card footer) button::before { content: "["; } .ui-terminal :is(.app-header, .flyout > footer, .detail-card footer) button::after { content: "]"; }
+.ui-terminal .strip, .ui-terminal .strip-provider { border-radius: 0; }
+
+/* ── Blueprint: white line work on drafting blue ── */
+:is(.app, .style-option).ui-blueprint { --canvas: #0d3a6b; --surface: #10447c; --well: #1d5a96; --border: #c4dcff52; --text: #eef5ff; --text-muted: #a8c8ef; --good: #c6f6ff; --warn: #ffe28a; --alert: #ffa08f; --brand: #ffe28a; --ui-font: "Avenir Next Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif; font-family: var(--ui-font); }
+.ui-blueprint:is(.surface-flyout, .surface-settings), .panel-viewport.ui-blueprint, .style-option.ui-blueprint { background: linear-gradient(#ffffff0d 1px, transparent 1px) 0 0 / 12px 12px, linear-gradient(90deg, #ffffff0d 1px, transparent 1px) 0 0 / 12px 12px, var(--canvas); }
+.ui-blueprint :is(h1, h2, h3, dt, legend, .badge) { text-transform: uppercase; letter-spacing: .1em; }
+.ui-blueprint .provider-card { border-color: #ffffff66; border-radius: 0; background: transparent; }
+.ui-blueprint :is(.app-header, .flyout > footer, .detail-card footer, .settings-content) :is(button[data-slot="button"], button:not([data-slot])) { border-radius: 0; background: transparent; border-style: dashed; }
+.ui-blueprint .meter-rule .meter-fill { background: var(--text); }
+.ui-blueprint .meter.meter-rule::before, .ui-blueprint .meter.meter-rule::after { content: ""; position: absolute; top: -4px; width: 1px; height: 9px; background: var(--text-muted); }
+.ui-blueprint .meter.meter-rule::before { left: 0; } .ui-blueprint .meter.meter-rule::after { right: 0; }
+.ui-blueprint .twin-used { stroke: var(--text); }
+.ui-blueprint .twin-time { stroke: var(--brand); }
+.ui-blueprint .strip, .ui-blueprint .strip-provider { border-radius: 0; }
+.ui-blueprint .trace-line { stroke: var(--text); }
+.ui-blueprint .trace-area { fill: #ffffff14; }
+
+/* ── Departures: split-flap station board ── */
+:is(.app, .style-option).ui-departures { --canvas: #0e0f11; --surface: #16181b; --well: #2a2d31; --border: #ffffff14; --text: #f2f2f2; --text-muted: #9aa0a6; --good: #7ee081; --warn: #f5d742; --alert: #ff6b5a; --brand: #f5d742; --ui-font: "Helvetica Neue", Arial, sans-serif; font-family: var(--ui-font); }
+.ui-departures :is(h1, h2, h3, dt, legend, .badge) { text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.ui-departures .provider-card { border-radius: 4px; }
+.ui-departures .quota-window > .row:first-child > span { text-transform: uppercase; font-weight: 700; letter-spacing: .04em; }
+.ui-departures .quota-window > .row.secondary > span:last-child { font-family: var(--ui-mono); color: var(--brand); }
+.ui-departures .meter-flap > i { background: linear-gradient(#2c2f33 50%, #23262a 50%); }
+.ui-departures .meter-flap > i.on { background: linear-gradient(var(--brand) 50%, color-mix(in srgb, var(--brand) 82%, #000) 50%); }
+.ui-departures .meter-flap > i.hot { background: linear-gradient(var(--alert) 50%, color-mix(in srgb, var(--alert) 82%, #000) 50%); }
+.ui-departures .quota-window .flap { font-size: 12px; }
+.ui-departures .strip-bars > span > i { border-radius: 0; background: linear-gradient(var(--brand) 50%, color-mix(in srgb, var(--brand) 80%, #000) 50%); }
+
+/* ── Arcade: quota left as hit points ── */
+:is(.app, .style-option).ui-arcade { --canvas: #120a24; --surface: #1d1238; --well: #30225a; --border: #ff4fd84d; --text: #fff6e0; --text-muted: #bcaaea; --good: #4dff88; --warn: #ffd23f; --alert: #ff3d6e; --brand: #ff4fd8; --ui-font: var(--ui-mono); font-family: var(--ui-font); }
+.ui-arcade :is(h1, h2, h3, dt, legend, .badge, button) { text-transform: uppercase; letter-spacing: .06em; }
+.ui-arcade h1 { text-shadow: 2px 2px 0 var(--brand); }
+.ui-arcade .provider-card, .ui-arcade .strip, .ui-arcade :is(.app-header, .flyout > footer, .detail-card footer, .settings-content) :is(button[data-slot="button"], button:not([data-slot])), .style-option.ui-arcade { border-radius: 0; clip-path: polygon(4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px), 0 4px); }
+.ui-arcade .provider-card { border: 0; box-shadow: inset 0 0 0 2px var(--well); }
+.ui-arcade .meter-hp > i, .ui-arcade .gauge-hp .gauge-cells > i { border-radius: 0; box-shadow: inset 0 -2px 0 #0006; }
+.ui-arcade .strip-bars > span > i { border-radius: 0; background: repeating-linear-gradient(var(--brand) 0 3px, color-mix(in srgb, var(--brand) 70%, #000) 3px 4px); }
+.ui-ledger .settings .settings-nav button[aria-current="page"] { color: var(--brand); }
+.settings .style-preview .quota-window > .row:first-child > strong { font-size: 11px; }
+/* Service status keeps its row and status-page link in every style. A status light carries severity. */
+.app:not(.ui-classic) .service-badge { --sev: var(--alert); gap: 5px; }
+.app:not(.ui-classic) .service-badge[data-severity="operational"] { --sev: var(--good); }
+.app:not(.ui-classic) .service-badge[data-severity="degraded"] { --sev: var(--warn); }
+.app:not(.ui-classic) .service-badge[data-severity="unknown"] { --sev: var(--text-muted); }
+.app:not(.ui-classic) .service-badge::before { content: ""; flex-shrink: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--sev); }
+.ui-flightDeck .service-badge.service-badge { border-radius: 3px; background: #0b0c08; letter-spacing: .1em; }
+.ui-flightDeck .service-badge::before { box-shadow: 0 0 5px var(--sev); }
+.ui-orbit .service-badge.service-badge { border-radius: 99px; background: color-mix(in srgb, var(--sev) 12%, transparent); border-color: color-mix(in srgb, var(--sev) 35%, transparent); }
+.ui-orbit .service-badge::before { box-shadow: 0 0 6px var(--sev); }
+.ui-ledger .service-badge.service-badge { border: 0; border-radius: 0; background: transparent; padding: 0; font-style: italic; font-size: 11px; text-decoration: none; }
+.ui-ledger .service-badge::before { width: 5px; height: 5px; }
+.ui-terminal .service-badge.service-badge { border-radius: 0; border-style: dashed; background: transparent; }
+.ui-terminal .service-badge::before { content: "●"; width: auto; height: auto; background: none; color: var(--sev); font-size: 8px; }
+.ui-blueprint .service-badge.service-badge { border-radius: 0; border-style: dashed; background: transparent; text-transform: uppercase; letter-spacing: .08em; }
+.ui-blueprint .service-badge::before { border-radius: 0; transform: rotate(45deg); width: 5px; height: 5px; }
+.ui-departures .service-badge.service-badge { border-radius: 2px; border: 0; background: linear-gradient(#26292d 50%, #1c1e21 50%); color: var(--brand); text-transform: uppercase; font-weight: 700; letter-spacing: .06em; }
+.ui-departures .service-badge[data-severity="operational"] { color: var(--good); }
+.ui-arcade .service-badge.service-badge { border-radius: 0; border: 0; background: var(--well); text-transform: uppercase; clip-path: polygon(3px 0, calc(100% - 3px) 0, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 0 calc(100% - 3px), 0 3px); }
+.ui-arcade .service-badge::before { border-radius: 0; width: 5px; height: 5px; }
+

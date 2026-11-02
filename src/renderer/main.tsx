@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
 import "./style.css";
+import "./interface-styles.css";
 async function mount() {
   let bridge = window.meterusage;
   if (!bridge && import.meta.env.MODE === "demo") bridge = await import("./preview").then(m => m.previewBridge());
