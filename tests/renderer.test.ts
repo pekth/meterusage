@@ -1178,8 +1178,14 @@ it("offers every style with a live preview and hides the accent for styles with 
   expect(light).toContain('class="style-option ui-classic theme-light" style="--brand:#fb7185"');
   expect(light).toContain('class="style-option ui-ledger theme-light"');
   expect(light).toContain('class="style-option ui-orbit"');
-  expect(themed("system", true)).toContain('class="style-option ui-ledger theme-dark"');
-  expect(themed("system", false)).toContain('class="style-option ui-classic theme-light"');
+  // System follows prefers-color-scheme in CSS, like the page, not the native system-UI flag.
+  for (const systemDark of [true, false]) {
+    const system = themed("system", systemDark);
+    expect(system).toContain('class="style-option ui-classic theme-system"'); expect(system).toContain('class="style-option ui-ledger theme-system"');
+  }
+  const css = readFileSync("src/renderer/interface-styles.css", "utf8");
+  expect(css).toMatch(/@media \(prefers-color-scheme: light\) \{ \.style-option\.ui-classic\.theme-system \{ --canvas: #fafafc;/);
+  expect(css).toMatch(/@media \(prefers-color-scheme: dark\) \{ :is\(\.app, \.style-option\)\.ui-ledger\.theme-system \{ --canvas: #16140f;/);
 });
 
 it("collapses quiet weeks into one labelled block in strip-chart styles", () => {

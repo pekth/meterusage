@@ -344,8 +344,9 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
   const [category, setCategory] = useState("Connections");
   const categories = ["Connections", "API connections", "Appearance", "General", "Providers", "Side notch", "Usage details", "Diagnostics"];
   const values = state.settings.values, style = styleOf(values.interfaceStyle);
-  // Classic and Ledger previews show the saved Theme (and Classic the saved Accent), as the app would.
-  const previewTheme = values.appearanceTheme === "light" || values.appearanceTheme === "dark" ? values.appearanceTheme : state.systemDark ? "dark" : "light";
+  // Classic and Ledger previews show the saved Theme (and Classic the saved Accent). System follows the same
+  // prefers-color-scheme signal as the page's theme-system class.
+  const previewTheme = values.appearanceTheme === "light" || values.appearanceTheme === "dark" ? values.appearanceTheme : "system";
   const reportCoolingDown = (state.issueReport?.retryAt ?? 0) > state.snapshot.clock;
   const set = (key: string, value: string | boolean | number) => void action({ action: "setPreference", key, value });
   const toggle = (key: string, text: string, ariaLabel?: string, disabled = false, describedBy?: string) => <label className="setting" key={key}><span>{text}</span><input type="checkbox" aria-label={ariaLabel} aria-describedby={describedBy} checked={values[key] === true} disabled={disabled || (key === "launchAtLogin" && state.snapshot.demo)} onChange={e => set(key, e.target.checked)} /></label>;
