@@ -45,13 +45,13 @@ function ServiceStatuses({ state, action }: { state: ViewState; action: (r: Requ
     const page = Object.hasOwn(statusPages, provider) ? provider as keyof typeof statusPages : undefined;
     const quiet = status.severity === "operational" && !status.stale && !status.refreshError;
     const label = severityNames[status.severity], title = `${status.description} · ${age}`;
-    const badge = page ? <Button variant="outline" size="xs" className="h-5 rounded-full px-2 text-[10px]" title={title} aria-label={`Open ${providerNames[provider]} status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{label}</Button> : <Badge variant="outline" className="text-[10px]" title={title}>{label}</Badge>;
+    const badge = page ? <Button variant="outline" size="xs" className="h-5 min-h-0 rounded-full px-2 text-[10px]" title={title} aria-label={`Open ${providerNames[provider]} status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{label}</Button> : <Badge variant="outline" className="text-[10px]" title={title}>{label}</Badge>;
     return <div className={`service-row${quiet ? "" : " service-row-detail"}`} key={provider}>{name}{badge}{!quiet && <span className="secondary">{status.severity !== "operational" || status.stale ? `${status.description} · ` : ""}{age}{status.refreshError && ` · ${status.refreshError}`}</span>}</div>;
   }) : <p className="secondary">Not checked yet</p>}</section>;
 }
 const heatmapModes = [["daily", "Day", "Daily"], ["weekly", "Week", "Weekly"], ["cumulative", "Total", "Cumulative"]] as const;
 function HeatmapModeToggle({ label, mode, setMode }: { label: string; mode: HeatmapMode; setMode: (mode: HeatmapMode) => void }) {
-  return <ToggleGroup aria-label={label} variant="outline" size="sm" spacing={0} value={[mode]} onValueChange={value => { if (value[0]) setMode(value[0] as HeatmapMode); }}>{heatmapModes.map(([value, short, full]) => <ToggleGroupItem key={value} value={value} aria-label={full} title={full} className="h-5 min-w-0 px-1.5 text-[10px]">{short}</ToggleGroupItem>)}</ToggleGroup>;
+  return <ToggleGroup aria-label={label} variant="outline" size="sm" spacing={0} value={[mode]} onValueChange={value => { if (value[0]) setMode(value[0] as HeatmapMode); }}>{heatmapModes.map(([value, short, full]) => <ToggleGroupItem key={value} value={value} aria-label={full} title={full} className="h-5 min-h-0 min-w-0 px-1.5 text-[10px] aria-pressed:border-primary/60 aria-pressed:bg-primary/15 aria-pressed:font-semibold aria-pressed:text-foreground">{short}</ToggleGroupItem>)}</ToggleGroup>;
 }
 /** Sunday-first labels matching the heatmap rows; alternate rows stay blank to keep the column narrow. */
 const weekdayLabels = Array.from({ length: 7 }, (_, i) => i % 2 ? new Date(2026, 0, 4 + i).toLocaleDateString([], { weekday: "short" }) : "");
@@ -371,7 +371,7 @@ export function UsagePanel({ state, action }: { state: ViewState; action: (r: Re
   const card = <ProviderCard key={slotKey(slot)} slot={slot} state={state} action={action} />;
   if (slots.length < 2) return <section className="usage-panel">{card}</section>;
   return <section className="usage-panel"><Tabs value={slotKey(slot)} onValueChange={value => setSelected(String(value))} className="gap-2">
-    <TabsList aria-label="Usage provider" className="provider-tabs h-8 w-full justify-start overflow-x-auto">{slots.map(item => {
+    <TabsList activateOnFocus aria-label="Usage provider" className="provider-tabs h-8 w-full justify-start overflow-x-auto">{slots.map(item => {
       const digit = item.slotID ? slots.filter(s => s.provider === item.provider).indexOf(item) + 1 : undefined;
       const name = slotName(item) + (digit && !item.label ? ` ${digit}` : "");
       return <TabsTrigger key={slotKey(item)} value={slotKey(item)} aria-label={name} title={name} className="flex-none px-2"><Mark slot={item} state={state} />{digit && <small>{digit}</small>}</TabsTrigger>;

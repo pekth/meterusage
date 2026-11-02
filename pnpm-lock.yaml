@@ -166,31 +166,19 @@ importers:
 
   .:
     dependencies:
-      '@base-ui/react':
-        specifier: 1.9.0
-        version: 1.9.0(@types/react@19.2.18)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
-      class-variance-authority:
-        specifier: 0.7.1
-        version: 0.7.1
-      cn:
-        specifier: 0.5.1
-        version: 0.5.1
-      lucide-react:
-        specifier: 1.66.0
-        version: 1.66.0(@types/react@19.2.18)(react@19.2.6)
       react:
         specifier: 19.2.6
         version: 19.2.6
       react-dom:
         specifier: 19.2.6
         version: 19.2.6(react@19.2.6)
-      tw-animate-css:
-        specifier: 1.4.0
-        version: 1.4.0
       yauzl:
         specifier: 3.2.0
         version: 3.2.0
     devDependencies:
+      '@base-ui/react':
+        specifier: 1.9.0
+        version: 1.9.0(@types/react@19.2.18)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@tailwindcss/vite':
         specifier: 4.3.3
         version: 4.3.3(@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.19.1)(jiti@2.7.0)(typescript@7.0.2))
@@ -209,18 +197,30 @@ importers:
       '@vitejs/plugin-react':
         specifier: 6.0.0
         version: 6.0.0(@voidzero-dev/vite-plus-core@0.3.0(@types/node@24.19.1)(jiti@2.7.0)(typescript@7.0.2))
+      class-variance-authority:
+        specifier: 0.7.1
+        version: 0.7.1
+      cn:
+        specifier: 0.5.1
+        version: 0.5.1
       electron:
         specifier: 43.4.1
         version: 43.4.1(supports-color@7.2.0)
       electron-builder:
         specifier: 26.15.6
         version: 26.15.6(electron-builder-squirrel-windows@26.15.6)(supports-color@7.2.0)
+      lucide-react:
+        specifier: 1.66.0
+        version: 1.66.0(@types/react@19.2.18)(react@19.2.6)
       shadcn:
         specifier: 4.23.0
         version: 4.23.0(supports-color@7.2.0)
       tailwindcss:
         specifier: 4.3.3
         version: 4.3.3
+      tw-animate-css:
+        specifier: 1.4.0
+        version: 1.4.0
       typescript:
         specifier: ~7.0.2
         version: 7.0.2

@@ -505,6 +505,26 @@ it.each(["daily", "weekly", "cumulative"])("exposes exact heatmap values on hove
   expect(css).not.toContain("--readout-height");
 });
 
+it("starts the quota heatmap at the first recorded week and keeps token readings aligned", () => {
+  const view = state(), today = localDay(now);
+  view.snapshot.demo = false; view.snapshot.appearance.heatmap = view.snapshot.appearance.codexHeatmap = true;
+  view.snapshot.activities.codex = value({ provider: "codex", scannedAt: now, sessions: [], daily: [{ day: today, tokens: tokens({ output: 4321 }), sessionCount: 1, estimatedCostUSD: 0 }] });
+  const render = (days: { day: number; percent: number }[]) => { view.snapshot.quotaActivity = { codex: days }; return renderToStaticMarkup(createElement(ProviderCard, { slot: primary("codex"), state: view, action: async () => {} })); };
+  const cells = (markup: string) => (markup.match(/role="img" aria-label="[^"]*of quota used/g) ?? []).length;
+  const date = (at: number) => new Date(at).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+  // A fresh install keeps the 12-week minimum: 11 full weeks plus this week through today.
+  const fresh = render([3, 2, 1, 0].map(ago => ({ day: shiftDay(today, -ago), percent: 12 })));
+  expect(fresh).toContain("12 weeks"); expect(fresh).toContain("--weeks:12"); expect(fresh).toContain('class="heatmap-weekdays"');
+  expect(cells(fresh)).toBe(11 * 7 + new Date(today).getDay() + 1);
+  expect(fresh).toContain(`${date(today)}: 12% of quota used, 4,321 tokens on`);
+  expect(fresh).not.toContain(`${date(shiftDay(today, -1))}: 12% of quota used, 4,321 tokens`);
+  const twenty = render([{ day: shiftDay(today, -140), percent: 5 }, { day: today, percent: 12 }]);
+  expect(twenty).toContain("21 weeks"); expect(twenty).toContain(`${date(today)}: 12% of quota used, 4,321 tokens on`);
+  expect(render([{ day: shiftDay(today, -280), percent: 5 }])).toContain("26 weeks");
+  const empty = render([]);
+  expect(empty).toContain("fills in as usage rises"); expect(empty).toContain("--weeks:12");
+});
+
 it("labels count-only heatmap days without inventing measured zero tokens", () => {
   const view = state(), day = localDay(now), daily = [{ day, tokens: tokens(), sessionCount: 2, estimatedCostUSD: 0 }];
   view.snapshot.slots = [primary("grok")]; view.snapshot.activities = {};
