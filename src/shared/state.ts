@@ -10,6 +10,6 @@ export interface Snapshot {
   /** Per-slot daily rise in quota used, from that provider's own readings. */
   quotaActivity?: Record<string, { day: number; percent: number; estimated?: boolean }[]>; usages: Record<string, Loaded<Usage>>;
   plans: Record<string, Loaded<string>>; statuses: Partial<Record<Provider, Loaded<ServiceStatus>>>;
-  appearance: { theme: string; accent: string; heatmap: boolean; claudeHeatmap: boolean; codexHeatmap: boolean; pacing: boolean; telemetry: boolean; chart: boolean; resetButton: boolean; compactTray: boolean; notch: boolean; pinned: boolean; onboarding: boolean };
+  appearance: { theme: string; accent: string; style?: string; heatmap: boolean; claudeHeatmap: boolean; codexHeatmap: boolean; pacing: boolean; telemetry: boolean; chart: boolean; resetButton: boolean; compactTray: boolean; notch: boolean; pinned: boolean; onboarding: boolean };
   historyError?: "loadFailed" | "writeFailed"; archiveWriteFailed: boolean; clearingCache: boolean;
 }

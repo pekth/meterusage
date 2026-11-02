@@ -2,7 +2,8 @@ import { apiBillingProviders, apiBillingNames, type ApiBillingReading } from "..
 import { normalizeProviderOrder } from "../domain/provider-order";
 import { ProviderOrder } from "./provider-order";
 import { ApiBillingBalanceLine, ApiBillingSetup, PrepaidCreditSetup } from "./api-billing-setup";
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Children, createContext, isValidElement, useContext, useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { interfaceStyles, styleInfo, styleOf, type ChartKind, type GaugeKind, type InterfaceStyle, type MeterKind } from "../shared/styles";
 import { type Bridge, type ViewState, type Request, type Surface, type ConnectionState, PanelSize, panelScales, providerKey, trayKey, statusPages } from "../shared/ipc";
 import { type AccountActivity, type Slot, type Provider, type QuotaWindow, type Telemetry, type Daily, type Loaded, type Session, type UsageWindow, clamp, providerNames, primary, slotKey, slotName, headlineWindow, lastBurn, totalTokens, localDay, shiftDay, utcDay, tokens, resetCreditAvailable, severityNames } from "../domain/models";
 import { pace, measuredBurn, durationMins, burnActive, etaSeconds, formatETA, paceText } from "../domain/pacing";
@@ -45,7 +46,7 @@ function ServiceStatuses({ state, action }: { state: ViewState; action: (r: Requ
     const page = Object.hasOwn(statusPages, provider) ? provider as keyof typeof statusPages : undefined;
     const quiet = status.severity === "operational" && !status.stale && !status.refreshError;
     const label = severityNames[status.severity], title = `${status.description} · ${age}`;
-    const badge = page ? <Button variant="outline" size="xs" className="h-5 min-h-0 rounded-full px-2 text-[10px]" title={title} aria-label={`${providerNames[provider]} status: ${label}. Open status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{label}</Button> : <Badge variant="outline" className="text-[10px]" title={title}>{label}</Badge>;
+    const badge = page ? <Button variant="outline" size="xs" className="service-badge h-5 min-h-0 rounded-full px-2 text-[10px]" data-severity={status.severity} title={title} aria-label={`${providerNames[provider]} status: ${label}. Open status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{label}</Button> : <Badge variant="outline" className="service-badge text-[10px]" data-severity={status.severity} title={title}>{label}</Badge>;
     return <div className={`service-row${quiet ? "" : " service-row-detail"}`} key={provider}>{name}{badge}{!quiet && <span className="secondary">{status.severity !== "operational" || status.stale ? `${status.description} · ` : ""}{age}{status.refreshError && ` · ${status.refreshError}`}</span>}</div>;
   }) : <p className="secondary">Not checked yet</p>}</section>;
 }
@@ -55,15 +56,73 @@ function HeatmapModeToggle({ label, mode, setMode }: { label: string; mode: Heat
 }
 /** Sunday-first labels matching the heatmap rows; alternate rows stay blank to keep the column narrow. */
 const weekdayLabels = Array.from({ length: 7 }, (_, i) => i % 2 ? new Date(2026, 0, 4 + i).toLocaleDateString([], { weekday: "short" }) : "");
+/** The active interface style. Components outside a provider render Classic. */
+export const StyleContext = createContext<InterfaceStyle>("classic");
+const useStyle = () => styleInfo[useContext(StyleContext)];
+/** Where even pacing would put usage now: the needle drawn on style meters and gauges. */
+const paceMarker = (w: QuotaWindow, now: number) => { const p = pace(w, now); return p ? clamp(p.usedPercent - p.deficitPercent) : undefined; };
+const segments = (count: number, lit: number, hotFrom?: number) => Array.from({ length: count }, (_, i) => { const at = (i + .5) / count * 100; return <i key={i} className={at < lit ? hotFrom !== undefined && at > hotFrom ? "hot" : "on" : undefined} />; });
+const asciiBar = (used: number, marker: number | undefined, cells: number) => Array.from({ length: cells }, (_, i) => { const at = (i + .5) / cells * 100; return at < used ? marker !== undefined && at > marker ? "▓" : "█" : "░"; }).join("");
+const hpColour = (left: number) => left > 50 ? "var(--good)" : left > 20 ? "var(--warn)" : "var(--alert)";
+function Flap({ text, label }: { text: string; label?: string }) {
+  return <span className="flap-digits" role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>{[...text].map((ch, i) => <span key={i} className="flap" aria-hidden="true">{ch}</span>)}</span>;
+}
+function MeterVisual({ kind, used, marker, colour }: { kind: MeterKind; used: number; marker?: number; colour: string }) {
+  if (kind === "tape") return <>{segments(30, used, marker)}{marker !== undefined && <b className="meter-pace" style={{ left: `${marker}%` }} />}</>;
+  if (kind === "rule") return <><span className="meter-fill" style={{ width: `${used}%`, background: used >= 80 ? colour : undefined }} />{marker !== undefined && <b className="meter-pace" style={{ left: `${marker}%` }} />}</>;
+  if (kind === "orbit") return <>{marker !== undefined && <span className="meter-time" style={{ width: `${marker}%` }} />}<span className="meter-fill" style={{ width: `${used}%`, background: marker !== undefined && used > marker + 10 ? "var(--alert)" : undefined }} /></>;
+  if (kind === "ascii") return <span className="meter-ascii" aria-hidden="true">[{asciiBar(used, marker, 24)}]</span>;
+  if (kind === "flap") return <>{segments(12, used, marker)}</>;
+  if (kind === "hp") { const left = 100 - used; return <><span className="hp-label" aria-hidden="true">HP</span>{Array.from({ length: 10 }, (_, i) => <i key={i} style={(i + .5) * 10 < left ? { background: hpColour(left) } : undefined} />)}</>; }
+  return <span style={{ width: `${used}%`, background: colour }} />;
+}
 export function Meter({ w, now, activityAt, pacing, quotaBurn = false }: { w: QuotaWindow; now: number; activityAt?: number; pacing: boolean; quotaBurn?: boolean }) {
+  const style = useStyle();
   const raw = pacing ? pace(w, now) : undefined, eta = raw && etaSeconds(raw, w.resetsAt, now);
   const burn = pacing && quotaBurn ? measuredBurn(w, now) : undefined;
   const text = quotaBurn ? burn ? `Quota burn · ${burn.percentPerHour > 0 && burn.percentPerHour < .1 ? "<0.1" : new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(burn.percentPerHour)} pp/h` : "Collecting quota burn rate" : raw ? paceText(raw) : w.pacingBaseline && durationMins(w) ? "Collecting usage after reset" : undefined;
   const burnETA = burn?.projectedExhaustion;
   const reset = w.resetsAt !== undefined ? `Resets ${new Date(w.resetsAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "Reset not reported";
-  return <div className="quota-window"><div className="row"><span>{w.label}</span><strong style={{ color: headroom(w.usedPercent) }}>{Math.round(w.usedPercent)}% used</strong></div><div className="meter" role="progressbar" aria-label={`${w.label} quota used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={clamp(w.usedPercent)} aria-valuetext={`${Math.round(w.usedPercent)}% used`}><span style={{ width: `${clamp(w.usedPercent)}%`, background: headroom(w.usedPercent) }} /></div><div className="row secondary"><span title={quotaBurn ? "Percentage points of quota used per hour, measured while MeterUsage is running. Not tokens or cost." : undefined}>{pacing && text}</span><span title={reset}>{burnETA !== undefined ? `Est. ${formatETA((burnETA - now) / 1000)}` : eta !== undefined ? formatETA(eta) : reset}</span></div>{(burnETA !== undefined || eta !== undefined) && <div className="row secondary"><span>{reset}</span></div>}</div>;
+  const used = clamp(w.usedPercent), rounded = Math.round(w.usedPercent), colour = headroom(w.usedPercent);
+  const marker = raw ? clamp(raw.usedPercent - raw.deficitPercent) : undefined;
+  const figure = style.meter === "flap" ? <Flap text={`${rounded}%`} label={`${rounded}% used`} /> : style.meter === "hp" ? <strong style={{ color: hpColour(100 - rounded) }}><span aria-hidden="true">{Math.max(0, 100 - rounded)} HP</span><span className="sr-only">{rounded}% used</span></strong> : <strong style={{ color: colour }}>{rounded}% used</strong>;
+  return <div className={`quota-window meter-${style.meter}`}><div className="row"><span>{w.label}</span>{figure}</div><div className={`meter meter-${style.meter}`} role="progressbar" aria-label={`${w.label} quota used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={used} aria-valuetext={`${rounded}% used`}><MeterVisual kind={style.meter} used={used} marker={marker} colour={colour} /></div><div className="row secondary"><span title={quotaBurn ? "Percentage points of quota used per hour, measured while MeterUsage is running. Not tokens or cost." : undefined}>{pacing && text}</span><span title={reset}>{burnETA !== undefined ? `Est. ${formatETA((burnETA - now) / 1000)}` : eta !== undefined ? formatETA(eta) : reset}</span></div>{(burnETA !== undefined || eta !== undefined) && <div className="row secondary"><span>{reset}</span></div>}</div>;
 }
-export function ActivityHeatmap({ title, scope, period, label, fullHistory, weeks, weekdays = false, unavailable = false, controls, children }: { title: string; scope: string; period?: string; label: string; fullHistory?: boolean; weeks?: number; weekdays?: boolean; unavailable?: boolean; controls?: ReactNode; children?: ReactNode }) {
+interface StripCell { amount?: number; peak: number; readout: string; label: string }
+/** Sparse-aware daily strip: a leading run of quiet days collapses into one labelled block. */
+function ActivityStrip({ kind, cells, label }: { kind: Exclude<ChartKind, "grid">; cells: StripCell[]; label: string }) {
+  const [active, setActive] = useState<number>();
+  // Only recorded zero days count as quiet. Unavailable days stay visible.
+  const firstActive = cells.findIndex(c => (c.amount ?? 0) > 0), leadingZero = cells.findIndex(c => c.amount !== 0);
+  const quiet = firstActive < 0 ? 0 : Math.min(firstActive, leadingZero < 0 ? cells.length : leadingZero);
+  const collapsed = quiet >= 7, shown = collapsed ? cells.slice(quiet) : cells;
+  const quietLabel = quiet >= 14 ? `${Math.floor(quiet / 7)} quiet weeks` : `${quiet} quiet days`;
+  const peak = Math.max(0.0001, ...shown.map(c => c.amount ?? 0)), level = (c: StripCell) => (c.amount ?? 0) / peak;
+  const current = active ?? shown.length - 1, readout = active !== undefined ? shown[active]?.readout : undefined;
+  const move = (e: KeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === "ArrowLeft" || e.key === "ArrowDown" ? -1 : e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : 0;
+    if (!step && e.key !== "Home" && e.key !== "End") return;
+    e.preventDefault();
+    setActive(e.key === "Home" ? 0 : e.key === "End" ? shown.length - 1 : Math.min(shown.length - 1, Math.max(0, current + step)));
+  };
+  if (!cells.length || cells.every(c => c.amount === undefined)) return <p className="heatmap-empty secondary">Activity unavailable</p>;
+  if (firstActive < 0) return <p className="heatmap-empty secondary">No activity recorded yet</p>;
+  const quietBlock = collapsed && <span className="strip-quiet" title={`${quietLabel} before the first recorded activity`}>{quietLabel}</span>;
+  let body: ReactNode;
+  if (kind === "spark") body = <span className="strip-spark">{collapsed && <span className="strip-quiet">·· {quietLabel} ··</span>}{shown.map((c, i) => <span key={i} className={i === active ? "active" : undefined} title={c.label} onPointerEnter={() => setActive(i)}>{c.amount === undefined ? "·" : "▁▂▃▄▅▆▇█"[Math.min(7, Math.round(level(c) * 7))]}</span>)}</span>;
+  else if (kind === "trace") {
+    // Each day owns an equal slice, so the latest day is drawn and the cursor sits over its hit area.
+    const width = 300, height = 60, slice = width / shown.length, y = (c: StripCell) => height - 3 - level(c) * (height - 8);
+    const path = `M0 ${y(shown[0]).toFixed(1)}` + shown.map((c, i) => `V${y(c).toFixed(1)}H${((i + 1) * slice).toFixed(1)}`).join("");
+    body = <>{quietBlock}<span className="strip-plot"><svg className="strip-trace" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true"><path className="trace-area" d={`${path}V${height}H0Z`} /><path className="trace-line" d={path} vectorEffect="non-scaling-stroke" />{active !== undefined && <line className="trace-cursor" x1={(active + .5) * slice} x2={(active + .5) * slice} y1="0" y2={height} vectorEffect="non-scaling-stroke" />}</svg><span className="strip-hits">{shown.map((c, i) => <span key={i} title={c.label} onPointerEnter={() => setActive(i)} />)}</span></span></>;
+  } else body = <>{quietBlock}<span className="strip-bars" style={{ gap: shown.length > 40 ? 0 : 2 }}>{shown.map((c, i) => <span key={i} title={c.label} className={`${c.amount === undefined ? "unavailable-day" : ""}${i === active ? " active" : ""}${i === shown.length - 1 ? " latest" : ""}`} onPointerEnter={() => setActive(i)}><i style={{ height: `${c.amount ? Math.max(4, level(c) * 100) : 0}%` }} /></span>)}</span></>;
+  // A slider reads one day at a time in screen readers' focus mode; the visual readout repeats it for pointer users.
+  return <><div className={`activity-strip strip-${kind}`} role="slider" tabIndex={0} aria-label={`${label}${collapsed ? `, ${quietLabel} collapsed` : ""}`} aria-valuemin={1} aria-valuemax={shown.length} aria-valuenow={current + 1} aria-valuetext={shown[current]?.label} onKeyDown={move} onPointerLeave={() => setActive(undefined)} onBlur={() => setActive(undefined)}>{body}</div><div className="heatmap-readout" aria-hidden="true">{readout ? <span>{readout}</span> : <span className="secondary">{shown.length} days shown{collapsed ? ` · ${quietLabel} collapsed` : ""}</span>}</div></>;
+}
+type HeatmapProps = { title: string; scope: string; period?: string; label: string; fullHistory?: boolean; weeks?: number; weekdays?: boolean; unavailable?: boolean; controls?: ReactNode; children?: ReactNode; chart?: ChartKind };
+/** Renders a heatmap in the active style's chart. */
+function StyledHeatmap(props: HeatmapProps) { return <ActivityHeatmap {...props} chart={useStyle().chart} />; }
+export function ActivityHeatmap({ title, scope, period, label, fullHistory, weeks, weekdays = false, unavailable = false, controls, children, chart = "grid" }: HeatmapProps) {
   const grid = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<string>(), [focused, setFocused] = useState<string>();
   const readout = hovered ?? focused;
@@ -75,6 +134,10 @@ export function ActivityHeatmap({ title, scope, period, label, fullHistory, week
     setFocused(cells.find(cell => cell === node.ownerDocument.activeElement)?.dataset.readout);
     setHovered(node.querySelector<HTMLElement>(".heatmap-cell[tabindex]:hover")?.dataset.readout);
   }, [children]);
+  if (chart !== "grid" && children) {
+    const cells = Children.toArray(children).flatMap(child => isValidElement<HeatmapCellProps>(child) && child.type === HeatmapCell ? [child.props] : []);
+    return <section className="activity-heatmap"><div className="heatmap-heading"><h3>{title}</h3>{controls}</div><p className="heatmap-caption secondary">{scope}{period && <> · {period}</>}</p><ActivityStrip kind={chart} cells={cells} label={label} /></section>;
+  }
   return <section className="activity-heatmap"><div className="heatmap-heading"><h3>{title}</h3>{controls}</div><p className="heatmap-caption secondary">{scope}{period && <> · {period}</>}</p>{children ? <><div className={weekdays ? "heatmap-body" : "contents"}>{weekdays && <div className="heatmap-weekdays" aria-hidden="true">{weekdayLabels.map((day, i) => <span key={i}>{day}</span>)}</div>}<div ref={grid} className={`heatmap${fullHistory ? " full-history" : ""}`} style={weeks ? { "--weeks": weeks } as CSSProperties : undefined} aria-label={label} onPointerOver={e => setHovered((e.target as HTMLElement).closest<HTMLElement>(".heatmap-cell[tabindex]")?.dataset.readout)} onPointerLeave={() => setHovered(undefined)} onBlur={() => setFocused(undefined)} onFocus={e => {
     const target = e.target as HTMLElement;
     if (!target.classList.contains("heatmap-cell")) return;
@@ -92,7 +155,8 @@ export function ActivityHeatmap({ title, scope, period, label, fullHistory, week
     if (next >= 0 && next < cells.length) cells[next].focus();
   }}>{children}</div></div><div className="heatmap-readout" aria-hidden="true">{readout ? <span>{readout}</span> : <div className="heatmap-legend secondary"><span className="heatmap-scale" aria-label="Usage intensity from less to more">Less{[0, .3, .65, 1].map(level => <i key={level} aria-hidden="true" style={{ background: level ? "var(--brand)" : "var(--well)", opacity: level || 1 }} />)}More</span>{unavailable && <span className="heatmap-missing"><i aria-hidden="true" />Unavailable</span>}</div>}</div></> : <p className="heatmap-empty secondary">Account history unavailable</p>}</section>;
 }
-function HeatmapCell({ label, readout, amount, peak, first = false, staticExport = false }: { label: string; readout: string; amount?: number; peak: number; first?: boolean; staticExport?: boolean }) {
+interface HeatmapCellProps { label: string; readout: string; amount?: number; peak: number; first?: boolean; staticExport?: boolean }
+export function HeatmapCell({ label, readout, amount, peak, first = false, staticExport = false }: HeatmapCellProps) {
   return <span className={`heatmap-cell${amount === undefined ? " unavailable-day" : ""}`} tabIndex={staticExport ? undefined : first ? 0 : -1} role="img" aria-label={label} title={label} data-readout={readout}><span aria-hidden="true" style={{ background: amount === undefined ? "transparent" : amount > 0 ? "var(--brand)" : "var(--well)", opacity: amount ? .3 + .7 * amount / peak : 1 }} /></span>;
 }
 function TelemetryView({ provider, t, stats, chart, heatmap, daily, now, staticExport, device }: { provider: Provider; t: Telemetry; stats: boolean; chart: boolean; heatmap: boolean; daily?: Daily[]; now: number; staticExport: boolean; device: string }) {
@@ -110,13 +174,13 @@ function TelemetryView({ provider, t, stats, chart, heatmap, daily, now, staticE
   const metricRows = (rows: typeof availableMetrics) => <dl className="metrics">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{typeof v === "number" ? n(v) : v}</dd></div>)}</dl>;
   const peak = Math.max(1, ...t.dailyHistory.map(amount)), cellPeak = Math.max(1, ...cells.flatMap(d => d ? [amount(d)] : []));
   const exact = new Intl.NumberFormat(), date = (day: number) => new Date(day).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", ...(provider === "openRouter" ? { timeZone: "UTC" } : {}) });
-  return <section className="telemetry">{stats && <><h3>Recorded activity</h3>{metricRows(staticExport ? availableMetrics : availableMetrics.slice(0, 2))}{!staticExport && availableMetrics.length > 2 && <details className="activity-details"><summary>More activity</summary>{metricRows(availableMetrics.slice(2))}</details>}</>}{chart && <svg className="sparkline" role="img" aria-label={`${measured ? "Token" : "Session"} usage in the last 30 days`} viewBox="0 0 300 50" preserveAspectRatio="none"><polyline points={t.dailyHistory.map((d, i) => `${i * 300 / 29},${48 - amount(d) / peak * 45}`).join(" ")} fill="none" stroke="var(--brand)" strokeWidth="2" /></svg>}{heatmap && <ActivityHeatmap title={measured ? "Token activity" : "Session activity"} scope={provider === "openRouter" ? "Provider account" : device[0].toUpperCase() + device.slice(1)} period="26 weeks" label="Usage over 26 weeks" fullHistory weekdays unavailable={cells.some(d => d?.available === false)} controls={daily && !staticExport && <HeatmapModeToggle label="Heatmap view" mode={mode} setMode={setMode} />}>{cells.map((d, i) => {
+  return <section className="telemetry">{stats && <><h3>Recorded activity</h3>{metricRows(staticExport ? availableMetrics : availableMetrics.slice(0, 2))}{!staticExport && availableMetrics.length > 2 && <details className="activity-details"><summary>More activity</summary>{metricRows(availableMetrics.slice(2))}</details>}</>}{chart && <svg className="sparkline" role="img" aria-label={`${measured ? "Token" : "Session"} usage in the last 30 days`} viewBox="0 0 300 50" preserveAspectRatio="none"><polyline points={t.dailyHistory.map((d, i) => `${i * 300 / 29},${48 - amount(d) / peak * 45}`).join(" ")} fill="none" stroke="var(--brand)" strokeWidth="2" /></svg>}{heatmap && <StyledHeatmap title={measured ? "Token activity" : "Session activity"} scope={provider === "openRouter" ? "Provider account" : device[0].toUpperCase() + device.slice(1)} period="26 weeks" label="Usage over 26 weeks" fullHistory weekdays unavailable={cells.some(d => d?.available === false)} controls={daily && !staticExport && <HeatmapModeToggle label="Heatmap view" mode={mode} setMode={setMode} />}>{cells.map((d, i) => {
     if (!d) return <span key={`future-${i}`} />;
     const scope = !daily || mode === "daily" ? date(d.day) : mode === "weekly" ? `Week of ${date(shiftDay(d.day, -new Date(d.day).getDay()))}` : `Through ${date(d.day)}`;
     const label = `${scope}: ${d.available === false ? "Unavailable" : measured ? `${exact.format(d.tokens)} tokens, ${exact.format(d.sessionCount)} sessions` : `${exact.format(d.sessionCount)} sessions, token totals unavailable`}`;
     const readout = `${scope} · ${d.available === false ? "Unavailable" : measured ? `${n(d.tokens)} tokens · ${n(d.sessionCount)} sessions` : `${n(d.sessionCount)} sessions · token totals unavailable`}`;
     return <HeatmapCell key={d.day} first={i === 0} staticExport={staticExport} label={label} readout={readout} amount={d.available === false ? undefined : amount(d)} peak={cellPeak} />;
-  })}</ActivityHeatmap>}</section>;
+  })}</StyledHeatmap>}</section>;
 }
 function QuotaHeatmap({ provider, days, local, now, staticExport, device }: { provider: Provider; days: { day: number; percent: number; estimated?: boolean }[]; local?: Daily[]; now: number; staticExport: boolean; device: string }) {
   const [mode, setMode] = useState<HeatmapMode>("daily");
@@ -128,16 +192,16 @@ function QuotaHeatmap({ provider, days, local, now, staticExport, device }: { pr
   const cells = all.slice(skip), peak = Math.max(0.0001, ...cells.flatMap(c => c ? [c.percent] : []));
   const pct = (v: number) => v === 0 ? "0%" : v < 1 ? "<1%" : `${Math.round(v)}%`;
   const date = (day: number) => new Date(day).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
-  return <section className="telemetry"><ActivityHeatmap title="Quota activity" scope={`${providerNames[provider]} account · all devices`} period={days.length ? `${weeks} weeks` : "fills in as usage rises"} label={`Daily quota used over ${weeks} weeks`} fullHistory weeks={weeks} weekdays controls={!staticExport && <HeatmapModeToggle label="Quota heatmap view" mode={mode} setMode={setMode} />}>{cells.map((c, i) => {
+  return <section className="telemetry"><StyledHeatmap title="Quota activity" scope={`${providerNames[provider]} account · all devices`} period={days.length ? `${weeks} weeks` : "fills in as usage rises"} label={`Daily quota used over ${weeks} weeks`} fullHistory weeks={weeks} weekdays controls={!staticExport && <HeatmapModeToggle label="Quota heatmap view" mode={mode} setMode={setMode} />}>{cells.map((c, i) => {
     if (!c) return <span key={`future-${i}`} />;
     const scope = mode === "daily" ? date(c.day) : mode === "weekly" ? `Week of ${date(shiftDay(c.day, -new Date(c.day).getDay()))}` : `Through ${date(c.day)}`;
     const tokens = tokenCells?.[skip + i]?.tokens ?? 0, exact = tokens ? `, ${new Intl.NumberFormat().format(tokens)} tokens on ${device}` : "", compact = tokens ? ` · ${n(tokens)} tokens on ${device}` : "";
     return <HeatmapCell key={c.day} first={i === 0} staticExport={staticExport} label={`${scope}: ${c.estimated ? "about " : ""}${pct(c.percent)} of quota used${c.estimated ? " (estimated)" : ""}${exact}`} readout={`${scope} · ${c.estimated ? "≈" : ""}${pct(c.percent)} of quota used${c.estimated ? " · estimated" : ""}${compact}`} amount={c.percent} peak={peak} />;
-  })}</ActivityHeatmap></section>;
+  })}</StyledHeatmap></section>;
 }
 function AccountHeatmap({ reading, staticExport }: { reading: Loaded<AccountActivity>; staticExport: boolean }) {
   const buckets = extract(reading)?.dailyUsageBuckets;
-  if (!buckets?.length) return <section className="telemetry"><ActivityHeatmap title="Account token activity" scope="Provider account" label="Account daily tokens" /></section>;
+  if (!buckets?.length) return <section className="telemetry"><StyledHeatmap title="Account token activity" scope="Provider account" label="Account daily tokens" /></section>;
   const sorted = [...buckets].sort((a, b) => a.startDate.localeCompare(b.startDate));
   const end = Date.parse(sorted[sorted.length - 1].startDate), byDate = new Map(sorted.map(b => [b.startDate, b.tokens]));
   const cells = Array.from({ length: 182 }, (_, i) => {
@@ -145,7 +209,7 @@ function AccountHeatmap({ reading, staticExport }: { reading: Loaded<AccountActi
     return { date, tokens: byDate.get(date) };
   });
   const peak = Math.max(1, ...cells.map(c => c.tokens ?? 0));
-  return <section className="telemetry"><ActivityHeatmap title="Account token activity" scope="Provider account" period={`26 weeks through ${sorted[sorted.length - 1].startDate}`} label="Account daily tokens over 26 weeks" fullHistory unavailable={cells.some(c => c.tokens === undefined)}>{cells.map((c, i) => <HeatmapCell key={c.date} first={i === 0} staticExport={staticExport} label={`${c.date}: ${c.tokens === undefined ? "Unavailable" : `${new Intl.NumberFormat("en").format(c.tokens)} tokens`}`} readout={`${new Date(c.date).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })} · ${c.tokens === undefined ? "Unavailable" : `${n(c.tokens)} tokens`}`} amount={c.tokens} peak={peak} />)}</ActivityHeatmap></section>;
+  return <section className="telemetry"><StyledHeatmap title="Account token activity" scope="Provider account" period={`26 weeks through ${sorted[sorted.length - 1].startDate}`} label="Account daily tokens over 26 weeks" fullHistory unavailable={cells.some(c => c.tokens === undefined)}>{cells.map((c, i) => <HeatmapCell key={c.date} first={i === 0} staticExport={staticExport} label={`${c.date}: ${c.tokens === undefined ? "Unavailable" : `${new Intl.NumberFormat("en").format(c.tokens)} tokens`}`} readout={`${new Date(c.date).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })} · ${c.tokens === undefined ? "Unavailable" : `${n(c.tokens)} tokens`}`} amount={c.tokens} peak={peak} />)}</StyledHeatmap></section>;
 }
 export function ProviderCard({ slot, state, action, detail = false, staticExport = false }: { slot: Slot; state: ViewState; action: (r: Request) => Promise<boolean | void>; detail?: boolean; staticExport?: boolean }) {
   const s = state.snapshot, key = slotKey(slot), fresh = extract(s.quotas[key]), q = fresh ?? s.archived[key], activity = extract(s.activities[key]), usage = extract(s.usages[key]), plan = extract(s.plans[key]) ?? q?.planType, accountActivity = s.accountActivities?.[key];
@@ -277,7 +341,7 @@ export function UpdateNotice({ state, action }: { state: ViewState; action: (r: 
 export function Settings({ state, action, saveOrder }: { state: ViewState; action: (r: Request) => Promise<boolean | void>; saveOrder: (order: Provider[]) => Promise<boolean> }) {
   const [category, setCategory] = useState("Connections");
   const categories = ["Connections", "API connections", "Appearance", "General", "Providers", "Side notch", "Usage details", "Diagnostics"];
-  const values = state.settings.values;
+  const values = state.settings.values, style = styleOf(values.interfaceStyle);
   const reportCoolingDown = (state.issueReport?.retryAt ?? 0) > state.snapshot.clock;
   const set = (key: string, value: string | boolean | number) => void action({ action: "setPreference", key, value });
   const toggle = (key: string, text: string, ariaLabel?: string, disabled = false, describedBy?: string) => <label className="setting" key={key}><span>{text}</span><input type="checkbox" aria-label={ariaLabel} aria-describedby={describedBy} checked={values[key] === true} disabled={disabled || (key === "launchAtLogin" && state.snapshot.demo)} onChange={e => set(key, e.target.checked)} /></label>;
@@ -290,12 +354,16 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
     </section>
     <section hidden={category !== "API connections"}>{category === "API connections" && <ApiBillingConnections state={state} action={action} />}</section>
     <section hidden={category !== "Appearance"}><h2>Appearance</h2><div className="settings-group">
+      <fieldset className="style-picker" aria-describedby="style-help"><legend>Style</legend>
+        <div className="style-options">{interfaceStyles.map(id => <label key={id} className={`style-option ui-${id}`}><input type="radio" name="interfaceStyle" value={id} checked={style === id} onChange={() => set("interfaceStyle", id)} /><StylePreview id={id} now={state.snapshot.clock} /><span className="style-name">{styleInfo[id].name}</span><span className="style-tagline">{styleInfo[id].tagline}</span></label>)}</div>
+        <p id="style-help" className="secondary">Reskins the usage panel, side notch and Settings. {styleInfo[style].palette === "follow" ? "Classic follows the Theme and Accent below." : styleInfo[style].palette === "theme" ? `${styleInfo[style].name} prints on paper in Light and on ink in Dark. It brings its own accent.` : `${styleInfo[style].name} brings its own palette, so Theme and Accent apply to Classic only.`}</p>
+      </fieldset>
       <fieldset className="size-picker" aria-describedby="panel-size-help"><legend>Usage-panel size</legend>
         <div className="size-options">{Object.values(PanelSize).map(size => <label key={size}><input type="radio" name="panelSize" value={size} checked={String(values.panelSize ?? PanelSize.Medium) === size} onChange={() => set("panelSize", size)} /><span>{size[0].toUpperCase() + size.slice(1)}</span></label>)}</div>
         <p id="panel-size-help" className="secondary">Sizes the usage panel, notch details and Settings content. Small also hides service status and activity charts in the usage panel. Settings fits the selected page and scrolls when needed.</p>
       </fieldset>
       <label className="setting"><span>Theme</span><select value={String(values.appearanceTheme)} onChange={e => set("appearanceTheme", e.target.value)}>{["system", "light", "dark"].map(x => <option key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</option>)}</select></label>
-      <fieldset className="accent-picker"><legend>Accent color</legend>{Object.entries(accents).map(([name, color]) => <label key={name}><input type="radio" name="accentTheme" value={name} checked={values.accentTheme === name} onChange={() => set("accentTheme", name)} /><span className="accent-swatch" style={{ background: color }} aria-hidden="true" /><span>{name}</span></label>)}</fieldset>
+      {styleInfo[style].palette === "follow" && <fieldset className="accent-picker"><legend>Accent color</legend>{Object.entries(accents).map(([name, color]) => <label key={name}><input type="radio" name="accentTheme" value={name} checked={values.accentTheme === name} onChange={() => set("accentTheme", name)} /><span className="accent-swatch" style={{ background: color }} aria-hidden="true" /><span>{name}</span></label>)}</fieldset>}
     </div></section>
     <section hidden={category !== "General"}><h2>General</h2><div className="settings-group">
       {["launchAtLogin", "quotaAlertsEnabled", "updateCheckEnabled"].map(k => toggle(k, labels[k]))}
@@ -315,6 +383,12 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
     <p className="secondary settings-footer">MeterUsage{state.appVersion ? ` ${state.appVersion}` : ""} · Cost figures are local estimates.</p>
   </main>;
 }
+/** A live sample of a style: the real meter and notch gauge, rendered in that style's palette. */
+function StylePreview({ id, now }: { id: InterfaceStyle; now: number }) {
+  const sample: QuotaWindow = { label: "5-hour", usedPercent: 62, resetsAt: now + 150 * 60000, windowDurationMins: 300 };
+  const info = styleInfo[id];
+  return <span className="style-preview" aria-hidden="true"><StyleContext.Provider value={id}><span className="style-preview-gauge"><StripGauge kind={info.gauge} w={sample} now={now} pacing><span className="mark style-preview-mark" /></StripGauge><span className="strip-percent">{info.gauge === "flap" ? <Flap text="62" /> : info.gauge === "hp" ? "38" : "62%"}</span></span><Meter w={sample} now={now} pacing /></StyleContext.Provider></span>;
+}
 function AccountRow({ account: a, action }: { account: ViewState["settings"]["accounts"][number]; action: (r: Request) => Promise<boolean | void> }) {
   const [label, setLabel] = useState(a.label);
   useEffect(() => setLabel(a.label), [a.label]);
@@ -331,10 +405,25 @@ function TrayImage({ state }: { state: ViewState }) {
   });
   return <div className="tray-image" aria-label="MeterUsage">{s.appearance.compactTray ? <svg width="9" height="13" viewBox="0 0 9 13"><rect x=".5" y=".5" width="8" height="12" rx="2" stroke="currentColor" fill="none" /><rect x="2" y="4.5" width="5" height="6.5" rx="1.5" fill="currentColor" /></svg> : clusters.length ? clusters : <span aria-label="Usage unavailable">–</span>}</div>;
 }
+/** The strip's per-provider gauge. Every kind keeps the 36-pixel strip width. */
+function StripGauge({ kind, w, now, pacing, children }: { kind: GaugeKind; w: QuotaWindow; now: number; pacing: boolean; children: ReactNode }) {
+  const used = clamp(w.usedPercent), marker = pacing ? paceMarker(w, now) : undefined, colour = headroom(w.usedPercent);
+  if (kind === "twin") {
+    const r1 = 11, r2 = 7.5, hot = marker !== undefined && used > marker + 10;
+    return <span className="usage-ring gauge-twin" aria-hidden="true"><svg viewBox="0 0 24 24"><circle className="twin-track" cx="12" cy="12" r={r1} /><circle className="twin-track twin-inner-track" cx="12" cy="12" r={r2} />{marker !== undefined && <circle className="twin-time" cx="12" cy="12" r={r1} pathLength="100" strokeDasharray={`${marker} 100`} transform="rotate(-90 12 12)" />}<circle className="twin-used" cx="12" cy="12" r={r2} pathLength="100" strokeDasharray={`${used} 100`} transform="rotate(-90 12 12)" style={{ stroke: hot ? "var(--alert)" : undefined }} /></svg><span>{children}</span></span>;
+  }
+  if (kind === "vu" || kind === "hp") {
+    const left = 100 - used;
+    return <span className={`gauge-stack gauge-${kind}`} aria-hidden="true">{children}<span className="gauge-cells">{kind === "vu" ? segments(6, used, marker) : Array.from({ length: 5 }, (_, i) => <i key={i} style={(i + .5) * 20 < left ? { background: hpColour(left) } : undefined} />)}</span></span>;
+  }
+  if (kind === "ascii") return <span className="gauge-stack gauge-ascii" aria-hidden="true">{children}<span className="gauge-text">{asciiBar(used, marker, 5)}</span></span>;
+  if (kind === "figure" || kind === "flap") return <span className={`gauge-stack gauge-${kind}`} aria-hidden="true">{children}</span>;
+  return <span className="usage-ring" aria-hidden="true" style={{ background: `conic-gradient(${colour} ${used}%, var(--well) 0)` }}><span>{children}</span></span>;
+}
 function Notch({ state, action }: { state: ViewState; action: (r: Request) => Promise<boolean | void> }) {
   const entries = notchEntries(state.snapshot), selected = entries.find(e => e.key === state.notch.selected) ?? entries[0];
   const suppressClick = useRef(false), drag = useRef<{ id: number; x: number; y: number; started: boolean } | null>(null);
-  const open = state.notch.expanded && !state.notch.dragging;
+  const open = state.notch.expanded && !state.notch.dragging, gauge = useStyle().gauge;
   return <div className={`notch ${state.notch.cardOnRight ? "card-right" : "card-left"}`}
     onContextMenu={e => { e.preventDefault(); void action({ action: "notchContext" }); }}
     onPointerEnter={() => void action({ action: "notchHover", hovering: true })}
@@ -355,8 +444,8 @@ function Notch({ state, action }: { state: ViewState; action: (r: Request) => Pr
         aria-pressed={open && selected?.key === key}
         onPointerEnter={() => { if (!drag.current?.started) void action({ action: "notchSelect", key }); }}
         onClick={() => { if (!suppressClick.current) void action({ action: "notchSelect", key }); }}>
-        <span className="usage-ring" aria-hidden="true" style={{ background: `conic-gradient(${headroom(w.usedPercent)} ${w.usedPercent}%, var(--well) 0)` }}><span><Mark slot={slot} state={state} /></span></span>
-        <span className="strip-percent" style={{ color: headroom(w.usedPercent) }}>{Math.round(w.usedPercent)}%</span>
+        <StripGauge kind={gauge} w={w} now={state.snapshot.clock} pacing={state.snapshot.appearance.pacing}><Mark slot={slot} state={state} /></StripGauge>
+        <span className="strip-percent" style={{ color: gauge === "hp" ? hpColour(100 - w.usedPercent) : headroom(w.usedPercent) }}>{gauge === "flap" ? <Flap text={String(Math.round(w.usedPercent))} /> : gauge === "hp" ? `${Math.max(0, 100 - Math.round(w.usedPercent))}` : `${Math.round(w.usedPercent)}%`}</span>
         {digit && <small>{digit}</small>}
       </button>;
     })}</div>
@@ -401,7 +490,11 @@ export function App({ bridge }: { bridge: Bridge }) {
   };
   if (!state) return <p className="empty" role="status">{error || "Loading usage…"}</p>;
   const s = state.snapshot, scale = panelScales[state.settings.values.panelSize as PanelSize] ?? 1;
-  const style = { ...(panel ? { zoom: scale } : {}), "--panel-scale": scale, "--brand": accents[s.appearance.accent] ?? accents.blue, "--notch-max-height": state.notch.maxHeight === undefined ? "100dvh" : `${state.notch.maxHeight}px` } as CSSProperties;
-  const app = <div ref={content} className={`app theme-${surface === "tray" ? state.systemDark ? "dark" : "light" : surface === "notch" || surface === "share" ? "dark" : s.appearance.theme} surface-${surface} size-${state.settings.values.panelSize ?? PanelSize.Medium}`} style={style}>{error && <div className="action-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{surface === "share" ? (() => { const slot = notchEntries(s).find(e => e.key === state.notch.selected)?.slot; return slot ? <ProviderCard slot={slot} state={state} action={action} detail staticExport /> : <p className="empty">Card unavailable</p>; })() : surface === "tray" ? <TrayImage state={state} /> : surface === "settings" ? <Settings state={state} action={action} saveOrder={saveOrder} /> : surface === "notch" ? <Notch state={state} action={action} /> : <main className="flyout"><header className="app-header row"><h1>MeterUsage {s.demo && <small>Demo</small>}</h1><div className="header-actions flex gap-1.5"><Button variant="outline" size="xs" disabled={s.refreshing} onClick={() => void action({ action: "refresh" })}>{s.refreshing ? "Refreshing…" : "Refresh"}</Button><Button variant="outline" size="xs" onClick={() => void action({ action: "settings" })}>Settings</Button></div></header><UpdateNotice state={state} action={action} />{s.historyError && <p className="stale">History could not be {s.historyError === "loadFailed" ? "read. Repair the file and relaunch to resume saving" : "saved. Live readings remain available"}.</p>}{s.archiveWriteFailed && <p className="stale">Last known quota could not be saved.</p>}<ServiceStatuses state={state} action={action} /><UsagePanel state={state} action={action} /><ApiBillingCards state={state} /><Collapsible className="overview-details provider-card"><CollapsibleTrigger className="group/breakdown flex min-h-0 w-full items-center gap-1 rounded-none border-0 bg-transparent p-0 text-left text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"><ChevronRight aria-hidden="true" className="size-3.5 transition-transform group-data-[panel-open]/breakdown:rotate-90" />All-provider activity breakdown</CollapsibleTrigger><CollapsibleContent keepMounted className="pt-2"><UnifiedStrip state={state} /><BurnCard state={state} /></CollapsibleContent></Collapsible><footer className="row secondary"><span>{s.lastRefreshedAt === undefined ? "Not refreshed yet" : `Updated ${new Date(s.lastRefreshedAt).toLocaleTimeString()}`}</span><span className="flex gap-1.5"><Button variant="outline" size="xs" onClick={() => void action({ action: "copyJSON" })}>Copy JSON</Button><Button variant="outline" size="xs" onClick={() => void action({ action: "quit" })}>Quit</Button></span></footer></main>}</div>;
-  return panel ? <ScrollArea className={`panel-viewport app theme-${s.appearance.theme}`} role="region" aria-label={surface === "settings" ? "Settings" : "MeterUsage panel"}>{app}</ScrollArea> : app;
+  const ui = styleOf(s.appearance.style), palette = styleInfo[ui].palette;
+  // Fixed palettes are dark. Ledger follows Theme as paper or ink. The notch and share card stay dark.
+  const theme = surface === "tray" ? state.systemDark ? "dark" : "light" : surface === "notch" || surface === "share" || palette === "fixed" ? "dark" : s.appearance.theme;
+  const style = { ...(panel ? { zoom: scale } : {}), "--panel-scale": scale, ...(palette === "follow" || surface === "tray" ? { "--brand": accents[s.appearance.accent] ?? accents.blue } : {}), "--notch-max-height": state.notch.maxHeight === undefined ? "100dvh" : `${state.notch.maxHeight}px` } as CSSProperties;
+  const app = <div ref={content} className={`app theme-${theme} ui-${surface === "tray" ? "classic" : ui} surface-${surface} size-${state.settings.values.panelSize ?? PanelSize.Medium}`} style={style}>{error && <div className="action-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{surface === "share" ? (() => { const slot = notchEntries(s).find(e => e.key === state.notch.selected)?.slot; return slot ? <ProviderCard slot={slot} state={state} action={action} detail staticExport /> : <p className="empty">Card unavailable</p>; })() : surface === "tray" ? <TrayImage state={state} /> : surface === "settings" ? <Settings state={state} action={action} saveOrder={saveOrder} /> : surface === "notch" ? <Notch state={state} action={action} /> : <main className="flyout"><header className="app-header row"><h1>MeterUsage {s.demo && <small>Demo</small>}</h1><div className="header-actions flex gap-1.5"><Button variant="outline" size="xs" disabled={s.refreshing} onClick={() => void action({ action: "refresh" })}>{s.refreshing ? "Refreshing…" : "Refresh"}</Button><Button variant="outline" size="xs" onClick={() => void action({ action: "settings" })}>Settings</Button></div></header><UpdateNotice state={state} action={action} />{s.historyError && <p className="stale">History could not be {s.historyError === "loadFailed" ? "read. Repair the file and relaunch to resume saving" : "saved. Live readings remain available"}.</p>}{s.archiveWriteFailed && <p className="stale">Last known quota could not be saved.</p>}<ServiceStatuses state={state} action={action} /><UsagePanel state={state} action={action} /><ApiBillingCards state={state} /><Collapsible className="overview-details provider-card"><CollapsibleTrigger className="group/breakdown flex min-h-0 w-full items-center gap-1 rounded-none border-0 bg-transparent p-0 text-left text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"><ChevronRight aria-hidden="true" className="size-3.5 transition-transform group-data-[panel-open]/breakdown:rotate-90" />All-provider activity breakdown</CollapsibleTrigger><CollapsibleContent keepMounted className="pt-2"><UnifiedStrip state={state} /><BurnCard state={state} /></CollapsibleContent></Collapsible><footer className="row secondary"><span>{s.lastRefreshedAt === undefined ? "Not refreshed yet" : `Updated ${new Date(s.lastRefreshedAt).toLocaleTimeString()}`}</span><span className="flex gap-1.5"><Button variant="outline" size="xs" onClick={() => void action({ action: "copyJSON" })}>Copy JSON</Button><Button variant="outline" size="xs" onClick={() => void action({ action: "quit" })}>Quit</Button></span></footer></main>}</div>;
+  const themed = <StyleContext.Provider value={surface === "tray" ? "classic" : ui}>{app}</StyleContext.Provider>;
+  return panel ? <ScrollArea className={`panel-viewport app theme-${theme} ui-${ui}`} role="region" aria-label={surface === "settings" ? "Settings" : "MeterUsage panel"}>{themed}</ScrollArea> : themed;
 }

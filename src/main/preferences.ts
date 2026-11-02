@@ -7,6 +7,7 @@ import { atomicJSON } from "./history";
 import { runCommand, type Command } from "./providers/transport";
 import { type Launch } from "./launch";
 import { PanelSize, panelScales } from "../shared/ipc";
+import { validInterfaceStyle } from "../shared/styles";
 import { prepaidPreferenceKeys, validPrepaidAmount, validPrepaidSince } from "../domain/api-billing";
 export const defaultsDomain = "dev.meterusage.app";
 const readDefaultsData = `ObjC.import("Foundation");
@@ -20,14 +21,14 @@ export const trayPreference = (p: Provider) => `menuBarProvider${suffix(p)}`;
 export type PreferenceValue = boolean | number | string | ManagedAccount[] | Provider[];
 type Kind = "boolean" | "number" | "string" | "data" | "date";
 const kinds: Record<string, Kind> = {
-  refreshIntervalSeconds: "number", appearanceTheme: "string", accentTheme: "string", panelSize: "string", managedAccounts: "data", providerOrder: "data",
+  refreshIntervalSeconds: "number", appearanceTheme: "string", accentTheme: "string", interfaceStyle: "string", panelSize: "string", managedAccounts: "data", providerOrder: "data",
   sideNotchPanelCorner: "string", updateLastCheckDate: "date", reportNextAllowedAt: "date", updateDismissedVersion: "string", updateAnnouncedVersion: "string",
   desktopCodexConnection: "string", desktopCodexCleanup: "string", desktopClaudeIdentity: "string", desktopAntigravityIdentity: "string", desktopGrokIdentity: "string", desktopGrokSource: "string",
   [prepaidPreferenceKeys.amount]: "number", [prepaidPreferenceKeys.since]: "string",
   ...Object.fromEntries(["launchAtLogin", "showHeatmap", "showClaudeHeatmap", "showCodexHeatmap", "quotaAlertsEnabled", "sideNotchPanelEnabled", "sideNotchPanelPinned", "menuBarCompactEnabled", "onboardingCompleted", "updateCheckEnabled", "updateAutoInstall", "showPacingBurnRate", "showActivityTelemetry", "showDailyActivityChart", "showSideNotchResetButton", ...providers.flatMap(p => [providerPreference(p), trayPreference(p)])].map(k => [k, "boolean" as const])),
 };
 export const initialPreferences: Record<string, PreferenceValue> = {
-  refreshIntervalSeconds: 60, appearanceTheme: "system", accentTheme: "blue", panelSize: PanelSize.Medium, managedAccounts: [], providerOrder: [...providers], sideNotchPanelCorner: "",
+  refreshIntervalSeconds: 60, appearanceTheme: "system", accentTheme: "blue", interfaceStyle: "classic", panelSize: PanelSize.Medium, managedAccounts: [], providerOrder: [...providers], sideNotchPanelCorner: "",
   launchAtLogin: false, showHeatmap: true, showClaudeHeatmap: true, showCodexHeatmap: true, quotaAlertsEnabled: false,
   sideNotchPanelEnabled: false, sideNotchPanelPinned: false, menuBarCompactEnabled: true, onboardingCompleted: false,
   updateCheckEnabled: true, updateAutoInstall: false, showPacingBurnRate: true, showActivityTelemetry: true, showDailyActivityChart: true, showSideNotchResetButton: true,
@@ -59,6 +60,7 @@ function validate(key: string, v: unknown): v is PreferenceValue {
   if (key === "desktopGrokSource") return v === "cursor" || v === "bot";
   if (key === "appearanceTheme") return ["system", "light", "dark"].includes(v);
   if (key === "accentTheme") return ["blue", "violet", "teal", "amber", "rose", "graphite"].includes(v);
+  if (key === "interfaceStyle") return validInterfaceStyle(v);
   if (key === "panelSize") return Object.hasOwn(panelScales, v);
   if (key === "sideNotchPanelCorner") return v === "" || /^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/.test(v);
   if (key === "desktopCodexConnection" || key === "desktopCodexCleanup") return v === "" || key === "desktopCodexConnection" && v === "off" || /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(v);
