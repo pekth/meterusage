@@ -25,9 +25,9 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Keep the usage panel to at most 70% of the screen height. Taller content
-  scrolls between a pinned header and footer, so Refresh, Settings and Quit stay
-  visible.
+- Keep the usage panel to at most 70% of the display work area (the screen
+  minus the menu bar, Dock or taskbar). Taller content scrolls between a pinned
+  header and footer, so Refresh, Settings and Quit stay visible.
 - Make the Small panel size compact: it shows quota meters, credits and resets
   without the service status row, activity charts or all-provider breakdown, and
   uses slightly larger text than before.

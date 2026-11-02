@@ -391,6 +391,7 @@ it("keeps reported service health visible when all usage providers are hidden", 
   const markup = renderApp(view);
   expect(markup).toContain('aria-label="Service status"'); expect(markup).toContain("Synthetic service outage"); expect(markup).toContain("All systems operational");
   expect(markup).toContain("var(--alert)"); expect(markup).toContain("Enable a provider in Settings");
+  expect(markup).toContain('aria-label="Codex status: Major outage. Open status page"');
   expect(markup.indexOf("Service status")).toBeLessThan(markup.indexOf("Enable a provider"));
   expect(markup.indexOf('aria-label="Service status"')).toBeLessThan(markup.indexOf("All-provider activity breakdown"));
 });

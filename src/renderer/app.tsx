@@ -45,7 +45,7 @@ function ServiceStatuses({ state, action }: { state: ViewState; action: (r: Requ
     const page = Object.hasOwn(statusPages, provider) ? provider as keyof typeof statusPages : undefined;
     const quiet = status.severity === "operational" && !status.stale && !status.refreshError;
     const label = severityNames[status.severity], title = `${status.description} · ${age}`;
-    const badge = page ? <Button variant="outline" size="xs" className="h-5 min-h-0 rounded-full px-2 text-[10px]" title={title} aria-label={`Open ${providerNames[provider]} status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{label}</Button> : <Badge variant="outline" className="text-[10px]" title={title}>{label}</Badge>;
+    const badge = page ? <Button variant="outline" size="xs" className="h-5 min-h-0 rounded-full px-2 text-[10px]" title={title} aria-label={`${providerNames[provider]} status: ${label}. Open status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{label}</Button> : <Badge variant="outline" className="text-[10px]" title={title}>{label}</Badge>;
     return <div className={`service-row${quiet ? "" : " service-row-detail"}`} key={provider}>{name}{badge}{!quiet && <span className="secondary">{status.severity !== "operational" || status.stale ? `${status.description} · ` : ""}{age}{status.refreshError && ` · ${status.refreshError}`}</span>}</div>;
   }) : <p className="secondary">Not checked yet</p>}</section>;
 }
