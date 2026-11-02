@@ -6,12 +6,19 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode 
 import { type Bridge, type ViewState, type Request, type Surface, type ConnectionState, PanelSize, panelScales, providerKey, trayKey, statusPages } from "../shared/ipc";
 import { type AccountActivity, type Slot, type Provider, type QuotaWindow, type Telemetry, type Daily, type Loaded, type Session, type UsageWindow, clamp, providerNames, primary, slotKey, slotName, headlineWindow, lastBurn, totalTokens, localDay, shiftDay, utcDay, tokens, resetCreditAvailable, severityNames } from "../domain/models";
 import { pace, measuredBurn, durationMins, burnActive, etaSeconds, formatETA, paceText } from "../domain/pacing";
+import { Badge } from "@/renderer/components/ui/badge";
+import { Button } from "@/renderer/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/renderer/components/ui/collapsible";
+import { ScrollArea } from "@/renderer/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/renderer/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/renderer/components/ui/toggle-group";
+import { ChevronRight } from "lucide-react";
 import { attributionSessions, stripTotals, failoverNudge, heatmapCells, quotaHeatmapCells, type HeatmapMode } from "../domain/overview";
 import { effectiveWindows, notchEntries } from "../domain/notch";
 import { burnBreakdown } from "../domain/telemetry";
 import { pricingSnapshot } from "../domain/pricing";
 const accents: Record<string, string> = { blue: "#0a84ff", violet: "#a78bfa", teal: "#2dd4bf", amber: "#fbbf24", rose: "#fb7185", graphite: "#aeaeb2" };
-const colours: Record<Provider, string> = { codex: "var(--accent)", claude: "var(--claude)", antigravity: "var(--antigravity)", grok: "var(--grok)", openCodeGo: "var(--opencode)", openRouter: "var(--openrouter)", cursor: "#1ab3e6", copilot: "#6699ff", gemini: "#4d80f2", muse: "#588cf5" };
+const colours: Record<Provider, string> = { codex: "var(--brand)", claude: "var(--claude)", antigravity: "var(--antigravity)", grok: "var(--grok)", openCodeGo: "var(--opencode)", openRouter: "var(--openrouter)", cursor: "#1ab3e6", copilot: "#6699ff", gemini: "#4d80f2", muse: "#588cf5" };
 const logos: Partial<Record<Provider, string>> = { codex: "codex-logo.png", grok: "grok-logo.png", antigravity: "antigravity-logo.png", openCodeGo: "opencode-logo.png", muse: "muse-code-logo.svg" };
 const n = (x: number) => new Intl.NumberFormat("en", { notation: x >= 1000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(x);
 const money = (x: number) => new Intl.NumberFormat("en", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(x);
@@ -23,22 +30,31 @@ const deviceName = (state: ViewState) => state.platform === "win32" ? "this PC" 
 function Mark({ slot, state }: { slot: Slot; state: ViewState }) {
   const id = useId();
   const status = extract(state.snapshot.statuses[slot.provider])?.severity;
-  const tint = status === undefined || status === "operational" ? colours[slot.provider] : status === "degraded" ? "var(--warn)" : status === "unknown" ? "var(--muted)" : "var(--alert)";
+  const tint = status === undefined || status === "operational" ? colours[slot.provider] : status === "degraded" ? "var(--warn)" : status === "unknown" ? "var(--text-muted)" : "var(--alert)";
   if (logos[slot.provider]) return <span aria-hidden="true" className="mark" data-provider={slot.provider} style={{ background: tint, maskImage: `url(./${logos[slot.provider]})`, WebkitMaskImage: `url(./${logos[slot.provider]})` }} />;
   if (slot.provider === "claude") return <svg aria-hidden="true" className="mark" viewBox="0 0 1 1" style={{ color: tint }}><defs><mask id={`eyes-${id}`}><rect width="1" height="1" fill="white" /><rect x=".27" y=".28" width=".15" height=".20" fill="black" /><rect x=".58" y=".28" width=".15" height=".20" fill="black" /></mask></defs><g fill="currentColor" mask={`url(#eyes-${id})`}><rect x=".08" y=".10" width=".84" height=".60" rx=".16" />{[.16, .35, .54, .73].map((x, i) => <rect key={x} x={x} y=".66" width=".11" height={i === 0 || i === 3 ? .22 : .24} />)}</g></svg>;
   return <span aria-hidden="true" className="mark" style={{ background: tint, maskImage: `url(./${slot.provider}-symbol.png)`, WebkitMaskImage: `url(./${slot.provider}-symbol.png)` }} />;
 }
 function ServiceStatuses({ state, action }: { state: ViewState; action: (r: Request) => Promise<boolean | void> }) {
   const rows = normalizeProviderOrder(state.settings.providerOrder).flatMap(provider => { const status = state.snapshot.statuses[provider]; return status ? [{ provider, status }] : []; });
-  return <section className="provider-card service-status" aria-label="Service status"><h2>Service status</h2>{rows.length ? rows.map(({ provider, status: loaded }) => {
-    if (loaded.status === "idle") return <div className="row status" key={provider}><div className="provider-heading"><Mark slot={primary(provider)} state={state} /><strong>{providerNames[provider]}</strong></div><p className="secondary">{state.snapshot.refreshing ? "Checking…" : "Not checked yet"}</p></div>;
-    if (loaded.status === "missing") return <div className="row status" key={provider}><div className="provider-heading"><Mark slot={primary(provider)} state={state} /><strong>{providerNames[provider]}</strong></div><p className="secondary">{state.snapshot.refreshing ? "Checking…" : loaded.reason}</p></div>;
-    const status = loaded.value;
+  // Healthy providers share one compact line; incidents, stale readings and failures get their own line with details.
+  return <section className="service-status" aria-label="Service status">{rows.length ? rows.map(({ provider, status: loaded }) => {
+    const name = <span className="service-name"><Mark slot={primary(provider)} state={state} /><strong>{providerNames[provider]}</strong></span>;
+    if (loaded.status !== "value") return <div className="service-row service-row-detail" key={provider}>{name}<span className="secondary">{state.snapshot.refreshing ? "Checking…" : loaded.status === "idle" ? "Not checked yet" : loaded.reason}</span></div>;
+    const status = loaded.value, age = `${status.stale ? "Last known" : "Checked"} ${formatETA((state.snapshot.clock - status.checkedAt) / 1000, true)} ago`;
     const page = Object.hasOwn(statusPages, provider) ? provider as keyof typeof statusPages : undefined;
-    const badge = <span className="badge" title={status.description}>{severityNames[status.severity]}</span>;
-    return <div className="row status" key={provider}><div className="provider-heading"><Mark slot={primary(provider)} state={state} /><div><strong>{providerNames[provider]}</strong>{(status.severity !== "operational" || status.stale) && <p className="secondary">{status.description}</p>}</div></div><div className="service-reading">{page ? <button aria-label={`Open ${providerNames[provider]} status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{badge}</button> : badge}<p className="secondary">{status.stale ? "Last known" : "Checked"} {formatETA((state.snapshot.clock - status.checkedAt) / 1000, true)} ago</p>{status.refreshError && <p className="secondary">{status.refreshError}</p>}</div></div>;
+    const quiet = status.severity === "operational" && !status.stale && !status.refreshError;
+    const label = severityNames[status.severity], title = `${status.description} · ${age}`;
+    const badge = page ? <Button variant="outline" size="xs" className="h-5 min-h-0 rounded-full px-2 text-[10px]" title={title} aria-label={`${providerNames[provider]} status: ${label}. Open status page`} onClick={() => void action({ action: "statusPage", provider: page })}>{label}</Button> : <Badge variant="outline" className="text-[10px]" title={title}>{label}</Badge>;
+    return <div className={`service-row${quiet ? "" : " service-row-detail"}`} key={provider}>{name}{badge}{!quiet && <span className="secondary">{status.severity !== "operational" || status.stale ? `${status.description} · ` : ""}{age}{status.refreshError && ` · ${status.refreshError}`}</span>}</div>;
   }) : <p className="secondary">Not checked yet</p>}</section>;
 }
+const heatmapModes = [["daily", "Day", "Daily"], ["weekly", "Week", "Weekly"], ["cumulative", "Total", "Cumulative"]] as const;
+function HeatmapModeToggle({ label, mode, setMode }: { label: string; mode: HeatmapMode; setMode: (mode: HeatmapMode) => void }) {
+  return <ToggleGroup aria-label={label} variant="outline" size="sm" spacing={0} value={[mode]} onValueChange={value => { if (value[0]) setMode(value[0] as HeatmapMode); }}>{heatmapModes.map(([value, short, full]) => <ToggleGroupItem key={value} value={value} aria-label={full} title={full} className="h-5 min-h-0 min-w-0 px-1.5 text-[10px] aria-pressed:border-primary/60 aria-pressed:bg-primary/15 aria-pressed:font-semibold aria-pressed:text-foreground">{short}</ToggleGroupItem>)}</ToggleGroup>;
+}
+/** Sunday-first labels matching the heatmap rows; alternate rows stay blank to keep the column narrow. */
+const weekdayLabels = Array.from({ length: 7 }, (_, i) => i % 2 ? new Date(2026, 0, 4 + i).toLocaleDateString([], { weekday: "short" }) : "");
 export function Meter({ w, now, activityAt, pacing, quotaBurn = false }: { w: QuotaWindow; now: number; activityAt?: number; pacing: boolean; quotaBurn?: boolean }) {
   const raw = pacing ? pace(w, now) : undefined, eta = raw && etaSeconds(raw, w.resetsAt, now);
   const burn = pacing && quotaBurn ? measuredBurn(w, now) : undefined;
@@ -47,7 +63,7 @@ export function Meter({ w, now, activityAt, pacing, quotaBurn = false }: { w: Qu
   const reset = w.resetsAt !== undefined ? `Resets ${new Date(w.resetsAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "Reset not reported";
   return <div className="quota-window"><div className="row"><span>{w.label}</span><strong style={{ color: headroom(w.usedPercent) }}>{Math.round(w.usedPercent)}% used</strong></div><div className="meter" role="progressbar" aria-label={`${w.label} quota used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={clamp(w.usedPercent)} aria-valuetext={`${Math.round(w.usedPercent)}% used`}><span style={{ width: `${clamp(w.usedPercent)}%`, background: headroom(w.usedPercent) }} /></div><div className="row secondary"><span title={quotaBurn ? "Percentage points of quota used per hour, measured while MeterUsage is running. Not tokens or cost." : undefined}>{pacing && text}</span><span title={reset}>{burnETA !== undefined ? `Est. ${formatETA((burnETA - now) / 1000)}` : eta !== undefined ? formatETA(eta) : reset}</span></div>{(burnETA !== undefined || eta !== undefined) && <div className="row secondary"><span>{reset}</span></div>}</div>;
 }
-export function ActivityHeatmap({ title, scope, period, label, fullHistory, unavailable = false, controls, children }: { title: string; scope: string; period?: string; label: string; fullHistory?: boolean; unavailable?: boolean; controls?: ReactNode; children?: ReactNode }) {
+export function ActivityHeatmap({ title, scope, period, label, fullHistory, weeks, weekdays = false, unavailable = false, controls, children }: { title: string; scope: string; period?: string; label: string; fullHistory?: boolean; weeks?: number; weekdays?: boolean; unavailable?: boolean; controls?: ReactNode; children?: ReactNode }) {
   const grid = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<string>(), [focused, setFocused] = useState<string>();
   const readout = hovered ?? focused;
@@ -59,7 +75,7 @@ export function ActivityHeatmap({ title, scope, period, label, fullHistory, unav
     setFocused(cells.find(cell => cell === node.ownerDocument.activeElement)?.dataset.readout);
     setHovered(node.querySelector<HTMLElement>(".heatmap-cell[tabindex]:hover")?.dataset.readout);
   }, [children]);
-  return <section className="activity-heatmap"><div className="heatmap-heading"><h3>{title}</h3>{controls}</div><p className="heatmap-caption secondary">{scope}{period && <> · {period}</>}</p>{children ? <><div ref={grid} className={`heatmap${fullHistory ? " full-history" : ""}`} aria-label={label} onPointerOver={e => setHovered((e.target as HTMLElement).closest<HTMLElement>(".heatmap-cell[tabindex]")?.dataset.readout)} onPointerLeave={() => setHovered(undefined)} onBlur={() => setFocused(undefined)} onFocus={e => {
+  return <section className="activity-heatmap"><div className="heatmap-heading"><h3>{title}</h3>{controls}</div><p className="heatmap-caption secondary">{scope}{period && <> · {period}</>}</p>{children ? <><div className={weekdays ? "heatmap-body" : "contents"}>{weekdays && <div className="heatmap-weekdays" aria-hidden="true">{weekdayLabels.map((day, i) => <span key={i}>{day}</span>)}</div>}<div ref={grid} className={`heatmap${fullHistory ? " full-history" : ""}`} style={weeks ? { "--weeks": weeks } as CSSProperties : undefined} aria-label={label} onPointerOver={e => setHovered((e.target as HTMLElement).closest<HTMLElement>(".heatmap-cell[tabindex]")?.dataset.readout)} onPointerLeave={() => setHovered(undefined)} onBlur={() => setFocused(undefined)} onFocus={e => {
     const target = e.target as HTMLElement;
     if (!target.classList.contains("heatmap-cell")) return;
     setFocused(target.dataset.readout);
@@ -74,10 +90,10 @@ export function ActivityHeatmap({ title, scope, period, label, fullHistory, unav
     const direction = e.key === "End" ? -1 : step || 1;
     while (next >= 0 && next < cells.length && !cells[next].classList.contains("heatmap-cell")) next += direction;
     if (next >= 0 && next < cells.length) cells[next].focus();
-  }}>{children}</div><div className="heatmap-readout" aria-hidden="true">{readout ? <span>{readout}</span> : <div className="heatmap-legend secondary"><span className="heatmap-scale" aria-label="Usage intensity from less to more">Less{[0, .3, .65, 1].map(level => <i key={level} aria-hidden="true" style={{ background: level ? "var(--accent)" : "var(--well)", opacity: level || 1 }} />)}More</span>{unavailable && <span className="heatmap-missing"><i aria-hidden="true" />Unavailable</span>}</div>}</div></> : <p className="heatmap-empty secondary">Account history unavailable</p>}</section>;
+  }}>{children}</div></div><div className="heatmap-readout" aria-hidden="true">{readout ? <span>{readout}</span> : <div className="heatmap-legend secondary"><span className="heatmap-scale" aria-label="Usage intensity from less to more">Less{[0, .3, .65, 1].map(level => <i key={level} aria-hidden="true" style={{ background: level ? "var(--brand)" : "var(--well)", opacity: level || 1 }} />)}More</span>{unavailable && <span className="heatmap-missing"><i aria-hidden="true" />Unavailable</span>}</div>}</div></> : <p className="heatmap-empty secondary">Account history unavailable</p>}</section>;
 }
 function HeatmapCell({ label, readout, amount, peak, first = false, staticExport = false }: { label: string; readout: string; amount?: number; peak: number; first?: boolean; staticExport?: boolean }) {
-  return <span className={`heatmap-cell${amount === undefined ? " unavailable-day" : ""}`} tabIndex={staticExport ? undefined : first ? 0 : -1} role="img" aria-label={label} title={label} data-readout={readout}><span aria-hidden="true" style={{ background: amount === undefined ? "transparent" : amount > 0 ? "var(--accent)" : "var(--well)", opacity: amount ? .3 + .7 * amount / peak : 1 }} /></span>;
+  return <span className={`heatmap-cell${amount === undefined ? " unavailable-day" : ""}`} tabIndex={staticExport ? undefined : first ? 0 : -1} role="img" aria-label={label} title={label} data-readout={readout}><span aria-hidden="true" style={{ background: amount === undefined ? "transparent" : amount > 0 ? "var(--brand)" : "var(--well)", opacity: amount ? .3 + .7 * amount / peak : 1 }} /></span>;
 }
 function TelemetryView({ provider, t, stats, chart, heatmap, daily, now, staticExport, device }: { provider: Provider; t: Telemetry; stats: boolean; chart: boolean; heatmap: boolean; daily?: Daily[]; now: number; staticExport: boolean; device: string }) {
   const [mode, setMode] = useState<HeatmapMode>("daily");
@@ -94,7 +110,7 @@ function TelemetryView({ provider, t, stats, chart, heatmap, daily, now, staticE
   const metricRows = (rows: typeof availableMetrics) => <dl className="metrics">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{typeof v === "number" ? n(v) : v}</dd></div>)}</dl>;
   const peak = Math.max(1, ...t.dailyHistory.map(amount)), cellPeak = Math.max(1, ...cells.flatMap(d => d ? [amount(d)] : []));
   const exact = new Intl.NumberFormat(), date = (day: number) => new Date(day).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric", ...(provider === "openRouter" ? { timeZone: "UTC" } : {}) });
-  return <section className="telemetry">{stats && <><h3>Recorded activity</h3>{metricRows(staticExport ? availableMetrics : availableMetrics.slice(0, 2))}{!staticExport && availableMetrics.length > 2 && <details className="activity-details"><summary>More activity</summary>{metricRows(availableMetrics.slice(2))}</details>}</>}{chart && <svg className="sparkline" role="img" aria-label={`${measured ? "Token" : "Session"} usage in the last 30 days`} viewBox="0 0 300 50" preserveAspectRatio="none"><polyline points={t.dailyHistory.map((d, i) => `${i * 300 / 29},${48 - amount(d) / peak * 45}`).join(" ")} fill="none" stroke="var(--accent)" strokeWidth="2" /></svg>}{heatmap && <ActivityHeatmap title={measured ? "Token activity" : "Session activity"} scope={provider === "openRouter" ? "Provider account" : device[0].toUpperCase() + device.slice(1)} period="26 weeks" label="Usage over 26 weeks" fullHistory unavailable={cells.some(d => d?.available === false)} controls={daily && !staticExport && <select aria-label="Heatmap view" value={mode} onChange={e => setMode(e.target.value as HeatmapMode)}>{["daily", "weekly", "cumulative"].map(m => <option key={m} value={m}>{m[0].toUpperCase() + m.slice(1)}</option>)}</select>}>{cells.map((d, i) => {
+  return <section className="telemetry">{stats && <><h3>Recorded activity</h3>{metricRows(staticExport ? availableMetrics : availableMetrics.slice(0, 2))}{!staticExport && availableMetrics.length > 2 && <details className="activity-details"><summary>More activity</summary>{metricRows(availableMetrics.slice(2))}</details>}</>}{chart && <svg className="sparkline" role="img" aria-label={`${measured ? "Token" : "Session"} usage in the last 30 days`} viewBox="0 0 300 50" preserveAspectRatio="none"><polyline points={t.dailyHistory.map((d, i) => `${i * 300 / 29},${48 - amount(d) / peak * 45}`).join(" ")} fill="none" stroke="var(--brand)" strokeWidth="2" /></svg>}{heatmap && <ActivityHeatmap title={measured ? "Token activity" : "Session activity"} scope={provider === "openRouter" ? "Provider account" : device[0].toUpperCase() + device.slice(1)} period="26 weeks" label="Usage over 26 weeks" fullHistory weekdays unavailable={cells.some(d => d?.available === false)} controls={daily && !staticExport && <HeatmapModeToggle label="Heatmap view" mode={mode} setMode={setMode} />}>{cells.map((d, i) => {
     if (!d) return <span key={`future-${i}`} />;
     const scope = !daily || mode === "daily" ? date(d.day) : mode === "weekly" ? `Week of ${date(shiftDay(d.day, -new Date(d.day).getDay()))}` : `Through ${date(d.day)}`;
     const label = `${scope}: ${d.available === false ? "Unavailable" : measured ? `${exact.format(d.tokens)} tokens, ${exact.format(d.sessionCount)} sessions` : `${exact.format(d.sessionCount)} sessions, token totals unavailable`}`;
@@ -106,13 +122,16 @@ function QuotaHeatmap({ provider, days, local, now, staticExport, device }: { pr
   const [mode, setMode] = useState<HeatmapMode>("daily");
   // Measured tokens from this device's transcripts, matched by aggregated cell.
   const tokenCells = local?.length ? heatmapCells(local, now, mode) : undefined;
-  const cells = quotaHeatmapCells(days, now, mode), peak = Math.max(0.0001, ...cells.flatMap(c => c ? [c.percent] : []));
+  // Quota history starts when MeterUsage first reads the account; skip whole weeks before it, keeping at least 12.
+  const all = quotaHeatmapCells(days, now, mode), first = days.length ? Math.min(...days.map(d => localDay(d.day))) : localDay(now);
+  const skip = 7 * Math.min(26 - 12, Math.floor(Math.max(0, all.findIndex(c => c !== null && c.day >= first)) / 7)), weeks = 26 - skip / 7;
+  const cells = all.slice(skip), peak = Math.max(0.0001, ...cells.flatMap(c => c ? [c.percent] : []));
   const pct = (v: number) => v === 0 ? "0%" : v < 1 ? "<1%" : `${Math.round(v)}%`;
   const date = (day: number) => new Date(day).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
-  return <section className="telemetry"><ActivityHeatmap title="Quota activity" scope={`${providerNames[provider]} account · all devices`} period={days.length ? "26 weeks" : "fills in as usage rises"} label="Daily quota used over 26 weeks" fullHistory controls={!staticExport && <select aria-label="Quota heatmap view" value={mode} onChange={e => setMode(e.target.value as HeatmapMode)}>{["daily", "weekly", "cumulative"].map(m => <option key={m} value={m}>{m[0].toUpperCase() + m.slice(1)}</option>)}</select>}>{cells.map((c, i) => {
+  return <section className="telemetry"><ActivityHeatmap title="Quota activity" scope={`${providerNames[provider]} account · all devices`} period={days.length ? `${weeks} weeks` : "fills in as usage rises"} label={`Daily quota used over ${weeks} weeks`} fullHistory weeks={weeks} weekdays controls={!staticExport && <HeatmapModeToggle label="Quota heatmap view" mode={mode} setMode={setMode} />}>{cells.map((c, i) => {
     if (!c) return <span key={`future-${i}`} />;
     const scope = mode === "daily" ? date(c.day) : mode === "weekly" ? `Week of ${date(shiftDay(c.day, -new Date(c.day).getDay()))}` : `Through ${date(c.day)}`;
-    const tokens = tokenCells?.[i]?.tokens ?? 0, exact = tokens ? `, ${new Intl.NumberFormat().format(tokens)} tokens on ${device}` : "", compact = tokens ? ` · ${n(tokens)} tokens on ${device}` : "";
+    const tokens = tokenCells?.[skip + i]?.tokens ?? 0, exact = tokens ? `, ${new Intl.NumberFormat().format(tokens)} tokens on ${device}` : "", compact = tokens ? ` · ${n(tokens)} tokens on ${device}` : "";
     return <HeatmapCell key={c.day} first={i === 0} staticExport={staticExport} label={`${scope}: ${c.estimated ? "about " : ""}${pct(c.percent)} of quota used${c.estimated ? " (estimated)" : ""}${exact}`} readout={`${scope} · ${c.estimated ? "≈" : ""}${pct(c.percent)} of quota used${c.estimated ? " · estimated" : ""}${compact}`} amount={c.percent} peak={peak} />;
   })}</ActivityHeatmap></section>;
 }
@@ -273,7 +292,7 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
     <section hidden={category !== "Appearance"}><h2>Appearance</h2><div className="settings-group">
       <fieldset className="size-picker" aria-describedby="panel-size-help"><legend>Usage-panel size</legend>
         <div className="size-options">{Object.values(PanelSize).map(size => <label key={size}><input type="radio" name="panelSize" value={size} checked={String(values.panelSize ?? PanelSize.Medium) === size} onChange={() => set("panelSize", size)} /><span>{size[0].toUpperCase() + size.slice(1)}</span></label>)}</div>
-        <p id="panel-size-help" className="secondary">Sizes the usage panel, notch details and Settings content. Settings fits the selected page and scrolls when needed.</p>
+        <p id="panel-size-help" className="secondary">Sizes the usage panel, notch details and Settings content. Small also hides service status and activity charts in the usage panel. Settings fits the selected page and scrolls when needed.</p>
       </fieldset>
       <label className="setting"><span>Theme</span><select value={String(values.appearanceTheme)} onChange={e => set("appearanceTheme", e.target.value)}>{["system", "light", "dark"].map(x => <option key={x} value={x}>{x[0].toUpperCase() + x.slice(1)}</option>)}</select></label>
       <fieldset className="accent-picker"><legend>Accent color</legend>{Object.entries(accents).map(([name, color]) => <label key={name}><input type="radio" name="accentTheme" value={name} checked={values.accentTheme === name} onChange={() => set("accentTheme", name)} /><span className="accent-swatch" style={{ background: color }} aria-hidden="true" /><span>{name}</span></label>)}</fieldset>
@@ -308,7 +327,7 @@ function TrayImage({ state }: { state: ViewState }) {
     const key = slotKey(slot), fresh = extract(s.quotas[key]), q = fresh ?? s.archived[key], w = q && headlineWindow(slot.provider, q.windows), status = extract(s.statuses[slot.provider]);
     if (!w && (!status || status.severity === "operational")) return [];
     const p = s.appearance.pacing && w ? pace(w, s.clock) : undefined, eta = p && etaSeconds(p, w?.resetsAt, s.clock), ambient = p && (p.status === "deficit" || (eta !== undefined && eta < 7200));
-    return [<span key={key} className="tray-cluster" style={{ opacity: q && !fresh ? .55 : 1 }}><Mark slot={slot} state={state} />{slot.slotID && <small>{counts.get(slot.provider)}</small>}{w && <span style={{ color: headroom(w.usedPercent) }}>{Math.round(w.usedPercent)}%</span>}{ambient && eta !== undefined && <span className="tray-eta" style={{ color: p?.status === "deficit" ? "var(--warn)" : "var(--muted)" }}>{formatETA(eta, true)}</span>}</span>];
+    return [<span key={key} className="tray-cluster" style={{ opacity: q && !fresh ? .55 : 1 }}><Mark slot={slot} state={state} />{slot.slotID && <small>{counts.get(slot.provider)}</small>}{w && <span style={{ color: headroom(w.usedPercent) }}>{Math.round(w.usedPercent)}%</span>}{ambient && eta !== undefined && <span className="tray-eta" style={{ color: p?.status === "deficit" ? "var(--warn)" : "var(--text-muted)" }}>{formatETA(eta, true)}</span>}</span>];
   });
   return <div className="tray-image" aria-label="MeterUsage">{s.appearance.compactTray ? <svg width="9" height="13" viewBox="0 0 9 13"><rect x=".5" y=".5" width="8" height="12" rx="2" stroke="currentColor" fill="none" /><rect x="2" y="4.5" width="5" height="6.5" rx="1.5" fill="currentColor" /></svg> : clusters.length ? clusters : <span aria-label="Usage unavailable">–</span>}</div>;
 }
@@ -346,25 +365,19 @@ function Notch({ state, action }: { state: ViewState; action: (r: Request) => Pr
 }
 export function UsagePanel({ state, action }: { state: ViewState; action: (r: Request) => Promise<boolean | void> }) {
   const [selected, setSelected] = useState("");
-  const id = useId(), slots = state.snapshot.slots;
+  const slots = state.snapshot.slots;
   const slot = slots.find(slot => slotKey(slot) === selected) ?? slots[0];
   if (!slot) return <p className="empty">Enable a provider in Settings.</p>;
-  const index = slots.indexOf(slot), tabs = slots.length > 1;
-  return <section className="usage-panel">
-    {tabs && <div className="provider-tabs" role="tablist" aria-label="Usage provider" onKeyDown={e => {
-      const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
-      const current = buttons.indexOf(e.target as HTMLButtonElement);
-      if (current < 0) return;
-      const next = e.key === "ArrowRight" ? (current + 1) % buttons.length : e.key === "ArrowLeft" ? (current - 1 + buttons.length) % buttons.length : e.key === "Home" ? 0 : e.key === "End" ? buttons.length - 1 : undefined;
-      if (next === undefined) return;
-      e.preventDefault(); buttons[next].focus(); buttons[next].click();
-    }}>{slots.map((item, i) => {
+  const card = <ProviderCard key={slotKey(slot)} slot={slot} state={state} action={action} />;
+  if (slots.length < 2) return <section className="usage-panel">{card}</section>;
+  return <section className="usage-panel"><Tabs value={slotKey(slot)} onValueChange={value => setSelected(String(value))} className="gap-2">
+    <TabsList activateOnFocus aria-label="Usage provider" className="provider-tabs h-8 w-full justify-start overflow-x-auto">{slots.map(item => {
       const digit = item.slotID ? slots.filter(s => s.provider === item.provider).indexOf(item) + 1 : undefined;
       const name = slotName(item) + (digit && !item.label ? ` ${digit}` : "");
-      return <button key={slotKey(item)} id={`${id}-tab-${i}`} role="tab" type="button" aria-label={name} title={name} aria-selected={i === index} aria-controls={`${id}-panel`} tabIndex={i === index ? 0 : -1} onClick={() => setSelected(slotKey(item))}><Mark slot={item} state={state} />{digit && <small>{digit}</small>}</button>;
-    })}</div>}
-    <div id={`${id}-panel`} role={tabs ? "tabpanel" : undefined} aria-labelledby={tabs ? `${id}-tab-${index}` : undefined}><ProviderCard key={slotKey(slot)} slot={slot} state={state} action={action} /></div>
-  </section>;
+      return <TabsTrigger key={slotKey(item)} value={slotKey(item)} aria-label={name} title={name} className="flex-none px-2"><Mark slot={item} state={state} />{digit && <small>{digit}</small>}</TabsTrigger>;
+    })}</TabsList>
+    <TabsContent value={slotKey(slot)}>{card}</TabsContent>
+  </Tabs></section>;
 }
 export function App({ bridge }: { bridge: Bridge }) {
   const [state, setState] = useState<ViewState>(), [error, setError] = useState("");
@@ -388,7 +401,7 @@ export function App({ bridge }: { bridge: Bridge }) {
   };
   if (!state) return <p className="empty" role="status">{error || "Loading usage…"}</p>;
   const s = state.snapshot, scale = panelScales[state.settings.values.panelSize as PanelSize] ?? 1;
-  const style = { ...(panel ? { zoom: scale } : {}), "--panel-scale": scale, "--accent": accents[s.appearance.accent] ?? accents.blue, "--notch-max-height": state.notch.maxHeight === undefined ? "100dvh" : `${state.notch.maxHeight}px` } as CSSProperties;
-  const app = <div ref={content} className={`app theme-${surface === "tray" ? state.systemDark ? "dark" : "light" : surface === "notch" || surface === "share" ? "dark" : s.appearance.theme} surface-${surface} size-${state.settings.values.panelSize ?? PanelSize.Medium}`} style={style}>{error && <div className="action-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{surface === "share" ? (() => { const slot = notchEntries(s).find(e => e.key === state.notch.selected)?.slot; return slot ? <ProviderCard slot={slot} state={state} action={action} detail staticExport /> : <p className="empty">Card unavailable</p>; })() : surface === "tray" ? <TrayImage state={state} /> : surface === "settings" ? <Settings state={state} action={action} saveOrder={saveOrder} /> : surface === "notch" ? <Notch state={state} action={action} /> : <main className="flyout"><header className="app-header row"><h1>MeterUsage {s.demo && <small>Demo</small>}</h1><div className="header-actions"><button disabled={s.refreshing} onClick={() => void action({ action: "refresh" })}>{s.refreshing ? "Refreshing…" : "Refresh"}</button><button onClick={() => void action({ action: "settings" })}>Settings</button></div></header><UpdateNotice state={state} action={action} />{s.historyError && <p className="stale">History could not be {s.historyError === "loadFailed" ? "read. Repair the file and relaunch to resume saving" : "saved. Live readings remain available"}.</p>}{s.archiveWriteFailed && <p className="stale">Last known quota could not be saved.</p>}<ServiceStatuses state={state} action={action} /><UsagePanel state={state} action={action} /><ApiBillingCards state={state} /><details className="overview-details provider-card"><summary>All-provider activity breakdown</summary><UnifiedStrip state={state} /><BurnCard state={state} /></details><footer className="row secondary"><span>{s.lastRefreshedAt === undefined ? "Not refreshed yet" : `Updated ${new Date(s.lastRefreshedAt).toLocaleTimeString()}`}</span><button onClick={() => void action({ action: "copyJSON" })}>Copy JSON</button><button onClick={() => void action({ action: "quit" })}>Quit</button></footer></main>}</div>;
-  return panel ? <div className={`panel-viewport app theme-${s.appearance.theme}`} role="region" aria-label={surface === "settings" ? "Settings" : "MeterUsage panel"}>{app}</div> : app;
+  const style = { ...(panel ? { zoom: scale } : {}), "--panel-scale": scale, "--brand": accents[s.appearance.accent] ?? accents.blue, "--notch-max-height": state.notch.maxHeight === undefined ? "100dvh" : `${state.notch.maxHeight}px` } as CSSProperties;
+  const app = <div ref={content} className={`app theme-${surface === "tray" ? state.systemDark ? "dark" : "light" : surface === "notch" || surface === "share" ? "dark" : s.appearance.theme} surface-${surface} size-${state.settings.values.panelSize ?? PanelSize.Medium}`} style={style}>{error && <div className="action-error" role="alert"><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError("")}>×</button></div>}{surface === "share" ? (() => { const slot = notchEntries(s).find(e => e.key === state.notch.selected)?.slot; return slot ? <ProviderCard slot={slot} state={state} action={action} detail staticExport /> : <p className="empty">Card unavailable</p>; })() : surface === "tray" ? <TrayImage state={state} /> : surface === "settings" ? <Settings state={state} action={action} saveOrder={saveOrder} /> : surface === "notch" ? <Notch state={state} action={action} /> : <main className="flyout"><header className="app-header row"><h1>MeterUsage {s.demo && <small>Demo</small>}</h1><div className="header-actions flex gap-1.5"><Button variant="outline" size="xs" disabled={s.refreshing} onClick={() => void action({ action: "refresh" })}>{s.refreshing ? "Refreshing…" : "Refresh"}</Button><Button variant="outline" size="xs" onClick={() => void action({ action: "settings" })}>Settings</Button></div></header><UpdateNotice state={state} action={action} />{s.historyError && <p className="stale">History could not be {s.historyError === "loadFailed" ? "read. Repair the file and relaunch to resume saving" : "saved. Live readings remain available"}.</p>}{s.archiveWriteFailed && <p className="stale">Last known quota could not be saved.</p>}<ServiceStatuses state={state} action={action} /><UsagePanel state={state} action={action} /><ApiBillingCards state={state} /><Collapsible className="overview-details provider-card"><CollapsibleTrigger className="group/breakdown flex min-h-0 w-full items-center gap-1 rounded-none border-0 bg-transparent p-0 text-left text-xs text-muted-foreground hover:bg-transparent hover:text-foreground"><ChevronRight aria-hidden="true" className="size-3.5 transition-transform group-data-[panel-open]/breakdown:rotate-90" />All-provider activity breakdown</CollapsibleTrigger><CollapsibleContent keepMounted className="pt-2"><UnifiedStrip state={state} /><BurnCard state={state} /></CollapsibleContent></Collapsible><footer className="row secondary"><span>{s.lastRefreshedAt === undefined ? "Not refreshed yet" : `Updated ${new Date(s.lastRefreshedAt).toLocaleTimeString()}`}</span><span className="flex gap-1.5"><Button variant="outline" size="xs" onClick={() => void action({ action: "copyJSON" })}>Copy JSON</Button><Button variant="outline" size="xs" onClick={() => void action({ action: "quit" })}>Quit</Button></span></footer></main>}</div>;
+  return panel ? <ScrollArea className={`panel-viewport app theme-${s.appearance.theme}`} role="region" aria-label={surface === "settings" ? "Settings" : "MeterUsage panel"}>{app}</ScrollArea> : app;
 }

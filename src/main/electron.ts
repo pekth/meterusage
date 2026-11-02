@@ -85,6 +85,7 @@ async function start(launch: Launch) {
   const notch = { expanded: false, cardOnRight: false, selected: "codex", dragging: false };
   let notchHeight = 200, anchor: { x: number; y: number } | undefined;
   let flyoutHeight = 700, settingsHeight: number | undefined;
+  const flyoutMaxScreenShare = 0.7;
   const panelScale = () => panelScales[prefs.values.panelSize as PanelSize] ?? 1;
   let panelSizeKeys = Promise.resolve();
   let drag: { cursor: Electron.Point; anchor: Electron.Point; timer: ReturnType<typeof setInterval>; timeout: ReturnType<typeof setTimeout> } | undefined;
@@ -202,7 +203,8 @@ async function start(launch: Launch) {
   function sizeFlyout() {
     const w = windows.get("flyout"); if (!w || w.isDestroyed()) return;
     const bounds = w.getBounds(), work = screen.getDisplayMatching(bounds).workArea;
-    const width = Math.min(Math.round(420 * panelScale()), work.width), height = Math.min(Math.ceil(flyoutHeight * panelScale()), work.height);
+    // The panel never fills the display: beyond 70% of the work area its content scrolls between the pinned header and footer.
+    const width = Math.min(Math.round(420 * panelScale()), work.width), height = Math.min(Math.ceil(flyoutHeight * panelScale()), Math.round(work.height * flyoutMaxScreenShare));
     // A bottom taskbar anchors the flyout's lower edge, so content height changes grow it upward.
     w.setBounds({ x: Math.round(Math.min(Math.max(bounds.x, work.x), work.x + work.width - width)), y: flyoutBottom ? work.y + work.height - height : Math.round(Math.min(Math.max(bounds.y, work.y), work.y + work.height - height)), width, height }, false);
   }

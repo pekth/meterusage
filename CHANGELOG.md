@@ -25,6 +25,18 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Keep the usage panel to at most 70% of the display work area (the screen
+  minus the menu bar, Dock or taskbar). Taller content scrolls between a pinned
+  header and footer, so Refresh, Settings and Quit stay visible.
+- Make the Small panel size compact: it shows quota meters, credits and resets
+  without the service status row, activity charts or all-provider breakdown, and
+  uses slightly larger text than before.
+- Show service status on one line when every provider is operational.
+  Incidents, stale readings and check failures still show details.
+- Start the quota heatmap at the first week with recorded history instead of
+  showing 26 mostly empty weeks, and label weekday rows. Switch heatmap views
+  with Day, Week and Total buttons.
+- Build the usage panel with shadcn/ui components on Base UI.
 - Accept update downloads from `tilorahdotco/meterusage` as well as
   `pekth/meterusage`, ahead of transferring the repository to the tilorahdotco
   organization. Release lookups keep using the current endpoints, which GitHub
