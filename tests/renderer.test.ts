@@ -249,6 +249,10 @@ it("explains missing Claude CLI allowance next to recorded activity and links th
     find(ProviderCard({ slot: primary("claude"), state: view, action, detail })).props.onClick();
     expect(action).toHaveBeenCalledExactlyOnceWith({ action: "companionGuide" }); action.mockClear();
   }
+  view.snapshot.archived = { claude: quota("claude", [window("5-hour", 40, now + 3600000)], now - 7200000) };
+  const lastKnown = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("claude"), state: view, action }));
+  expect(lastKnown).toContain("Last known"); expect(lastKnown).toContain("Allowance unavailable for Claude Code CLI"); expect(lastKnown).toContain("How to add allowance");
+  view.snapshot.archived = {};
   view.snapshot.quotas = { claude: missing(new Unavailable("noData"), "claude") };
   const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("claude"), state: view, action }));
   expect(markup).toContain("No usage yet"); expect(markup).not.toContain("How to add allowance");

@@ -22,7 +22,8 @@ No file means no Claude allowance bars. That is a normal state: local Claude
 Code activity, the plan badge and the heatmap still load. The app's card says
 **Allowance unavailable for Claude Code CLI. Add a companion usage file or
 connect Claude Desktop** and links to this guide, so it never looks as if you
-have no usage. A file that exists but is older than five hours, past a reset,
+have no usage. If an earlier reading exists, its bars stay visible as **Last
+known** with the same message and link. A file that exists but is older than five hours, past a reset,
 or unreadable still shows **No usage yet** until the companion writes again.
 
 ## Windows
