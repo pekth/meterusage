@@ -24,7 +24,7 @@ follows [Semantic Versioning](https://semver.org/).
 - Ledger, Blueprint and Orbit side-notch cards no longer show the desktop
   through the card. Settings opens wider (1040 px) instead of taller. The
   Style picker fits on two rows, and Connections and API connections show two
-  columns of cards. Ledger and other bar charts no longer collapse to a sliver.
+  columns of cards ([ADR 0043](docs/adr/0043-wide-settings-layout.md)). Ledger and other bar charts no longer collapse to a sliver.
 - Add **Install updates automatically** in Settings > General, off by default.
   When on, a newer version that hasn't been dismissed installs through the
   existing verified update path, without the confirmation dialog, only while
