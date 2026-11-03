@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
+# Builds an isolated preview bundle of the frozen legacy Swift app.
+# Recovery and reference only; see legacy/swift/README.md.
 set -euo pipefail
 
 APP_NAME="MeterUsagePreview"
 EXECUTABLE="meterusage"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-DIST_DIR="${ROOT_DIR}/dist"
+PACKAGE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${PACKAGE_DIR}/../.." && pwd)"
+DIST_DIR="${PACKAGE_DIR}/dist"
 APP_DIR="${DIST_DIR}/${APP_NAME}.app"
-INFO_PLIST_SRC="${ROOT_DIR}/Resources/Info.plist"
+INFO_PLIST_SRC="${PACKAGE_DIR}/Resources/Info.plist"
 
 echo "==> Building release binary in worktree"
-swift build -c release --package-path "${ROOT_DIR}"
+swift build -c release --package-path "${PACKAGE_DIR}"
 
-BIN_PATH="$(swift build -c release --package-path "${ROOT_DIR}" --show-bin-path)/${EXECUTABLE}"
+BIN_PATH="$(swift build -c release --package-path "${PACKAGE_DIR}" --show-bin-path)/${EXECUTABLE}"
 [ -x "${BIN_PATH}" ] || {
     echo "error: built executable not found at ${BIN_PATH}" >&2
     exit 1

@@ -2,9 +2,10 @@
 
 Electron **0.3.0-beta.17, build 87** is the sole offered distribution and default
 installer download. It remains a beta, with stable acceptance open. New features
-target Electron. Historical Swift 0.2.41 releases and retained `Sources/` remain
-recovery/reference material, including explicit `--build-from-source` builds.
-See the [beta download](BETA.md), [historical Swift reference](swift/README.md)
+target Electron. Historical Swift 0.2.41 releases and the frozen Swift source
+under `legacy/swift/` remain recovery/reference material
+([ADR 0045](adr/0045-swift-moved-to-legacy.md)).
+See the [beta download](BETA.md), [historical Swift reference](../legacy/swift/README.md)
 and [distribution decision](adr/0034-electron-beta-default.md).
 
 The Electron source stack is on main through [PR #76](https://github.com/tilorahdotco/meterusage/pull/76),

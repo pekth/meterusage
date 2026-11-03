@@ -1,6 +1,6 @@
 # ADR 0034: Offer Electron beta as the default distribution
 
-- Amended by: [ADR 0037](0037-opt-in-automatic-updates.md) (opt-in automatic installation setting)
+- Amended by: [ADR 0037](0037-opt-in-automatic-updates.md) (opt-in automatic installation setting); [ADR 0045](0045-swift-moved-to-legacy.md) (Swift source moved to `legacy/swift/`)
 - Status: Accepted distribution direction; stable/native acceptance remains open
 - Date: 2026-10-22
 - Amends: distribution portions of [ADR 0024](0024-electron-primary-swift-retirement.md)

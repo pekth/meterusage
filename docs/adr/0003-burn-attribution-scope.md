@@ -22,5 +22,5 @@ Burn attribution covers the last 7 calendar days across every token-bearing prov
 
 ## References
 
-- `Sources/MeterUsage/Services/BurnAttributionCalculator.swift`
-- `Sources/MeterUsage/Views/PopoverRoot.swift` (`unifiedActivityStrip`)
+- `legacy/swift/Sources/MeterUsage/Services/BurnAttributionCalculator.swift`
+- `legacy/swift/Sources/MeterUsage/Views/PopoverRoot.swift` (`unifiedActivityStrip`)

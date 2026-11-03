@@ -7,7 +7,7 @@ retains historical Swift recovery material under [ADR 0034](0034-electron-beta-d
 [ADR 0024](0024-electron-primary-swift-retirement.md)
 amends the long-term development direction. ADR 0010's shared identity,
 compatibility and acceptance requirements remain in force. The
-[Swift](../swift/README.md) and [Electron](../electron/README.md) guides route setup.
+[Swift](../../legacy/swift/README.md) and [Electron](../electron/README.md) guides route setup.
 
 ## Index
 
@@ -22,7 +22,7 @@ compatibility and acceptance requirements remain in force. The
 | [0005](0005-multi-account-slots.md) | Model a second Claude/Codex account as its own provider slot keyed by an alternate config directory; never merge two accounts' windows and never read or display account identity. | Accepted; slot mechanism amended by [0006](0006-managed-account-list.md) |
 | [0006](0006-managed-account-list.md) | Additional accounts are a managed, unbounded Settings list; `ProviderSlot` (provider + generated id, label display-only) keys every metered surface, with primary-slot persistence formats unchanged. | Accepted |
 | [0008](0008-reset-aware-quota-pacing.md) | ADR 0008: Collect fresh quota observations after a manual reset | Accepted |
-| [0009](0009-prebuilt-bundle-default.md) | Download and verify the prebuilt app by default; compile legacy Swift only with `--build-from-source`. | Accepted; artifact amended by ADR 0034 |
+| [0009](0009-prebuilt-bundle-default.md) | Download and verify the prebuilt app by default; never compile in the installer (legacy Swift builds moved by ADR 0045). | Accepted; artifact amended by ADR 0034 |
 | [0010](0010-macos-typescript-electron.md) | Port macOS and the schema-1 JSON CLI to TypeScript/Electron/React; preserve data contracts and pause Windows until a test machine is available. | Accepted architecture; native acceptance pending |
 | [0011](0011-desktop-account-connections.md) | Add opt-in Codex browser sign-in and Claude Desktop account allowance; separate account allowance from local activity. | Accepted implementation direction; native and provider acceptance pending |
 | [0012](0012-codex-live-test-profile.md) | Run isolated live Codex validation in the existing UI while blocking other providers and candidate system effects. | Accepted implementation direction; reset prohibition superseded by [0017](0017-connected-codex-menu-reset.md); native UI acceptance pending |
@@ -50,6 +50,7 @@ compatibility and acceptance requirements remain in force. The
 | [0035](0035-openai-remaining-balance.md) | Show OpenAI remaining balance from undocumented credit grants, falling back to a prepaid-minus-spend estimate; failures never block spend. | Source implementation; real-account acceptance pending |
 | [0036](0036-grok-bot-usage-cache-fallback.md) | Fall back to Grok Bot's cached usage for the verified account when its allowance request fails with a network or server error. | Source implementation; live acceptance pending |
 | [0037](0037-opt-in-automatic-updates.md) | Add an opt-in setting that installs verified updates without the confirmation dialog while MeterUsage is not in use. | Source implementation; native install acceptance pending |
+| [0045](0045-swift-moved-to-legacy.md) | Move the frozen Swift package, sources, tests and build scripts to `legacy/swift/`; drop Swift from CI and from `Scripts/make-app.sh`. Electron keeps `Resources/` and its Swift helpers. | Accepted |
 | [0044](0044-claude-free-reset-display.md) | Show Claude free resets from the usage response's `cedar_ember` opt-in and redeem a confirmed one through the verified Desktop session; grant IDs stay in memory. | Accepted; display confirmed on a real account; redemption pending first real use |
 | [0043](0043-wide-settings-layout.md) | Open Settings 1040 px wide with 1000 px content; Appearance in a grid and connection cards in two columns, so Settings grows wider rather than taller. | Accepted; checked on a Mac with a local test build |
 | [0042](0042-interface-styles.md) | Offer eight selectable interface styles that share one meter, gauge and chart set; keep accessibility, service status and notch geometry; scope unlayered style CSS. | Accepted implementation direction; native acceptance pending |

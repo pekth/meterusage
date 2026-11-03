@@ -1,0 +1,25 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "rateLimits": {
+      "limitId": "synthetic-limit-id",
+      "limitName": null,
+      "primary": {
+        "usedPercent": 42,
+        "windowDurationMins": 10080,
+        "resetsAt": 1893456000
+      },
+      "secondary": null,
+      "credits": {
+        "hasCredits": true,
+        "unlimited": false,
+        "balance": "25.50"
+      },
+      "individualLimit": null,
+      "spendControlReached": false,
+      "planType": "plus",
+      "rateLimitReachedType": null
+    }
+  }
+}

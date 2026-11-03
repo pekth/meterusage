@@ -1,0 +1,12 @@
+{
+  "five_hour": { "used_percentage": 61, "resets_at": 1790000000 },
+  "seven_day": { "used_percentage": 24, "resets_at": 1790500000 },
+  "extra_usage": {
+    "is_enabled": false,
+    "used_percentage": null,
+    "used_credits": null,
+    "monthly_limit": null
+  },
+  "gemini": { "used_percentage": null, "resets_at": null },
+  "updated_at": 1789999999
+}

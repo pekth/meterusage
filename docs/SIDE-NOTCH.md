@@ -42,7 +42,7 @@ The panel is anchored by the strip's top-right corner. A drag records that
 corner, and it persists across launches. Expanding the card grows the window
 away from the corner, so the strip stays where the user parked it.
 
-Invariants, asserted in `Tests/MeterUsageTests/SideNotchPanelTests.swift`:
+Invariants, asserted in `legacy/swift/Tests/MeterUsageTests/SideNotchPanelTests.swift`:
 
 - The top edge (`maxY`) is identical for every card height, on both card sides.
 - The strip's outer edge is identical for every card height.
@@ -193,6 +193,6 @@ measured frame over a plausible cause.
 
 ## References
 
-- `Sources/MeterUsage/App/SideNotchPanelController.swift`
-- `Sources/MeterUsage/Views/SideNotchPanelView.swift`
-- `Tests/MeterUsageTests/SideNotchPanelTests.swift`
+- `legacy/swift/Sources/MeterUsage/App/SideNotchPanelController.swift`
+- `legacy/swift/Sources/MeterUsage/Views/SideNotchPanelView.swift`
+- `legacy/swift/Tests/MeterUsageTests/SideNotchPanelTests.swift`

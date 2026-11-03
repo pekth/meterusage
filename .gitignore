@@ -31,9 +31,9 @@ credentials.json
 *secret*
 *.key
 
-# Real captured provider payloads. Fixtures under Tests/ must be synthetic;
-# anything captured from a live account stays out of the repo.
-Tests/**/Fixtures/**/*.live.json
+# Real captured provider payloads. Test fixtures must be synthetic; anything
+# captured from a live account stays out of the repo.
+**/[Ff]ixtures/**/*.live.json
 scratch/
 
 # Local tooling files.

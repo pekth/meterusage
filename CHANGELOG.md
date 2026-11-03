@@ -45,6 +45,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Move the frozen Swift app (package, sources, tests, `Info.plist` and build
+  scripts) to `legacy/swift/` and stop building it in CI.
+  `Scripts/make-app.sh` now only downloads the prebuilt app;
+  `--build-from-source` points to `legacy/swift/Scripts/make-app.sh`
+  ([ADR 0045](docs/adr/0045-swift-moved-to-legacy.md)).
 - Keep the usage panel to at most 70% of the display work area (the screen
   minus the menu bar, Dock or taskbar). Taller content scrolls between a pinned
   header and footer, so Refresh, Settings and Quit stay visible.

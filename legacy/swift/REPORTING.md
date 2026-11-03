@@ -17,13 +17,13 @@ an uncertain retry reuses the original report ID and snapshot. The app
 coordinator retains the pending report, send state and receipt when Settings
 closes and reopens. A confirmed receipt keeps Send disabled for the rest of the
 app session. Quitting the app clears this in-memory state; no report is saved
-to disk. See [ADR 0012](../adr/0012-report-state-outlives-settings.md).
+to disk. See [ADR 0012](../../docs/adr/0012-report-state-outlives-settings.md).
 
 The report includes app/build, numeric OS/architecture, provider states,
 aggregate readings and freshness, cache/history state, and recent refresh
 outcomes. It does not poll providers or run commands when reporting. Unknown
 observations stay unknown; it cannot reconstruct earlier raw errors or crashes.
-See [privacy](../PRIVACY.md#legacy-swift-source-diagnostic-reports) for excluded data and network metadata handling.
+See [privacy](../../docs/PRIVACY.md#legacy-swift-source-diagnostic-reports) for excluded data and network metadata handling.
 
 The request is `POST /report`, `Content-Type: application/json`:
 
@@ -89,8 +89,8 @@ It does not prove native Settings interaction or availability in a released app.
 ## Required verification
 
 Run `node --test Reporting/worker.test.mjs` for the relay contract. Run
-`swift build`, `swift test` and `Scripts/make-app.sh --build-from-source` on
-macOS for the app candidate. Use synthetic inputs only.
+`swift build --package-path legacy/swift`, `swift test --package-path legacy/swift`
+and `legacy/swift/Scripts/make-app.sh` on macOS for the legacy app. Use synthetic inputs only.
 
 Verify success, lost acknowledgement/retry, double-click, Settings navigation
 during a send and after its result, offline failure,
@@ -150,7 +150,7 @@ Keep the same draft ID and text for an uncertain retry, including after process
 exit. The relay reconciles exact UUID, content and destination. Changed app or
 system metadata with the same ID can produce an unconfirmed result. Do not
 mint a new ID automatically after a failure. A deliberate new draft is a new
-report and requires new native consent. See [ADR 0013](../adr/0013-agent-feedback-native-consent.md).
+report and requires new native consent. See [ADR 0013](../../docs/adr/0013-agent-feedback-native-consent.md).
 
 The external-link fixture is a synthetic UX example inspired by
 [Ben Davis's post](https://x.com/davis7/status/2108756950641254490).

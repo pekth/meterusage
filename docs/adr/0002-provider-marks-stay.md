@@ -14,7 +14,7 @@ Provider icons and logos are frozen as product identity. Feature work and any cr
 - `Resources/opencode-logo.png`
 - `Resources/antigravity-logo.png`
 - `Resources/AppIcon.png` / `Resources/AppIcon.icns`
-- Rendered via `ProviderMark` (`Sources/MeterUsage/Views/MenuBarLabel.swift`)
+- Rendered via `ProviderMark` (`legacy/swift/Sources/MeterUsage/Views/MenuBarLabel.swift`)
 
 ## Consequences
 

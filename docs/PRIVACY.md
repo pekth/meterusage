@@ -471,7 +471,7 @@ input, request or credential store on Windows. See [ADR 0038](adr/0038-windows-c
 `Scripts/make-app.sh` downloads a pinned public ZIP by default, checks SHA-256
 and code signature, and copies/verifies replacement output in staging. Failure
 preserves the previous generated app. It does not install an app or developer
-tools. Source compilation requires `--build-from-source`. Electron candidate
+tools and never compiles; legacy Swift builds use `legacy/swift/Scripts/make-app.sh`. Electron candidate
 packaging uses `--publish never` and does not replace that installation path.
 
 Synthetic tests assert parser/privacy, account, history, schema and IPC
@@ -507,7 +507,7 @@ See [REPORTING.md](REPORTING.md) for the delivery contract and proof limits.
 ## Legacy Swift source diagnostic reports
 
 The retained Swift source includes a separate reporting feature absent from
-the published Swift 0.2.41 app. Its [reporting contract](swift/REPORTING.md)
+the published Swift 0.2.41 app. Its [reporting contract](../legacy/swift/REPORTING.md)
 also describes the native-consent agent feedback CLI.
 
 
