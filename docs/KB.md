@@ -1,6 +1,6 @@
 # Project knowledge
 
-Release documentation refresh: 2026-11-02 for build 86.
+Release documentation refresh: 2026-11-03 for build 87.
 
 ## Contributor checks
 
@@ -32,7 +32,7 @@ Release documentation refresh: 2026-11-02 for build 86.
   keeps Electron as the sole feature target. Historical Swift source/releases
   remain recovery/reference material; explicit `--build-from-source` builds
   legacy Swift. Source retirement is pending. Required Swift helpers/assets stay.
-- `Scripts/make-app.sh` pins [Electron 0.3.0-beta.16, build 86](BETA.md), its
+- `Scripts/make-app.sh` pins [Electron 0.3.0-beta.17, build 87](BETA.md), its
   `-mac-arm64.zip` filename and SHA-256. It verifies the download and staged
   signature before replacement, preserves the published signature, and never
   falls back to a compiler. Preparing output does not install the app.
@@ -275,7 +275,7 @@ Release documentation refresh: 2026-11-02 for build 86.
 
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
 - The retained legacy Swift app uses Swift Package Manager, targets macOS 13 or later, and includes an executable target and a test target in `Package.swift`. Its AppKit and SwiftUI imports require macOS for build/test checks. Electron is the offered beta; its source/build commands are in `CONTRIBUTING.md`.
-- `README.md` and `Scripts/make-app.sh` select the prebuilt Electron 0.3.0-beta.16 Apple silicon ZIP for macOS 13+. Installation needs no Node, pnpm, Swift, Xcode or Git. The script verifies SHA-256 and downloaded/staged signatures before replacing generated output, preserving the published signature and existing output on copy/verification failures. It rejects unsupported platforms and never falls back to compilation. Explicit `--build-from-source` builds legacy Swift for recovery/reference. Historical Swift 0.2.41 remains retrievable, ad-hoc signed and not notarized. GitHub source archives contain source and scripts, not an app bundle. See ADRs 0009 and 0034.
+- `README.md` and `Scripts/make-app.sh` select the prebuilt Electron 0.3.0-beta.17 Apple silicon ZIP for macOS 13+. Installation needs no Node, pnpm, Swift, Xcode or Git. The script verifies SHA-256 and downloaded/staged signatures before replacing generated output, preserving the published signature and existing output on copy/verification failures. It rejects unsupported platforms and never falls back to compilation. Explicit `--build-from-source` builds legacy Swift for recovery/reference. Historical Swift 0.2.41 remains retrievable, ad-hoc signed and not notarized. GitHub source archives contain source and scripts, not an app bundle. See ADRs 0009 and 0034.
 - Swift provider data sources are implemented under `Sources/MeterUsage/Services/`; the candidate adapters live under `src/main/providers/` and `src/main/composition.ts`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
 - Antigravity CLI quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
@@ -305,6 +305,7 @@ Release documentation refresh: 2026-11-02 for build 86.
 - Windows shell: colored notification-area icon with a usage tooltip (no text tray image), taskbar-anchored flyout, tray click toggles despite blur, **Copy card image** instead of the share sheet, no default menu bar, AppUserModelID `dev.meterusage.app`. Renderer copy says "this PC" when `state.platform` is `win32`.
 - Windows 0.3.0-beta.13, build 83, was published on 2026-11-01 as an unsigned pre-release (`--latest=false`) from `176b409` (includes the tilorahdotco release lookup, #99). Workflow run 41380556038; installer SHA-256 `35d49481…c2493f`, zip `6e777e77…3a44e5`. It is Windows-only: macOS updaters skip it.
 - 0.3.0-beta.16, build 86, was published on 2026-11-02 for macOS and Windows in one release from `73ce30b` (Windows workflow run 41474197722; macOS built, signed and notarized on the Mac). One LF `SHA256SUMS` lists the macOS ZIP (`44d34e6c…87fe51`), the unsigned Windows installer (`07f5937b…5b1c8a`) and the portable zip (`197be91b…30b903`). Later releases follow this combined pattern.
+- 0.3.0-beta.17, build 87, was published on 2026-11-03 for macOS and Windows from `206384b` (wide Settings, #105; Windows workflow run 41577638081). `SHA256SUMS`: macOS ZIP `23a4f8d5…766f00`, Windows installer `1f285245…6b27aa3`, portable zip `58200a6d…35d517`.
 - Windows releases are built by the manual `Windows release build` workflow (`.github/workflows/windows-release.yml`, inputs `version` and `build`). It runs `test:windows`, packages with `-c.extraMetadata.version`/`-c.buildVersion`, runs both smoke scripts and uploads `windows-release-assets` (installer, zip, `SHA256SUMS`). It runs only from `main`, records the built commit in the job summary and `windows-release-smoke/source-commit.txt`, and never tags or publishes. For a Windows-only release, publish by hand with `gh release create v<version> --prerelease --latest=false --target <that full SHA>` and those three files; GitHub's asset digests feed the Windows updater. If the release also carries macOS assets, use `gh release upload` and merge both platforms' lines into one LF `SHA256SUMS`.
 - Windows packaging: `pnpm package:win` builds unsigned NSIS and zip x64 artifacts named `MeterUsage-<version>-win-x64.<ext>`. `after-pack.cjs` leaves `MeterUsage.exe` unchanged; the macOS Keychain helper is a mac-only extra resource. A Windows GUI-subsystem exe prints `json` output only when stdout is redirected (for example `MeterUsage.exe json > report.json`); JSON mode exits after the write callback so pipes flush.
 - `pnpm test:windows` runs every test file except ten: those whose fixtures need POSIX modes, symlinks, shebang scripts or Electron singleton symlinks, and the macOS updater tests (ditto/codesign staging). `tests/windows-updater.test.ts` covers the Windows updater on every platform.

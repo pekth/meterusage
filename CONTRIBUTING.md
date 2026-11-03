@@ -144,8 +144,8 @@ See [`docs/DEMO.md`](docs/DEMO.md) for the data and privacy rules.
 
 ## TypeScript Electron candidate
 
-The source manifest retains 0.2.41. The default Electron beta is 0.3.0-beta.16,
-build 86, with the version explicitly set during packaging. See the
+The source manifest retains 0.2.41. The default Electron beta is 0.3.0-beta.17,
+build 87, with the version explicitly set during packaging. See the
 [beta guide](docs/BETA.md) for the signed artifact and incomplete native
 acceptance, and the [Electron guide](docs/electron/README.md) for source choices
 and parity gaps.
@@ -199,7 +199,7 @@ Windows-safe test files to `test:windows`. CI is not a real-machine acceptance
 run. Maintainers build Windows releases with the manual **Windows release
 build** workflow, which uploads unsigned artifacts and never publishes. The
 first was [0.3.0-beta.13](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.13), Windows-only. From
-[0.3.0-beta.16](docs/BETA.md#windows-beta-16), each release adds the Windows
+[0.3.0-beta.16](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.16), each release adds the Windows
 artifacts from the same main commit and version as the macOS build, with one
 merged `SHA256SUMS`.
 
