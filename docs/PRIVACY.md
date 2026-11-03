@@ -138,9 +138,18 @@ can MeterUsage request GET
 `https://claude.ai/api/organizations/{organization-uuid}/usage?cedar_ember=1`.
 The query asks Claude to include saved free resets. If it is rejected,
 MeterUsage retries once without it. From the reset block it keeps only
-eligibility and, per grant, the remaining count, pause state and start and
-expiry times. Grant identifiers are never selected, and free resets are not
-written to the quota archive
+eligibility, the next grant and, per grant, its identifier, remaining count,
+pause state, usability and start and expiry times. Grant identifiers stay in
+memory and are not written to the quota archive or JSON reports.
+
+After the user confirms **Use reset**, MeterUsage repeats the bootstrap and
+usage checks and confirms that the grant is still redeemable. It then sends one
+POST to
+`https://claude.ai/api/organizations/{organization-uuid}/reset_rate_limits`
+with only the program, grant identifier and a random request ID. The same
+session cookie is used, with `Content-Type: application/json` and
+`Origin: https://claude.ai`. This is the only Claude request with a body.
+Bootstrap and the local credential are checked again before the result is shown
 ([ADR 0044](adr/0044-claude-free-reset-display.md)).
 Bootstrap is checked again and the local account, organization and session are
 reread before publishing allowance, including after a failed usage request.
@@ -154,9 +163,7 @@ that challenge or change its TLS, User-Agent, headers or cookies to evade it.
 Connect reports a fixed message without exposing response bodies, headers or
 session details, and preserves the current source. A failed Claude Desktop
 method offers **Open Claude usage**. This user-initiated action opens only
-`https://claude.ai/settings/usage` from normal Settings. A live Claude free
-reset offers **Open in Claude**, which opens the same page from the menu or
-notch. MeterUsage never redeems a reset. Demo, candidate and
+`https://claude.ai/settings/usage` from normal Settings. Demo, candidate and
 isolated test profiles cannot open it. The renderer supplies no URL, account
 or profile. The page is a manual fallback; opening it does not connect
 MeterUsage, import browser data or report quota.

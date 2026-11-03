@@ -4,7 +4,7 @@ import { createDecipheriv, createHash, pbkdf2Sync } from "node:crypto";
 import { runCommand, type Command } from "./transport";
 import { selectJSON } from "../select-json";
 import { date, object, text } from "./parsers";
-import { Unavailable, quota, window } from "../../domain/models";
+import { Unavailable, quota, window, type ResetCredit } from "../../domain/models";
 import { readStableFile, type Decrypt } from "./windows-dpapi";
 import { pathToFileURL } from "node:url";
 
@@ -170,34 +170,44 @@ export function verifyDesktopAccount(raw: string, credential: DesktopCredential)
   } catch { throw unavailable(); }
 }
 const maxResetGrants = 200, maxFreeResets = 50;
-type Grant = { left: number; startsAt?: number; endsAt?: number; paused: boolean };
+/** Claude grant identifiers are redemption handles: kept in memory for redemption, never archived or reported. */
+export const claudeGrantID = /^[A-Za-z0-9_-]{1,64}$/;
+type Grant = { id?: string; left: number; startsAt?: number; endsAt?: number; paused: boolean; usableNow?: boolean };
 const grantBound = (value: unknown) => { if (value == null) return undefined; const at = date(value); if (at === undefined) throw new Error("Invalid reset bound"); return at; };
 function resetGrant(value: unknown): Grant | undefined {
   try {
     const g = object(value), left = g.resets_left, total = g.resets_total;
     if (!Number.isSafeInteger(left) || (left as number) < 0 || typeof g.paused !== "boolean") return undefined;
     if (total != null && (!Number.isSafeInteger(total) || (total as number) < (left as number))) return undefined;
-    return { left: left as number, startsAt: grantBound(g.starts_at), endsAt: grantBound(g.ends_at), paused: g.paused };
+    if (g.usable_now != null && typeof g.usable_now !== "boolean") return undefined;
+    const id = typeof g.id === "string" && claudeGrantID.test(g.id) ? g.id : undefined;
+    return { id, left: left as number, startsAt: grantBound(g.starts_at), endsAt: grantBound(g.ends_at), paused: g.paused, usableNow: g.usable_now as boolean | undefined };
   } catch { return undefined; }
 }
 /**
- * Claude's saved "Reset for free" grants, from the usage response's `cedar_ember` block. Grant identifiers are
- * redemption handles and are never selected; each available reset keeps only its expiry. A malformed block or an
- * implausible inventory shows no resets and never affects the usage windows.
+ * Claude's saved "Reset for free" grants, from the usage response's `cedar_ember` block. A live grant is not paused,
+ * has resets left, has started and has not expired. It is redeemable when Claude reports it usable now, its identifier
+ * is well formed and, when Claude names the next grant, it is that grant. A malformed block or an implausible inventory
+ * shows no resets and never affects the usage windows.
  */
-export function desktopFreeResets(block: unknown, now: number): (number | undefined)[] {
-  if (block == null || typeof block !== "object" || Array.isArray(block)) return [];
+export function desktopFreeResets(block: unknown, now: number): { count: number; credits: ResetCredit[] } {
+  const none = { count: 0, credits: [] };
+  if (block == null || typeof block !== "object" || Array.isArray(block)) return none;
   const b = block as Record<string, unknown>;
-  if (b.eligible !== true || !Array.isArray(b.grants) || b.grants.length > maxResetGrants) return [];
-  const expiries: (number | undefined)[] = [];
-  for (const grant of b.grants.map(resetGrant)) {
+  if (b.eligible !== true || !Array.isArray(b.grants) || b.grants.length > maxResetGrants) return none;
+  const next = typeof b.next_grant_id === "string" ? b.next_grant_id : undefined;
+  let count = 0; const credits: ResetCredit[] = [];
+  for (const [index, grant] of b.grants.map(resetGrant).entries()) {
     if (!grant || grant.paused || grant.left === 0 || grant.startsAt !== undefined && grant.startsAt > now || grant.endsAt !== undefined && grant.endsAt <= now) continue;
-    if (expiries.length + grant.left > maxFreeResets) return [];
-    for (let i = 0; i < grant.left; i++) expiries.push(grant.endsAt);
+    if (count + grant.left > maxFreeResets) return none;
+    count += grant.left;
+    const redeemable = grant.id !== undefined && grant.usableNow !== false && (next === undefined || grant.id === next);
+    credits.push({ id: grant.id ?? `claude-free-reset-${index}`, title: grant.left > 1 ? `Free reset ×${grant.left}` : "Free reset", status: redeemable ? "available" : "Not usable yet", expiresAt: grant.endsAt });
   }
-  return expiries.sort((a, b) => (a ?? Infinity) - (b ?? Infinity));
+  credits.sort((a, b) => (a.expiresAt ?? Infinity) - (b.expiresAt ?? Infinity));
+  return { count, credits };
 }
-const resetSelection = { eligible: true, grants: { "*": { resets_left: true, resets_total: true, paused: true, starts_at: true, ends_at: true } } } as const;
+const resetSelection = { eligible: true, next_grant_id: true, grants: { "*": { id: true, resets_left: true, resets_total: true, paused: true, starts_at: true, ends_at: true, usable_now: true } } } as const;
 export function desktopQuota(raw: string, now: number) {
   const keys = ["five_hour", "seven_day", "seven_day_sonnet", "seven_day_opus", "seven_day_oauth_apps", "seven_day_cowork"];
   const selected = object(selectJSON(raw, { ...Object.fromEntries(keys.map(key => [key, { utilization: true, resets_at: true }])), cedar_ember: resetSelection }));
@@ -210,9 +220,23 @@ export function desktopQuota(raw: string, now: number) {
   });
   if (!windows.length) throw new Unavailable("noData");
   const q = quota("claude", windows, now), resets = desktopFreeResets(selected.cedar_ember, now);
-  if (resets.length) {
-    q.resetCreditCount = resets.length;
-    q.resetCredits = resets.map((expiresAt, index) => ({ id: `claude-free-reset-${index}-${expiresAt ?? "open"}`, title: "Free reset", status: "available", expiresAt }));
-  }
+  if (resets.count) { q.resetCreditCount = resets.count; q.resetCredits = resets.credits; }
   return q;
+}
+/** Messages shown when Claude does not apply a confirmed free reset. */
+export const claudeResetErrors = {
+  notLimited: "You're not at a Claude limit, so the reset wasn't used. Try again when you reach one.",
+  alreadyUsed: "This Claude reset was already used.",
+  ineligible: "Claude says this reset isn't available to your account.",
+  cooldown: "Claude resets are cooling down. Try again later.",
+  unconfirmed: "Claude couldn't confirm the reset. If you're still limited in a moment, try again.",
+  failed: "Couldn't redeem Claude reset",
+} as const;
+/** Returns when Claude applied the reset; otherwise throws an Error carrying one of `claudeResetErrors`. */
+export function claudeResetOutcome(raw: string): void {
+  let result: unknown;
+  try { result = object(selectJSON(raw, { result: true })).result; } catch { throw new Error(claudeResetErrors.failed); }
+  if (result === "reset") return;
+  const message = result === "not_limited" ? claudeResetErrors.notLimited : result === "already_used" ? claudeResetErrors.alreadyUsed : result === "ineligible" ? claudeResetErrors.ineligible : result === "cooldown" ? claudeResetErrors.cooldown : result === "unavailable" ? claudeResetErrors.unconfirmed : claudeResetErrors.failed;
+  throw new Error(message);
 }

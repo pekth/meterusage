@@ -124,8 +124,10 @@ candidate and isolated test profiles. Browser verification does not establish
 that a later MeterUsage connection will succeed.
 
 When Claude reports a saved "Reset for free", the Claude card shows it with
-its expiry and an **Open in Claude** button for the same page. Use the reset
-there; MeterUsage never redeems it
+its expiry. If Claude says the reset is usable now, the card offers
+**Use reset**. MeterUsage asks you to confirm, then redeems it through your
+Claude Desktop session. Claude may refuse a reset while you are not at a
+limit, and MeterUsage shows its reason
 ([ADR 0044](adr/0044-claude-free-reset-display.md)).
 
 These diagnostics have source and synthetic-fixture proof only. They do not
