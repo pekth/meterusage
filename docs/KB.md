@@ -514,4 +514,4 @@ and its activation evidence; this does not add them to Swift 0.2.41.
 
 ## Instabox Actions runners
 
-Ubuntu jobs in `.github/workflows` use `instabox-medium` instead of GitHub-hosted runners. Job steps, triggers, permissions and timeouts are unchanged. The Swift job still requires the GitHub-hosted `macos-15` runner. Source configuration alone does not prove execution on Instabox.
+Ubuntu jobs in `.github/workflows` use `instabox-medium` instead of GitHub-hosted runners. Job steps, triggers, permissions and timeouts are unchanged. No macOS job remains; the Swift CI job was removed by ADR 0045. Source configuration alone does not prove execution on Instabox.
