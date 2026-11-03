@@ -58,7 +58,8 @@ Synthetic tests cover parsing, the usage retry, both endpoint checks, the claim
 body, every outcome, request ID reuse, account changes during a claim, the
 archive exclusion, the card and the coordinator messages. On 2026-11-03 a
 signed local build on a Mac, connected to a personal Claude Desktop account
-with one unused reset, showed "1 free reset" expiring 2026-12-15. Redemption
+with one unused reset, showed "1 free reset" expiring 2026-12-15 and offered
+**Use reset**, so the grant identifier and usability fields parsed. Redemption
 through `claude.ai` has not yet run against a real account. The owner is
 keeping the reset until it is needed. Team and Enterprise organizations are
 not covered.
