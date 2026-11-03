@@ -88,8 +88,10 @@ export class AntigravityRuntime {
   private async probe(binary: string, args: string[], options: CommandOptions): Promise<boolean> { try { await this.run(binary, args, options); return true; } catch { return false; } }
   run(binary: string, args: string[], options: CommandOptions = {}) { return this.command(binary, args, { ...options, env: this.env, timeoutMs: args[0] === "info" || args.includes("inspect") ? 5000 : 30000 }); }
   async quota(now: number, signal?: AbortSignal) {
-    const runtime = await this.resolve(signal); if (!runtime) throw new Unavailable("noData");
-    for (const args of [["image", "inspect", "antigravity-cli:local"], ["volume", "inspect", "antigravity-config"], ["volume", "inspect", "antigravity-bin"]]) if (!await this.probe(runtime, args, { signal })) throw new Unavailable("noData");
+    // Native agy usage can exist without the container, so a missing quota runtime gets its own reason, not "No usage yet".
+    const missing = () => signal?.aborted ? new Unavailable("noData") : new Unavailable("containerMissing", "Antigravity Desktop");
+    const runtime = await this.resolve(signal); if (!runtime) throw missing();
+    for (const args of [["image", "inspect", "antigravity-cli:local"], ["volume", "inspect", "antigravity-config"], ["volume", "inspect", "antigravity-bin"]]) if (!await this.probe(runtime, args, { signal })) throw missing();
     return parseAntigravity(await this.run(runtime, ["run", "--rm", "--pull=never", "-v", "antigravity-config:/root/.gemini", "-v", "antigravity-bin:/root/.local/bin", "antigravity-cli:local", "-p", "/usage"], { signal }), now);
   }
   async usage(root: string, now: number, signal?: AbortSignal): Promise<Usage> {

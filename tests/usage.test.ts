@@ -50,6 +50,16 @@ describe("existing runtime recovery", () => {
     expect(await runtime.resolve(undefined, now)).toBeUndefined(); expect(calls).toEqual([["info"], ["machine", "inspect", "podman-machine-default"], ["machine", "start", "podman-machine-default"]]);
     calls.length = 0; expect(await runtime.resolve(undefined, now + 1000)).toBeUndefined(); expect(calls).toEqual([["info"]]);
   });
+  it("explains missing Antigravity CLI allowance when the agy container is absent", async () => {
+    const message = "Allowance unavailable for Antigravity CLI. Set up the agy container or connect Antigravity Desktop";
+    await expect(new AntigravityRuntime([], async () => "unused").quota(now)).rejects.toMatchObject({ code: "containerMissing", message });
+    const root = temp(), docker = join(root, "docker"); writeFileSync(docker, "", { mode: 0o700 });
+    const noImage: Command = async (_binary, args) => { if (args[0] === "image") throw new Error("no such image"); return "exists"; };
+    await expect(new AntigravityRuntime([docker], noImage).quota(now)).rejects.toMatchObject({ code: "containerMissing", message });
+    // A cancelled refresh keeps the generic state instead of claiming the container is missing.
+    const aborted = new AbortController(); aborted.abort();
+    await expect(new AntigravityRuntime([docker], noImage).quota(now, aborted.signal)).rejects.toMatchObject({ code: "noData" });
+  });
   it("checks existing image and volumes before quota invocation", async () => {
     const root = temp(), docker = join(root, "docker"); writeFileSync(docker, "", { mode: 0o700 }); const calls: string[][] = [];
     const runtime = new AntigravityRuntime([docker], async (_binary, args) => { calls.push(args); if (args[0] === "run") return "Gemini Models\tWeekly Limit Remaining\t100%\t2030-01-01T00:00:00Z"; return "exists"; });

@@ -21,6 +21,12 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The Antigravity card no longer says **No usage yet** when the Antigravity
+  CLI source shows local activity but Docker or Podman, the
+  `antigravity-cli:local` image or its volumes are absent. It now says
+  **Allowance unavailable for Antigravity CLI. Set up the agy container or
+  connect Antigravity Desktop**. Diagnostic reports show `containerMissing`
+  instead of `noData` for this case.
 - The Claude card no longer says **No usage yet** when the Claude Code CLI
   source has no companion usage file while recorded activity is shown. It now
   says **Allowance unavailable for Claude Code CLI. Add a companion usage file
