@@ -126,8 +126,9 @@ Release documentation refresh: 2026-11-03 for build 87.
   if rejected. Available grants become expiry-only "Free reset" credits on the
   Claude card, with **Open in Claude** linking to
   `https://claude.ai/settings/usage`. MeterUsage never redeems them, and they
-  are not archived. Synthetic proof only; the field name is undocumented and
-  not yet confirmed against a real account.
+  are not archived. The field name is undocumented. A signed local build showed
+  a real personal account's reset on 2026-11-03; removal after use and Team or
+  Enterprise accounts are not yet observed.
 
 - Electron Claude plan labels recognize known organization, seat and user tiers
   in that order. An unknown higher-priority value permits a known fallback;

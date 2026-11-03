@@ -1,6 +1,6 @@
 # ADR 0044: Show Claude free resets and link to Claude to use them
 
-- Status: Source implementation; live acceptance against a real account pending
+- Status: Accepted; display confirmed on a real personal account; removal after use pending
 - Date: 2026-11-03
 - Amends: [ADR 0016](0016-claude-live-test-profile.md) (Claude usage request)
 
@@ -41,6 +41,8 @@ opts in with `cedar_ember=1`. This field name is undocumented and can change.
 ## Evidence and limits
 
 Synthetic tests cover parsing, the retry, the endpoint check, the archive
-exclusion, the card and the IPC surface rules. They do not prove that a real
-account returns this block in this shape, or that Team and Enterprise
-organizations receive it.
+exclusion, the card and the IPC surface rules. On 2026-11-03 a signed local
+build on a Mac, connected to a personal Claude Desktop account with one unused
+reset, showed "1 free reset" expiring 2026-12-15 with **Open in Claude**.
+Not yet observed: the reset disappearing after it is used on claude.ai, and
+Team or Enterprise organizations.
