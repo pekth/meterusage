@@ -22,7 +22,7 @@ import { runJSON } from "./cli";
 import { channel, stateChannel, statusPages, panelScales, PanelSize, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
 import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./ipc";
 import { providers, slotKey } from "../domain/models";
-import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize, flyoutOrigin } from "../domain/notch";
+import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize, flyoutOrigin, fitWidth } from "../domain/notch";
 import { trayTooltip } from "../domain/overview";
 
 const shareCardWidth = 250;
@@ -148,7 +148,7 @@ async function start(launch: Launch) {
     const existing = windows.get(surface); if (existing && !existing.isDestroyed()) return existing;
     const panel = surface === "notch", trayImage = surface === "tray", shareImage = surface === "share";
     if (surface === "settings") settingsHeight = undefined;
-    const w = new BrowserWindow({ width: shareImage ? shareCardWidth * 2 : trayImage ? 1000 : panel ? stripWidth : surface === "settings" ? 780 : Math.round(420 * panelScale()), height: trayImage ? 22 : panel ? notchHeight : surface === "settings" ? 680 : Math.ceil(flyoutHeight * panelScale()), show: false, frame: surface === "settings", transparent: panel || trayImage || shareImage, resizable: surface === "settings", minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, ...(panel ? { ...(windowsShell ? {} : { type: "panel" }), focusable: false, hasShadow: false } : {}), title: surface === "settings" ? "MeterUsage Settings" : "MeterUsage", backgroundColor: panel || trayImage || shareImage ? "#00000000" : "#242428", webPreferences: { preload: join(__dirname, "../preload/preload.cjs"), offscreen: trayImage || shareImage, zoomFactor: shareImage ? 2 : 1, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false } });
+    const w = new BrowserWindow({ width: shareImage ? shareCardWidth * 2 : trayImage ? 1000 : panel ? stripWidth : surface === "settings" ? 1040 : Math.round(420 * panelScale()), height: trayImage ? 22 : panel ? notchHeight : surface === "settings" ? 680 : Math.ceil(flyoutHeight * panelScale()), show: false, frame: surface === "settings", transparent: panel || trayImage || shareImage, resizable: surface === "settings", minimizable: false, maximizable: false, fullscreenable: false, skipTaskbar: true, ...(panel ? { ...(windowsShell ? {} : { type: "panel" }), focusable: false, hasShadow: false } : {}), title: surface === "settings" ? "MeterUsage Settings" : "MeterUsage", backgroundColor: panel || trayImage || shareImage ? "#00000000" : "#242428", webPreferences: { preload: join(__dirname, "../preload/preload.cjs"), offscreen: trayImage || shareImage, zoomFactor: shareImage ? 2 : 1, sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, spellcheck: false } });
     if (trayImage) { w.webContents.setFrameRate(10); w.webContents.on("paint", (_event, _rect, image) => { if (!tray.isDestroyed() && trayWidth > 0) tray.setImage(image); }); }
     if (shareImage) {
       w.webContents.setFrameRate(10);
@@ -218,7 +218,12 @@ async function start(launch: Launch) {
   }
   function showSettings() {
     if (!launch.demo && !launch.candidate && app.isPackaged) prefs.values.launchAtLogin = app.getLoginItemSettings().openAtLogin;
-    windows.get("flyout")?.hide(); const w = create("settings"); publish(); w.show(); w.focus();
+    windows.get("flyout")?.hide(); const w = create("settings"); publish();
+    // Settings opens 1040 px wide (ADR 0043). Fit it to a narrower screen before the first show;
+    // sizeSettings waits for the renderer's first resize.
+    const bounds = w.getBounds(), fitted = fitWidth(bounds, screen.getDisplayMatching(bounds).workArea);
+    if (fitted.x !== bounds.x || fitted.width !== bounds.width) w.setBounds(fitted, false);
+    w.show(); w.focus();
   }
   function restoreAnchor() {
     const raw = String(prefs.values.sideNotchPanelCorner), nums = raw.split(",").map(Number);

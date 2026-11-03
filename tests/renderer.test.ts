@@ -1242,3 +1242,15 @@ it("keeps style notch cards opaque and the strip container apart from its bar ro
   expect(markup).not.toMatch(/class="activity-strip strip-bars"/);
   expect((markup.match(/class="strip-bars"/g) ?? []).length).toBe(1);
 });
+
+it("lays Settings out wide: Appearance in a grid and connection cards in two columns", () => {
+  const view = state(); view.settings.values = { interfaceStyle: "classic" };
+  const markup = renderToStaticMarkup(createElement(Settings, { state: view, action: async () => {}, saveOrder: async () => true }));
+  expect(markup).toContain('class="settings-group appearance-group"');
+  const css = readFileSync("src/renderer/style.css", "utf8");
+  expect(css).toContain(".settings { padding: 16px; max-width: 1000px;");
+  expect(css).toMatch(/@media \(min-width: 820px\) \{\s*\.settings \.connections > \.settings-group \{ display: grid; grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1fr\);/);
+  // The rules sit inside the components layer, before Tailwind's @theme block.
+  expect(css.indexOf(".settings .appearance-group {")).toBeLessThan(css.indexOf("@theme inline"));
+  expect(readFileSync("src/main/electron.ts", "utf8")).toContain('surface === "settings" ? 1040 :');
+});

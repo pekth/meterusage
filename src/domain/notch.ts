@@ -10,6 +10,11 @@ export function notchFrame(anchor: { x: number; y: number }, size: { width: numb
   return { x: Math.round(Math.min(Math.max(x, screen.x), Math.max(screen.x + screen.width - width, screen.x))), y: Math.round(Math.min(Math.max(anchor.y, screen.y), Math.max(screen.y + screen.height - height, screen.y))), width, height };
 }
 /** Flyout origin beside the tray icon: below a top menu bar, or above a bottom taskbar with its lower edge anchored. */
+/** A window narrowed to the work area and moved inside it horizontally. Height and y are unchanged. */
+export function fitWidth(bounds: Rect, work: Rect): Rect {
+  const width = Math.min(bounds.width, work.width);
+  return { ...bounds, x: Math.round(Math.min(Math.max(bounds.x, work.x), work.x + work.width - width)), width };
+}
 export function flyoutOrigin(tray: Rect, work: Rect, size: { width: number; height: number }) {
   const bottom = tray.y + tray.height / 2 > work.y + work.height / 2;
   const x = Math.round(Math.min(Math.max(tray.x + tray.width / 2 - size.width / 2, work.x), work.x + work.width - size.width));
