@@ -203,7 +203,15 @@ Data and settings are in `%APPDATA%\MeterUsage`. Uninstall from **Settings →
 Apps**; app data is kept. Later Windows pre-releases install through the
 in-app updater (digest-verified, unsigned; [ADR 0039](adr/0039-windows-updater.md)).
 
-Built from `176b409` by the **Windows release build** workflow
+Beta.17's Windows assets were built from `206384b` by the **Windows release
+build** workflow
+([run 41577638081](https://github.com/tilorahdotco/meterusage/actions/runs/41577638081)).
+On a GitHub `windows-latest` runner, it passed typecheck, 663 Windows tests
+(4 skipped), packaging, packaged-app smoke tests, and the silent install,
+update handoff and uninstall check.
+
+Beta.13, the first Windows build, was built from `176b409` by the same
+workflow
 ([run 41380556038](https://github.com/tilorahdotco/meterusage/actions/runs/41380556038)).
 For that build, a GitHub Windows Server 2025 runner checked:
 
