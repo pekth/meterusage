@@ -233,6 +233,13 @@ it.each([
     } else expect((await invoke(settings, usageRequest)).ok).toBe(false);
     expect(activeSources).toBe(sourceBeforeUsage); expect(refresh).toHaveBeenCalledTimes(refreshesBeforeUsage);
     expect(setPreference).toHaveBeenCalledTimes(writesBeforeUsage); expect(connect).not.toHaveBeenCalled();
+    openExternal.mockClear();
+    for (const window of [flyout, settings]) {
+      expect(await invoke(window, { action: "companionGuide" })).toEqual({ ok: true });
+      expect(openExternal).toHaveBeenLastCalledWith("https://github.com/tilorahdotco/meterusage/blob/main/docs/COMPANION.md");
+    }
+    for (const window of windows.filter(w => w.surface === "tray" || w.surface === "share")) expect((await invoke(window, { action: "companionGuide" })).ok).toBe(false);
+    openExternal.mockClear();
 
     const stableSource: Source = { slot: { provider: "codex", slotID: "", label: "" } }, museSource: Source = { slot: { provider: "muse", slotID: "", label: "" } };
     activeSources = [stableSource];
@@ -497,6 +504,7 @@ it.each([
       await invoke(settings, { action: "setPreference", key: "sideNotchPanelEnabled", value: true });
       const panel = windows.find(w => w.surface === "notch")!;
       expect((await invoke(panel, { action: "claudeUsagePage" })).ok).toBe(false);
+      openExternal.mockClear(); expect(await invoke(panel, { action: "companionGuide" })).toEqual({ ok: true }); expect(openExternal).toHaveBeenCalledOnce(); openExternal.mockClear();
       expect(panel.options).toMatchObject({ type: "panel", focusable: false });
       expect(panel.bounds.width).toBe(36);
       expect(panel.showInactive).toHaveBeenCalled(); expect(panel.focus).not.toHaveBeenCalled();

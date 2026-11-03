@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings, StyleContext, UpdateNotice, UsagePanel } from "../src/renderer/app";
 import { interfaceStyles, styleInfo } from "../src/shared/styles";
 import { HeatmapCell } from "../src/renderer/app";
-import { tokens, providers, primary, quota, value, window, localDay, shiftDay, utcDay } from "../src/domain/models";
+import { tokens, providers, primary, quota, value, window, localDay, shiftDay, utcDay, missing, Unavailable } from "../src/domain/models";
 import type { ViewState } from "../src/shared/ipc";
 import { openRouterUsage } from "../src/main/providers/usage";
 import { telemetry } from "../src/domain/telemetry";
@@ -232,6 +232,31 @@ const state = (): ViewState => ({ snapshot: {
   activities: { codex: value({ provider: "codex", scannedAt: now, daily: [], sessions: [session("old-project", now - 2 * 3600000, 100000), session("active-project", now - 60000, 100, 100)] }) },
   usages: {}, plans: {}, statuses: {}, appearance: { theme: "dark", accent: "blue", heatmap: false, claudeHeatmap: false, codexHeatmap: false, pacing: true, telemetry: false, chart: false, resetButton: false, compactTray: true, notch: true, pinned: false, onboarding: true }, archiveWriteFailed: false, clearingCache: false,
 }, settings: { values: {}, accounts: [] }, systemDark: true, notch: { expanded: true, cardOnRight: false, selected: "codex", dragging: false } });
+
+it("explains missing Claude CLI allowance next to recorded activity and links the companion guide", () => {
+  const view = state(), action = vi.fn(async () => {});
+  view.snapshot.slots = [primary("claude")]; view.snapshot.plans = { claude: value("Max 5×") };
+  view.snapshot.quotas = { claude: missing(new Unavailable("companionMissing", "Claude Desktop"), "claude") };
+  view.snapshot.activities = { claude: value({ provider: "claude", scannedAt: now, daily: [], sessions: [session("cli-project", now - 60000, 36_300_000)] }) };
+  const find = (node: any): any => !node || typeof node !== "object" ? undefined : Array.isArray(node) ? node.map(find).find(Boolean)
+    : node.type === "button" && node.props.children === "How to add allowance" ? node : find(node.props?.children);
+  for (const detail of [false, true]) {
+    const card = (staticExport = false) => createElement(ProviderCard, { slot: primary("claude"), state: view, action, detail, staticExport });
+    const markup = renderToStaticMarkup(card());
+    expect(markup).toContain("Allowance unavailable for Claude Code CLI. Add a companion usage file or connect Claude Desktop");
+    expect(markup).not.toContain("No usage yet"); expect(markup).toContain("Max 5×"); expect(markup).toContain("Recent sessions (1)");
+    expect(markup).toContain("How to add allowance"); expect(renderToStaticMarkup(card(true))).not.toContain("How to add allowance");
+    find(ProviderCard({ slot: primary("claude"), state: view, action, detail })).props.onClick();
+    expect(action).toHaveBeenCalledExactlyOnceWith({ action: "companionGuide" }); action.mockClear();
+  }
+  view.snapshot.archived = { claude: quota("claude", [window("5-hour", 40, now + 3600000)], now - 7200000) };
+  const lastKnown = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("claude"), state: view, action }));
+  expect(lastKnown).toContain("Last known"); expect(lastKnown).toContain("Allowance unavailable for Claude Code CLI"); expect(lastKnown).toContain("How to add allowance");
+  view.snapshot.archived = {};
+  view.snapshot.quotas = { claude: missing(new Unavailable("noData"), "claude") };
+  const markup = renderToStaticMarkup(createElement(ProviderCard, { slot: primary("claude"), state: view, action }));
+  expect(markup).toContain("No usage yet"); expect(markup).not.toContain("How to add allowance");
+});
 
 it("shows measured Grok quota burn on menu and detail cards without inventing tokens or billing", () => {
   const view = state(), first = quota("grok", [window("Grok Bot Desktop", 10, now + 7200000)], now - 120000);
@@ -1070,6 +1095,12 @@ it("offers manual Claude usage only on a failed Desktop method and sends only in
     if (usage) {
       expect(action).not.toHaveBeenCalled(); usage.props.onClick();
       expect(action).toHaveBeenCalledExactlyOnceWith({ action: "claudeUsagePage" }); action.mockClear();
+    }
+    const guide = buttons.find((node: any) => node.props.children === "Companion file guide");
+    expect(Boolean(guide)).toBe(provider === "claude" && method === "cli");
+    if (guide) {
+      expect(action).not.toHaveBeenCalled(); guide.props.onClick();
+      expect(action).toHaveBeenCalledExactlyOnceWith({ action: "companionGuide" }); action.mockClear();
     }
   }
 });
