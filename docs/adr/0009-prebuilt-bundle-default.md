@@ -42,8 +42,9 @@ Test default preparation with Swift unavailable, explicit source selection,
 invalid arguments, unsupported platforms, and failed download, checksum,
 bundle, signature, or destination-copy checks. Download, copy, and verification
 failures must preserve existing generated output and remove staging files.
-Run these synthetic cases through `swift test` as
-well as the standalone shell test.
+Run these synthetic cases with `bash tests/scripts/make-app-tests.sh`. (Superseded
+by [ADR 0045](0045-swift-moved-to-legacy.md): the Swift `swift test` wrapper
+for this shell test was removed, and CI runs the shell test directly.)
 Also download the real pinned asset on macOS, verify its prepared bundle, and
 execute its synthetic demo JSON path without compiler access.
 
