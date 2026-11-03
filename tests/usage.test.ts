@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseGeneration, parseStep, conversationUsage, readConversations, AntigravityRuntime } from "../src/main/providers/antigravity";
 import { antigravityHistory, grokUsage, openCodeUsage, parseOpenCodeRows, openCodeQuery, openRouterUsage } from "../src/main/providers/usage";
-import { type Command } from "../src/main/providers/transport";
+import { CommandFailure, type Command } from "../src/main/providers/transport";
 const roots: string[] = []; const temp = () => { const root = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(root); return root; };
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 const now = Date.parse("2026-10-06T12:00:00Z");
@@ -49,6 +49,19 @@ describe("existing runtime recovery", () => {
     const runtime = new AntigravityRuntime([podman], command);
     expect(await runtime.resolve(undefined, now)).toBeUndefined(); expect(calls).toEqual([["info"], ["machine", "inspect", "podman-machine-default"], ["machine", "start", "podman-machine-default"]]);
     calls.length = 0; expect(await runtime.resolve(undefined, now + 1000)).toBeUndefined(); expect(calls).toEqual([["info"]]);
+  });
+  it("explains missing Antigravity CLI allowance when the agy container is absent", async () => {
+    const message = "Allowance unavailable for Antigravity CLI. Set up the agy container or connect Antigravity Desktop";
+    await expect(new AntigravityRuntime([], async () => "unused").quota(now)).rejects.toMatchObject({ code: "containerMissing", message });
+    const root = temp(), docker = join(root, "docker"); writeFileSync(docker, "", { mode: 0o700 });
+    const noImage: Command = async (_binary, args) => { if (args[0] === "image") throw new CommandFailure(1); return "exists"; };
+    await expect(new AntigravityRuntime([docker], noImage).quota(now)).rejects.toMatchObject({ code: "containerMissing", message });
+    // A hung or unstartable inspect does not prove the container is missing.
+    const slowVolume: Command = async (_binary, args) => { if (args[0] === "volume") throw new Error("Provider request timed out"); return "exists"; };
+    await expect(new AntigravityRuntime([docker], slowVolume).quota(now)).rejects.toMatchObject({ code: "failed" });
+    // A cancelled refresh keeps the generic state instead of claiming the container is missing.
+    const aborted = new AbortController(); aborted.abort();
+    await expect(new AntigravityRuntime([docker], noImage).quota(now, aborted.signal)).rejects.toMatchObject({ code: "noData" });
   });
   it("checks existing image and volumes before quota invocation", async () => {
     const root = temp(), docker = join(root, "docker"); writeFileSync(docker, "", { mode: 0o700 }); const calls: string[][] = [];
