@@ -1,19 +1,40 @@
 # Feeding the Claude quota bars
 
 > ### ⚡ TL;DR
-> meterusage **never** calls Anthropic directly for quota. Claude quota cards light up only when an external companion writes a local JSON file (`~/.claude/claudewatch-usage.json` or `~/.claude/meterusage-usage.json`). When that JSON contains a `limits[]` array, per-model windows (such as Fable) render automatically.
+> meterusage **never** calls Anthropic directly for quota. With the **Claude Code CLI** source, Claude allowance bars light up only when an external companion writes a local JSON file (see the paths below). When that JSON contains a `limits[]` array, per-model windows (such as Fable) render automatically. Without a companion, connect **Claude Desktop** in Settings → Connections instead.
 
 
 meterusage never calls Anthropic for quota. The Claude quota card is driven
 entirely by a JSON file that some *other* tool on your machine writes:
 
 ```
-~/.claude/claudewatch-usage.json     # checked first
-~/.claude/meterusage-usage.json      # checked if the first is absent
+<MeterUsage app data>/claude-usage.json   # checked first
+~/.claude/claudewatch-usage.json          # checked next
+~/.claude/meterusage-usage.json           # checked last
 ```
 
-No file means no Claude quota card. That is the normal, expected state — the
-app is useful without it, and its absence is never reported as an error.
+`<MeterUsage app data>` is `~/Library/Application Support/MeterUsage` on macOS
+and `%APPDATA%\MeterUsage` on Windows. `~/.claude` is
+`%USERPROFILE%\.claude` on Windows. An additional Claude account reads only
+the two companion file names inside its own configured directory.
+
+No file means no Claude allowance bars. That is a normal state: local Claude
+Code activity, the plan badge and the heatmap still load. The app's card says
+**Allowance unavailable for Claude Code CLI. Add a companion usage file or
+connect Claude Desktop** and links to this guide, so it never looks as if you
+have no usage. A file that exists but is older than five hours, past a reset,
+or unreadable still shows **No usage yet** until the companion writes again.
+
+## Windows
+
+MeterUsage does not ship a Windows companion. `Scripts/claude-companion.sh` is
+a bash script for macOS and Linux, and it reads a statusline writer's cache in
+`/tmp/claude`, which a plain Claude Code CLI install on Windows does not
+create. On Windows, either:
+
+- connect **Claude Desktop** in Settings → Connections for account allowance, or
+- run your own writer that saves the JSON shape below to one of the paths
+  above, following the same rules (temp file, validate, then rename).
 
 This document is for people who already have such a writer and want the
 per-model weekly windows (Fable's own weekly quota among them) to show up.

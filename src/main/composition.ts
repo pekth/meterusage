@@ -75,7 +75,8 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
     const activity = new ClaudeActivitySource(join(home, "projects"), join(launch.data, alternate ? `claude-local-scan-cache-${slot.slotID}.json` : "claude-local-scan-cache.json"));
     return { slot, quota: async () => {
       const paths = alternate ? [join(home, "meterusage-usage.json"), join(home, "claudewatch-usage.json")] : [join(launch.data, "claude-usage.json"), join(home, "claudewatch-usage.json"), join(home, "meterusage-usage.json")];
-      const path = paths.find(existsSync), raw = path && read(path); if (!raw) throw new Unavailable("noData");
+      const path = paths.find(existsSync); if (!path) throw new Unavailable("companionMissing", alternate ? undefined : "Claude Desktop");
+      const raw = read(path); if (!raw) throw new Unavailable("noData");
       try {
         const q = parseClaudeQuota(raw, statSync(path!).mtimeMs), clock = now();
         // A CLI companion must be observed within Claude's shortest quota cycle.

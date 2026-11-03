@@ -19,7 +19,7 @@ import { prepaidFrom } from "../domain/api-billing";
 import { NotchFold } from "./notch-fold";
 import { Updater, removeStagedInstallers, windowsInstallation } from "./updater";
 import { runJSON } from "./cli";
-import { channel, stateChannel, statusPages, panelScales, PanelSize, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
+import { channel, stateChannel, statusPages, companionGuide, panelScales, PanelSize, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
 import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./ipc";
 import { providers, slotKey } from "../domain/models";
 import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize, flyoutOrigin, fitWidth } from "../domain/notch";
@@ -286,6 +286,9 @@ async function start(launch: Launch) {
       case "claudeUsagePage":
         if (surface !== "settings" || launch.demo || launch.candidate || launch.profile || launch.codexTest || launch.claudeTest) throw new Error("Invalid request");
         await shell.openExternal("https://claude.ai/settings/usage"); break;
+      case "companionGuide":
+        if (surface !== "flyout" && surface !== "notch" && surface !== "settings") throw new Error("Invalid request");
+        await shell.openExternal(companionGuide); break;
       case "close": source.hide(); break;
       case "quit": app.quit(); break;
       case "clearCache": await coordinator.clearCache(); break;

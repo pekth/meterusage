@@ -275,6 +275,19 @@ describe("provider path and transport composition", () => {
       expect(c.snapshot().quotas.claude.status).toBe("missing"); expect(c.snapshot().archived.claude).toBeUndefined();
     } finally { c.stop(); }
   });
+  it("explains missing Claude CLI allowance when no companion file exists", async () => {
+    const root = temp(), alt = join(root, "alternate"); mkdirSync(alt); mkdirSync(join(root, ".claude/projects"), { recursive: true });
+    writeFileSync(join(root, ".claude.json"), JSON.stringify({ oauthAccount: { organizationRateLimitTier: "default_claude_max_5x" } }));
+    const launch = launchConfiguration([], {}, root), prefs = await Preferences.load(launch, async () => { throw new Error("absent"); });
+    prefs.values.managedAccounts = [{ id: "alternate", provider: "claude", label: "Alternate", path: alt, enabled: true }];
+    const sources = compose(launch, prefs, { now: () => now });
+    const primarySource = sources.find(s => s.slot.provider === "claude" && !s.slot.slotID)!, alternate = sources.find(s => s.slot.slotID === "alternate")!;
+    expect(await primarySource.plan!()).toBe("Max 5×");
+    await expect(primarySource.quota!()).rejects.toMatchObject({ code: "companionMissing", message: "Allowance unavailable for Claude Code CLI. Add a companion usage file or connect Claude Desktop" });
+    await expect(alternate.quota!()).rejects.toMatchObject({ code: "companionMissing", message: "Allowance unavailable for Claude Code CLI. Add a companion usage file" });
+    // An existing but unusable companion keeps the generic state; only a missing file means the source cannot supply allowance.
+    writeFileSync(join(root, ".claude/meterusage-usage.json"), ""); await expect(primarySource.quota!()).rejects.toMatchObject({ code: "noData" });
+  });
   it("prioritizes the primary Claude app-support companion without alternate-account fallback", async () => {
     const root = temp(), alt = join(root, "alternate"), dir = join(root, "Library/Application Support/MeterUsage");
     mkdirSync(alt); mkdirSync(dir, { recursive: true }); mkdirSync(join(root, ".claude"));
@@ -319,7 +332,7 @@ describe("provider path and transport composition", () => {
     const prefs = await Preferences.load(liveFixture(root), async () => { throw new Error("absent"); }); prefs.values.managedAccounts = [{ id: "alternate", provider: "claude", label: "Alternate", path: alt, enabled: true }];
     const sources = compose(liveFixture(root), prefs, { now: () => now }); expect(sources.filter(s => !s.slot.slotID)).toHaveLength(providers.filter(p => p !== "muse" || prefs.enabled(p)).length);
     expect(sources.filter(s => s.status).map(s => s.slot.provider)).toEqual(["codex", "claude"]);
-    const alternate = sources.find(s => s.slot.slotID === "alternate")!; await expect(alternate.plan!()).rejects.toThrow("No usage"); await expect(alternate.quota!()).rejects.toThrow("No usage");
+    const alternate = sources.find(s => s.slot.slotID === "alternate")!; await expect(alternate.plan!()).rejects.toThrow("No usage"); await expect(alternate.quota!()).rejects.toMatchObject({ code: "companionMissing" });
     const primary = sources.find(s => s.slot.provider === "claude" && !s.slot.slotID)!; expect(await primary.plan!()).toBe("Pro"); expect((await primary.quota!()).windows[0].usedPercent).toBe(75);
     expect(accountHome({ id: "a", provider: "claude", label: "A", path: "~/alternate", enabled: true }, root)).toBe(alt);
   });

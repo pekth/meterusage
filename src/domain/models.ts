@@ -69,10 +69,12 @@ export interface Telemetry {
 export type Severity = "operational" | "unknown" | "degraded" | "partialOutage" | "majorOutage";
 export const severityNames: Record<Severity, string> = { operational: "Operational", unknown: "Unknown", degraded: "Degraded", partialOutage: "Partial outage", majorOutage: "Major outage" };
 export interface ServiceStatus { provider: Provider; severity: Severity; description: string; checkedAt: number; stale?: boolean; refreshError?: string }
-export type MissingCode = "cliNotFound" | "notSignedIn" | "offline" | "failed" | "noData" | "dataNotFound" | "keychainDenied";
+export type MissingCode = "cliNotFound" | "notSignedIn" | "offline" | "failed" | "noData" | "dataNotFound" | "keychainDenied" | "companionMissing";
 export class Unavailable extends Error {
   constructor(public code: MissingCode, public subject?: string) {
-    super(code === "cliNotFound" ? `${subject} CLI not found` : code === "notSignedIn" ? `Not signed in to ${subject}` : code === "offline" ? "Offline" : code === "failed" ? `Couldn't read ${subject} usage` : code === "dataNotFound" ? `${subject} not found` : code === "keychainDenied" ? `Keychain access for ${subject} was not kept. Disconnect, connect again and choose Always Allow` : "No usage yet");
+    super(code === "cliNotFound" ? `${subject} CLI not found` : code === "notSignedIn" ? `Not signed in to ${subject}` : code === "offline" ? "Offline" : code === "failed" ? `Couldn't read ${subject} usage` : code === "dataNotFound" ? `${subject} not found` : code === "keychainDenied" ? `Keychain access for ${subject} was not kept. Disconnect, connect again and choose Always Allow`
+      // No companion file at all: the CLI source cannot supply allowance, so say how to get it rather than implying no usage.
+      : code === "companionMissing" ? `Allowance unavailable for Claude Code CLI. Add a companion usage file${subject ? ` or connect ${subject}` : ""}` : "No usage yet");
   }
 }
 export const failed = (p: Provider) => new Unavailable("failed", providerNames[p]);

@@ -21,6 +21,13 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The Claude card no longer says **No usage yet** when the Claude Code CLI
+  source has no companion usage file while recorded activity is shown. It now
+  says **Allowance unavailable for Claude Code CLI. Add a companion usage file
+  or connect Claude Desktop**, with a **How to add allowance** button that
+  opens the companion guide. Settings → Connections offers the same guide for
+  the Claude Code CLI source. [COMPANION.md](docs/COMPANION.md) now lists the
+  app-data path and the Windows options (#108).
 - Ledger, Blueprint and Orbit side-notch cards no longer show the desktop
   through the card. Settings opens wider (1040 px) instead of taller. The
   Style picker fits on two rows, and Connections and API connections show two

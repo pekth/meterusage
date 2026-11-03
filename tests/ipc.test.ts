@@ -3,6 +3,8 @@ import { parseRequest, trustedSender, projectSettings } from "../src/main/ipc";
 describe("renderer boundary", () => {
   it("accepts only no-argument Claude usage-page intent", () => {
     expect(parseRequest({ action: "claudeUsagePage" })).toEqual({ action: "claudeUsagePage" });
+    expect(parseRequest({ action: "companionGuide" })).toEqual({ action: "companionGuide" });
+    expect(() => parseRequest({ action: "companionGuide", url: "synthetic" })).toThrow("Invalid request");
     for (const field of ["url", "account", "profile", "provider", "path", "cookie"]) expect(() => parseRequest({ action: "claudeUsagePage", [field]: "synthetic" })).toThrow("Invalid request");
   });
   it("allows only fixed providers and no credential or selector in saved-key requests", () => {

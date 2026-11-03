@@ -176,6 +176,9 @@ Release documentation refresh: 2026-11-03 for build 87.
   for MeterUsage-owned connection cleanup before selecting existing local
   collection. Ordinary Disconnect still prevents automatic local fallback.
   CLI data covers this Mac; Claude CLI allowance needs a companion usage file.
+  With no companion file the Claude card says allowance is unavailable for
+  Claude Code CLI and links to [COMPANION.md](COMPANION.md); Windows has no
+  bundled companion.
   Done follows the source choices and remains optional. Demo and isolated live
   test profiles cannot switch to local collection. See
   [ADR 0023](adr/0023-onboarding-source-choice.md).

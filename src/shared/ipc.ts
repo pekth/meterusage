@@ -2,6 +2,8 @@ import type { Snapshot } from "./state";
 import type { Provider } from "../domain/models";
 export const channel = "meterusage:request", stateChannel = "meterusage:state";
 export const statusPages = { codex: "https://status.openai.com/", claude: "https://status.claude.com/", cursor: "https://status.cursor.com/", copilot: "https://www.githubstatus.com/" };
+/** Setup guide for the Claude companion usage file that feeds CLI-only allowance. */
+export const companionGuide = "https://github.com/tilorahdotco/meterusage/blob/main/docs/COMPANION.md";
 export type Surface = "flyout" | "settings" | "notch" | "tray" | "share";
 export enum PanelSize { Small = "small", Medium = "medium", Large = "large" }
 export const panelScales = { [PanelSize.Small]: 0.9, [PanelSize.Medium]: 1, [PanelSize.Large]: 1.15 };
@@ -24,7 +26,7 @@ export interface ViewState {
   update?: { version: string; state: "idle" | "downloading" | "installing" | "failed" };
 }
 export type Request =
-  | { action: "state" | "refresh" | "settings" | "close" | "quit" | "clearCache" | "copyDiagnostics" | "sendReport" | "claudeUsagePage" | "copyJSON" | "dragStart" | "dragEnd" | "notchContext" | "updateInstall" | "updateDismiss" }
+  | { action: "state" | "refresh" | "settings" | "close" | "quit" | "clearCache" | "copyDiagnostics" | "sendReport" | "claudeUsagePage" | "companionGuide" | "copyJSON" | "dragStart" | "dragEnd" | "notchContext" | "updateInstall" | "updateDismiss" }
   | { action: "share"; key: string }
   | { action: "statusPage"; provider: keyof typeof statusPages }
   | { action: "setPreference"; key: string; value: boolean | number | string }
