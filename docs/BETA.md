@@ -1,14 +1,14 @@
 # Electron public beta
 
-MeterUsage **0.3.0-beta.17, build 87** is the sole offered app and default
+MeterUsage **0.3.0-beta.18, build 88** is the sole offered app and default
 download. It remains a beta. The ZIP supports Apple silicon and macOS 13 or
 later and is Developer ID signed, notarized and stapled. Historical Swift
 source/releases remain available for recovery; stable acceptance is still open.
 
 ## Install
 
-1. Download [the beta ZIP](https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.17/MeterUsage-0.3.0-beta.17-mac-arm64.zip)
-   and [SHA256SUMS](https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.17/SHA256SUMS).
+1. Download [the beta ZIP](https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.18/MeterUsage-0.3.0-beta.18-mac-arm64.zip)
+   and [SHA256SUMS](https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.18/SHA256SUMS).
 2. Quit MeterUsage and keep a copy of your existing app and its saved data for
    rollback. The beta shares the app identity and data locations with Swift.
 3. Unzip the download, move `MeterUsage.app` to Applications, and open it.
@@ -47,7 +47,7 @@ shasum -a 256 -c SHA256SUMS
 Expected ZIP SHA-256:
 
 ```text
-23a4f8d5d70aed5475103bb28e277f3ec249a6c34b807a811de0e1b953766f00
+030ca8726e8ca032489fdcf4fc1eabcb10faa7737ba71325e4c89134dce700e3
 ```
 
 ## Provider coverage
@@ -89,8 +89,8 @@ Expected ZIP SHA-256:
   preserved and newly pasted keys are not saved. OpenRouter keeps its existing
   balance and aggregate activity source. Read [API setup and limits](API_USAGE_BETA.md).
 
-See [source choices](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.17/docs/electron/README.md#source-choices),
-[desktop connections](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.17/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.17/docs/PRIVACY.md).
+See [source choices](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.18/docs/electron/README.md#source-choices),
+[desktop connections](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.18/docs/DESKTOP-CONNECTIONS.md) and [privacy](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.18/docs/PRIVACY.md).
 
 ## Known limits
 
@@ -116,15 +116,26 @@ See [source choices](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta
 - Live Codex refresh was observed. Claude paid-account allowance was not
   live-tested. Optional support-report delivery and deployed relay limits
   were not verified end to end.
-- The Windows build of this release is unsigned; see [Windows beta 17](#windows-beta-17).
+- The Windows build of this release is unsigned; see [Windows beta 18](#windows-beta-18).
   Intel Mac binaries are not provided by this beta.
 
 Use Settings > Diagnostics for sanitized diagnostics and **Send report**.
 The app limits report attempts to one every ten minutes, including relaunches.
-Review the [report contents and privacy limits](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.17/docs/REPORTING.md) before sending.
+Review the [report contents and privacy limits](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.18/docs/REPORTING.md) before sending.
 Never include tokens, passwords or raw account files in an issue.
 
 ## Build and screenshot identity
+
+Beta.18 was built from `git archive` of main
+`68ff0c80ed087389366ae75d8715e88663c68cf3`. It adds Claude free resets (#107)
+and clear reasons when the Claude Code CLI or Antigravity CLI source cannot
+supply allowance (#109, #111). Packaging sets `0.3.0-beta.18`, build 88. The
+macOS ZIP and the unsigned Windows installer and portable zip come from that
+commit and share one `SHA256SUMS`. Source passed typecheck, 1008 synthetic
+tests and production build, and hosted CI (`typescript`, `windows`) on the
+pull request. Apple accepted notarization. Stapling, Gatekeeper (`Notarized
+Developer ID`), bundle version and the uploaded assets' SHA-256 were checked
+separately. The Windows build passed the release workflow (run 41742128516).
 
 Beta.17 was built from `git archive` of main
 `206384b5aeded82f95c6ba4b18ed5a4c2684e06a`, which makes Settings wider instead
@@ -177,21 +188,21 @@ Applications. The new artifact does not close the native acceptance gaps above.
 The [screenshot gallery](SCREENSHOTS.md) uses invented demo data and the actual
 release renderer. It replaces old product captures without exposing real accounts.
 
-## Windows beta 17
+## Windows beta 18
 
-[MeterUsage 0.3.0-beta.17, build 87](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.17) carries the
+[MeterUsage 0.3.0-beta.18, build 88](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.18) carries the
 **unsigned** Windows build for x64 Windows 10/11 alongside the macOS ZIP. Both
-were built from `206384b`, with one `SHA256SUMS` for all three files. Each
+were built from `68ff0c8`, with one `SHA256SUMS` for all three files. Each
 updater selects only its own platform's asset. The first Windows build,
 [0.3.0-beta.13, build 83](https://github.com/tilorahdotco/meterusage/releases/tag/v0.3.0-beta.13), was Windows-only.
 
 | Asset | SHA-256 |
 | --- | --- |
-| `MeterUsage-0.3.0-beta.17-win-x64.exe` (per-user installer) | `1f285245830f4f481953967fe272ef0123662079912134a79bd137f1c6b27aa3` |
-| `MeterUsage-0.3.0-beta.17-win-x64.zip` (portable; cannot update itself) | `58200a6d5e2e9e45a76be9ea58aa659da82db9264a618bce0d07dbcb0b35d517` |
+| `MeterUsage-0.3.0-beta.18-win-x64.exe` (per-user installer) | `782d66098748a005805b6b6f12ec9bfb2cfa687a67613dc6e004157ecb35a60c` |
+| `MeterUsage-0.3.0-beta.18-win-x64.zip` (portable; cannot update itself) | `6c0b6bcdf6bfca633dec5a4b04dfdf33132ded30d93d8d29e65f99e9cdcbdcb1` |
 
 1. Download the installer and `SHA256SUMS` from the release.
-2. In PowerShell, run `Get-FileHash -Algorithm SHA256 .\MeterUsage-0.3.0-beta.17-win-x64.exe`
+2. In PowerShell, run `Get-FileHash -Algorithm SHA256 .\MeterUsage-0.3.0-beta.18-win-x64.exe`
    and compare it with `SHA256SUMS`.
 3. Run the installer. SmartScreen warns because there is no code-signing
    certificate; choose **More info → Run anyway** only if the hash matches.
@@ -202,6 +213,13 @@ updater selects only its own platform's asset. The first Windows build,
 Data and settings are in `%APPDATA%\MeterUsage`. Uninstall from **Settings →
 Apps**; app data is kept. Later Windows pre-releases install through the
 in-app updater (digest-verified, unsigned; [ADR 0039](adr/0039-windows-updater.md)).
+
+Beta.18's Windows assets were built from `68ff0c8` by the **Windows release
+build** workflow
+([run 41742128516](https://github.com/tilorahdotco/meterusage/actions/runs/41742128516)).
+On a GitHub `windows-latest` runner, it passed typecheck, 674 Windows tests
+(4 skipped), packaging, packaged-app smoke tests, and the silent install,
+update handoff and uninstall check.
 
 Beta.17's Windows assets were built from `206384b` by the **Windows release
 build** workflow

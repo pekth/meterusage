@@ -4,7 +4,7 @@ Electron is the sole offered app, default download and active target for new
 MeterUsage features. Historical Swift source/releases remain recovery/reference
 material under [ADR 0034](../adr/0034-electron-beta-default.md).
 
-The default public beta is **0.3.0-beta.17, build 87**, for Apple silicon and
+The default public beta is **0.3.0-beta.18, build 88**, for Apple silicon and
 macOS 13+. Use the [beta installation guide](../BETA.md) or run
 `Scripts/make-app.sh` for verified prebuilt preparation. The ZIP is Developer ID
 signed and notarized. Source manifests retain `0.2.41`; packaging sets the beta
@@ -223,7 +223,7 @@ packaging and installation receipts only for their recorded layer. Windows
 work resumed under [ADR 0038](../adr/0038-windows-ci-test-machine.md) with a CI
 runner as the only test machine. The `windows` CI job packages an unsigned
 build and smoke-tests it. The unsigned Windows build of
-[0.3.0-beta.17](../BETA.md#windows-beta-17) is published alongside macOS; real-machine
+[0.3.0-beta.18](../BETA.md#windows-beta-18) is published alongside macOS; real-machine
 acceptance remains open.
 
 [ADR 0010](../adr/0010-macos-typescript-electron.md) keeps Swift as the behavior
