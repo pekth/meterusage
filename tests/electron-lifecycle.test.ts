@@ -217,7 +217,7 @@ it.each([
     const usageRequest = { action: "claudeUsagePage" };
     expect(openExternal).not.toHaveBeenCalled();
     const sourceBeforeUsage = activeSources, refreshesBeforeUsage = refresh.mock.calls.length, writesBeforeUsage = setPreference.mock.calls.length;
-    for (const window of windows.filter(w => w.surface !== "settings")) expect((await invoke(window, usageRequest)).ok).toBe(false);
+    for (const window of windows.filter(w => !["settings", "flyout", "notch"].includes(w.surface))) expect((await invoke(window, usageRequest)).ok).toBe(false);
     for (const flag of ["demo", "candidate", "codexTest", "claudeTest"] as const) {
       const previous = launch[flag]; launch[flag] = true;
       expect((await invoke(settings, usageRequest)).ok).toBe(false); launch[flag] = previous;
@@ -230,7 +230,10 @@ it.each([
       expect(openExternal).toHaveBeenCalledExactlyOnceWith("https://claude.ai/settings/usage");
       openExternal.mockRejectedValueOnce(new Error("SYNTHETIC_PRIVATE_SHELL_FAILURE"));
       expect(await invoke(settings, usageRequest)).toEqual({ ok: false, error: "Could not complete action" });
-    } else expect((await invoke(settings, usageRequest)).ok).toBe(false);
+      // A Claude free reset card in the menu opens the same fixed page.
+      expect(await invoke(flyout, usageRequest)).toEqual({ ok: true });
+      expect(openExternal).toHaveBeenLastCalledWith("https://claude.ai/settings/usage");
+    } else { expect((await invoke(settings, usageRequest)).ok).toBe(false); expect((await invoke(flyout, usageRequest)).ok).toBe(false); }
     expect(activeSources).toBe(sourceBeforeUsage); expect(refresh).toHaveBeenCalledTimes(refreshesBeforeUsage);
     expect(setPreference).toHaveBeenCalledTimes(writesBeforeUsage); expect(connect).not.toHaveBeenCalled();
 
@@ -496,7 +499,7 @@ it.each([
       vi.useFakeTimers();
       await invoke(settings, { action: "setPreference", key: "sideNotchPanelEnabled", value: true });
       const panel = windows.find(w => w.surface === "notch")!;
-      expect((await invoke(panel, { action: "claudeUsagePage" })).ok).toBe(false);
+      expect((await invoke(panel, { action: "claudeUsagePage" })).ok).toBe(!candidate);
       expect(panel.options).toMatchObject({ type: "panel", focusable: false });
       expect(panel.bounds.width).toBe(36);
       expect(panel.showInactive).toHaveBeenCalled(); expect(panel.focus).not.toHaveBeenCalled();

@@ -156,7 +156,13 @@ export class DesktopConnections {
       reading?.("request");
       await verify(); verified = true;
       check();
-      raw = await this.http(claudeUsageURL(credential.organization), "claude", credential.cookie, signal);
+      try { raw = await this.http(claudeUsageURL(credential.organization), "claude", credential.cookie, signal); }
+      catch (error) {
+        // A rejected reset opt-in must not hide the usage windows: retry once without it.
+        if (!(error instanceof Unavailable) || error instanceof ClaudeBrowserVerification || !["failed", "notSignedIn"].includes(error.code)) throw error;
+        check();
+        raw = await this.http(claudeUsageURL(credential.organization, false), "claude", credential.cookie, signal);
+      }
       check();
     } finally {
       reading?.("verification");

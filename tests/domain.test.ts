@@ -84,6 +84,13 @@ describe("Swift LimitsReport and account-identity parity", () => {
 describe("Swift durable history/archive compatibility", () => {
   function withFile(fn: (path: string) => void) { const root = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); try { fn(join(root, "history.json")); } finally { rmSync(root, { recursive: true, force: true }); } }
   const daily = (input: number): Daily[] => [{ day: now, tokens: tokens({ input }), estimatedCostUSD: .01, sessionCount: 1 }];
+  it("keeps Claude free resets live-only so a reset used on claude.ai cannot return from the archive", () => withFile(path => {
+    const q = quota("claude", [window("5-hour", 10)], now); q.resetCreditCount = 1;
+    q.resetCredits = [{ id: "claude-free-reset-0", title: "Free reset", status: "available", expiresAt: now + 86400000 }];
+    saveArchive(path, [{ slot: primary("claude"), quota: q }]);
+    const restored = readArchive(path).claude;
+    expect(restored.windows[0].usedPercent).toBe(10); expect(restored.resetCreditCount).toBeUndefined(); expect(restored.resetCredits).toEqual([]);
+  }));
   it("rejects invalid optional archive metadata and drops unknown fields", () => withFile(path => {
     const q = quota("codex", [window("5-hour", 0)], now);
     q.groups = [{ id: "model", title: "Model", windows: q.windows }];

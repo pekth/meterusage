@@ -121,6 +121,14 @@ Release documentation refresh: 2026-11-03 for build 87.
   Settings. Opening that page does not connect MeterUsage or report quota.
   Synthetic checks do not establish native or live-provider acceptance.
 
+- Claude free resets ([ADR 0044](adr/0044-claude-free-reset-display.md)):
+  the Desktop usage request adds `cedar_ember=1` and retries once without it
+  if rejected. Available grants become expiry-only "Free reset" credits on the
+  Claude card, with **Open in Claude** linking to
+  `https://claude.ai/settings/usage`. MeterUsage never redeems them, and they
+  are not archived. Synthetic proof only; the field name is undocumented and
+  not yet confirmed against a real account.
+
 - Electron Claude plan labels recognize known organization, seat and user tiers
   in that order. An unknown higher-priority value permits a known fallback;
   unknown-only metadata stays unavailable instead of exposing internal labels.

@@ -44,7 +44,7 @@ describe("coordinator refresh journey", () => {
     });
     const http: transport.HTTP = async url => {
       if (url === transport.endpoints.claudeBootstrap) return '{"account":{"uuid":"11111111-1111-1111-1111-111111111111","memberships":[{"organization":{"uuid":"22222222-2222-2222-2222-222222222222"}}]}}';
-      if (!url.endsWith("/usage")) return '{"components":[]}';
+      if (!url.includes("/usage")) return '{"components":[]}';
       if (hold) { started(); await response; throw new Unavailable("offline"); }
       return '{"five_hour":{"utilization":42}}';
     };
@@ -74,7 +74,7 @@ describe("coordinator refresh journey", () => {
     const credentials = vi.spyOn(claudeDesktop, "readDesktopCredential").mockResolvedValue({ identity, account: "11111111-1111-1111-1111-111111111111", organization: "22222222-2222-2222-2222-222222222222", cookie: "sessionKey=synthetic-session" });
     const http: transport.HTTP = async url => {
       if (url === transport.endpoints.claudeBootstrap) return '{"account":{"uuid":"11111111-1111-1111-1111-111111111111","memberships":[{"organization":{"uuid":"22222222-2222-2222-2222-222222222222"}}]}}';
-      if (!url.endsWith("/usage")) return '{"components":[]}';
+      if (!url.includes("/usage")) return '{"components":[]}';
       if (offline) throw new Unavailable("offline");
       return '{"five_hour":{"utilization":42}}';
     };

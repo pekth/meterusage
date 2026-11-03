@@ -214,6 +214,21 @@ it("verifies unchanged local and remote identity after an offline usage failure"
   expect(f.command.mock.calls.filter(([binary]) => binary === "/usr/bin/sandbox-exec").map(([, args]) => args.at(-1))).toEqual([desktopSchemaSQL, desktopCookieSQL, desktopSchemaSQL, desktopCookieSQL]);
   expect(f.http.mock.calls.map(([url]) => url)).toEqual([endpoints.claudeBootstrap, claudeUsageURL(org), endpoints.claudeBootstrap]);
 });
+it("retries a rejected free-reset opt-in once without it and keeps the usage windows", async () => {
+  for (const code of ["failed", "notSignedIn"] as const) {
+    const f = await fixture(); f.prefs.values.desktopClaudeIdentity = identity;
+    f.http.mockImplementation(async url => { if (url === endpoints.claudeBootstrap) return bootstrap(); if (url === claudeUsageURL(org)) throw new Unavailable(code, "Claude Desktop"); return '{"five_hour":{"utilization":25}}'; });
+    const q = await f.connections.quota("claude");
+    expect(q.windows[0].usedPercent).toBe(25); expect(q.resetCredits).toEqual([]);
+    expect(f.http.mock.calls.map(([url]) => url)).toEqual([endpoints.claudeBootstrap, claudeUsageURL(org), claudeUsageURL(org, false), endpoints.claudeBootstrap]);
+  }
+});
+it("does not retry the free-reset opt-in on a browser challenge", async () => {
+  const f = await fixture(); f.prefs.values.desktopClaudeIdentity = identity;
+  f.http.mockImplementation(async url => { if (url === endpoints.claudeBootstrap) return bootstrap(); throw new ClaudeBrowserVerification(); });
+  await expect(f.connections.quota("claude")).rejects.toBeInstanceOf(ClaudeBrowserVerification);
+  expect(f.http.mock.calls.map(([url]) => url)).toEqual([endpoints.claudeBootstrap, claudeUsageURL(org), endpoints.claudeBootstrap]);
+});
 it("reports a usage failure accurately when final identity verification succeeds", async () => {
   const f = await fixture();
   f.http.mockImplementation(async url => { if (url === endpoints.claudeBootstrap) return bootstrap(); throw new Error("synthetic usage service failure"); });
@@ -277,7 +292,7 @@ it("sends Cookie only to fixed bootstrap and UUID-bound usage with bounded trans
     expect(init!.headers).not.toHaveProperty("Authorization"); expect(init!.headers).not.toHaveProperty("anthropic-beta");
     expect(init!.signal).toBeInstanceOf(AbortSignal);
   }
-  for (const url of ["https://claude.ai/api/account", "https://claude.ai/api/organizations/not-uuid/usage", "https://evil.invalid/api/bootstrap", endpoints.openRouterKey]) await expect(http(url as Endpoint, "claude", credential().cookie)).rejects.toThrow();
+  for (const url of ["https://claude.ai/api/account", "https://claude.ai/api/organizations/not-uuid/usage", `https://claude.ai/api/organizations/${org}/usage?cedar_ember=2`, `https://claude.ai/api/organizations/${org}/usage?cedar_ember=1&x=1`, "https://evil.invalid/api/bootstrap", endpoints.openRouterKey]) await expect(http(url as Endpoint, "claude", credential().cookie)).rejects.toThrow();
   await expect(http(endpoints.claudeBootstrap, "grok", credential().cookie)).rejects.toThrow();
   await expect(http(endpoints.claudeBootstrap, "claude", "Bearer synthetic")).rejects.toThrow();
   expect(fetcher).toHaveBeenCalledTimes(2);

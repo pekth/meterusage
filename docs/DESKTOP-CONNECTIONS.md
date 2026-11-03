@@ -123,6 +123,11 @@ current source. It never opens automatically and is unavailable in demo,
 candidate and isolated test profiles. Browser verification does not establish
 that a later MeterUsage connection will succeed.
 
+When Claude reports a saved "Reset for free", the Claude card shows it with
+its expiry and an **Open in Claude** button for the same page. Use the reset
+there; MeterUsage never redeems it
+([ADR 0044](adr/0044-claude-free-reset-display.md)).
+
 These diagnostics have source and synthetic-fixture proof only. They do not
 identify the cause of a live connection failure or prove that Claude Desktop
 connection works. Packaged banner display, Keychain access, Desktop compatibility

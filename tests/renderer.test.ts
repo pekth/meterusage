@@ -301,6 +301,19 @@ it("hides reset actions for allowance-only sources while retaining earned credit
   }
 });
 
+it("links Claude free resets to Claude's usage page without an in-app redemption", () => {
+  const view = state(), q = quota("claude", [w], now); q.resetCreditCount = 1;
+  q.resetCredits = [{ id: "claude-free-reset-0", title: "Free reset", status: "available", expiresAt: now + 86400000 }];
+  view.snapshot.quotas.claude = value(q); view.snapshot.slots = [primary("claude")]; view.snapshot.notchSlots = [primary("claude")]; view.snapshot.demo = false;
+  for (const surface of ["flyout", "notch"]) {
+    const markup = renderApp(view, surface); expect(markup).toContain("1 free reset"); expect(markup).toContain("Open in Claude"); expect(markup).not.toContain("Use reset");
+  }
+  q.resetCredits[0].expiresAt = now; expect(renderApp(view)).not.toContain("Open in Claude");
+  q.resetCredits[0].expiresAt = now + 1000; view.snapshot.demo = true; expect(renderApp(view)).not.toContain("Open in Claude");
+  view.snapshot.demo = false; view.snapshot.quotas.claude = { status: "missing", code: "offline", reason: "Offline" }; view.snapshot.archived.claude = q;
+  expect(renderApp(view)).not.toContain("Open in Claude");
+});
+
 it("uses general weekly-only Claude allowance in tray, tooltip and notch without model-specific fallback", () => {
   const view = state(), s = view.snapshot, slot = primary("claude");
   s.slots = s.traySlots = s.notchSlots = [slot]; s.appearance.compactTray = false;

@@ -135,7 +135,13 @@ The captured session cookie authenticates GET `https://claude.ai/api/bootstrap`.
 Its nested account UUID must match the local account selector, and the intended
 organization must appear exactly once in that account's memberships. Only then
 can MeterUsage request GET
-`https://claude.ai/api/organizations/{organization-uuid}/usage`.
+`https://claude.ai/api/organizations/{organization-uuid}/usage?cedar_ember=1`.
+The query asks Claude to include saved free resets. If it is rejected,
+MeterUsage retries once without it. From the reset block it keeps only
+eligibility and, per grant, the remaining count, pause state and start and
+expiry times. Grant identifiers are never selected, and free resets are not
+written to the quota archive
+([ADR 0044](adr/0044-claude-free-reset-display.md)).
 Bootstrap is checked again and the local account, organization and session are
 reread before publishing allowance, including after a failed usage request.
 Membership alone does not establish allowance entitlement. No GET `/api/account`,
@@ -148,7 +154,9 @@ that challenge or change its TLS, User-Agent, headers or cookies to evade it.
 Connect reports a fixed message without exposing response bodies, headers or
 session details, and preserves the current source. A failed Claude Desktop
 method offers **Open Claude usage**. This user-initiated action opens only
-`https://claude.ai/settings/usage` from normal Settings. Demo, candidate and
+`https://claude.ai/settings/usage` from normal Settings. A live Claude free
+reset offers **Open in Claude**, which opens the same page from the menu or
+notch. MeterUsage never redeems a reset. Demo, candidate and
 isolated test profiles cannot open it. The renderer supplies no URL, account
 or profile. The page is a manual fallback; opening it does not connect
 MeterUsage, import browser data or report quota.

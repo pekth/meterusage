@@ -123,10 +123,11 @@ export const endpoints = {
   codexStatus: "https://status.openai.com/api/v2/components.json",
   claudeStatus: "https://status.claude.com/api/v2/components.json",
 } as const;
-const claudeUsagePattern = /^https:\/\/claude\.ai\/api\/organizations\/[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}\/usage$/;
+// `cedar_ember=1` asks Claude to include saved "Reset for free" grants beside the usage windows.
+const claudeUsagePattern = /^https:\/\/claude\.ai\/api\/organizations\/[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}\/usage(?:\?cedar_ember=1)?$/;
 export const isClaudeEndpoint = (url: string): boolean => url === endpoints.claudeBootstrap || claudeUsagePattern.test(url);
-export function claudeUsageURL(organization: string): `https://claude.ai/api/organizations/${string}/usage` {
-  const url = `https://claude.ai/api/organizations/${organization}/usage` as const;
+export function claudeUsageURL(organization: string, resets = true): `https://claude.ai/api/organizations/${string}/usage${"" | "?cedar_ember=1"}` {
+  const url = `https://claude.ai/api/organizations/${organization}/usage${resets ? "?cedar_ember=1" as const : "" as const}` as const;
   if (!claudeUsagePattern.test(url)) throw new Unavailable("notSignedIn", "Claude Desktop");
   return url;
 }

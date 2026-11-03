@@ -169,9 +169,38 @@ export function verifyDesktopAccount(raw: string, credential: DesktopCredential)
     if (matches !== 1) throw unavailable();
   } catch { throw unavailable(); }
 }
+const maxResetGrants = 200, maxFreeResets = 50;
+type Grant = { left: number; startsAt?: number; endsAt?: number; paused: boolean };
+const grantBound = (value: unknown) => { if (value == null) return undefined; const at = date(value); if (at === undefined) throw new Error("Invalid reset bound"); return at; };
+function resetGrant(value: unknown): Grant | undefined {
+  try {
+    const g = object(value), left = g.resets_left, total = g.resets_total;
+    if (!Number.isSafeInteger(left) || (left as number) < 0 || typeof g.paused !== "boolean") return undefined;
+    if (total != null && (!Number.isSafeInteger(total) || (total as number) < (left as number))) return undefined;
+    return { left: left as number, startsAt: grantBound(g.starts_at), endsAt: grantBound(g.ends_at), paused: g.paused };
+  } catch { return undefined; }
+}
+/**
+ * Claude's saved "Reset for free" grants, from the usage response's `cedar_ember` block. Grant identifiers are
+ * redemption handles and are never selected; each available reset keeps only its expiry. A malformed block or an
+ * implausible inventory shows no resets and never affects the usage windows.
+ */
+export function desktopFreeResets(block: unknown, now: number): (number | undefined)[] {
+  if (block == null || typeof block !== "object" || Array.isArray(block)) return [];
+  const b = block as Record<string, unknown>;
+  if (b.eligible !== true || !Array.isArray(b.grants) || b.grants.length > maxResetGrants) return [];
+  const expiries: (number | undefined)[] = [];
+  for (const grant of b.grants.map(resetGrant)) {
+    if (!grant || grant.paused || grant.left === 0 || grant.startsAt !== undefined && grant.startsAt > now || grant.endsAt !== undefined && grant.endsAt <= now) continue;
+    if (expiries.length + grant.left > maxFreeResets) return [];
+    for (let i = 0; i < grant.left; i++) expiries.push(grant.endsAt);
+  }
+  return expiries.sort((a, b) => (a ?? Infinity) - (b ?? Infinity));
+}
+const resetSelection = { eligible: true, grants: { "*": { resets_left: true, resets_total: true, paused: true, starts_at: true, ends_at: true } } } as const;
 export function desktopQuota(raw: string, now: number) {
   const keys = ["five_hour", "seven_day", "seven_day_sonnet", "seven_day_opus", "seven_day_oauth_apps", "seven_day_cowork"];
-  const selected = object(selectJSON(raw, Object.fromEntries(keys.map(key => [key, { utilization: true, resets_at: true }]))));
+  const selected = object(selectJSON(raw, { ...Object.fromEntries(keys.map(key => [key, { utilization: true, resets_at: true }])), cedar_ember: resetSelection }));
   const windows = keys.flatMap(key => {
     if (selected[key] == null) return [];
     const value = object(selected[key]), percent = value.utilization, reset = date(value.resets_at);
@@ -180,5 +209,10 @@ export function desktopQuota(raw: string, now: number) {
     return [window(label, percent, reset, key === "five_hour" ? 300 : 10080)];
   });
   if (!windows.length) throw new Unavailable("noData");
-  return quota("claude", windows, now);
+  const q = quota("claude", windows, now), resets = desktopFreeResets(selected.cedar_ember, now);
+  if (resets.length) {
+    q.resetCreditCount = resets.length;
+    q.resetCredits = resets.map((expiresAt, index) => ({ id: `claude-free-reset-${index}-${expiresAt ?? "open"}`, title: "Free reset", status: "available", expiresAt }));
+  }
+  return q;
 }

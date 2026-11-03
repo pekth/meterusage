@@ -284,7 +284,8 @@ async function start(launch: Launch) {
         if (surface !== "flyout") throw new Error("Invalid request");
         await shell.openExternal(statusPages[r.provider]); break;
       case "claudeUsagePage":
-        if (surface !== "settings" || launch.demo || launch.candidate || launch.profile || launch.codexTest || launch.claudeTest) throw new Error("Invalid request");
+        // Settings links here after a browser check; menu and notch cards link here to use a Claude free reset.
+        if (!["settings", "flyout", "notch"].includes(surface) || launch.demo || launch.candidate || launch.profile || launch.codexTest || launch.claudeTest) throw new Error("Invalid request");
         await shell.openExternal("https://claude.ai/settings/usage"); break;
       case "close": source.hide(); break;
       case "quit": app.quit(); break;

@@ -580,6 +580,28 @@ it("retains only numeric Claude allowance windows and preserves missing versus m
   expect(q.windows).toHaveLength(1); expect(q.windows[0].usedPercent).toBe(0); expect(JSON.stringify(q)).not.toContain("OMIT");
   for (const raw of ['{}', '{"five_hour":{"utilization":-1}}', '{"five_hour":{"utilization":101}}', '{"five_hour":{"utilization":0,"resets_at":"wrong"}}']) expect(() => desktopQuota(raw, now)).toThrow();
 });
+it("reads Claude free resets as expiry-only credits without grant identifiers", () => {
+  const day = 86400000, at = (offset: number) => new Date(now + offset).toISOString();
+  const grant = (extra: Record<string, unknown>) => ({ id: "OMIT_GRANT_HANDLE", resets_left: 1, resets_total: 1, paused: false, starts_at: at(-day), ends_at: at(3 * day), usable_now: true, ...extra });
+  const usage = (cedar: unknown) => JSON.stringify({ five_hour: { utilization: 10 }, cedar_ember: cedar });
+  const q = desktopQuota(usage({ eligible: true, grants: [
+    grant({ resets_left: 2, resets_total: 2, ends_at: at(5 * day) }), grant({ ends_at: at(day) }), grant({ ends_at: null }), grant({ usable_now: false, ends_at: at(2 * day) }),
+    grant({ paused: true }), grant({ resets_left: 0 }), grant({ ends_at: at(-60000) }), grant({ starts_at: at(day) }),
+    grant({ resets_left: -1 }), grant({ resets_left: 2, resets_total: 1 }), grant({ paused: "no" }), grant({ ends_at: "wrong" }), "OMIT_SCALAR",
+  ] }), now);
+  expect(q.windows[0].usedPercent).toBe(10);
+  expect(q.resetCreditCount).toBe(5);
+  expect(q.resetCredits.map(c => c.expiresAt)).toEqual([now + day, now + 2 * day, now + 5 * day, now + 5 * day, undefined]);
+  expect(q.resetCredits.every(c => c.title === "Free reset" && c.status === "available")).toBe(true);
+  expect(new Set(q.resetCredits.map(c => c.id)).size).toBe(5);
+  expect(JSON.stringify(q)).not.toContain("OMIT");
+  // Ineligible, absent, malformed and implausible inventories show no resets and keep the windows.
+  for (const cedar of [{ eligible: false, grants: [grant({})] }, null, "OMIT", { eligible: true }, { eligible: true, grants: [grant({ resets_left: 51, resets_total: 51 })] }, { eligible: true, grants: Array(201).fill(grant({})) }]) {
+    const empty = desktopQuota(usage(cedar), now);
+    expect(empty.windows[0].usedPercent).toBe(10); expect(empty.resetCreditCount).toBeUndefined(); expect(empty.resetCredits).toEqual([]);
+  }
+  expect(desktopQuota('{"five_hour":{"utilization":10}}', now).resetCreditCount).toBeUndefined();
+});
 it("rejects effective plaintext storage before login and cleans up an in-progress cancelled login", async () => {
   const deniedRoot = temp(), denied = fakeCodex(deniedRoot);
   writeFileSync(denied, readFileSync(denied, "utf8").replace("cli_auth_credentials_store:'keyring'", "cli_auth_credentials_store:'file'"));
