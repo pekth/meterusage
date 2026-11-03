@@ -75,7 +75,7 @@
 .settings .style-picker { min-width: 0; margin: 0; padding: 14px 0; border: 0; }
 .settings .style-picker legend { float: left; width: 100%; margin-bottom: 9px; padding: 0; font-size: 13px; }
 .settings .style-picker > .secondary { clear: both; padding-top: 8px; }
-/* Four compact columns keep the eight options to two rows in the 780-pixel Settings window. */
+/* Four columns keep the eight options to two rows in the wide Settings window. */
 .style-options { clear: both; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 @media (max-width: 640px) { .style-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .settings .style-option { position: relative; display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 7px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--canvas); font-family: var(--ui-font, inherit); cursor: pointer; }

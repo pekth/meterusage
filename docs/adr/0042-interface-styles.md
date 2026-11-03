@@ -41,8 +41,11 @@ with another. People also disagree on taste.
   panel cards transparent or translucent, so in those windows every
   non-Classic card is opaque. Otherwise the desktop shows through the card and
   washes out its text.
-- Settings opens 780 px wide (was 620), and the Style picker uses four
-  compact columns, so the eight options take two rows.
+- Settings opens 1040 px wide (was 620), clamped to the screen, and its
+  content may use 1000 px. The Style picker uses four columns, panel size and
+  Theme share a row, and Connections and API connections lay their cards out
+  in two columns. Settings grows wider, not taller. Providers stays one column
+  for drag-to-reorder.
 - The activity chart's outer modifier class is `strip-kind-<kind>`. It must
   not reuse `strip-bars` or `strip-spark`, the inner row classes.
 

@@ -358,7 +358,7 @@ export function Settings({ state, action, saveOrder }: { state: ViewState; actio
     <Connections state={state} action={action} />
     </section>
     <section hidden={category !== "API connections"}>{category === "API connections" && <ApiBillingConnections state={state} action={action} />}</section>
-    <section hidden={category !== "Appearance"}><h2>Appearance</h2><div className="settings-group">
+    <section hidden={category !== "Appearance"}><h2>Appearance</h2><div className="settings-group appearance-group">
       <fieldset className="style-picker" aria-describedby="style-help"><legend>Style</legend>
         <div className="style-options">{interfaceStyles.map(id => <label key={id} className={`style-option ui-${id}${styleInfo[id].palette === "fixed" ? "" : ` theme-${previewTheme}`}`} style={id === "classic" ? { "--brand": accents[String(values.accentTheme)] ?? accents.blue } as CSSProperties : undefined}><input type="radio" name="interfaceStyle" value={id} checked={style === id} onChange={() => set("interfaceStyle", id)} /><StylePreview id={id} now={state.snapshot.clock} /><span className="style-name">{styleInfo[id].name}</span><span className="style-tagline">{styleInfo[id].tagline}</span></label>)}</div>
         <p id="style-help" className="secondary">Reskins the usage panel, side notch and Settings. {styleInfo[style].palette === "follow" ? "Classic follows the Theme and Accent below." : styleInfo[style].palette === "theme" ? `${styleInfo[style].name} prints on paper in Light and on ink in Dark. It brings its own accent.` : `${styleInfo[style].name} brings its own palette, so Theme and Accent apply to Classic only.`}</p>
