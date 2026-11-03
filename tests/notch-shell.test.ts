@@ -1,6 +1,6 @@
 import { it, expect, afterEach, vi } from "vite-plus/test";
 import { NotchFold } from "../src/main/notch-fold";
-import { effectiveWindows, notchEntries, minimumShareSize, notchFrame, stripWidth, cardWidth } from "../src/domain/notch";
+import { effectiveWindows, notchEntries, minimumShareSize, notchFrame, stripWidth, cardWidth, fitWidth } from "../src/domain/notch";
 import { shareSnapshot } from "../src/main/ipc";
 import { quota, primary, window } from "../src/domain/models";
 import { launchConfiguration } from "../src/main/launch";
@@ -105,4 +105,15 @@ it("keeps the builder bundle name and renames only the executable before signing
   const { renameExecutable } = require("../Scripts/electron/after-pack.cjs");
   renameExecutable(bundle, (_binary: string, args: string[]) => { expect(args).toEqual(["-c", "Set :CFBundleExecutable meterusage", join(bundle, "Contents/Info.plist")]); executable = "meterusage"; });
   expect(executable).toBe("meterusage"); expect(readFileSync(join(bin, "meterusage"), "utf8")).toBe("synthetic executable"); expect(readdirSync(bin)).toEqual(["meterusage"]);
+});
+
+it("fits a 1040-pixel Settings window to a narrower or offset work area before it is shown", () => {
+  const settings = { x: 200, y: 80, width: 1040, height: 680 };
+  // A 1024-pixel display narrows the window and moves it fully on screen.
+  expect(fitWidth(settings, { x: 0, y: 25, width: 1024, height: 743 })).toEqual({ x: 0, y: 80, width: 1024, height: 680 });
+  // A wide display keeps the window as created.
+  expect(fitWidth(settings, { x: 0, y: 25, width: 2560, height: 1055 })).toEqual(settings);
+  // A secondary display to the left keeps the window inside that display's work area.
+  expect(fitWidth({ ...settings, x: -300 }, { x: -1280, y: 0, width: 1280, height: 800 })).toEqual({ x: -1040, y: 80, width: 1040, height: 680 });
+  expect(fitWidth({ ...settings, x: -2000 }, { x: -1280, y: 0, width: 1280, height: 800 })).toEqual({ x: -1280, y: 80, width: 1040, height: 680 });
 });

@@ -212,6 +212,8 @@ it.each([
     expect(flyout.bounds).toMatchObject({ width: 420, height: 593 });
     await invoke(windows[2], { action: "settings" });
     const settings = windows[3];
+    // Settings opens 1040 px wide (ADR 0043) and fits the 1200-pixel test work area.
+    expect(settings.options.width).toBe(1040); expect(settings.bounds.width).toBe(1040);
     const usageRequest = { action: "claudeUsagePage" };
     expect(openExternal).not.toHaveBeenCalled();
     const sourceBeforeUsage = activeSources, refreshesBeforeUsage = refresh.mock.calls.length, writesBeforeUsage = setPreference.mock.calls.length;

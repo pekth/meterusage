@@ -22,7 +22,7 @@ import { runJSON } from "./cli";
 import { channel, stateChannel, statusPages, panelScales, PanelSize, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
 import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./ipc";
 import { providers, slotKey } from "../domain/models";
-import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize, flyoutOrigin } from "../domain/notch";
+import { notchFrame, cardOnRight, stripWidth, cardWidth, minimumShareSize, flyoutOrigin, fitWidth } from "../domain/notch";
 import { trayTooltip } from "../domain/overview";
 
 const shareCardWidth = 250;
@@ -218,7 +218,12 @@ async function start(launch: Launch) {
   }
   function showSettings() {
     if (!launch.demo && !launch.candidate && app.isPackaged) prefs.values.launchAtLogin = app.getLoginItemSettings().openAtLogin;
-    windows.get("flyout")?.hide(); const w = create("settings"); publish(); w.show(); w.focus();
+    windows.get("flyout")?.hide(); const w = create("settings"); publish();
+    // Settings opens 1040 px wide (ADR 0043). Fit it to a narrower screen before the first show;
+    // sizeSettings waits for the renderer's first resize.
+    const bounds = w.getBounds(), fitted = fitWidth(bounds, screen.getDisplayMatching(bounds).workArea);
+    if (fitted.x !== bounds.x || fitted.width !== bounds.width) w.setBounds(fitted, false);
+    w.show(); w.focus();
   }
   function restoreAnchor() {
     const raw = String(prefs.values.sideNotchPanelCorner), nums = raw.split(",").map(Number);
