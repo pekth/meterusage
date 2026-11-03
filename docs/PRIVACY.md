@@ -135,7 +135,22 @@ The captured session cookie authenticates GET `https://claude.ai/api/bootstrap`.
 Its nested account UUID must match the local account selector, and the intended
 organization must appear exactly once in that account's memberships. Only then
 can MeterUsage request GET
-`https://claude.ai/api/organizations/{organization-uuid}/usage`.
+`https://claude.ai/api/organizations/{organization-uuid}/usage?cedar_ember=1`.
+The query asks Claude to include saved free resets. If it is rejected,
+MeterUsage retries once without it. From the reset block it keeps only
+eligibility, the next grant and, per grant, its identifier, remaining count,
+pause state, usability and start and expiry times. Grant identifiers stay in
+memory and are not written to the quota archive or JSON reports.
+
+After the user confirms **Use reset**, MeterUsage repeats the bootstrap and
+usage checks and confirms that the grant is still redeemable. It then sends one
+POST to
+`https://claude.ai/api/organizations/{organization-uuid}/reset_rate_limits`
+with only the program, grant identifier and a random request ID. The same
+session cookie is used, with `Content-Type: application/json` and
+`Origin: https://claude.ai`. This is the only Claude request with a body.
+Bootstrap and the local credential are checked again before the result is shown
+([ADR 0044](adr/0044-claude-free-reset-display.md)).
 Bootstrap is checked again and the local account, organization and session are
 reread before publishing allowance, including after a failed usage request.
 Membership alone does not establish allowance entitlement. No GET `/api/account`,

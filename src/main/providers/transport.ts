@@ -123,21 +123,32 @@ export const endpoints = {
   codexStatus: "https://status.openai.com/api/v2/components.json",
   claudeStatus: "https://status.claude.com/api/v2/components.json",
 } as const;
-const claudeUsagePattern = /^https:\/\/claude\.ai\/api\/organizations\/[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}\/usage$/;
-export const isClaudeEndpoint = (url: string): boolean => url === endpoints.claudeBootstrap || claudeUsagePattern.test(url);
-export function claudeUsageURL(organization: string): `https://claude.ai/api/organizations/${string}/usage` {
-  const url = `https://claude.ai/api/organizations/${organization}/usage` as const;
+// `cedar_ember=1` asks Claude to include saved "Reset for free" grants beside the usage windows.
+const claudeUsagePattern = /^https:\/\/claude\.ai\/api\/organizations\/[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}\/usage(?:\?cedar_ember=1)?$/;
+// Redeems one saved Claude free reset. Only a JSON body is ever sent here, and only after the user confirms.
+const claudeResetPattern = /^https:\/\/claude\.ai\/api\/organizations\/[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}\/reset_rate_limits$/;
+export const isClaudeEndpoint = (url: string): boolean => url === endpoints.claudeBootstrap || claudeUsagePattern.test(url) || claudeResetPattern.test(url);
+export function claudeUsageURL(organization: string, resets = true): `https://claude.ai/api/organizations/${string}/usage${"" | "?cedar_ember=1"}` {
+  const url = `https://claude.ai/api/organizations/${organization}/usage${resets ? "?cedar_ember=1" as const : "" as const}` as const;
   if (!claudeUsagePattern.test(url)) throw new Unavailable("notSignedIn", "Claude Desktop");
   return url;
 }
-export type Endpoint = typeof endpoints[keyof typeof endpoints] | ReturnType<typeof claudeUsageURL>;
-export type HTTP = (url: Endpoint, provider: Provider, key?: string, signal?: AbortSignal) => Promise<string>;
+export function claudeResetURL(organization: string): `https://claude.ai/api/organizations/${string}/reset_rate_limits` {
+  const url = `https://claude.ai/api/organizations/${organization}/reset_rate_limits` as const;
+  if (!claudeResetPattern.test(url)) throw new Unavailable("notSignedIn", "Claude Desktop");
+  return url;
+}
+export type Endpoint = typeof endpoints[keyof typeof endpoints] | ReturnType<typeof claudeUsageURL> | ReturnType<typeof claudeResetURL>;
+/** `body` is a JSON POST body, accepted only for the Claude reset endpoint. */
+export type HTTP = (url: Endpoint, provider: Provider, key?: string, signal?: AbortSignal, body?: string) => Promise<string>;
 export class ClaudeBrowserVerification extends Unavailable {
   constructor() { super("notSignedIn", "Claude Desktop"); }
 }
 export function httpTransport(fetcher: typeof fetch = fetch): HTTP {
-  return async (url, provider, key, signal) => {
-    if (!(Object.values(endpoints) as string[]).includes(url) && !claudeUsagePattern.test(url)) throw failed(provider);
+  return async (url, provider, key, signal, body) => {
+    const reset = claudeResetPattern.test(url);
+    if (!(Object.values(endpoints) as string[]).includes(url) && !claudeUsagePattern.test(url) && !reset) throw failed(provider);
+    if (reset !== (body !== undefined) || body !== undefined && body.length > 1024) throw failed(provider);
     const controller = new AbortController();
     const boundedSignal = AbortSignal.any([controller.signal, ...(signal ? [signal] : []), AbortSignal.timeout(30000)]);
     let response: Response | undefined;
@@ -148,7 +159,7 @@ export function httpTransport(fetcher: typeof fetch = fetch): HTTP {
       if (claude && (provider !== "claude" || !key || !/^sessionKey=[A-Za-z0-9._~-]{1,16384}$/.test(key)) || !claude && key?.startsWith("sessionKey=")) throw new Unavailable("notSignedIn", "Claude Desktop");
       const cursor = url === endpoints.cursorIdentity || url === endpoints.cursorGrok;
       if (cursor && (provider !== "grok" || !key || key.length > 17000 || !/^WorkosCursorSessionToken=[A-Za-z0-9._-]+%3A%3A[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(key))) throw new Unavailable("notSignedIn", "Grok Bot via Cursor");
-      response = await fetcher(url, { signal: boundedSignal, redirect: "error", cache: "no-store", ...(url === endpoints.cursorGrok ? { method: "POST", body: "{}" } : {}), headers: { Accept: "application/json", "User-Agent": "meterusage/0.2.41", ...(url === endpoints.cursorGrok ? { "Content-Type": "application/json", Origin: "https://cursor.com" } : {}), ...(key ? cursor || claude ? { Cookie: key } : { Authorization: `Bearer ${key}` } : {}) } });
+      response = await fetcher(url, { signal: boundedSignal, redirect: "error", cache: "no-store", ...(url === endpoints.cursorGrok ? { method: "POST", body: "{}" } : reset ? { method: "POST", body } : {}), headers: { Accept: "application/json", "User-Agent": "meterusage/0.2.41", ...(url === endpoints.cursorGrok ? { "Content-Type": "application/json", Origin: "https://cursor.com" } : reset ? { "Content-Type": "application/json", Origin: "https://claude.ai" } : {}), ...(key ? cursor || claude ? { Cookie: key } : { Authorization: `Bearer ${key}` } : {}) } });
       boundedSignal.throwIfAborted();
       if (claude && response.status === 403 && response.headers.get("cf-mitigated") === "challenge") throw new ClaudeBrowserVerification();
       if (cursor && response.status === 403) throw new Unavailable("notSignedIn", "Grok Bot via Cursor");

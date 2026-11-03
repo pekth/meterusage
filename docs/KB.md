@@ -121,6 +121,16 @@ Release documentation refresh: 2026-11-03 for build 87.
   Settings. Opening that page does not connect MeterUsage or report quota.
   Synthetic checks do not establish native or live-provider acceptance.
 
+- Claude free resets ([ADR 0044](adr/0044-claude-free-reset-display.md)):
+  the Desktop usage request adds `cedar_ember=1` and retries once without it
+  if rejected. Live grants become "Free reset" credits on the Claude card. A
+  confirmed **Use reset** POSTs to `claude.ai/api/organizations/{org}/reset_rate_limits`
+  inside the verified Desktop session, and Claude's outcome is shown. Grant IDs
+  stay in memory and are not archived. Both endpoints are undocumented. A
+  signed local build showed a real personal account's reset on 2026-11-03;
+  redemption has not run against a real account yet, and Team and Enterprise
+  are not covered.
+
 - Electron Claude plan labels recognize known organization, seat and user tiers
   in that order. An unknown higher-priority value permits a known fallback;
   unknown-only metadata stays unavailable instead of exposing internal labels.

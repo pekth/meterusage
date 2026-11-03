@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DesktopConnections, connectCodex, codexLoginURL } from "../src/main/connections";
-import { desktopQuota } from "../src/main/providers/claude-desktop";
+import { desktopQuota, claudeResetOutcome, claudeResetErrors } from "../src/main/providers/claude-desktop";
 import { Unavailable } from "../src/domain/models";
 import { Preferences } from "../src/main/preferences";
 import { compose } from "../src/main/composition";
@@ -579,6 +579,37 @@ it("retains only numeric Claude allowance windows and preserves missing versus m
   const q = desktopQuota('{"five_hour":{"utilization":0,"resets_at":"2026-10-07T13:00:00Z"},"seven_day":null,"metadata":"OMIT_METADATA"}', now);
   expect(q.windows).toHaveLength(1); expect(q.windows[0].usedPercent).toBe(0); expect(JSON.stringify(q)).not.toContain("OMIT");
   for (const raw of ['{}', '{"five_hour":{"utilization":-1}}', '{"five_hour":{"utilization":101}}', '{"five_hour":{"utilization":0,"resets_at":"wrong"}}']) expect(() => desktopQuota(raw, now)).toThrow();
+});
+it("reads Claude free resets per grant and marks only the next usable grant redeemable", () => {
+  const day = 86400000, at = (offset: number) => new Date(now + offset).toISOString();
+  const grant = (id: string, extra: Record<string, unknown> = {}) => ({ id, resets_left: 1, resets_total: 1, paused: false, starts_at: at(-day), ends_at: at(3 * day), usable_now: true, OMIT: "OMIT_UNSELECTED", ...extra });
+  const usage = (cedar: unknown) => JSON.stringify({ five_hour: { utilization: 10 }, cedar_ember: cedar });
+  const q = desktopQuota(usage({ eligible: true, grants: [
+    grant("grant_two", { resets_left: 2, resets_total: 2, ends_at: at(5 * day) }), grant("grant_soon", { ends_at: at(day) }), grant("grant_open", { ends_at: null }), grant("grant_gated", { usable_now: false, ends_at: at(2 * day) }),
+    grant("paused", { paused: true }), grant("used", { resets_left: 0 }), grant("expired", { ends_at: at(-60000) }), grant("future", { starts_at: at(day) }),
+    grant("bad_left", { resets_left: -1 }), grant("bad_total", { resets_left: 2, resets_total: 1 }), grant("bad_pause", { paused: "no" }), grant("bad_end", { ends_at: "wrong" }), grant("bad_usable", { usable_now: "yes" }), grant("bad id!"), "OMIT_SCALAR",
+  ] }), now);
+  expect(q.windows[0].usedPercent).toBe(10);
+  expect(q.resetCreditCount).toBe(6);
+  expect(q.resetCredits.map(c => [c.id, c.title, c.status, c.expiresAt])).toEqual([
+    ["grant_soon", "Free reset", "available", now + day], ["grant_gated", "Free reset", "Not usable yet", now + 2 * day],
+    ["claude-free-reset-13", "Free reset", "Not usable yet", now + 3 * day], ["grant_two", "Free reset ×2", "available", now + 5 * day], ["grant_open", "Free reset", "available", undefined],
+  ]);
+  expect(JSON.stringify(q)).not.toContain("OMIT");
+  // When Claude names the next grant, only that grant can be redeemed.
+  const queued = desktopQuota(usage({ eligible: true, next_grant_id: "grant_b", grants: [grant("grant_a"), grant("grant_b")] }), now);
+  expect(queued.resetCredits.map(c => [c.id, c.status])).toEqual([["grant_a", "Not usable yet"], ["grant_b", "available"]]);
+  // Ineligible, absent, malformed and implausible inventories show no resets and keep the windows.
+  for (const cedar of [{ eligible: false, grants: [grant("a")] }, null, "OMIT", { eligible: true }, { eligible: true, grants: [grant("a", { resets_left: 51, resets_total: 51 })] }, { eligible: true, grants: Array(201).fill(grant("a")) }]) {
+    const empty = desktopQuota(usage(cedar), now);
+    expect(empty.windows[0].usedPercent).toBe(10); expect(empty.resetCreditCount).toBeUndefined(); expect(empty.resetCredits).toEqual([]);
+  }
+  expect(desktopQuota('{"five_hour":{"utilization":10}}', now).resetCreditCount).toBeUndefined();
+});
+it("maps each Claude reset outcome to a settled result or a user message", () => {
+  expect(() => claudeResetOutcome('{"result":"reset","OMIT":"x"}')).not.toThrow();
+  for (const [result, message] of [["not_limited", claudeResetErrors.notLimited], ["already_used", claudeResetErrors.alreadyUsed], ["ineligible", claudeResetErrors.ineligible], ["cooldown", claudeResetErrors.cooldown], ["unavailable", claudeResetErrors.unconfirmed], ["surprise", claudeResetErrors.failed]]) expect(() => claudeResetOutcome(JSON.stringify({ result }))).toThrow(message);
+  for (const raw of ["", "not json", "[]", '{"result":{}}']) expect(() => claudeResetOutcome(raw)).toThrow(claudeResetErrors.failed);
 });
 it("rejects effective plaintext storage before login and cleans up an in-progress cancelled login", async () => {
   const deniedRoot = temp(), denied = fakeCodex(deniedRoot);

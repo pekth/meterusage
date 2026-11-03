@@ -3,7 +3,7 @@ import { readApiBilling } from "./providers/api-billing";
 import { join } from "node:path";
 import { readdir, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { type Loaded, type Quota, type AccountActivity, type Activity, type Usage, type ServiceStatus, type Slot, type Provider, providers, primary, slotKey, lastBurn, totalTokens, utcDay, value, missing, failed, Unavailable, resetCreditAvailable } from "../domain/models";
+import { type Loaded, type Quota, type AccountActivity, type Activity, type Usage, type ServiceStatus, type Slot, type Provider, providers, primary, slotKey, lastBurn, totalTokens, utcDay, value, missing, failed, Unavailable, resetCreditAvailable, providerNames } from "../domain/models";
 import { orderedSlots } from "../domain/provider-order";
 import { AlertEvaluator, type Alert } from "../domain/alerts";
 import { telemetry } from "../domain/telemetry";
@@ -15,6 +15,7 @@ import { type Source, compose, accountHome } from "./composition";
 import { HistoryStore, readArchive, saveArchive } from "./history";
 import { QuotaActivityStore } from "./quota-activity";
 import { limitsReport, canonicalJSON } from "../domain/report";
+import { claudeResetErrors } from "./providers/claude-desktop";
 type Kind = "accountActivity" | "quota" | "activity" | "usage" | "plan" | "status";
 // Grok observations belong to the live source session; dated quota may survive it.
 function archiveQuota(q: Quota): Quota {
@@ -197,12 +198,12 @@ export class Coordinator {
     if (cachedQuota || result.status === "missing" && ["failed", "offline"].includes(result.code)) { const failures = (prior?.failures ?? 0) + 1; this.backoffs.set(backoffKey, { failures, next: this.now() + backoffDelay(failures) }); }
     else this.backoffs.delete(backoffKey);
   }
-  prepareReset(key: string, creditID: string): { token: string; account: string; title: string } {
+  prepareReset(key: string, creditID: string): { token: string; account: string; title: string; provider: Provider } {
     const source = this.sources.find(s => slotKey(s.slot) === key && this.visible(s)), q = this.quotas[key], credit = q?.status === "value" ? q.value.resetCredits.find(c => c.id === creditID) : undefined;
     if (!source?.consumeReset || !credit || !resetCreditAvailable(credit, this.now())) throw new Error("Reset credit unavailable");
     for (const [token, prior] of this.confirmations) if (prior.key === key || prior.expires <= this.now()) this.confirmations.delete(token);
     const token = randomUUID(); this.confirmations.set(token, { key, creditID, expires: this.now() + 60000, source });
-    return { token, account: source.slot.label || "Codex", title: credit.title };
+    return { token, account: source.slot.label || providerNames[source.slot.provider], title: credit.title, provider: source.slot.provider };
   }
   cancelReset(token: string) { this.confirmations.delete(token); }
   async confirmReset(token: string) {
@@ -212,7 +213,7 @@ export class Coordinator {
     if (source !== intent.source || !source?.consumeReset || q?.status !== "value" || !q.value.resetCredits.some(c => c.id === intent.creditID && resetCreditAvailable(c, this.now()))) throw new Error("Reset credit unavailable");
     const controller = new AbortController(); this.resets.set(intent.key, controller);
     try {
-      if (!await source.consumeReset(intent.creditID, controller.signal)) throw new Unavailable("failed", "Codex");
+      if (!await source.consumeReset(intent.creditID, controller.signal)) throw new Unavailable("failed", providerNames[source.slot.provider]);
       if (this.stopped || !this.sources.includes(source) || !this.visible(source)) throw new Error("Reset source replaced");
       const acceptedAt = this.now();
       const latest = this.quotas[intent.key];
@@ -221,7 +222,11 @@ export class Coordinator {
       this.persistArchive();
       this.publish(); await this.refresh(false, intent.key);
     }
-    catch { throw new Error("Couldn't redeem Codex reset"); }
+    catch (error) {
+      if (source.slot.provider !== "claude") throw new Error("Couldn't redeem Codex reset");
+      // Claude explains why a confirmed reset was not applied; keep that reason for the user.
+      throw new Error(error instanceof Error && (Object.values(claudeResetErrors) as string[]).includes(error.message) ? error.message : claudeResetErrors.failed);
+    }
     finally { this.resets.delete(intent.key); }
   }
   async clearCache() {

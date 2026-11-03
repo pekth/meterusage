@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Launch } from "./launch";
 import { Preferences } from "./preferences";
-import { ClaudeBrowserVerification, CommandFailure, boundedChild, cliEnvironment, cliPath, codexRPC, endpoints, claudeUsageURL, httpTransport, runCommand, type Command, type HTTP } from "./providers/transport";
+import { ClaudeBrowserVerification, CommandFailure, boundedChild, cliEnvironment, cliPath, codexRPC, endpoints, claudeUsageURL, claudeResetURL, httpTransport, runCommand, type Command, type HTTP } from "./providers/transport";
 import { object, parseCodex } from "./providers/parsers";
 import { parseCodexAccountUsage } from "./providers/codex-account-usage";
-import { desktopQuota, readDesktopCredential, desktopReadErrors, windowsDesktopReadErrors, validClaudeIdentity, verifyDesktopAccount } from "./providers/claude-desktop";
+import { desktopQuota, readDesktopCredential, desktopReadErrors, windowsDesktopReadErrors, validClaudeIdentity, verifyDesktopAccount, claudeGrantID, claudeResetErrors, claudeResetOutcome } from "./providers/claude-desktop";
 import { chromiumKey, decryptChromiumWindows, dpapiUnprotect, type Decrypt, type Unprotect } from "./providers/windows-dpapi";
 import { localRoot, minimalEnvironment, supportRoot } from "./platform";
 import { connectionErrors } from "./connection-errors";
@@ -17,6 +17,7 @@ import { selectJSON } from "./select-json";
 import { Unavailable, failed, resetCreditAvailable } from "../domain/models";
 import { providerKey, type ConnectionState, type ConnectionProvider } from "../shared/ipc";
 
+type ClaudeRedemption = { grant: string; request: string };
 const configuration = ["-c", 'cli_auth_credentials_store="keyring"', "-c", 'forced_login_method="chatgpt"', "-c", 'chatgpt_base_url="https://chatgpt.com"'];
 export function codexLoginURL(raw: unknown): string {
   if (typeof raw !== "string" || raw.length > 8192) throw new Error("Invalid sign-in address");
@@ -70,6 +71,7 @@ export class DesktopConnections {
   private stopped = false;
   private antigravityController = new AbortController();
   private resetController?: AbortController;
+  private readonly claudeClaims = new Map<string, string>();
   private stopping?: Promise<void>;
   private cleanupController = new AbortController();
   private claudeController = new AbortController();
@@ -132,20 +134,20 @@ export class DesktopConnections {
       return { secret: bytes => decryptChromiumWindows(bytes, key), dispose: () => key.fill(0) };
     } catch { throw new Unavailable("notSignedIn", "Claude Desktop"); }
   }
-  private async claudeQuota(allowUI: boolean, signal: AbortSignal, guard: () => void, expected?: string, reading?: (stage: keyof typeof desktopReadErrors) => void) {
+  private async claudeQuota(allowUI: boolean, signal: AbortSignal, guard: () => void, expected?: string, reading?: (stage: keyof typeof desktopReadErrors) => void, redeem?: ClaudeRedemption) {
     const check = () => { guard(); signal.throwIfAborted(); };
     check();
     const { secret: password, dispose } = await this.claudeSecret(allowUI, signal, check);
-    try { return await this.claudeAttempt(password, signal, check, expected, reading); }
+    try { return await this.claudeAttempt(password, signal, check, expected, reading, redeem); }
     finally { dispose(); }
   }
-  private async claudeAttempt(password: string | Decrypt, signal: AbortSignal, check: () => void, expected?: string, reading?: (stage: keyof typeof desktopReadErrors) => void) {
+  private async claudeAttempt(password: string | Decrypt, signal: AbortSignal, check: () => void, expected?: string, reading?: (stage: keyof typeof desktopReadErrors) => void, redeem?: ClaudeRedemption) {
     const windows = this.windows ? { root: this.windowsAppData("Claude") } : undefined;
     check();
     const credential = await readDesktopCredential(this.launch.home, password, this.now(), reading, this.command, signal, windows);
     check();
     if (expected && credential.identity !== expected) throw new Unavailable("notSignedIn", "Claude Desktop");
-    let raw: string, verified = false;
+    let raw: string, claim: string | undefined, verified = false;
     const verify = async () => {
       check();
       try { verifyDesktopAccount(await this.http(endpoints.claudeBootstrap, "claude", credential.cookie, signal), credential); }
@@ -156,8 +158,21 @@ export class DesktopConnections {
       reading?.("request");
       await verify(); verified = true;
       check();
-      raw = await this.http(claudeUsageURL(credential.organization), "claude", credential.cookie, signal);
+      try { raw = await this.http(claudeUsageURL(credential.organization), "claude", credential.cookie, signal); }
+      catch (error) {
+        // A rejected reset opt-in must not hide the usage windows: retry once without it.
+        if (!(error instanceof Unavailable) || error instanceof ClaudeBrowserVerification || !["failed", "notSignedIn"].includes(error.code)) throw error;
+        check();
+        raw = await this.http(claudeUsageURL(credential.organization, false), "claude", credential.cookie, signal);
+      }
       check();
+      if (redeem) {
+        // Redeem only a grant this verified session reports as usable now.
+        if (!desktopQuota(raw, this.now()).resetCredits.some(c => c.id === redeem.grant && resetCreditAvailable(c, this.now()))) throw new Error("Reset credit unavailable");
+        check();
+        claim = await this.http(claudeResetURL(credential.organization), "claude", credential.cookie, signal, JSON.stringify({ program: "cedar_ember", grant_id: redeem.grant, request_id: redeem.request }));
+        check();
+      }
     } finally {
       reading?.("verification");
       // Revoked consent or cancellation must prevent another private read.
@@ -172,6 +187,7 @@ export class DesktopConnections {
       reading?.("request");
     }
     reading?.("response");
+    if (redeem) claudeResetOutcome(claim!);
     return { identity: credential.identity, quota: desktopQuota(raw, this.now()) };
   }
   private checkCodexProfile(profile: string) {
@@ -283,6 +299,27 @@ export class DesktopConnections {
       const root = object(selectJSON(raw, { result: { outcome: true }, error: { code: true, message: true } }));
       if (root.error) { parseCodex(raw, this.now()); throw failed("codex"); }
       return object(root.result).outcome === "reset";
+    } finally { this.resetController = undefined; }
+  }
+  /**
+   * Redeems one Claude free reset after the user confirms it. An unanswered or unconfirmed claim keeps its request ID,
+   * so a retry addresses the same claim instead of spending another reset.
+   */
+  async consumeClaudeReset(id: string, signal?: AbortSignal) {
+    const profile = String(this.prefs.values.desktopClaudeIdentity);
+    if (this.launch.demo || this.launch.claudeTest || !claudeGrantID.test(id) || this.resetController || !this.enabled("claude") || !validClaudeIdentity(profile)) throw new Error("Reset credit unavailable");
+    const controller = new AbortController(), generation = this.claudeController; this.resetController = controller;
+    const guard = () => { if (!this.enabled("claude") || this.claudeController !== generation || this.prefs.values.desktopClaudeIdentity !== profile) throw new Unavailable("notSignedIn", "Claude Desktop"); };
+    const active = AbortSignal.any([controller.signal, generation.signal, ...(signal ? [signal] : [])]);
+    const request = this.claudeClaims.get(id) ?? randomUUID(); this.claudeClaims.set(id, request);
+    try {
+      await this.claudeQuota(false, active, guard, profile, undefined, { grant: id, request });
+      this.claudeClaims.delete(id);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message !== claudeResetErrors.unconfirmed && message !== claudeResetErrors.failed && (Object.values(claudeResetErrors) as string[]).includes(message)) this.claudeClaims.delete(id);
+      throw error;
     } finally { this.resetController = undefined; }
   }
   async connect(provider: ConnectionProvider, open: (url: string) => Promise<void>, consent: () => Promise<boolean> = async () => provider === "codex" || provider === "antigravity") {

@@ -44,7 +44,7 @@ describe("coordinator refresh journey", () => {
     });
     const http: transport.HTTP = async url => {
       if (url === transport.endpoints.claudeBootstrap) return '{"account":{"uuid":"11111111-1111-1111-1111-111111111111","memberships":[{"organization":{"uuid":"22222222-2222-2222-2222-222222222222"}}]}}';
-      if (!url.endsWith("/usage")) return '{"components":[]}';
+      if (!url.includes("/usage")) return '{"components":[]}';
       if (hold) { started(); await response; throw new Unavailable("offline"); }
       return '{"five_hour":{"utilization":42}}';
     };
@@ -74,7 +74,7 @@ describe("coordinator refresh journey", () => {
     const credentials = vi.spyOn(claudeDesktop, "readDesktopCredential").mockResolvedValue({ identity, account: "11111111-1111-1111-1111-111111111111", organization: "22222222-2222-2222-2222-222222222222", cookie: "sessionKey=synthetic-session" });
     const http: transport.HTTP = async url => {
       if (url === transport.endpoints.claudeBootstrap) return '{"account":{"uuid":"11111111-1111-1111-1111-111111111111","memberships":[{"organization":{"uuid":"22222222-2222-2222-2222-222222222222"}}]}}';
-      if (!url.endsWith("/usage")) return '{"components":[]}';
+      if (!url.includes("/usage")) return '{"components":[]}';
       if (offline) throw new Unavailable("offline");
       return '{"five_hour":{"utilization":42}}';
     };
@@ -386,4 +386,20 @@ it("uses the existing bounded backoff for failed account history reads", async (
   clock += 60000; await c.refresh(true); expect(read).toHaveBeenCalledTimes(2);
   clock += 60000; await c.refresh(true); expect(read).toHaveBeenCalledTimes(2);
   clock += 60000; await c.refresh(true); expect(read).toHaveBeenCalledTimes(3);
+});
+
+it("names Claude in reset confirmation and keeps Claude's reason when a confirmed reset is not applied", async () => {
+  let outcome: () => Promise<boolean> = async () => { throw new Error(claudeDesktop.claudeResetErrors.notLimited); };
+  const q = quota("claude", [window("5-hour", 100)], now); q.resetCreditCount = 1;
+  q.resetCredits = [{ id: "grant_a", title: "Free reset", status: "available", expiresAt: now + 86400000 }];
+  const source: Source = { slot: primary("claude"), accountBound: true, quota: async () => structuredClone(q), consumeReset: () => outcome() };
+  const { c, prefs } = await setup([source]); prefs.values.showProviderClaude = true; await c.refresh();
+  const intent = c.prepareReset("claude", "grant_a");
+  expect(intent).toMatchObject({ provider: "claude", account: "Claude", title: "Free reset" });
+  await expect(c.confirmReset(intent.token)).rejects.toThrow(claudeDesktop.claudeResetErrors.notLimited);
+  outcome = async () => { throw new Error("SYNTHETIC_PRIVATE_FAILURE"); };
+  await expect(c.confirmReset(c.prepareReset("claude", "grant_a").token)).rejects.toThrow(claudeDesktop.claudeResetErrors.failed);
+  outcome = async () => true;
+  await c.confirmReset(c.prepareReset("claude", "grant_a").token);
+  expect(c.snapshot().archived.claude.resetPacingSince).toBe(now);
 });

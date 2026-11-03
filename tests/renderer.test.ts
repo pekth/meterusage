@@ -104,7 +104,7 @@ it("groups settings and names provider controls while keeping accent choices sel
   expect(markup).toContain("Collect usage"); expect(markup).toContain("Show in menu bar and side notch");
   expect(markup).toContain('aria-label="Collect Codex usage"'); expect(markup).toContain('aria-label="Show Codex in menu bar and side notch"');
   expect(markup).not.toMatch(/aria-label="Show Codex in menu bar and side notch"[^>]*disabled/);
-  expect(markup).toContain("Side notch"); expect(markup).toContain("Usage details"); expect(markup).toContain("Codex limit resets in the side notch");
+  expect(markup).toContain("Side notch"); expect(markup).toContain("Usage details"); expect(markup).toContain("Limit resets in the side notch");
   expect(markup).not.toContain('<span>Accent</span><select');
   expect((markup.match(/type="radio" name="accentTheme"/g) ?? []).length).toBe(6);
   expect(markup).toMatch(/type="radio" name="accentTheme"(?=[^>]*value="violet")(?=[^>]*checked)/);
@@ -284,7 +284,7 @@ it("limits the reset visibility setting to live notch details, keeping flyout re
   view.snapshot.quotas.codex = value(q); view.snapshot.notchSlots = [primary("codex")];
   q.canConsumeReset = true;
   expect(renderApp(view)).toContain("Use reset"); expect(renderApp(view, "notch")).not.toContain("Use reset"); expect(renderApp(view, "share")).not.toContain("Use reset");
-  expect(renderApp(view, "settings")).toContain("Codex limit resets in the side notch");
+  expect(renderApp(view, "settings")).toContain("Limit resets in the side notch");
   view.snapshot.appearance.resetButton = true; expect(renderApp(view, "notch")).toContain("Use reset");
 });
 
@@ -299,6 +299,20 @@ it("hides reset actions for allowance-only sources while retaining earned credit
       expect(markup.includes("Use reset")).toBe(capability === true && surface !== "share");
     }
   }
+});
+
+it("offers Use reset for a live Claude free reset and hides stale or gated resets", () => {
+  const view = state(), q = quota("claude", [w], now); q.resetCreditCount = 1; q.canConsumeReset = true;
+  q.resetCredits = [{ id: "grant_a", title: "Free reset", status: "available", expiresAt: now + 86400000 }];
+  view.snapshot.quotas.claude = value(q); view.snapshot.slots = [primary("claude")]; view.snapshot.notchSlots = [primary("claude")]; view.snapshot.demo = false; view.snapshot.appearance.resetButton = true;
+  for (const surface of ["flyout", "notch"]) {
+    const markup = renderApp(view, surface); expect(markup).toContain("1 free reset"); expect(markup).toContain("Use reset"); expect(markup).not.toContain("Open in Claude");
+  }
+  q.resetCredits[0].status = "Not usable yet"; expect(renderApp(view)).toContain("Not usable yet"); expect(renderApp(view)).not.toContain("Use reset");
+  q.resetCredits[0].status = "available"; q.canConsumeReset = false; expect(renderApp(view)).not.toContain("Use reset");
+  // Claude free resets are live-only: a stale reading shows none.
+  q.canConsumeReset = true; view.snapshot.quotas.claude = { status: "missing", code: "offline", reason: "Offline" }; view.snapshot.archived.claude = q;
+  expect(renderApp(view)).not.toContain("Use reset"); expect(renderApp(view)).not.toContain("free reset");
 });
 
 it("uses general weekly-only Claude allowance in tray, tooltip and notch without model-specific fallback", () => {

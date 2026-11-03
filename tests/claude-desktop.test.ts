@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createCipheriv, createHash, pbkdf2Sync } from "node:crypto";
-import { desktopCredential, readDesktopCredential, verifyDesktopAccount, claudeIdentity, desktopCookieSQL, desktopSchemaSQL } from "../src/main/providers/claude-desktop";
+import { desktopCredential, readDesktopCredential, verifyDesktopAccount, claudeIdentity, desktopCookieSQL, desktopSchemaSQL, claudeResetErrors } from "../src/main/providers/claude-desktop";
 import { desktopHTTP } from "../src/main/native-http";
 import type { session } from "electron";
 import { DesktopConnections } from "../src/main/connections";
@@ -13,7 +13,7 @@ import { compose } from "../src/main/composition";
 import { Coordinator } from "../src/main/coordinator";
 import { saveArchive } from "../src/main/history";
 import { primary, quota, window, Unavailable } from "../src/domain/models";
-import { ClaudeBrowserVerification, httpTransport, endpoints, claudeUsageURL, type Command, type HTTP, type Endpoint } from "../src/main/providers/transport";
+import { ClaudeBrowserVerification, httpTransport, endpoints, claudeUsageURL, claudeResetURL, type Command, type HTTP, type Endpoint } from "../src/main/providers/transport";
 import * as transport from "../src/main/providers/transport";
 
 const account = "11111111-1111-1111-1111-111111111111", org = "22222222-2222-2222-2222-222222222222", other = "33333333-3333-3333-3333-333333333333";
@@ -35,7 +35,8 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 async function fixture(isolated = false) {
-  const home = mkdtempSync(join(tmpdir(), "meterusage-claude-synthetic-")); roots.push(home);
+  // The reader rejects symlinked stores, and macOS temp paths start with the /var -> /private/var symlink.
+  const home = realpathSync(mkdtempSync(join(tmpdir(), "meterusage-claude-synthetic-"))); roots.push(home);
   const root = join(home, "Library/Application Support/Claude"); mkdirSync(root, { recursive: true });
   writeFileSync(join(root, "config.json"), config); writeFileSync(join(root, "Cookies"), "SYNTHETIC_NOT_SQLITE");
   // The Claude Desktop reader is macOS-only; Windows marks the connection unsupported.
@@ -214,6 +215,66 @@ it("verifies unchanged local and remote identity after an offline usage failure"
   expect(f.command.mock.calls.filter(([binary]) => binary === "/usr/bin/sandbox-exec").map(([, args]) => args.at(-1))).toEqual([desktopSchemaSQL, desktopCookieSQL, desktopSchemaSQL, desktopCookieSQL]);
   expect(f.http.mock.calls.map(([url]) => url)).toEqual([endpoints.claudeBootstrap, claudeUsageURL(org), endpoints.claudeBootstrap]);
 });
+const resetUsage = (extra: Record<string, unknown> = {}) => JSON.stringify({ five_hour: { utilization: 100 }, cedar_ember: { eligible: true, next_grant_id: "grant_a", grants: [{ id: "grant_a", resets_left: 1, resets_total: 1, paused: false, ends_at: new Date(now + 86400000).toISOString(), usable_now: true, ...extra }] } });
+function resetFixture(f: Awaited<ReturnType<typeof fixture>>, claims: string[], usage = resetUsage()) {
+  f.prefs.values.desktopClaudeIdentity = identity;
+  f.http.mockImplementation(async (url, provider, cookie, _signal, body) => {
+    expect(provider).toBe("claude"); expect(cookie).toBe("sessionKey=synthetic-session");
+    if (url === endpoints.claudeBootstrap) return bootstrap();
+    if (url === claudeUsageURL(org)) { expect(body).toBeUndefined(); return usage; }
+    expect(url).toBe(claudeResetURL(org));
+    const claim = JSON.parse(body!); expect(Object.keys(claim).sort()).toEqual(["grant_id", "program", "request_id"]);
+    expect(claim).toMatchObject({ program: "cedar_ember", grant_id: "grant_a" }); expect(claim.request_id).toMatch(/^[\da-f-]{36}$/);
+    return claims.shift() ?? '{"result":"reset"}';
+  });
+}
+it("redeems a confirmed Claude free reset inside the verified Desktop session", async () => {
+  const f = await fixture(); resetFixture(f, ['{"result":"reset"}']);
+  expect(await f.connections.consumeClaudeReset("grant_a")).toBe(true);
+  // Bootstrap, usage and the claim run between the two identity checks, with one Keychain read.
+  expect(f.http.mock.calls.map(([url]) => url)).toEqual([endpoints.claudeBootstrap, claudeUsageURL(org), claudeResetURL(org), endpoints.claudeBootstrap]);
+  expect(f.command.mock.calls.filter(([binary]) => binary === "/synthetic/helper")).toHaveLength(1);
+  expect(f.command.mock.calls.filter(([binary]) => binary === "/synthetic/helper")[0][1]).toEqual([]);
+});
+it("reports each settled Claude reset outcome and keeps the request ID only for unconfirmed claims", async () => {
+  const f = await fixture(), requests = () => f.http.mock.calls.filter(([url]) => url === claudeResetURL(org)).map(([, , , , body]) => JSON.parse(body!).request_id);
+  resetFixture(f, ['{"result":"unavailable"}', '{"result":"not_limited"}', '{"result":"cooldown"}']);
+  await expect(f.connections.consumeClaudeReset("grant_a")).rejects.toThrow(claudeResetErrors.unconfirmed);
+  await expect(f.connections.consumeClaudeReset("grant_a")).rejects.toThrow(claudeResetErrors.notLimited);
+  await expect(f.connections.consumeClaudeReset("grant_a")).rejects.toThrow(claudeResetErrors.cooldown);
+  const [first, retry, fresh] = requests();
+  expect(retry).toBe(first); expect(fresh).not.toBe(first);
+});
+it("never sends a Claude reset claim for an unavailable, malformed or gated grant", async () => {
+  for (const [id, usage] of [["grant_b", resetUsage()], ["bad id", resetUsage()], ["grant_a", resetUsage({ usable_now: false })], ["grant_a", resetUsage({ paused: true })], ["grant_a", resetUsage({ ends_at: new Date(now - 1000).toISOString() })]] as const) {
+    const f = await fixture(); resetFixture(f, [], usage);
+    await expect(f.connections.consumeClaudeReset(id)).rejects.toThrow("Reset credit unavailable");
+    expect(f.http.mock.calls.some(([url]) => url === claudeResetURL(org))).toBe(false);
+  }
+  const off = await fixture(); off.prefs.values.desktopClaudeIdentity = "";
+  await expect(off.connections.consumeClaudeReset("grant_a")).rejects.toThrow("Reset credit unavailable"); expect(off.http).not.toHaveBeenCalled();
+});
+it("does not report a Claude reset when the account changes during the claim", async () => {
+  const f = await fixture(); resetFixture(f, []);
+  const original = f.http.getMockImplementation()!;
+  f.http.mockImplementation(async (url, ...rest) => { const raw = await original(url, ...rest); if (url === claudeResetURL(org)) f.cookies([row("sessionKey", "different-session"), row("lastActiveOrg", org)]); return raw; });
+  await expect(f.connections.consumeClaudeReset("grant_a")).rejects.toMatchObject({ code: "notSignedIn" });
+});
+it("retries a rejected free-reset opt-in once without it and keeps the usage windows", async () => {
+  for (const code of ["failed", "notSignedIn"] as const) {
+    const f = await fixture(); f.prefs.values.desktopClaudeIdentity = identity;
+    f.http.mockImplementation(async url => { if (url === endpoints.claudeBootstrap) return bootstrap(); if (url === claudeUsageURL(org)) throw new Unavailable(code, "Claude Desktop"); return '{"five_hour":{"utilization":25}}'; });
+    const q = await f.connections.quota("claude");
+    expect(q.windows[0].usedPercent).toBe(25); expect(q.resetCredits).toEqual([]);
+    expect(f.http.mock.calls.map(([url]) => url)).toEqual([endpoints.claudeBootstrap, claudeUsageURL(org), claudeUsageURL(org, false), endpoints.claudeBootstrap]);
+  }
+});
+it("does not retry the free-reset opt-in on a browser challenge", async () => {
+  const f = await fixture(); f.prefs.values.desktopClaudeIdentity = identity;
+  f.http.mockImplementation(async url => { if (url === endpoints.claudeBootstrap) return bootstrap(); throw new ClaudeBrowserVerification(); });
+  await expect(f.connections.quota("claude")).rejects.toBeInstanceOf(ClaudeBrowserVerification);
+  expect(f.http.mock.calls.map(([url]) => url)).toEqual([endpoints.claudeBootstrap, claudeUsageURL(org), endpoints.claudeBootstrap]);
+});
 it("reports a usage failure accurately when final identity verification succeeds", async () => {
   const f = await fixture();
   f.http.mockImplementation(async url => { if (url === endpoints.claudeBootstrap) return bootstrap(); throw new Error("synthetic usage service failure"); });
@@ -277,10 +338,17 @@ it("sends Cookie only to fixed bootstrap and UUID-bound usage with bounded trans
     expect(init!.headers).not.toHaveProperty("Authorization"); expect(init!.headers).not.toHaveProperty("anthropic-beta");
     expect(init!.signal).toBeInstanceOf(AbortSignal);
   }
-  for (const url of ["https://claude.ai/api/account", "https://claude.ai/api/organizations/not-uuid/usage", "https://evil.invalid/api/bootstrap", endpoints.openRouterKey]) await expect(http(url as Endpoint, "claude", credential().cookie)).rejects.toThrow();
+  // The reset endpoint is a JSON POST and nothing else; other endpoints never carry a body.
+  await http(claudeResetURL(org), "claude", credential().cookie, undefined, '{"program":"cedar_ember"}');
+  expect(fetcher.mock.calls.at(-1)![1]).toMatchObject({ method: "POST", body: '{"program":"cedar_ember"}', headers: { "Content-Type": "application/json", Origin: "https://claude.ai", Cookie: credential().cookie } });
+  await expect(http(claudeResetURL(org), "claude", credential().cookie)).rejects.toThrow();
+  await expect(http(claudeResetURL(org), "claude", credential().cookie, undefined, "x".repeat(1025))).rejects.toThrow();
+  await expect(http(claudeUsageURL(org), "claude", credential().cookie, undefined, "{}")).rejects.toThrow();
+  await expect(http(`https://claude.ai/api/organizations/${org}/reset_rate_limits?x=1` as Endpoint, "claude", credential().cookie, undefined, "{}")).rejects.toThrow();
+  for (const url of ["https://claude.ai/api/account", "https://claude.ai/api/organizations/not-uuid/usage", `https://claude.ai/api/organizations/${org}/usage?cedar_ember=2`, `https://claude.ai/api/organizations/${org}/usage?cedar_ember=1&x=1`, "https://evil.invalid/api/bootstrap", endpoints.openRouterKey]) await expect(http(url as Endpoint, "claude", credential().cookie)).rejects.toThrow();
   await expect(http(endpoints.claudeBootstrap, "grok", credential().cookie)).rejects.toThrow();
   await expect(http(endpoints.claudeBootstrap, "claude", "Bearer synthetic")).rejects.toThrow();
-  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher).toHaveBeenCalledTimes(3);
 });
 it.each(["overflow", "redirect", "unauthorized", "cancel"])("rejects transport %s with fixed failures", async failure => {
   const controller = new AbortController();

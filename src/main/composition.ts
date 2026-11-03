@@ -88,6 +88,8 @@ export function compose(launch: Launch, prefs: Preferences, options: { command?:
   if (prefs.values.desktopClaudeIdentity !== "") {
     claude.accountBound = true;
     claude.quota = signal => validClaudeIdentity(prefs.values.desktopClaudeIdentity) && options.connections ? options.connections.quota("claude", signal) : Promise.reject(new Unavailable("notSignedIn", "claude"));
+    const connections = options.connections;
+    if (connections?.enabled("claude")) claude.consumeReset = (id, signal) => connections.consumeClaudeReset(id, signal);
     // Local CLI activity cannot be attributed to a separately connected account.
     delete claude.activity; delete claude.plan;
   }
