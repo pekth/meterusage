@@ -49,5 +49,7 @@ use their own copies of the three provider fixtures they read
   `legacy/swift/` remains a separate change under those conditions.
 - The legacy Swift test of the installer script was removed. The shell test
   covers the same cases and now runs in CI.
-- Historical ADRs, plans and changelog entries keep the old root paths as
-  written.
+- Active docs and file pointers in ADRs (for example 0002, 0003 and 0004) use
+  the `legacy/swift/` paths. Past decisions, plans and changelog entries keep
+  their original wording; ADRs 0009, 0024 and 0034 carry an amendment note
+  pointing here instead of being rewritten.
