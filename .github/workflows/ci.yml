@@ -31,15 +31,8 @@ jobs:
         run: pnpm test
       - name: Build
         run: pnpm build
-  test:
-    runs-on: macos-15
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Build
-        run: swift build
-      - name: Test
-        run: swift test
+      - name: Installer script tests
+        run: bash tests/scripts/make-app-tests.sh
   # Windows has no physical test machine; this runner is the test machine (ADR 0038).
   windows:
     runs-on: windows-latest

@@ -45,10 +45,10 @@ Demo reset confirmation consumes only synthetic fixture credits.
 
 ## Swift legacy demo
 
-From the retained Swift source on macOS:
+From the legacy Swift source in `legacy/swift/` on macOS, run from the repository root:
 
 ```sh
-METERUSAGE_DEMO=1 swift run meterusage
+METERUSAGE_DEMO=1 swift run --package-path legacy/swift meterusage
 ```
 
 The environment value must be exactly `1`. Swift demo mode swaps provider

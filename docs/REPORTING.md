@@ -1,7 +1,7 @@
 # Diagnostic reports
 
 This page describes Electron. The retained Swift source has a separate
-[reporting and native-consent CLI contract](swift/REPORTING.md), which is not
+[reporting and native-consent CLI contract](../legacy/swift/REPORTING.md), which is not
 included in the published Swift 0.2.41 app.
 
 In **Settings → Diagnostics**, choose **Send report** to submit a sanitized

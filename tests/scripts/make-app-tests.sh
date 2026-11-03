@@ -5,9 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "${WORK}"' EXIT
-mkdir -p "${WORK}/bin" "${WORK}/repo/Scripts" "${WORK}/repo/Resources" "${WORK}/foreign-stage"
+mkdir -p "${WORK}/bin" "${WORK}/repo/Scripts" "${WORK}/foreign-stage"
 cp "${ROOT}/Scripts/make-app.sh" "${WORK}/repo/Scripts/"
-touch "${WORK}/repo/Resources/AppIcon.icns"
 
 cat > "${WORK}/bin/mock" <<'MOCK'
 #!/usr/bin/env bash
@@ -55,7 +54,7 @@ case "$name" in
             exit 1
         fi ;;
     swift)
-        echo 'Swift must not run during default preparation' >&2
+        echo 'Swift must never run during app preparation' >&2
         exit 99 ;;
 esac
 MOCK
@@ -79,13 +78,13 @@ run_case() {
         echo "FAIL: $scenario exited $result, expected $expected" >&2
         exit 1
     fi
-    if [ "$scenario" = source-build ]; then
-        grep -qx swift "${WORK}/calls"
-    else
-        if grep -qx swift "${WORK}/calls"; then
-            echo "FAIL: $scenario invoked Swift" >&2
-            exit 1
-        fi
+    if grep -qx swift "${WORK}/calls"; then
+        echo "FAIL: $scenario invoked Swift" >&2
+        exit 1
+    fi
+    if [ "$scenario" = legacy-source-option ]; then
+        grep -Fq 'legacy/swift/Scripts/make-app.sh' "${WORK}/output" || { echo 'FAIL: legacy source option does not point at legacy/swift' >&2; exit 1; }
+        test ! -s "${WORK}/calls" || { echo 'FAIL: legacy source option ran tools' >&2; exit 1; }
     fi
     if [ "$expected" -eq 0 ]; then
         grep -Fqx 'https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.17/MeterUsage-0.3.0-beta.17-mac-arm64.zip' "${WORK}/url-args" || { echo 'FAIL: default Electron beta asset URL' >&2; exit 1; }
@@ -115,4 +114,5 @@ run_case staged-signature-failed 1
 run_case unsupported-os 1
 run_case unsupported-arch 1
 run_case invalid-option 2 --invalid
-run_case source-build 99 --build-from-source
+run_case legacy-source-option 2 --build-from-source
+run_case extra-arguments 2 --build-from-source extra

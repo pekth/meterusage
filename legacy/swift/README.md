@@ -19,16 +19,17 @@
 ## Historical Swift recovery reference
 
 Use the [Electron beta](../../README.md) for the offered app. This guide retains
-historical behavior and recovery instructions. See [versions](../VERSIONS.md).
+historical behavior and recovery instructions. See [versions](../../docs/VERSIONS.md).
 
 This guide describes the published Swift 0.2.41 app and retained Swift sources.
 The Swift app is frozen for new features. New feature work targets Electron;
 Swift receives only critical fixes and transition compatibility work. Preserve
 historical source/releases for recovery, with no separate offered edition.
-Source removal still requires the
-[retirement conditions](../adr/0024-electron-primary-swift-retirement.md#retirement-conditions).
+The sources moved to `legacy/swift/` and left CI
+([ADR 0045](../../docs/adr/0045-swift-moved-to-legacy.md)); deletion still requires the
+[retirement conditions](../../docs/adr/0024-electron-primary-swift-retirement.md#retirement-conditions).
 Stable acceptance and isolated Swift upgrade/rollback remain open.
-Current product images are in the [Electron beta gallery](../SCREENSHOTS.md).
+Current product images are in the [Electron beta gallery](../../docs/SCREENSHOTS.md).
 Old Swift product captures have been removed from the active documentation.
 
 MeterUsage shows supported AI coding allowances, measured token usage, pacing
@@ -52,7 +53,7 @@ See [installation](#download-and-installation) for first-launch steps.
 
 ## Showcase
 
-See the [current Electron beta screenshots](../SCREENSHOTS.md). This legacy
+See the [current Electron beta screenshots](../../docs/SCREENSHOTS.md). This legacy
 Swift guide retains its behavior and installation reference without old images.
 
 ---
@@ -138,18 +139,23 @@ If a release has no app ZIP, use an earlier release that includes one or report
 the missing asset.
 
 <a id="from-a-git-checkout-no-swift"></a>
-### Explicit legacy source build
+### Legacy source build
 
-`./Scripts/make-app.sh` now prepares the Electron beta. For an explicit legacy
-Swift source build for recovery or reference, run:
+The Swift package, sources, tests and build scripts live in this
+`legacy/swift/` directory ([ADR 0045](../../docs/adr/0045-swift-moved-to-legacy.md)).
+`./Scripts/make-app.sh` at the repository root only prepares the Electron
+beta. For a legacy Swift source build for recovery or reference, run from the
+repository root:
 
 ```sh
-./Scripts/make-app.sh --build-from-source
+swift build --package-path legacy/swift
+swift test --package-path legacy/swift
+./legacy/swift/Scripts/make-app.sh
 ```
 
-That mode requires Swift and Xcode Command Line Tools and signs ad hoc. It does
-not reproduce the published Electron beta. The default download path never
-falls back to compilation. Use the historical ZIP above when recovering the
+The script writes `legacy/swift/dist/MeterUsage.app`. It requires Swift and
+Xcode Command Line Tools and signs ad hoc. It does not reproduce the published
+Electron beta, and CI does not build this package. Use the historical ZIP above when recovering the
 published Swift release. Quit the active app and preserve app/data backups
 before replacement; native upgrade/rollback acceptance remains open.
 
@@ -163,8 +169,8 @@ before replacement; native upgrade/rollback acceptance remains open.
 ### Contributing
 
 Swift and Xcode Command Line Tools are needed only to build from source.
-See [CONTRIBUTING.md](../../CONTRIBUTING.md) for developer setup, build commands,
-and tests. Source builds require the explicit `--build-from-source` option.
+See [CONTRIBUTING.md](../../CONTRIBUTING.md) for developer setup and the
+[legacy source build](#from-a-git-checkout-no-swift) for commands.
 
 ### Agent Budget CLI
 To consume quota telemetry programmatically in scripts or agents:

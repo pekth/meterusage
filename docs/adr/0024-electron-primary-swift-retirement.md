@@ -3,6 +3,12 @@
 - Status: Accepted development direction; distribution amended by ADR 0034; source retirement and stable cutover pending
 - Date: 2026-10-14
 - Amends: [ADR 0010](0010-macos-typescript-electron.md), for ongoing development and eventual Swift retirement only
+- Amended by: [ADR 0045](0045-swift-moved-to-legacy.md) (source moved to `legacy/swift/`, Swift CI removed)
+
+> **Amended by [ADR 0045](0045-swift-moved-to-legacy.md) (2026-11-03):** the
+> Swift package now lives in `legacy/swift/` and CI no longer builds it.
+> `Scripts/make-app.sh --build-from-source` was replaced by
+> `legacy/swift/Scripts/make-app.sh`.
 
 ## Distribution amendment (2026-10-22)
 

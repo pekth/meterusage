@@ -3,7 +3,7 @@
 Historical synthetic UI concepts for MeterUsage feature waves. Numbers are
 invented. These concepts use the Swift hardware-black notch palette; they are
 not current Electron screenshots or proof that every concept shipped. Read the
-[Swift guide](../swift/README.md) for older demo captures and the
+[Swift guide](../../legacy/swift/README.md) for older demo captures and the
 [Electron guide](../electron/README.md) for current candidate source behavior.
 
 ## Hard constraint: provider marks stay
@@ -17,7 +17,7 @@ Do **not** redesign or replace provider icons/logos.
 | OpenCode Go logo | `Resources/opencode-logo.png` |
 | Antigravity logo | `Resources/antigravity-logo.png` |
 | App icon | `Resources/AppIcon.png`, `Resources/AppIcon.icns` |
-| Render path | `ProviderMark` in `Sources/MeterUsage/Views/MenuBarLabel.swift` |
+| Render path | `ProviderMark` in `legacy/swift/Sources/MeterUsage/Views/MenuBarLabel.swift` |
 
 The retained Swift menu bar, popover, Settings and side notch use `ProviderMark`.
 The Electron renderer reuses the provider assets through its own mark renderer. New UI (including any cross-platform shell) must reuse these assets and the same mark semantics (service-status tint on the mark, headroom tint on the %).

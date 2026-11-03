@@ -1,8 +1,7 @@
 # Contributing to meterusage
 
-New MeterUsage features target Electron in `src/` and `tests/`. Retain Swift
-source for critical maintenance, compatibility and rollback. Both implementations
-remain in this checkout; use the matching validation commands below.
+New MeterUsage features target Electron in `src/` and `tests/`. The frozen
+Swift app lives under `legacy/swift/` for recovery and reference only.
 
 > ### Quick start
 > 1. Fork & clone the repo.
@@ -18,12 +17,11 @@ pull request.
 ## Active app and legacy recovery
 
 New features target the [Electron implementation](docs/electron/README.md).
-The [legacy Swift app](docs/swift/README.md) is frozen for new features and kept
-for critical maintenance, transition compatibility and rollback. Both source
-trees remain until the [retirement conditions](docs/adr/0024-electron-primary-swift-retirement.md#retirement-conditions)
-pass. Validate both affected paths when a shared contract changes.
-`Scripts/make-app.sh` prepares the pinned Electron beta by default. Its explicit
-`--build-from-source` mode builds legacy Swift for recovery/reference only.
+The [legacy Swift app](legacy/swift/README.md) lives under `legacy/swift/`. It
+is frozen for recovery and reference, has no CI job and gets no new features
+([ADR 0045](docs/adr/0045-swift-moved-to-legacy.md)).
+`Scripts/make-app.sh` only prepares the pinned Electron beta; it never
+compiles. `legacy/swift/Scripts/make-app.sh` builds the legacy Swift bundle.
 Isolated demo/test profiles are required for candidate QA;
 shared normal profiles do not support safe side-by-side use.
 
@@ -34,9 +32,9 @@ Follow [the Electron commands](#typescript-electron-candidate). Electron's macOS
 packaging still needs Swift for its Keychain helper and asset exporter.
 
 The offered app is the Electron beta for Apple silicon and macOS 13+; stable
-acceptance remains open. Retained Swift source uses Swift tools version 5.9
-and has no third-party package dependencies. Explicit legacy Swift builds need
-Xcode Command Line Tools:
+acceptance remains open. The legacy Swift package uses Swift tools version 5.9
+and has no third-party package dependencies. macOS packaging and legacy Swift
+builds need Xcode Command Line Tools:
 
 ```sh
 xcode-select --install
@@ -99,34 +97,27 @@ Add OpenRouter balance display
 Do not mix unrelated fixes in the same commit.
 
 <a id="build-and-test"></a>
-## Legacy Swift build and test
+## Build and test
 
-GitHub Actions runs `swift build` and `swift test` on macOS 15, Electron
-typecheck, synthetic tests and production bundling on Linux, and an unsigned
-Windows package with a packaged smoke run on Windows, for pushes to
-`main` and pull requests. Repository owners must enable Actions under
-Settings > Actions > General for these checks to run.
+GitHub Actions runs Electron typecheck, synthetic tests, production bundling
+and the installer script tests on Linux, and an unsigned Windows package with
+a packaged smoke run on Windows, for pushes to `main` and pull requests.
+Repository owners must enable Actions under Settings > Actions > General for
+these checks to run. The commands are listed under
+[Electron development](#typescript-electron-candidate).
 
-For Swift source changes, run these checks before a pull request:
+Test `Scripts/make-app.sh` download and failure paths with
+`bash tests/scripts/make-app-tests.sh`; those tests use synthetic tools and
+bundles without network or compiler access.
 
-```sh
-swift build
-swift test
-./Scripts/make-app.sh --build-from-source
-```
-
-`make-app.sh` downloads a prebuilt release by default, without Swift. Always
-pass `--build-from-source` when validating your source changes. Test the script's
-download and failure paths with `bash Tests/Scripts/make-app-tests.sh`; those
-tests use synthetic tools and bundles without network or compiler access.
-
-Use demo mode to inspect the real UI without provider credentials:
+Only a change inside `legacy/swift/` needs the legacy checks, on macOS 13 or
+later:
 
 ```sh
-METERUSAGE_DEMO=1 swift run meterusage
+swift build --package-path legacy/swift
+swift test --package-path legacy/swift
+./legacy/swift/Scripts/make-app.sh
 ```
-
-Demo data is synthetic. Use it for screenshots and manual checks.
 
 For a UI-affecting change, exercise the affected path and record what was
 inspected. Automated tests, release builds, and code-sign verification do not
@@ -222,8 +213,8 @@ settings/account isolation, offline failures, notification/login behavior,
 sharing and updater paths. Capture two different-height provider cards on
 macOS and confirm the top edge and strip stay fixed. Use only synthetic reset
 credits. Keep the published app and its data untouched during candidate QA.
-Retained Swift sources are the behavior oracle and rollback path. Run affected
-Swift checks when those inputs change; reuse matching receipts otherwise.
+The frozen sources under `legacy/swift/` remain a behavior reference. Run the
+legacy Swift checks only when a change touches that directory.
 
 See [ADR 0010](docs/adr/0010-macos-typescript-electron.md) and
 [the migration plan](docs/plans/macos-electron-migration-plan.md).
@@ -233,21 +224,11 @@ See [ADR 0010](docs/adr/0010-macos-typescript-electron.md) and
 New providers and data sources belong in Electron. Use the `src/` and `tests/`
 map in [Electron development](#typescript-electron-candidate).
 
-### Legacy Swift maintenance
+### Legacy Swift
 
-Use these paths only for critical fixes, transition compatibility and rollback:
-
-- `Sources/MeterUsage/Services/` contains provider readers, pricing, and
-  service-status sources.
-- `Sources/MeterUsage/Core/` contains coordination and saved preferences.
-- `Sources/MeterUsage/Views/` contains the SwiftUI menu-bar interface.
-- `Tests/MeterUsageTests/` contains unit tests and synthetic fixtures.
-
-When maintaining a legacy provider or data source, use the existing `QuotaSource`,
-`UsageSource`, `LocalActivitySource`, or `StatusSource` contract in
-`Sources/MeterUsage/Services/DataSource.swift`. Keep provider failures isolated
-so one unavailable provider does not hide the others. Add or update the model,
-coordinator, settings, and tests only when the maintenance change needs them.
+`legacy/swift/` holds the frozen Swift package (`Package.swift`, `Sources/`,
+`Tests/`, its `Info.plist` and build scripts). Change it only for recovery;
+see the [legacy guide](legacy/swift/README.md).
 
 ### Shared contribution rules
 
@@ -279,8 +260,7 @@ positive.
 
 ## Generated assets
 
-Run `./Scripts/make-icon.sh` only when the icon design changes. Build the legacy
-Swift app bundle with `./Scripts/make-app.sh --build-from-source`. For Electron
+Run `./Scripts/make-icon.sh` only when the icon design changes. For Electron
 packaging, follow [Electron development](#typescript-electron-candidate).
 Generated output under `dist/` and `release/` is ignored and should not be
 force-added.
@@ -291,7 +271,7 @@ A pull request should include:
 
 - the user-visible change and why it is needed;
 - the files or provider paths affected;
-- the exact checks you ran, including the affected Swift or TypeScript checks;
+- the exact checks you ran, including the TypeScript checks (and legacy Swift checks if `legacy/swift/` changed);
 - any privacy, network, or credential-handling impact; and
 - demo-mode screenshots when a UI change needs visual review, plus captured
   side notch frames when the change touches panel layout or motion.

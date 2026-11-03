@@ -9,9 +9,9 @@ public repository.
   [`README.md`](README.md). From a Git checkout or source archive, run
   `./Scripts/make-app.sh` to download and verify it in `dist/MeterUsage.app`,
   then install that bundle within the user's requested scope.
-- Installation does not require Swift or Xcode Command Line Tools. Reserve
-  `swift build`, `swift test`, and `--build-from-source` for an explicit source
-  build or contribution task. Do not install developer tools for app installation.
+- Installation does not require Node, Swift or Xcode Command Line Tools. Do
+  not install developer tools for app installation. `Scripts/make-app.sh`
+  never compiles the app.
 - If the prebuilt download, checksum, signature, or platform check fails,
   report that error. Do not fall back to compiling the app.
 - Verify the installed bundle and running app separately. Preparing a bundle
@@ -20,10 +20,13 @@ public repository.
 ## Project rules
 
 - Keep changes focused and explain user-visible behavior in the pull request.
-- Run `swift build` and `swift test` before submitting code changes. This
-  package uses macOS frameworks and requires macOS 13 or later. When developing
-  on Linux, run these checks on macOS over SSH. Report the actual validation
-  host; Swift itself also supports other platforms.
+- Run `pnpm typecheck`, `pnpm test` and `pnpm build` before submitting code
+  changes. Report the actual validation host.
+- The Swift app is frozen under [`legacy/swift/`](legacy/swift/README.md) for
+  recovery and reference. Do not add features there. Only a change inside
+  `legacy/swift/` needs `swift build --package-path legacy/swift` and
+  `swift test --package-path legacy/swift`, run on macOS 13 or later (over SSH
+  when developing on Linux). CI does not build it.
 - During release work, verify each requested state separately: tested source,
   built and signed bundle, installed and running app, Git tag, published GitHub
   Release, uploaded asset, and manual runtime checks. Do not infer one state

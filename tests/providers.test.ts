@@ -15,7 +15,7 @@ vi.mock("node:fs", async original => { const fs = await original<typeof import("
 vi.mock("node:fs/promises", async original => { const fs = await original<typeof import("node:fs/promises")>(); return { ...fs, open: vi.fn(fs.open), readdir: vi.fn(fs.readdir) }; });
 const temp = () => { const root = mkdtempSync(join(tmpdir(), "meterusage-fixture-")); roots.push(root); return root; };
 afterEach(() => { vi.mocked(statSync).mockReset(); vi.mocked(createReadStream).mockReset(); vi.mocked(open).mockReset(); vi.mocked(readdir).mockReset(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
-const fixture = (name: string) => readFileSync(join("Tests/MeterUsageTests/Fixtures", name), "utf8");
+const fixture = (name: string) => readFileSync(join("tests/fixtures/providers", name), "utf8");
 const now = Date.parse("2026-10-06T12:00:00Z");
 describe("selective privacy boundary", () => {
   it("materializes tier scalars only, including escaped keys and nested unknown values", () => {

@@ -40,7 +40,7 @@ PC. See [Windows beta notes](docs/BETA.md#windows-beta-17) and
 [ADR 0038](docs/adr/0038-windows-ci-test-machine.md).
 
 Stable acceptance remains open. Historical Swift releases and source are
-[recovery references](docs/swift/README.md), with no separate offered edition.
+[recovery references](legacy/swift/README.md), with no separate offered edition.
 Both implementations share app identity and saved data. Do not run them together
 against a normal profile. See [versions and recovery](docs/VERSIONS.md).
 
@@ -125,15 +125,16 @@ This downloads the pinned Electron beta ZIP, verifies its checksum and
 signature, and prepares `dist/MeterUsage.app` with its published signature
 unchanged. Drag that app to Applications to install it. Failed download,
 copy or verification leaves existing generated output intact and never falls
-back to compilation. Explicit `--build-from-source` remains a
-[legacy Swift recovery build](docs/swift/README.md#from-a-git-checkout-no-swift).
+back to compilation. The frozen Swift app and its
+[recovery build](legacy/swift/README.md#from-a-git-checkout-no-swift) live under
+`legacy/swift/`.
 
 ## Setup and data coverage
 
-All nine provider adapters remain in the retained Swift and candidate source:
+All nine provider adapters exist in the Electron source and the legacy Swift source:
 Codex, Claude Code, Antigravity, OpenRouter, Grok, OpenCode Go, Cursor, Copilot
 CLI and Gemini CLI. Their inputs and available measurements differ. The
-[Swift provider matrix](docs/swift/README.md#provider-matrix) describes existing
+[Swift provider matrix](legacy/swift/README.md#provider-matrix) describes existing
 CLI/local collection. The [Electron source choices](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.17/docs/electron/README.md#source-choices)
 also describe optional Codex browser sign-in and Claude Desktop allowance.
 
@@ -157,7 +158,7 @@ acceptance or verify Swift upgrade/rollback. See [ADR 0034](docs/adr/0034-electr
 
 - [Beta download, verification and limits](docs/BETA.md)
 - [Current beta screenshots](docs/SCREENSHOTS.md)
-- [Historical Swift recovery reference](docs/swift/README.md)
+- [Historical Swift recovery reference](legacy/swift/README.md)
 - [Electron guide and known gaps](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.17/docs/electron/README.md)
 - [Versions and staged Swift retirement](docs/VERSIONS.md)
 - [Contributing](CONTRIBUTING.md)
@@ -178,7 +179,7 @@ See [downloads](#download).
 See the [Electron candidate guide](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.17/docs/electron/README.md).
 
 <a id="second-accounts"></a>
-See [Swift additional local accounts](docs/swift/README.md#second-accounts) and
+See [Swift additional local accounts](legacy/swift/README.md#second-accounts) and
 [Electron advanced local accounts](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.17/docs/electron/README.md#advanced-local-accounts).
 
 <a id="requirements"></a>
@@ -188,7 +189,7 @@ See [beta requirements](docs/BETA.md#install).
 See [contributor setup](CONTRIBUTING.md).
 
 <a id="agent-budget-cli"></a>
-See the [Swift Agent Budget CLI](docs/swift/README.md#agent-budget-cli) and
+See the [Swift Agent Budget CLI](legacy/swift/README.md#agent-budget-cli) and
 [Electron commands](https://github.com/tilorahdotco/meterusage/blob/v0.3.0-beta.17/docs/electron/README.md#build-and-test).
 
 <a id="showcase"></a><a id="-showcase"></a>
@@ -198,10 +199,10 @@ See the [Swift Agent Budget CLI](docs/swift/README.md#agent-budget-cli) and
 See [current beta screenshots](docs/SCREENSHOTS.md).
 
 <a id="provider-matrix"></a><a id="-provider-matrix"></a>
-See the [Swift provider matrix](docs/swift/README.md#provider-matrix).
+See the [Swift provider matrix](legacy/swift/README.md#provider-matrix).
 
 <a id="key-features"></a><a id="-key-features"></a>
-See [Swift behavior](docs/swift/README.md#key-features).
+See [Swift behavior](legacy/swift/README.md#key-features).
 
 <a id="privacy--architecture"></a><a id="-privacy--architecture"></a>
 See [privacy and data handling](docs/PRIVACY.md).

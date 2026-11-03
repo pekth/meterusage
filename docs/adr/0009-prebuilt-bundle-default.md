@@ -1,7 +1,12 @@
 # ADR 0009: Prepare the prebuilt app by default
 
-- Status: Accepted; default artifact amended by ADR 0034
+- Status: Accepted; default artifact amended by ADR 0034; source build moved by ADR 0045
 - Date: 2026-10-06
+
+> **Amended by [ADR 0045](0045-swift-moved-to-legacy.md) (2026-11-03):** the
+> Swift package now lives in `legacy/swift/` and CI no longer builds it.
+> `Scripts/make-app.sh --build-from-source` was replaced by
+> `legacy/swift/Scripts/make-app.sh`.
 
 [ADR 0034](0034-electron-beta-default.md) selects the Electron beta as the
 prebuilt default. Explicit `--build-from-source` retains legacy Swift recovery
@@ -37,8 +42,9 @@ Test default preparation with Swift unavailable, explicit source selection,
 invalid arguments, unsupported platforms, and failed download, checksum,
 bundle, signature, or destination-copy checks. Download, copy, and verification
 failures must preserve existing generated output and remove staging files.
-Run these synthetic cases through `swift test` as
-well as the standalone shell test.
+Run these synthetic cases with `bash tests/scripts/make-app-tests.sh`. (Superseded
+by [ADR 0045](0045-swift-moved-to-legacy.md): the Swift `swift test` wrapper
+for this shell test was removed, and CI runs the shell test directly.)
 Also download the real pinned asset on macOS, verify its prepared bundle, and
 execute its synthetic demo JSON path without compiler access.
 
