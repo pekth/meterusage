@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createCipheriv, createHash, pbkdf2Sync } from "node:crypto";
@@ -35,7 +35,8 @@ beforeEach(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 async function fixture(isolated = false) {
-  const home = mkdtempSync(join(tmpdir(), "meterusage-claude-synthetic-")); roots.push(home);
+  // The reader rejects symlinked stores, and macOS temp paths start with the /var -> /private/var symlink.
+  const home = realpathSync(mkdtempSync(join(tmpdir(), "meterusage-claude-synthetic-"))); roots.push(home);
   const root = join(home, "Library/Application Support/Claude"); mkdirSync(root, { recursive: true });
   writeFileSync(join(root, "config.json"), config); writeFileSync(join(root, "Cookies"), "SYNTHETIC_NOT_SQLITE");
   // The Claude Desktop reader is macOS-only; Windows marks the connection unsupported.

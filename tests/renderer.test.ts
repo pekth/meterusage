@@ -311,7 +311,8 @@ it("links Claude free resets to Claude's usage page without an in-app redemption
   q.resetCredits[0].expiresAt = now; expect(renderApp(view)).not.toContain("Open in Claude");
   q.resetCredits[0].expiresAt = now + 1000; view.snapshot.demo = true; expect(renderApp(view)).not.toContain("Open in Claude");
   view.snapshot.demo = false; view.snapshot.quotas.claude = { status: "missing", code: "offline", reason: "Offline" }; view.snapshot.archived.claude = q;
-  expect(renderApp(view)).not.toContain("Open in Claude");
+  // Claude free resets are live-only: a stale reading shows none.
+  expect(renderApp(view)).not.toContain("Open in Claude"); expect(renderApp(view)).not.toContain("free reset");
 });
 
 it("uses general weekly-only Claude allowance in tray, tooltip and notch without model-specific fallback", () => {
