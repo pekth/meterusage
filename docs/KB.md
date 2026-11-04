@@ -133,6 +133,15 @@ Release documentation refresh: 2026-11-03 for build 88.
   redemption has not run against a real account yet, and Team and Enterprise
   are not covered.
 
+- Claude per-model weekly plan limits: the Desktop usage response lists them
+  in `limits[]` as `kind: "weekly_scoped"` entries with `percent`, `resets_at`
+  and `scope.model.display_name`. MeterUsage shows each one as
+  `Weekly · <model>` after **Weekly · All models**, for example Fable's weekly
+  limit on Max. A malformed entry is skipped, and a model that a legacy
+  `seven_day_*` key already shows is not repeated. Claude Desktop's own bundle
+  reads the same shape. Not yet confirmed in a signed build against a real
+  account.
+
 - Electron Claude plan labels recognize known organization, seat and user tiers
   in that order. An unknown higher-priority value permits a known fallback;
   unknown-only metadata stays unavailable instead of exposing internal labels.
