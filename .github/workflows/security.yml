@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   security:
-    uses: tilorahdotco/.github/.github/workflows/security.yml@d67a1628a8108cbf78e2b36bcb54cbad5f3ab418
+    uses: tilorahdotco/.github/.github/workflows/security.yml@f7a775a9e139a7a9d2bd52657b8f69009e9574df
     with:
       # Public repository: GitHub-hosted runners only.
       runner: ubuntu-latest
