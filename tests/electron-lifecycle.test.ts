@@ -772,6 +772,7 @@ it.each([
     } else {
       tray.emit("right-click");
       expect(tray.menu?.items.find(item => item.label === "Quit MeterUsage")?.role).toBe("quit");
+      expect(tray.menu?.items.map(item => item.label)).toEqual(["Open MeterUsage", "Settings…", "Check for Updates…", undefined, "Quit MeterUsage"]);
       application.quit();
     }
     application.quit();

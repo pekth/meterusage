@@ -134,7 +134,9 @@ export class Updater {
   installState: InstallState = "idle";
   /** A verified Windows installer that starts only after MeterUsage has finished quitting. */
   private pendingInstaller?: string;
-  private check?: Promise<void>;
+  private check?: Promise<Release | undefined>;
+  /** Set while a user-requested check waits on a scheduled one, so that check posts no notification. */
+  private quiet = false;
   private generation = 0;
   private checkController?: AbortController;
   private installController?: AbortController;
@@ -143,18 +145,39 @@ export class Updater {
   private get platform() { return this.prefs.launch.platform ?? process.platform; }
   checkIfDue(now = Date.now()) {
     if (this.prefs.launch.demo || this.prefs.launch.candidate || this.prefs.values.updateCheckEnabled !== true || this.check || now - Number(this.prefs.values.updateLastCheckDate ?? 0) < 3600000) return;
+    return this.start(now, true).then(() => {}, () => { /* A release lookup failure stays separate from usage. */ });
+  }
+  /**
+   * A check the user asked for. It skips the hourly limit and does not post a notification. It resolves with a newer
+   * release, even one the user dismissed, or undefined when this version is current, and rejects when the lookup fails
+   * or is cancelled. A scheduled check already in progress is reused, without its notification.
+   */
+  async checkNow(now = Date.now()) {
+    if (this.prefs.launch.demo || this.prefs.launch.candidate || this.prefs.values.updateCheckEnabled !== true) throw new Error("Update checks unavailable");
+    if (!this.check) return this.start(now, false);
+    this.quiet = true;
+    try { return await this.check; } finally { this.quiet = false; }
+  }
+  private start(now: number, announce: boolean) {
     const generation = this.generation, controller = new AbortController(); this.checkController = controller;
-    const pending: Promise<void> = (async () => {
+    const cancelled = () => generation !== this.generation || this.prefs.values.updateCheckEnabled !== true;
+    const pending: Promise<Release | undefined> = (async () => {
       await this.prefs.set("updateLastCheckDate", now);
-      if (generation !== this.generation || this.prefs.values.updateCheckEnabled !== true) return;
+      if (cancelled()) throw new Error("Update check cancelled");
       const beta = isPrerelease(this.currentVersion);
       const raw = (await this.download(beta ? releasesEndpoint : releaseEndpoint, 1048576, controller.signal)).toString("utf8");
       const release = beta ? parseReleases(raw, this.platform) : parseRelease(raw, this.platform);
-      if (generation !== this.generation || this.prefs.values.updateCheckEnabled !== true || !newer(release.version, this.currentVersion)) return;
+      if (cancelled()) throw new Error("Update check cancelled");
+      if (!newer(release.version, this.currentVersion)) return undefined;
       this.available = release;
-      if (this.prefs.values.updateAnnouncedVersion !== release.version) { await this.prefs.set("updateAnnouncedVersion", release.version); if (generation !== this.generation || this.prefs.values.updateCheckEnabled !== true) return; this.announce(release); }
-      this.changed();
-    })().catch(() => { /* A release lookup failure stays separate from usage. */ }).finally(() => { if (this.check === pending) { this.check = undefined; this.checkController = undefined; } });
+      // Announce first, with no await since the last cancellation check, then record the version. A quiet manual check
+      // records nothing, so a later scheduled check still announces.
+      if (announce && !this.quiet && this.prefs.values.updateAnnouncedVersion !== release.version) {
+        this.announce(release);
+        await this.prefs.set("updateAnnouncedVersion", release.version); if (cancelled()) throw new Error("Update check cancelled");
+      }
+      this.changed(); return release;
+    })().finally(() => { if (this.check === pending) { this.check = undefined; this.checkController = undefined; } });
     this.check = pending; return pending;
   }
   /** The release to install without a prompt, only when opted in, idle, packaged and not previously failed or dismissed. */

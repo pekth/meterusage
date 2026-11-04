@@ -27,7 +27,11 @@ its GitHub SHA-256 digest, bundle identity and signature, then replaces the app
 and relaunches. Beta 11 adds **Install updates automatically** in
 Settings > General (off by default). When on, a newer version that hasn't been
 dismissed installs through the same checks without the dialog, only while you
-aren't using MeterUsage. Beta 4 and earlier cannot see betas; install the current beta
+aren't using MeterUsage. To check right away, right-click the menu bar or
+notification-area icon and choose **Check for Updates…**. It ignores the
+hourly limit, also offers a version you dismissed and always reports the
+result. If **Check for updates** is off, it asks before turning it on.
+Beta 4 and earlier cannot see betas; install the current beta
 manually once. Beta 5 through 10 can discover newer releases, but their installer
 may reject macOS temporary-directory aliases. Install beta.11 or later manually
 once to receive the updater fix. Every Electron build before beta 12 accepts updates

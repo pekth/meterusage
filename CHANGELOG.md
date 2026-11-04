@@ -12,6 +12,11 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Check for Updates…** in the menu bar (macOS) and notification-area
+  (Windows) icon's right-click menu checks for a new version right away, even
+  within the hourly limit or for a dismissed version, and always says whether
+  one is available. A newer version opens the usual **Install update**
+  confirmation. If update checks are off, it asks before turning them on.
 - The Claude card shows per-model weekly plan limits, such as **Weekly ·
   Fable** on Max, when Claude Desktop is connected. They come from the same
   usage response that Claude's Settings → Usage page reads.
