@@ -1,0 +1,29 @@
+name: Security
+
+# Secret scan on every change. The dependency audit runs weekly (or by hand) so
+# a new advisory does not block unrelated pull requests. See
+# https://github.com/tilorahdotco/.github/blob/main/docs/USAGE.md
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security:
+    uses: tilorahdotco/.github/.github/workflows/security.yml@d67a1628a8108cbf78e2b36bcb54cbad5f3ab418
+    with:
+      # Public repository: GitHub-hosted runners only.
+      runner: ubuntu-latest
+      node-version: '24'
+      audit: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'pnpm' || 'none' }}
+      pnpm-version: 12.9.1
