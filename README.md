@@ -20,6 +20,7 @@ release when **Check for updates** is on. Beta 8 adds an update notice
 in Usage and Settings > General for installation with confirmation or dismissal. Beta 11 adds
 **Install updates automatically**, off by default, in Settings > General.
 Enable it to install verified updates while MeterUsage is not in use.
+To check right away, right-click the menu bar icon and choose **Check for Updates…**.
 Downloads and installation show busy states; failures offer retry. Beta 9
 finds the Codex sign-in helper in `ChatGPT.app` installs and reports refused
 Claude Desktop Keychain reads. Beta 10 adds the dollars left to the OpenAI API card, from OpenAI's unofficial credit

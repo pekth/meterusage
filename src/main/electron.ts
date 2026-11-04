@@ -17,7 +17,7 @@ import { IssueReports } from "./issue-reports";
 import { ApiBillingFetch, apiBillingFetchErrors } from "./api-billing-fetch";
 import { prepaidFrom } from "../domain/api-billing";
 import { NotchFold } from "./notch-fold";
-import { Updater, removeStagedInstallers, windowsInstallation } from "./updater";
+import { Updater, removeStagedInstallers, windowsInstallation, type Release } from "./updater";
 import { runJSON } from "./cli";
 import { channel, stateChannel, statusPages, companionGuide, panelScales, PanelSize, type ViewState, type Surface, type Request, type Reply } from "../shared/ipc";
 import { parseRequest, trustedSender, projectSettings, shareSnapshot } from "./ipc";
@@ -93,7 +93,8 @@ async function start(launch: Launch) {
   const sharedDirectories = new Set<string>();
   const tray = new Tray(trayIcon());
   tray.setToolTip("MeterUsage");
-  tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showUsage() }, { label: "Settings…", click: () => showSettings() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
+  let checkingForUpdates = false;
+  tray.on("right-click", () => tray.popUpContextMenu(Menu.buildFromTemplate([{ label: "Open MeterUsage", click: () => showUsage() }, { label: "Settings…", click: () => showSettings() }, { label: checkingForUpdates ? "Checking for Updates…" : "Check for Updates…", enabled: !checkingForUpdates, click: () => void checkForUpdates() }, { type: "separator" }, { label: "Quit MeterUsage", role: "quit" }])));
   // On Windows, clicking the tray icon first blurs (and hides) an open flyout; that click must not reopen it.
   let flyoutBlurredAt = 0;
   tray.on("click", () => { const w = windows.get("flyout"); if (w?.isVisible()) w.hide(); else if (!windowsShell || Date.now() - flyoutBlurredAt > 300) showUsage(); });
@@ -110,6 +111,38 @@ async function start(launch: Launch) {
     return !visible("flyout") && !visible("settings") && !visible("share") && !notch.expanded && !notch.dragging && !sharing && !confirmingReset && !confirmingUpdate
       && !connections.state.some(c => c.status === "connecting") && !apiBillingFetch.running;
   };
+  /** Asks before installing a release; on acceptance it installs through the verified path and quits. */
+  async function confirmAndInstall(source: BrowserWindow | null, release: Release) {
+    confirmingUpdate = true;
+    const options: Electron.MessageBoxOptions = { type: "question", title: "Install MeterUsage update?", message: `Install MeterUsage ${release.version}?`, detail: windowsShell ? "MeterUsage will quit, run the verified installer and relaunch." : "The app will quit, verify the downloaded bundle, replace this app and relaunch.", buttons: ["Cancel", "Install update"], defaultId: 0, cancelId: 0 };
+    const accepted = await (source ? dialog.showMessageBox(source, options) : dialog.showMessageBox(options)).finally(() => { confirmingUpdate = false; });
+    if (accepted.response === 1) { await updater.install(appLocation(), release); app.quit(); }
+  }
+  /** The tray menu's Check for Updates…: an immediate check that always reports its outcome. */
+  async function checkForUpdates() {
+    if (checkingForUpdates) return;
+    checkingForUpdates = true; confirmingUpdate = true;
+    const notice = (message: string, detail: string, type: "info" | "warning" = "info") => dialog.showMessageBox({ type, title: "MeterUsage updates", message, detail, buttons: ["OK"] });
+    try {
+      // A menu bar app has no focused window, so bring its dialogs to the front.
+      if (process.platform === "darwin") app.focus({ steal: true });
+      if (launch.demo || launch.candidate || !app.isPackaged) return void await notice("Updates aren't available in this copy", "Demo, test profile and development copies of MeterUsage don't update.");
+      if (updater.installState === "downloading" || updater.installState === "installing") return void await notice("An update is already installing", "MeterUsage will relaunch when it finishes.");
+      if (prefs.values.updateCheckEnabled !== true) {
+        const turnOn = await dialog.showMessageBox({ type: "question", title: "Check for updates?", message: "Update checks are off", detail: "Turn on Check for updates and look for a new version of MeterUsage now?", buttons: ["Cancel", "Turn on and check"], defaultId: 1, cancelId: 0 });
+        if (turnOn.response !== 1) return;
+        await prefs.set("updateCheckEnabled", true); publish();
+      }
+      let release: Release | undefined;
+      try { release = await updater.checkNow(); }
+      catch { return void await notice("Couldn't check for updates", "Check your internet connection and try again.", "warning"); }
+      if (!release) return void await notice("MeterUsage is up to date", `You have version ${app.getVersion()}, the newest available.`);
+      if (windowsShell && !windowsInstallation(appLocation())) return void await notice(`MeterUsage ${release.version} is available`, portableUpdate);
+      confirmingUpdate = false;
+      await confirmAndInstall(null, release);
+    } catch { await notice("Couldn't install the update", "Your current version is unchanged. Try again later.", "warning"); }
+    finally { checkingForUpdates = false; confirmingUpdate = false; }
+  }
   async function maybeAutoInstall() {
     // Zip and portable Windows copies cannot update in place; only the manual offer applies to them.
     const release = updater.autoInstallRelease(notInUse(), app.isPackaged && !launch.demo && !launch.candidate && (!windowsShell || windowsInstallation(appLocation())));
@@ -426,10 +459,7 @@ async function start(launch: Launch) {
       case "updateInstall": {
         if (launch.demo || launch.candidate || !app.isPackaged || !updater.visible) throw new Error("Update installation unavailable");
         if (windowsShell && !windowsInstallation(appLocation())) throw new Error(portableUpdate);
-        const confirmedRelease = structuredClone(updater.visible);
-        confirmingUpdate = true;
-        const accepted = await dialog.showMessageBox(source, { type: "question", title: "Install MeterUsage update?", message: `Install MeterUsage ${confirmedRelease.version}?`, detail: windowsShell ? "MeterUsage will quit, run the verified installer and relaunch." : "The app will quit, verify the downloaded bundle, replace this app and relaunch.", buttons: ["Cancel", "Install update"], defaultId: 0, cancelId: 0 }).finally(() => { confirmingUpdate = false; });
-        if (accepted.response === 1) { await updater.install(appLocation(), confirmedRelease); app.quit(); }
+        await confirmAndInstall(source, structuredClone(updater.visible));
         break;
       }
     }

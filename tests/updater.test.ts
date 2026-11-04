@@ -43,6 +43,27 @@ describe("verified explicit updates", () => {
     await updater.dismiss(); expect(updater.visible).toBeUndefined(); await updater.checkIfDue(now + 3600000); expect(calls).toBe(2); expect(announcements).toBe(1);
     await prefs.set("updateCheckEnabled", false); updater.reset(); await updater.checkIfDue(now + 7200000); expect(calls).toBe(2); expect(updater.available).toBeUndefined();
   });
+  it("checks now on request without the hourly limit or a notification, and reports failures", async () => {
+    const root = temp(), prefs = await Preferences.load({ demo: false, candidate: false, home: root, data: root, env: {} }, async (_binary, args) => { if (args[0] !== "write") throw new Error("absent fixture defaults"); return ""; }, "fixture.meterusage");
+    let calls = 0, announcements = 0, response: () => Buffer = () => Buffer.from(payload());
+    const updater = new Updater(prefs, "0.2.41", () => {}, async () => { calls++; return response(); }, () => announcements++);
+    const now = Date.parse("2026-10-06T12:00:00Z");
+    await updater.checkIfDue(now); expect(calls).toBe(1); expect(announcements).toBe(1);
+    await updater.dismiss(); expect(updater.visible).toBeUndefined();
+    // A dismissed release is still offered when the user asks, within the hour and without another notification.
+    expect((await updater.checkNow(now + 1000))?.version).toBe("0.2.42"); expect(calls).toBe(2); expect(announcements).toBe(1);
+    const current = new Updater(prefs, "0.2.42", () => {}, async () => { calls++; return Buffer.from(payload()); }, () => announcements++);
+    await expect(current.checkNow(now + 2000)).resolves.toBeUndefined(); expect(current.available).toBeUndefined();
+    response = () => { throw new Error("offline"); };
+    await expect(updater.checkNow(now + 3000)).rejects.toThrow("offline");
+    await prefs.set("updateCheckEnabled", false); const before = calls;
+    await expect(updater.checkNow(now + 4000)).rejects.toThrow("unavailable"); expect(calls).toBe(before);
+  });
+  it("never checks on request from a demo candidate", async () => {
+    const launch = launchConfiguration(["--demo", "--candidate-profile", temp()], {}), prefs = await Preferences.load(launch);
+    let calls = 0; const updater = new Updater(prefs, "0.2.41", () => {}, async () => { calls++; return Buffer.from(payload()); });
+    await expect(updater.checkNow()).rejects.toThrow("unavailable"); expect(calls).toBe(0);
+  });
   it("cannot restore an old check or announcement after update checks are disabled", async () => {
     const root = temp(), prefs = await Preferences.load({ demo: false, candidate: false, home: root, data: root, env: {} }, async (_binary, args) => { if (args[0] !== "write") throw new Error("absent fixture"); return ""; }, "fixture.meterusage");
     let respond!: (data: Buffer) => void, signal: AbortSignal | undefined, announcements = 0;
