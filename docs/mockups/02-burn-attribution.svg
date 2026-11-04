@@ -34,7 +34,7 @@
 
   <!-- burn item 2 -->
   <rect x="314" y="280" width="352" height="68" rx="9" fill="#121214"/>
-  <text x="328" y="302" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="600">tilorah-hq</text>
+  <text x="328" y="302" fill="#fff" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="600">my-project</text>
   <text x="646" y="302" fill="#f5e300" font-family="-apple-system, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" text-anchor="end">27%</text>
   <rect x="328" y="312" width="324" height="3" rx="2" fill="#3a3a3a"/>
   <rect x="328" y="312" width="87" height="3" rx="2" fill="#f5e300"/>

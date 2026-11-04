@@ -223,7 +223,7 @@ final class NewPipelineTests: XCTestCase {
                 weekTokens: TokenTotals(input: 249_000_000, output: 0),
                 projectBreakdown: [
                     ProjectTokens(project: "meterusage", tokens: TokenTotals(input: 200_000_000, output: 0)),
-                    ProjectTokens(project: "tivox", tokens: TokenTotals(input: 49_000_000, output: 0))
+                    ProjectTokens(project: "sample-app", tokens: TokenTotals(input: 49_000_000, output: 0))
                 ],
                 capturedAt: now
             ))
@@ -244,7 +244,7 @@ final class NewPipelineTests: XCTestCase {
             fallbackToRecent: false, now: now
         ))
         XCTAssertEqual(breakdown?.longChatCount, 0)
-        XCTAssertEqual(breakdown?.contributors.map(\.projectName).sorted(), ["meterusage", "tivox"])
+        XCTAssertEqual(breakdown?.contributors.map(\.projectName).sorted(), ["meterusage", "sample-app"])
     }
 
     /// Sessions without a token ledger carry no burn evidence. A scope whose
