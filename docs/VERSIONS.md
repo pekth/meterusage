@@ -1,6 +1,6 @@
 # MeterUsage versions
 
-Electron **0.3.0-beta.18, build 88** is the sole offered distribution and default
+Electron **0.3.0-beta.19, build 89** is the sole offered distribution and default
 installer download. It remains a beta, with stable acceptance open. New features
 target Electron. Historical Swift 0.2.41 releases and the frozen Swift source
 under `legacy/swift/` remain recovery/reference material
