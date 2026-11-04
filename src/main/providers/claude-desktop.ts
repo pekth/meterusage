@@ -209,15 +209,19 @@ export function desktopFreeResets(block: unknown, now: number): { count: number;
 }
 const resetSelection = { eligible: true, next_grant_id: true, grants: { "*": { id: true, resets_left: true, resets_total: true, paused: true, starts_at: true, ends_at: true, usable_now: true } } } as const;
 const scopedLimitSelection = { "*": { kind: true, percent: true, resets_at: true, scope: { model: { display_name: true } } } } as const;
+// Selecting `resets_at: true` drops an object or array value. This pass keeps such a value as an empty container, so
+// the entry can be rejected without reading its contents. Both passes keep the same container entries, so they align.
+const scopedResetShapeSelection = { limits: { "*": { resets_at: {} } } } as const;
 /**
  * Per-model weekly plan limits, such as Fable's on Max, from the usage response's `limits` array. Claude lists them
  * there as `weekly_scoped` entries named by model. A malformed entry is skipped and never affects the other windows,
  * and a model that a legacy `seven_day_*` key already shows is not repeated.
  */
-function desktopModelWeeklyWindows(limits: unknown, shown: string[]) {
-  if (!Array.isArray(limits)) return [];
+function desktopModelWeeklyWindows(limits: unknown, resetShapes: unknown, shown: string[]) {
+  if (!Array.isArray(limits) || !Array.isArray(resetShapes) || resetShapes.length !== limits.length) return [];
   const seen = new Set(shown);
-  return limits.flatMap(entry => {
+  return limits.flatMap((entry, index) => {
+    if (typeof object(resetShapes[index]).resets_at === "object") return [];
     const limit = object(entry), percent = limit.percent, reset = date(limit.resets_at), name = displayText(object(object(limit.scope).model).display_name);
     if (limit.kind !== "weekly_scoped" || !name || typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 100 || limit.resets_at != null && reset === undefined) return [];
     const label = `Weekly · ${name}`;
@@ -237,7 +241,7 @@ export function desktopQuota(raw: string, now: number) {
     return [window(label, percent, reset, key === "five_hour" ? 300 : 10080)];
   });
   if (!windows.length) throw new Unavailable("noData");
-  windows.splice(windows.findIndex(w => w.label === "Weekly · All models") + 1 || windows.length, 0, ...desktopModelWeeklyWindows(selected.limits, windows.map(w => w.label.toLowerCase())));
+  windows.splice(windows.findIndex(w => w.label === "Weekly · All models") + 1 || windows.length, 0, ...desktopModelWeeklyWindows(selected.limits, object(selectJSON(raw, scopedResetShapeSelection)).limits, windows.map(w => w.label.toLowerCase())));
   const q = quota("claude", windows, now), resets = desktopFreeResets(selected.cedar_ember, now);
   if (resets.count) { q.resetCreditCount = resets.count; q.resetCredits = resets.credits; }
   return q;

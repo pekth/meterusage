@@ -584,7 +584,7 @@ it("reads Claude per-model weekly plan limits such as Fable from the usage limit
   const scoped = (name: unknown, percent: unknown, extra: Record<string, unknown> = {}) => ({ kind: "weekly_scoped", group: "weekly", percent, resets_at: "2026-11-06T04:00:00Z", scope: { model: { id: null, display_name: name } }, OMIT: "OMIT_UNSELECTED", ...extra });
   const q = desktopQuota(JSON.stringify({
     five_hour: { utilization: 69, resets_at: "2026-11-03T16:30:00Z" }, seven_day: { utilization: 74, resets_at: "2026-11-04T16:00:00Z" }, seven_day_opus: { utilization: 5 }, seven_day_cowork: { utilization: 1 },
-    limits: [{ kind: "weekly_all", percent: 74 }, scoped("Fable", 32), scoped("Opus", 50), scoped("Fable", 90), scoped(null, 10), scoped("Bad", null), scoped("Over", 101), scoped("Late", 5, { resets_at: "wrong" }), { kind: "session", percent: 69, scope: { model: { display_name: "Session" } } }, "OMIT_SCALAR"],
+    limits: [{ kind: "weekly_all", percent: 74 }, scoped("Fable", 77, { resets_at: { at: "OMIT_NESTED" } }), scoped("Fable", 32), scoped("Opus", 50), scoped("Shape", 6, { resets_at: [] }), scoped("Fable", 90), scoped(null, 10), scoped("Bad", null), scoped("Over", 101), scoped("Late", 5, { resets_at: "wrong" }), { kind: "session", percent: 69, scope: { model: { display_name: "Session" } } }, "OMIT_SCALAR"],
   }), now);
   expect(q.windows.map(w => [w.label, w.usedPercent])).toEqual([["5-hour", 69], ["Weekly · All models", 74], ["Weekly · Fable", 32], ["Weekly · opus", 5], ["Weekly · cowork", 1]]);
   expect(q.windows[2]).toMatchObject({ resetsAt: Date.parse("2026-11-06T04:00:00Z"), windowDurationMins: 10080 });
