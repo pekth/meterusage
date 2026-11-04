@@ -59,6 +59,21 @@ describe("verified explicit updates", () => {
     await prefs.set("updateCheckEnabled", false); const before = calls;
     await expect(updater.checkNow(now + 4000)).rejects.toThrow("unavailable"); expect(calls).toBe(before);
   });
+  it("reuses a scheduled check in progress without its notification, and rejects it once reset", async () => {
+    const root = temp(), prefs = await Preferences.load({ demo: false, candidate: false, home: root, data: root, env: {} }, async (_binary, args) => { if (args[0] !== "write") throw new Error("absent fixture defaults"); return ""; }, "fixture.meterusage");
+    let calls = 0, announcements = 0, respond!: (data: Buffer) => void;
+    const updater = new Updater(prefs, "0.2.41", () => {}, async () => { calls++; return new Promise<Buffer>(resolve => { respond = resolve; }); }, () => announcements++);
+    const now = Date.parse("2026-10-06T12:00:00Z");
+    const scheduled = updater.checkIfDue(now); await new Promise<void>(resolve => setImmediate(resolve));
+    const manual = updater.checkNow(now + 1000);
+    respond(Buffer.from(payload())); await scheduled;
+    expect((await manual)?.version).toBe("0.2.42"); expect(calls).toBe(1); expect(announcements).toBe(0);
+    // A reset while the manual check waits cancels it rather than starting a fresh lookup.
+    const second = updater.checkIfDue(now + 3600000); await new Promise<void>(resolve => setImmediate(resolve));
+    const waiting = updater.checkNow(now + 3601000);
+    updater.reset(); respond(Buffer.from(payload())); await second;
+    await expect(waiting).rejects.toThrow(); expect(calls).toBe(2);
+  });
   it("never checks on request from a demo candidate", async () => {
     const launch = launchConfiguration(["--demo", "--candidate-profile", temp()], {}), prefs = await Preferences.load(launch);
     let calls = 0; const updater = new Updater(prefs, "0.2.41", () => {}, async () => { calls++; return Buffer.from(payload()); });

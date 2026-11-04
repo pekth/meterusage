@@ -135,6 +135,8 @@ export class Updater {
   /** A verified Windows installer that starts only after MeterUsage has finished quitting. */
   private pendingInstaller?: string;
   private check?: Promise<Release | undefined>;
+  /** Set while a user-requested check waits on a scheduled one, so that check posts no notification. */
+  private quiet = false;
   private generation = 0;
   private checkController?: AbortController;
   private installController?: AbortController;
@@ -147,12 +149,14 @@ export class Updater {
   }
   /**
    * A check the user asked for. It skips the hourly limit and does not post a notification. It resolves with a newer
-   * release, even one the user dismissed, or undefined when this version is current, and rejects when the lookup fails.
+   * release, even one the user dismissed, or undefined when this version is current, and rejects when the lookup fails
+   * or is cancelled. A scheduled check already in progress is reused, without its notification.
    */
   async checkNow(now = Date.now()) {
     if (this.prefs.launch.demo || this.prefs.launch.candidate || this.prefs.values.updateCheckEnabled !== true) throw new Error("Update checks unavailable");
-    await this.check?.catch(() => {});
-    return this.start(now, false);
+    if (!this.check) return this.start(now, false);
+    this.quiet = true;
+    try { return await this.check; } finally { this.quiet = false; }
   }
   private start(now: number, announce: boolean) {
     const generation = this.generation, controller = new AbortController(); this.checkController = controller;
@@ -166,7 +170,7 @@ export class Updater {
       if (cancelled()) throw new Error("Update check cancelled");
       if (!newer(release.version, this.currentVersion)) return undefined;
       this.available = release;
-      if (this.prefs.values.updateAnnouncedVersion !== release.version) { await this.prefs.set("updateAnnouncedVersion", release.version); if (cancelled()) throw new Error("Update check cancelled"); if (announce) this.announce(release); }
+      if (this.prefs.values.updateAnnouncedVersion !== release.version) { await this.prefs.set("updateAnnouncedVersion", release.version); if (cancelled()) throw new Error("Update check cancelled"); if (announce && !this.quiet) this.announce(release); }
       this.changed(); return release;
     })().finally(() => { if (this.check === pending) { this.check = undefined; this.checkController = undefined; } });
     this.check = pending; return pending;

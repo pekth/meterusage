@@ -122,7 +122,8 @@ async function start(launch: Launch) {
   async function checkForUpdates() {
     if (checkingForUpdates) return;
     checkingForUpdates = true; confirmingUpdate = true;
-    const notice = (message: string, detail: string, type: "info" | "warning" = "info") => dialog.showMessageBox({ type, title: "MeterUsage updates", message, detail, buttons: ["OK"] });
+    // Once quit starts, the flow shows nothing more and never confirms or installs.
+    const notice = async (message: string, detail: string, type: "info" | "warning" = "info") => { if (!quitting) await dialog.showMessageBox({ type, title: "MeterUsage updates", message, detail, buttons: ["OK"] }); };
     try {
       // A menu bar app has no focused window, so bring its dialogs to the front.
       if (process.platform === "darwin") app.focus({ steal: true });
@@ -130,7 +131,7 @@ async function start(launch: Launch) {
       if (updater.installState === "downloading" || updater.installState === "installing") return void await notice("An update is already installing", "MeterUsage will relaunch when it finishes.");
       if (prefs.values.updateCheckEnabled !== true) {
         const turnOn = await dialog.showMessageBox({ type: "question", title: "Check for updates?", message: "Update checks are off", detail: "Turn on Check for updates and look for a new version of MeterUsage now?", buttons: ["Cancel", "Turn on and check"], defaultId: 1, cancelId: 0 });
-        if (turnOn.response !== 1) return;
+        if (turnOn.response !== 1 || quitting) return;
         try { await prefs.set("updateCheckEnabled", true); }
         catch { return void await notice("Couldn't turn on update checks", "Your settings are unchanged. Try again, or turn on Check for updates in Settings.", "warning"); }
         publish();
@@ -138,6 +139,7 @@ async function start(launch: Launch) {
       let release: Release | undefined;
       try { release = await updater.checkNow(); }
       catch { return void await notice("Couldn't check for updates", "Check your internet connection and try again.", "warning"); }
+      if (quitting) return;
       if (!release) return void await notice("MeterUsage is up to date", `You have version ${app.getVersion()}, the newest available.`);
       if (windowsShell && !windowsInstallation(appLocation())) return void await notice(`MeterUsage ${release.version} is available`, portableUpdate);
       confirmingUpdate = false;
