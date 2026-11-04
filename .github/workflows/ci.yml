@@ -16,9 +16,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Changes
+    uses: tilorahdotco/.github/.github/workflows/changes.yml@f7a775a9e139a7a9d2bd52657b8f69009e9574df
+    with:
+      runner: ubuntu-latest
+
   # Public repository: pull request code runs on GitHub-hosted runners only.
   ci:
-    uses: tilorahdotco/.github/.github/workflows/node-ci.yml@d67a1628a8108cbf78e2b36bcb54cbad5f3ab418
+    name: CI
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    uses: tilorahdotco/.github/.github/workflows/node-ci.yml@f7a775a9e139a7a9d2bd52657b8f69009e9574df
     with:
       runner: ubuntu-latest
       timeout-minutes: 10
@@ -32,6 +41,8 @@ jobs:
         bash tests/scripts/make-app-tests.sh
   # Windows has no physical test machine; this runner is the test machine (ADR 0038).
   windows:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
     env:
@@ -80,3 +91,17 @@ jobs:
             release/*.exe
             release/*.zip
           retention-days: 7
+
+  gate:
+    name: CI gate
+    needs: [changes, ci, windows]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "needed job results: $RESULTS"
+          case " $RESULTS " in *" failure "*|*" cancelled "*) exit 1 ;; esac
