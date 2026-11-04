@@ -1,5 +1,8 @@
 name: CI
 
+# The ci job calls the shared workflow; see
+# https://github.com/tilorahdotco/.github/blob/main/docs/USAGE.md
+
 on:
   push:
     branches: [main]
@@ -13,26 +16,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  typescript:
-    runs-on: instabox-medium
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: '24'
-      - name: Install pnpm
-        run: npm install --global pnpm@12.9.1 --ignore-scripts
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Test
-        run: pnpm test
-      - name: Build
-        run: pnpm build
-      - name: Installer script tests
-        run: bash tests/scripts/make-app-tests.sh
+  # Public repository: pull request code runs on GitHub-hosted runners only.
+  ci:
+    uses: tilorahdotco/.github/.github/workflows/node-ci.yml@d67a1628a8108cbf78e2b36bcb54cbad5f3ab418
+    with:
+      runner: ubuntu-latest
+      timeout-minutes: 10
+      node-version: '24'
+      package-manager: pnpm
+      pnpm-version: 12.9.1
+      typecheck: pnpm typecheck
+      test: pnpm test
+      build: |
+        pnpm build
+        bash tests/scripts/make-app-tests.sh
   # Windows has no physical test machine; this runner is the test machine (ADR 0038).
   windows:
     runs-on: windows-latest
@@ -43,7 +40,7 @@ jobs:
       # Keep LF fixtures byte-identical to the other platforms.
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
       - name: Install pnpm
