@@ -29,8 +29,9 @@ Stable acceptance and Swift source retirement remain separate work under
 ## Update channels
 
 The repository moved from `pekth/meterusage` to `tilorahdotco/meterusage` by a
-GitHub transfer on 2026-11-01. Beta 12 and later accept release assets under
-either owner, and nothing else; GitHub now reports them under `tilorahdotco`.
+GitHub transfer on 2026-11-01. Beta 12 accepted release assets under either
+owner; after the `pekth` name became free to register, newer builds accept
+`tilorahdotco` only. GitHub reports assets under `tilorahdotco`.
 Builds after beta 12 look up releases at `tilorahdotco`. Every earlier Electron
 build (betas 1–11) accepts only `pekth` assets. Builds that updated to beta 12
 before the transfer keep updating; a build still on an earlier beta needs beta

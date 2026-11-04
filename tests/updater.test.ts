@@ -7,7 +7,7 @@ import { Updater, fetchUpdate, parseRelease, parseReleases, newer, verifyDigest,
 import { launchConfiguration } from "../src/main/launch";
 import { Preferences } from "../src/main/preferences";
 const bytes = Buffer.from("synthetic update bytes"), digest = "sha256:" + createHash("sha256").update(bytes).digest("hex");
-const payload = (url = "https://github.com/pekth/meterusage/releases/download/v0.2.42/MeterUsage-0.2.42.zip", hash = digest) => JSON.stringify({ tag_name: "v0.2.42", assets: [{ name: "MeterUsage-0.2.42.zip", browser_download_url: url, digest: hash }] });
+const payload = (url = "https://github.com/tilorahdotco/meterusage/releases/download/v0.2.42/MeterUsage-0.2.42.zip", hash = digest) => JSON.stringify({ tag_name: "v0.2.42", assets: [{ name: "MeterUsage-0.2.42.zip", browser_download_url: url, digest: hash }] });
 const roots: string[] = []; const temp = () => { const p = mkdtempSync(join(realpathSync(tmpdir()), "meterusage-fixture-")); roots.push(p); return p; };
 afterEach(() => roots.splice(0).forEach(p => rmSync(p, { recursive: true, force: true })));
 describe("verified explicit updates", () => {
@@ -96,7 +96,7 @@ describe("verified explicit updates", () => {
     const root = temp(), prefs = await Preferences.load({ demo: false, candidate: false, home: root, data: root, env: {} }, async (_binary, args) => { if (args[0] !== "write") throw new Error("fixture absent"); return ""; }, "fixture.meterusage");
     let respond!: (bytes: Buffer) => void, requested = "", signal: AbortSignal | undefined, staged = false;
     const updater = new Updater(prefs, "0.2.41", () => {}, async (url, _max, s) => { requested = url; signal = s; return new Promise<Buffer>(resolve => { respond = resolve; }); });
-    const confirmed = parseRelease(payload()); updater.available = { ...confirmed, version: "0.2.43", asset: { ...confirmed.asset, url: "https://github.com/pekth/meterusage/releases/download/v0.2.43/MeterUsage-0.2.43.zip" } };
+    const confirmed = parseRelease(payload()); updater.available = { ...confirmed, version: "0.2.43", asset: { ...confirmed.asset, url: "https://github.com/tilorahdotco/meterusage/releases/download/v0.2.43/MeterUsage-0.2.43.zip" } };
     const installing = updater.install("/tmp/MeterUsage.app", confirmed, async () => { staged = true; return ""; });
     const rejected = expect(installing).rejects.toThrow("Could not install");
     expect(requested).toBe(confirmed.asset.url);
@@ -106,9 +106,13 @@ describe("verified explicit updates", () => {
 
 describe("repository transfer to tilorahdotco", () => {
   const forOwner = (owner: string) => payload(`https://github.com/${owner}/meterusage/releases/download/v0.2.42/MeterUsage-0.2.42.zip`);
-  it("accepts assets reported under either the old or the new owner and keeps the reported URL", () => {
-    expect(parseRelease(forOwner("pekth")).asset.url).toBe("https://github.com/pekth/meterusage/releases/download/v0.2.42/MeterUsage-0.2.42.zip");
+  it("accepts assets reported under the new owner and keeps the reported URL", () => {
     expect(parseRelease(forOwner("tilorahdotco")).asset.url).toBe("https://github.com/tilorahdotco/meterusage/releases/download/v0.2.42/MeterUsage-0.2.42.zip");
+  });
+  it("rejects assets under the retired pekth owner, which is free for anyone to register", () => {
+    expect(() => parseRelease(forOwner("pekth"))).toThrow("Invalid update asset");
+    const v = "0.3.0-beta.12", asset = { name: `MeterUsage-${v}-mac-arm64.zip`, browser_download_url: `https://github.com/pekth/meterusage/releases/download/v${v}/MeterUsage-${v}-mac-arm64.zip`, digest };
+    expect(() => parseReleases(JSON.stringify([{ tag_name: `v${v}`, draft: false, assets: [asset] }]))).toThrow();
   });
   it("picks a tilorahdotco beta asset from the release list", () => {
     const v = "0.3.0-beta.12", asset = (owner: string) => ({ name: `MeterUsage-${v}-mac-arm64.zip`, browser_download_url: `https://github.com/${owner}/meterusage/releases/download/v${v}/MeterUsage-${v}-mac-arm64.zip`, digest });
@@ -128,7 +132,7 @@ describe("repository transfer to tilorahdotco", () => {
   it("looks up releases at the tilorahdotco repository", () => {
     for (const endpoint of [releaseEndpoint, releasesEndpoint]) expect(endpoint.startsWith("https://api.github.com/repos/tilorahdotco/meterusage/releases")).toBe(true);
   });
-  it.each(["someone-else", "tilorahdotco.evil", "PEKTH"])("rejects assets under %s", owner => {
+  it.each(["someone-else", "tilorahdotco.evil", "PEKTH", "pekth"])("rejects assets under %s", owner => {
     expect(() => parseRelease(forOwner(owner))).toThrow("Invalid update asset");
   });
 });
@@ -177,7 +181,7 @@ describe("opt-in automatic install", () => {
   });
 });
 describe("beta update channel", () => {
-  const beta = (tag: string, extra: Record<string, unknown> = {}) => { const v = tag.slice(1); return { tag_name: tag, draft: false, assets: [{ name: `MeterUsage-${v}-mac-arm64.zip`, browser_download_url: `https://github.com/pekth/meterusage/releases/download/${tag}/MeterUsage-${v}-mac-arm64.zip`, digest }], ...extra }; };
+  const beta = (tag: string, extra: Record<string, unknown> = {}) => { const v = tag.slice(1); return { tag_name: tag, draft: false, assets: [{ name: `MeterUsage-${v}-mac-arm64.zip`, browser_download_url: `https://github.com/tilorahdotco/meterusage/releases/download/${tag}/MeterUsage-${v}-mac-arm64.zip`, digest }], ...extra }; };
   it("orders betas below their final release", () => {
     expect(newer("0.3.0-beta.5", "0.3.0-beta.4")).toBe(true);
     expect(newer("0.3.0-beta.10", "0.3.0-beta.9")).toBe(true);
@@ -190,7 +194,7 @@ describe("beta update channel", () => {
     const list = JSON.stringify([beta("v0.3.0-beta.6", { draft: true }), beta("v0.3.0-beta.5"), beta("v0.3.0-beta.4"), JSON.parse(payload())]);
     const release = parseReleases(list);
     expect(release.version).toBe("0.3.0-beta.5");
-    expect(release.asset.url).toBe("https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.5/MeterUsage-0.3.0-beta.5-mac-arm64.zip");
+    expect(release.asset.url).toBe("https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.5/MeterUsage-0.3.0-beta.5-mac-arm64.zip");
   });
   it("checks the release list from a beta and announces a newer beta once", async () => {
     const root = temp(), prefs = await Preferences.load({ demo: false, candidate: false, home: root, data: root, env: {} }, async (_binary, args) => { if (args[0] !== "write") throw new Error("absent fixture defaults"); return ""; }, "fixture.meterusage");

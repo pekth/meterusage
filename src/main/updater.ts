@@ -26,9 +26,9 @@ export function newer(candidate: string, current: string) {
 }
 type RawRelease = { tag_name?: unknown; draft?: unknown; assets?: { name?: unknown; browser_download_url?: unknown; digest?: unknown }[] };
 const releaseShape = { tag_name: true, draft: true, assets: { '*': { name: true, browser_download_url: true, digest: true } } } as const;
-// The repository was transferred from pekth to tilorahdotco on 2026-11-01. GitHub reports asset URLs under the
-// new owner; pekth stays accepted for the same repository's old URLs. Accept exactly these two and nothing else.
-const releaseOwners = ["tilorahdotco", "pekth"] as const;
+// The repository was transferred from pekth to tilorahdotco on 2026-11-01, and the pekth name is now free for anyone
+// to register. Accept asset URLs under tilorahdotco only, so a pekth/meterusage release can never be trusted.
+const releaseOwners = ["tilorahdotco"] as const;
 function releaseFrom(data: RawRelease, platform: Platform): Release {
   if (typeof data.tag_name !== "string" || !versionPattern.test(data.tag_name) || data.draft === true) throw new Error("Invalid release");
   const version = data.tag_name.replace(/^v/i, "");

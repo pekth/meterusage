@@ -18,7 +18,7 @@ function installer(machine = 0x14c, marker = "NullsoftInst") {
   return bytes;
 }
 const sha = (bytes: Buffer) => "sha256:" + createHash("sha256").update(bytes).digest("hex");
-const asset = (version: string, name: string, bytes = installer(), owner = "pekth") => ({ name, browser_download_url: `https://github.com/${owner}/meterusage/releases/download/v${version}/${name}`, digest: sha(bytes) });
+const asset = (version: string, name: string, bytes = installer(), owner = "tilorahdotco") => ({ name, browser_download_url: `https://github.com/${owner}/meterusage/releases/download/v${version}/${name}`, digest: sha(bytes) });
 const release = (version: string, assets: unknown[], extra: Record<string, unknown> = {}) => ({ tag_name: `v${version}`, draft: false, assets, ...extra });
 const winRelease = (version: string, bytes = installer()) => release(version, [asset(version, `MeterUsage-${version}-win-x64.exe`, bytes)]);
 const macRelease = (version: string) => release(version, [asset(version, `MeterUsage-${version}-mac-arm64.zip`)]);
@@ -36,15 +36,15 @@ function installed() {
 describe("Windows release assets", () => {
   it("selects only the Windows installer on Windows and only macOS assets elsewhere", () => {
     const list = JSON.stringify([winRelease("0.3.0-beta.14"), macRelease("0.3.0-beta.13"), release("0.3.0-beta.15", [asset("0.3.0-beta.15", "MeterUsage-0.3.0-beta.15-win-x64.exe")], { draft: true })]);
-    expect(parseReleases(list, "win32")).toMatchObject({ version: "0.3.0-beta.14", asset: { url: "https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.14/MeterUsage-0.3.0-beta.14-win-x64.exe" } });
+    expect(parseReleases(list, "win32")).toMatchObject({ version: "0.3.0-beta.14", asset: { url: "https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.14/MeterUsage-0.3.0-beta.14-win-x64.exe" } });
     expect(parseReleases(list, "darwin").version).toBe("0.3.0-beta.13");
     expect(() => parseRelease(JSON.stringify(macRelease("0.3.1")), "win32")).toThrow("Invalid update asset");
     expect(() => parseRelease(JSON.stringify(winRelease("0.3.1")), "darwin")).toThrow("Invalid update asset");
   });
-  it("accepts either repository owner and rejects other owners, portable zips and missing digests", () => {
+  it("accepts only the tilorahdotco owner and rejects the retired pekth owner, other owners, portable zips and missing digests", () => {
     const v = "0.3.0-beta.14", name = `MeterUsage-${v}-win-x64.exe`;
     expect(parseRelease(JSON.stringify(release(v, [asset(v, name, installer(), "tilorahdotco")])), "win32").asset.url).toContain("/tilorahdotco/meterusage/");
-    for (const assets of [[asset(v, name, installer(), "someone-else")], [asset(v, `MeterUsage-${v}-win-x64.zip`)], [{ ...asset(v, name), digest: undefined }]]) expect(() => parseRelease(JSON.stringify(release(v, assets)), "win32")).toThrow("Invalid update asset");
+    for (const assets of [[asset(v, name, installer(), "pekth")], [asset(v, name, installer(), "someone-else")], [asset(v, `MeterUsage-${v}-win-x64.zip`)], [{ ...asset(v, name), digest: undefined }]]) expect(() => parseRelease(JSON.stringify(release(v, assets)), "win32")).toThrow("Invalid update asset");
   });
 });
 
@@ -55,7 +55,7 @@ describe("Windows installer staging", () => {
     for (const bytes of [installer(0x1c0), installer(0x14c, "NotAnInstaller"), Buffer.from("PK\x03\x04 zip archive".padEnd(8192, "\0")), installer().subarray(0, 1024)]) expect(() => inspectWindowsInstaller(bytes)).toThrow("Invalid update installer");
   });
   it("verifies the digest before writing and stages the exact bytes", async () => {
-    const bytes = installer(), target: Release = { version: "0.3.0-beta.14", tag: "v0.3.0-beta.14", asset: { url: "https://github.com/pekth/meterusage/releases/download/v0.3.0-beta.14/MeterUsage-0.3.0-beta.14-win-x64.exe", digest: sha(bytes) } };
+    const bytes = installer(), target: Release = { version: "0.3.0-beta.14", tag: "v0.3.0-beta.14", asset: { url: "https://github.com/tilorahdotco/meterusage/releases/download/v0.3.0-beta.14/MeterUsage-0.3.0-beta.14-win-x64.exe", digest: sha(bytes) } };
     await expect(stageWindowsInstaller({ ...target, asset: { ...target.asset, digest: sha(installer(0x8664)) } }, bytes)).rejects.toThrow("Invalid update digest");
     const path = await stageWindowsInstaller(target, bytes); roots.push(dirname(path));
     expect(path.endsWith("MeterUsage-0.3.0-beta.14-win-x64.exe")).toBe(true); expect(readFileSync(path).equals(bytes)).toBe(true);
