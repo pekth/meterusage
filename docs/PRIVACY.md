@@ -137,7 +137,8 @@ organization must appear exactly once in that account's memberships. Only then
 can MeterUsage request GET
 `https://claude.ai/api/organizations/{organization-uuid}/usage?cedar_ember=1`.
 The query asks Claude to include saved free resets. If it is rejected,
-MeterUsage retries once without it. From the reset block it keeps only
+MeterUsage retries once without it. From the `limits` array it keeps only each
+entry's kind, percentage, reset time and model display name. From the reset block it keeps only
 eligibility, the next grant and, per grant, its identifier, remaining count,
 pause state, usability and start and expiry times. Grant identifiers stay in
 memory and are not written to the quota archive or JSON reports.

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { createDecipheriv, createHash, pbkdf2Sync } from "node:crypto";
 import { runCommand, type Command } from "./transport";
 import { selectJSON } from "../select-json";
-import { date, object, text } from "./parsers";
+import { date, displayText, object, text } from "./parsers";
 import { Unavailable, quota, window, type ResetCredit } from "../../domain/models";
 import { readStableFile, type Decrypt } from "./windows-dpapi";
 import { pathToFileURL } from "node:url";
@@ -208,9 +208,27 @@ export function desktopFreeResets(block: unknown, now: number): { count: number;
   return { count, credits };
 }
 const resetSelection = { eligible: true, next_grant_id: true, grants: { "*": { id: true, resets_left: true, resets_total: true, paused: true, starts_at: true, ends_at: true, usable_now: true } } } as const;
+const scopedLimitSelection = { "*": { kind: true, percent: true, resets_at: true, scope: { model: { display_name: true } } } } as const;
+/**
+ * Per-model weekly plan limits, such as Fable's on Max, from the usage response's `limits` array. Claude lists them
+ * there as `weekly_scoped` entries named by model. A malformed entry is skipped and never affects the other windows,
+ * and a model that a legacy `seven_day_*` key already shows is not repeated.
+ */
+function desktopModelWeeklyWindows(limits: unknown, shown: string[]) {
+  if (!Array.isArray(limits)) return [];
+  const seen = new Set(shown);
+  return limits.flatMap(entry => {
+    const limit = object(entry), percent = limit.percent, reset = date(limit.resets_at), name = displayText(object(object(limit.scope).model).display_name);
+    if (limit.kind !== "weekly_scoped" || !name || typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 100 || limit.resets_at != null && reset === undefined) return [];
+    const label = `Weekly · ${name}`;
+    if (seen.has(label.toLowerCase())) return [];
+    seen.add(label.toLowerCase());
+    return [window(label, percent, reset, 10080)];
+  });
+}
 export function desktopQuota(raw: string, now: number) {
   const keys = ["five_hour", "seven_day", "seven_day_sonnet", "seven_day_opus", "seven_day_oauth_apps", "seven_day_cowork"];
-  const selected = object(selectJSON(raw, { ...Object.fromEntries(keys.map(key => [key, { utilization: true, resets_at: true }])), cedar_ember: resetSelection }));
+  const selected = object(selectJSON(raw, { ...Object.fromEntries(keys.map(key => [key, { utilization: true, resets_at: true }])), limits: scopedLimitSelection, cedar_ember: resetSelection }));
   const windows = keys.flatMap(key => {
     if (selected[key] == null) return [];
     const value = object(selected[key]), percent = value.utilization, reset = date(value.resets_at);
@@ -219,6 +237,7 @@ export function desktopQuota(raw: string, now: number) {
     return [window(label, percent, reset, key === "five_hour" ? 300 : 10080)];
   });
   if (!windows.length) throw new Unavailable("noData");
+  windows.splice(windows.findIndex(w => w.label === "Weekly · All models") + 1 || windows.length, 0, ...desktopModelWeeklyWindows(selected.limits, windows.map(w => w.label.toLowerCase())));
   const q = quota("claude", windows, now), resets = desktopFreeResets(selected.cedar_ember, now);
   if (resets.count) { q.resetCreditCount = resets.count; q.resetCredits = resets.credits; }
   return q;

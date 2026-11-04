@@ -580,6 +580,18 @@ it("retains only numeric Claude allowance windows and preserves missing versus m
   expect(q.windows).toHaveLength(1); expect(q.windows[0].usedPercent).toBe(0); expect(JSON.stringify(q)).not.toContain("OMIT");
   for (const raw of ['{}', '{"five_hour":{"utilization":-1}}', '{"five_hour":{"utilization":101}}', '{"five_hour":{"utilization":0,"resets_at":"wrong"}}']) expect(() => desktopQuota(raw, now)).toThrow();
 });
+it("reads Claude per-model weekly plan limits such as Fable from the usage limits array", () => {
+  const scoped = (name: unknown, percent: unknown, extra: Record<string, unknown> = {}) => ({ kind: "weekly_scoped", group: "weekly", percent, resets_at: "2026-11-06T04:00:00Z", scope: { model: { id: null, display_name: name } }, OMIT: "OMIT_UNSELECTED", ...extra });
+  const q = desktopQuota(JSON.stringify({
+    five_hour: { utilization: 69, resets_at: "2026-11-03T16:30:00Z" }, seven_day: { utilization: 74, resets_at: "2026-11-04T16:00:00Z" }, seven_day_opus: { utilization: 5 }, seven_day_cowork: { utilization: 1 },
+    limits: [{ kind: "weekly_all", percent: 74 }, scoped("Fable", 32), scoped("Opus", 50), scoped("Fable", 90), scoped(null, 10), scoped("Bad", null), scoped("Over", 101), scoped("Late", 5, { resets_at: "wrong" }), { kind: "session", percent: 69, scope: { model: { display_name: "Session" } } }, "OMIT_SCALAR"],
+  }), now);
+  expect(q.windows.map(w => [w.label, w.usedPercent])).toEqual([["5-hour", 69], ["Weekly · All models", 74], ["Weekly · Fable", 32], ["Weekly · opus", 5], ["Weekly · cowork", 1]]);
+  expect(q.windows[2]).toMatchObject({ resetsAt: Date.parse("2026-11-06T04:00:00Z"), windowDurationMins: 10080 });
+  expect(JSON.stringify(q)).not.toContain("OMIT");
+  // A malformed limits array never hides the base windows.
+  for (const limits of [null, "OMIT", {}, [null]]) expect(desktopQuota(JSON.stringify({ five_hour: { utilization: 10 }, limits }), now).windows.map(w => w.label)).toEqual(["5-hour"]);
+});
 it("reads Claude free resets per grant and marks only the next usable grant redeemable", () => {
   const day = 86400000, at = (offset: number) => new Date(now + offset).toISOString();
   const grant = (id: string, extra: Record<string, unknown> = {}) => ({ id, resets_left: 1, resets_total: 1, paused: false, starts_at: at(-day), ends_at: at(3 * day), usable_now: true, OMIT: "OMIT_UNSELECTED", ...extra });

@@ -12,6 +12,10 @@ follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The Claude card shows per-model weekly plan limits, such as **Weekly ·
+  Fable** on Max, when Claude Desktop is connected. They come from the same
+  usage response that Claude's Settings → Usage page reads.
+
 - Add **Style** in Settings → Appearance with eight looks: Classic, Flight
   Deck, Orbit, Ledger, Terminal, Blueprint, Departures and Arcade. Each one
   reskins the usage panel, side notch and Settings, and each option shows a
