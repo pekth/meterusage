@@ -170,10 +170,11 @@ export class Updater {
       if (cancelled()) throw new Error("Update check cancelled");
       if (!newer(release.version, this.currentVersion)) return undefined;
       this.available = release;
-      // Record a version only when it is announced, so a quiet manual check leaves a later notification in place.
+      // Announce first, with no await since the last cancellation check, then record the version. A quiet manual check
+      // records nothing, so a later scheduled check still announces.
       if (announce && !this.quiet && this.prefs.values.updateAnnouncedVersion !== release.version) {
+        this.announce(release);
         await this.prefs.set("updateAnnouncedVersion", release.version); if (cancelled()) throw new Error("Update check cancelled");
-        if (!this.quiet) this.announce(release);
       }
       this.changed(); return release;
     })().finally(() => { if (this.check === pending) { this.check = undefined; this.checkController = undefined; } });
