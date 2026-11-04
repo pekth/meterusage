@@ -116,7 +116,9 @@ async function start(launch: Launch) {
     confirmingUpdate = true;
     const options: Electron.MessageBoxOptions = { type: "question", title: "Install MeterUsage update?", message: `Install MeterUsage ${release.version}?`, detail: windowsShell ? "MeterUsage will quit, run the verified installer and relaunch." : "The app will quit, verify the downloaded bundle, replace this app and relaunch.", buttons: ["Cancel", "Install update"], defaultId: 0, cancelId: 0 };
     const accepted = await (source ? dialog.showMessageBox(source, options) : dialog.showMessageBox(options)).finally(() => { confirmingUpdate = false; });
-    if (accepted.response === 1) { await updater.install(appLocation(), release); app.quit(); }
+    // Every install entry point passes here; once quit has begun, nothing installs. The check and install() run in one
+    // synchronous step, because install() takes its controller before its first await.
+    if (accepted.response === 1 && !quitting) { await updater.install(appLocation(), release); app.quit(); }
   }
   /** The tray menu's Check for Updates…: an immediate check that always reports its outcome. */
   async function checkForUpdates() {

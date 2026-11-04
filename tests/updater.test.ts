@@ -68,6 +68,8 @@ describe("verified explicit updates", () => {
     const manual = updater.checkNow(now + 1000);
     respond(Buffer.from(payload())); await scheduled;
     expect((await manual)?.version).toBe("0.2.42"); expect(calls).toBe(1); expect(announcements).toBe(0);
+    // The quiet check records nothing, so a later scheduled check still announces the release once.
+    expect(prefs.values.updateAnnouncedVersion).not.toBe("0.2.42");
     // A reset while the manual check waits cancels it rather than starting a fresh lookup.
     const second = updater.checkIfDue(now + 3600000); await new Promise<void>(resolve => setImmediate(resolve));
     const waiting = updater.checkNow(now + 3601000);

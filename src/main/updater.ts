@@ -170,7 +170,11 @@ export class Updater {
       if (cancelled()) throw new Error("Update check cancelled");
       if (!newer(release.version, this.currentVersion)) return undefined;
       this.available = release;
-      if (this.prefs.values.updateAnnouncedVersion !== release.version) { await this.prefs.set("updateAnnouncedVersion", release.version); if (cancelled()) throw new Error("Update check cancelled"); if (announce && !this.quiet) this.announce(release); }
+      // Record a version only when it is announced, so a quiet manual check leaves a later notification in place.
+      if (announce && !this.quiet && this.prefs.values.updateAnnouncedVersion !== release.version) {
+        await this.prefs.set("updateAnnouncedVersion", release.version); if (cancelled()) throw new Error("Update check cancelled");
+        if (!this.quiet) this.announce(release);
+      }
       this.changed(); return release;
     })().finally(() => { if (this.check === pending) { this.check = undefined; this.checkController = undefined; } });
     this.check = pending; return pending;
