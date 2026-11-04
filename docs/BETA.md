@@ -38,10 +38,11 @@ releases, so install beta 12 or later manually once. `Scripts/make-app.sh` now p
 checksum/signature verification, destination staging and no compiler fallback.
 It preserves the published signature. Preparing output does not install it.
 
-To check the ZIP in its download directory:
+To check the ZIP in its download directory (`SHA256SUMS` also lists the
+Windows files, so check only the macOS line):
 
 ```sh
-shasum -a 256 -c SHA256SUMS
+grep -F 'MeterUsage-0.3.0-beta.18-mac-arm64.zip' SHA256SUMS | shasum -a 256 -c -
 ```
 
 Expected ZIP SHA-256:
