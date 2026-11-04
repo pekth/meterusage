@@ -131,7 +131,9 @@ async function start(launch: Launch) {
       if (prefs.values.updateCheckEnabled !== true) {
         const turnOn = await dialog.showMessageBox({ type: "question", title: "Check for updates?", message: "Update checks are off", detail: "Turn on Check for updates and look for a new version of MeterUsage now?", buttons: ["Cancel", "Turn on and check"], defaultId: 1, cancelId: 0 });
         if (turnOn.response !== 1) return;
-        await prefs.set("updateCheckEnabled", true); publish();
+        try { await prefs.set("updateCheckEnabled", true); }
+        catch { return void await notice("Couldn't turn on update checks", "Your settings are unchanged. Try again, or turn on Check for updates in Settings.", "warning"); }
+        publish();
       }
       let release: Release | undefined;
       try { release = await updater.checkNow(); }
