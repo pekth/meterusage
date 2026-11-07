@@ -1,7 +1,7 @@
 import { it, expect, vi } from "vite-plus/test";
 import { createElement, useEffect, useRef, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ActivityHeatmap, App, Connections, Meter, ProviderCard, Settings, StyleContext, UpdateNotice, UsagePanel } from "../src/renderer/app";
+import { ActivityHeatmap, App, Connections, Meter, ProviderCard, resetText, Settings, StyleContext, UpdateNotice, UsagePanel } from "../src/renderer/app";
 import { interfaceStyles, styleInfo } from "../src/shared/styles";
 import { HeatmapCell } from "../src/renderer/app";
 import { tokens, providers, primary, quota, value, window, localDay, shiftDay, utcDay, missing, Unavailable } from "../src/domain/models";
@@ -1298,4 +1298,11 @@ it("lays Settings out wide: Appearance in a grid and connection cards in two col
   // The rules sit inside the components layer, before Tailwind's @theme block.
   expect(css.indexOf(".settings .appearance-group {")).toBeLessThan(css.indexOf("@theme inline"));
   expect(readFileSync("src/main/electron.ts", "utf8")).toContain('surface === "settings" ? 1040 :');
+});
+
+it("names the reset day as today, tomorrow, or the weekday", () => {
+  const base = new Date(2026, 10, 6, 21, 0).getTime(), at = (d: number, h: number) => new Date(2026, 10, 6 + d, h, 0).getTime();
+  expect(resetText(at(0, 23), base)).toMatch(/^Resets today, /);
+  expect(resetText(at(1, 3), base)).toMatch(/^Resets tomorrow, /);
+  expect(resetText(at(5, 23), base)).toMatch(/^Resets Wed, Nov 11, /);
 });
