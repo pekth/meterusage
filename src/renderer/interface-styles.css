@@ -217,3 +217,4 @@
 .app:not(.ui-classic):is(.surface-notch, .surface-share) .detail-card { background: var(--surface); }
 .app.ui-blueprint:is(.surface-notch, .surface-share) .detail-card { border: 1px solid #ffffff66; background: linear-gradient(#ffffff0d 1px, transparent 1px) 0 0 / 12px 12px, linear-gradient(90deg, #ffffff0d 1px, transparent 1px) 0 0 / 12px 12px, var(--canvas); }
 .app.ui-ledger:is(.surface-notch, .surface-share) .detail-card { border-top: 3px double var(--text); }
+.ui-departures .quota-window > .row.secondary > span.reset-line { color: var(--text); }

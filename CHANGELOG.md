@@ -62,7 +62,7 @@ follows [Semantic Versioning](https://semver.org/).
 
 - Make quota reset times easier to read: the reset line now uses the main text
   colour and a heavier weight, and names the day ("today", "tomorrow", or the
-  weekday and date, such as "Wed, Nov 11").
+  weekday and date, such as "Wed, Nov 11") in every interface style.
 - Move the frozen Swift app (package, sources, tests, `Info.plist` and build
   scripts) to `legacy/swift/` and stop building it in CI.
   `Scripts/make-app.sh` now only downloads the prebuilt app;
