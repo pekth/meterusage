@@ -77,17 +77,26 @@ function MeterVisual({ kind, used, marker, colour }: { kind: MeterKind; used: nu
   if (kind === "hp") { const left = 100 - used; return <><span className="hp-label" aria-hidden="true">HP</span>{Array.from({ length: 10 }, (_, i) => <i key={i} style={(i + .5) * 10 < left ? { background: hpColour(left) } : undefined} />)}</>; }
   return <span style={{ width: `${used}%`, background: colour }} />;
 }
+/** Reset time with the day spelled out: "today", "tomorrow", or the weekday and date. */
+export function resetText(resetsAt: number, now: number): string {
+  const at = new Date(resetsAt), time = at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((dayStart(at) - dayStart(new Date(now))) / 86400000);
+  if (days === 0) return `Resets today, ${time}`;
+  if (days === 1) return `Resets tomorrow, ${time}`;
+  return `Resets ${at.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}, ${time}`;
+}
 export function Meter({ w, now, activityAt, pacing, quotaBurn = false }: { w: QuotaWindow; now: number; activityAt?: number; pacing: boolean; quotaBurn?: boolean }) {
   const style = useStyle();
   const raw = pacing ? pace(w, now) : undefined, eta = raw && etaSeconds(raw, w.resetsAt, now);
   const burn = pacing && quotaBurn ? measuredBurn(w, now) : undefined;
   const text = quotaBurn ? burn ? `Quota burn · ${burn.percentPerHour > 0 && burn.percentPerHour < .1 ? "<0.1" : new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(burn.percentPerHour)} pp/h` : "Collecting quota burn rate" : raw ? paceText(raw) : w.pacingBaseline && durationMins(w) ? "Collecting usage after reset" : undefined;
   const burnETA = burn?.projectedExhaustion;
-  const reset = w.resetsAt !== undefined ? `Resets ${new Date(w.resetsAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "Reset not reported";
+  const reset = w.resetsAt !== undefined ? resetText(w.resetsAt, now) : "Reset not reported";
   const used = clamp(w.usedPercent), rounded = Math.round(w.usedPercent), colour = headroom(w.usedPercent);
   const marker = raw ? clamp(raw.usedPercent - raw.deficitPercent) : undefined;
   const figure = style.meter === "flap" ? <Flap text={`${rounded}%`} label={`${rounded}% used`} /> : style.meter === "hp" ? <strong style={{ color: hpColour(100 - rounded) }}><span aria-hidden="true">{Math.max(0, 100 - rounded)} HP</span><span className="sr-only">{rounded}% used</span></strong> : <strong style={{ color: colour }}>{rounded}% used</strong>;
-  return <div className={`quota-window meter-${style.meter}`}><div className="row"><span>{w.label}</span>{figure}</div><div className={`meter meter-${style.meter}`} role="progressbar" aria-label={`${w.label} quota used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={used} aria-valuetext={`${rounded}% used`}><MeterVisual kind={style.meter} used={used} marker={marker} colour={colour} /></div><div className="row secondary"><span title={quotaBurn ? "Percentage points of quota used per hour, measured while MeterUsage is running. Not tokens or cost." : undefined}>{pacing && text}</span><span title={reset}>{burnETA !== undefined ? `Est. ${formatETA((burnETA - now) / 1000)}` : eta !== undefined ? formatETA(eta) : reset}</span></div>{(burnETA !== undefined || eta !== undefined) && <div className="row secondary"><span>{reset}</span></div>}</div>;
+  return <div className={`quota-window meter-${style.meter}`}><div className="row"><span>{w.label}</span>{figure}</div><div className={`meter meter-${style.meter}`} role="progressbar" aria-label={`${w.label} quota used`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={used} aria-valuetext={`${rounded}% used`}><MeterVisual kind={style.meter} used={used} marker={marker} colour={colour} /></div><div className="row secondary"><span title={quotaBurn ? "Percentage points of quota used per hour, measured while MeterUsage is running. Not tokens or cost." : undefined}>{pacing && text}</span><span title={reset} className={burnETA === undefined && eta === undefined ? "reset-line" : undefined}>{burnETA !== undefined ? `Est. ${formatETA((burnETA - now) / 1000)}` : eta !== undefined ? formatETA(eta) : reset}</span></div>{(burnETA !== undefined || eta !== undefined) && <div className="row secondary"><span className="reset-line">{reset}</span></div>}</div>;
 }
 interface StripCell { amount?: number; peak: number; readout: string; label: string }
 /** Sparse-aware daily strip: a leading run of quiet days collapses into one labelled block. */
