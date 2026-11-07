@@ -1,6 +1,6 @@
 # Project knowledge
 
-Release documentation refresh: 2026-11-03 for build 89.
+Release documentation refresh: 2026-11-07 for build 90.
 
 ## Contributor checks
 
@@ -34,7 +34,7 @@ Release documentation refresh: 2026-11-03 for build 89.
   `legacy/swift/` and removes them from CI. Historical Swift releases remain
   recovery/reference material. Deletion is still pending. Required Swift
   helpers (`Scripts/electron/*.swift`) and shared `Resources/` assets stay.
-- `Scripts/make-app.sh` pins [Electron 0.3.0-beta.19, build 89](BETA.md), its
+- `Scripts/make-app.sh` pins [Electron 0.3.0-beta.20, build 90](BETA.md), its
   `-mac-arm64.zip` filename and SHA-256. It verifies the download and staged
   signature before replacement, preserves the published signature, and never
   falls back to a compiler. Preparing output does not install the app.
@@ -301,7 +301,7 @@ Release documentation refresh: 2026-11-03 for build 89.
 
 - meterusage is a macOS menu-bar app that displays AI coding-assistant quota and usage signals. `README.md` describes provider clusters, quota cards, heatmaps, sparklines, alerts, diagnostics, and a scriptable JSON CLI.
 - The frozen legacy Swift app lives in `legacy/swift/`. It uses Swift Package Manager, targets macOS 13 or later, and includes an executable target and a test target in `legacy/swift/Package.swift`. Its AppKit and SwiftUI imports require macOS for build/test checks (`swift build --package-path legacy/swift`). No CI job builds it. Electron is the offered beta; its source/build commands are in `CONTRIBUTING.md`.
-- `README.md` and `Scripts/make-app.sh` select the prebuilt Electron 0.3.0-beta.19 Apple silicon ZIP for macOS 13+. Installation needs no Node, pnpm, Swift, Xcode or Git. The script verifies SHA-256 and downloaded/staged signatures before replacing generated output, preserving the published signature and existing output on copy/verification failures. It rejects unsupported platforms and never compiles; `--build-from-source` exits with a pointer to `legacy/swift/Scripts/make-app.sh`, which builds legacy Swift for recovery/reference. Historical Swift 0.2.41 remains retrievable, ad-hoc signed and not notarized. GitHub source archives contain source and scripts, not an app bundle. See ADRs 0009 and 0034.
+- `README.md` and `Scripts/make-app.sh` select the prebuilt Electron 0.3.0-beta.20 Apple silicon ZIP for macOS 13+. Installation needs no Node, pnpm, Swift, Xcode or Git. The script verifies SHA-256 and downloaded/staged signatures before replacing generated output, preserving the published signature and existing output on copy/verification failures. It rejects unsupported platforms and never compiles; `--build-from-source` exits with a pointer to `legacy/swift/Scripts/make-app.sh`, which builds legacy Swift for recovery/reference. Historical Swift 0.2.41 remains retrievable, ad-hoc signed and not notarized. GitHub source archives contain source and scripts, not an app bundle. See ADRs 0009 and 0034.
 - Legacy Swift provider data sources are under `legacy/swift/Sources/MeterUsage/Services/`; the candidate adapters live under `src/main/providers/` and `src/main/composition.ts`. `docs/PRIVACY.md` describes the boundary for local files, provider CLIs, documented network endpoints, and data reduction before display.
 - Antigravity CLI quota and usage share a bounded Docker/Podman runtime resolver. It prefers a healthy runtime and can start only an already-existing `podman-machine-default` after an inspect check; it never creates a machine or pulls an image. Concurrent recovery calls are serialized; failed starts have a 60-second cooldown. Internet or authentication failures are not repaired by restarting a healthy runtime. Without a runtime, the `antigravity-cli:local` image or its volumes, quota reports `containerMissing` ("Allowance unavailable for Antigravity CLI. Set up the agy container or connect Antigravity Desktop") because native conversation usage can still be present. An inspect that times out or cannot start reports `failed` instead.
 - Demo mode uses synthetic data. `README.md` and `docs/DEMO.md` describe it as the path for screenshots and local UI inspection without provider accounts.
@@ -331,6 +331,7 @@ Release documentation refresh: 2026-11-03 for build 89.
 - Windows shell: colored notification-area icon with a usage tooltip (no text tray image), taskbar-anchored flyout, tray click toggles despite blur, **Copy card image** instead of the share sheet, no default menu bar, AppUserModelID `dev.meterusage.app`. Renderer copy says "this PC" when `state.platform` is `win32`.
 - Windows 0.3.0-beta.13, build 83, was published on 2026-11-01 as an unsigned pre-release (`--latest=false`) from `176b409` (includes the tilorahdotco release lookup, #99). Workflow run 41380556038; installer SHA-256 `35d49481…c2493f`, zip `6e777e77…3a44e5`. It is Windows-only: macOS updaters skip it.
 - 0.3.0-beta.16, build 86, was published on 2026-11-02 for macOS and Windows in one release from `73ce30b` (Windows workflow run 41474197722; macOS built, signed and notarized on the Mac). One LF `SHA256SUMS` lists the macOS ZIP (`44d34e6c…87fe51`), the unsigned Windows installer (`07f5937b…5b1c8a`) and the portable zip (`197be91b…30b903`). Later releases follow this combined pattern.
+- 0.3.0-beta.20, build 90, was published on 2026-11-07 for macOS and Windows from `f25f7c8` (easier-to-read reset times #121, Check for Updates in the tray menu #117, updater trusts only `tilorahdotco` #115; Windows workflow run 42341011274). `SHA256SUMS`: macOS ZIP `f1ee03d4…27a07c`, Windows installer `573d028a…897ab1`, portable zip `5574dfeb…d17d1`.
 - 0.3.0-beta.19, build 89, was published on 2026-11-04 for macOS and Windows from `5cf9afc` (Claude per-model weekly limits such as Fable #114, Sponsor link #113; Windows workflow run 41768216629). `SHA256SUMS`: macOS ZIP `99e328ee…adb73f`, Windows installer `6201efd5…130bd4`, portable zip `e711068a…cb1beb`.
 - 0.3.0-beta.18, build 88, was published on 2026-11-03 for macOS and Windows from `68ff0c8` (Claude free resets #107, CLI allowance reasons #109 and #111; Windows workflow run 41742128516). `SHA256SUMS`: macOS ZIP `030ca872…e700e3`, Windows installer `782d6609…35a60c`, portable zip `6c0b6bcd…cbdcb1`.
 - 0.3.0-beta.17, build 87, was published on 2026-11-03 for macOS and Windows from `206384b` (wide Settings, #105; Windows workflow run 41577638081). `SHA256SUMS`: macOS ZIP `23a4f8d5…766f00`, Windows installer `1f285245…6b27aa3`, portable zip `58200a6d…35d517`.
