@@ -1302,8 +1302,10 @@ it("lays Settings out wide: Appearance in a grid and connection cards in two col
 
 it("names the reset day as today, tomorrow, or the weekday", () => {
   const base = new Date(2026, 10, 6, 21, 0).getTime(), at = (d: number, h: number) => new Date(2026, 10, 6 + d, h, 0).getTime();
-  expect(resetText(at(0, 23), base)).toMatch(/^Resets today, /);
-  expect(resetText(at(1, 3), base)).toMatch(/^Resets tomorrow, /);
+  const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  expect(resetText(at(0, 23), base)).toBe(`Resets today, ${time(at(0, 23))}`);
+  expect(resetText(at(1, 3), base)).toBe(`Resets tomorrow, ${time(at(1, 3))}`);
   const day = new Date(at(5, 23)).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  expect(resetText(at(5, 23), base).startsWith(`Resets ${day}, `)).toBe(true);
+  expect(resetText(at(5, 23), base)).toBe(`Resets ${day}, ${time(at(5, 23))}`);
+  expect(time(at(0, 23))).not.toBe(time(at(1, 3)));
 });
